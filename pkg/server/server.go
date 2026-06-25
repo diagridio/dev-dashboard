@@ -14,8 +14,8 @@ import (
 
 // Options configures the HTTP router.
 type Options struct {
-	BasePath string  // "" or e.g. "/dashboard"
-	DistFS   fs.FS   // embedded SPA assets (contains index.html)
+	BasePath string // "" or e.g. "/dashboard"
+	DistFS   fs.FS  // embedded SPA assets (contains index.html)
 	Version  version.Info
 }
 
