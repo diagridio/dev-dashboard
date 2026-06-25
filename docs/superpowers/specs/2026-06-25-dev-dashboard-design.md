@@ -212,8 +212,12 @@ GET  /api/version                                dashboard + detected runtime ve
 - **Minimal chrome:** left nav (Overview · Workflows · Components · Configurations),
   top bar with theme toggle + global autorefresh control. Dense tables; monospace for
   ids/ports/PIDs.
-- **Theming:** follows `prefers-color-scheme` by default with a manual toggle persisted to
-  `localStorage`. CSS variables drive both themes.
+- **Theming:** **defaults to the light theme**, with a manual toggle persisted to
+  `localStorage` (may optionally follow `prefers-color-scheme` when the user hasn't chosen).
+  CSS variables drive both themes. Brand-green text/labels (e.g. the `app` log source tag and
+  the application "A" marker) use a contrast-adjusted accent token — a deeper teal-green on
+  light, a brighter mint on dark — rather than the raw mint, which is too light for text on
+  white.
 - **Autorefresh:** a central setting. Workflows + Overview poll on the interval
   (default 3 s, pausable). Logs stream over SSE.
 - **Tech:** React + Vite with a small dependency footprint; TanStack Query for
