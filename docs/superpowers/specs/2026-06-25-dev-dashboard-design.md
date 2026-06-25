@@ -214,10 +214,11 @@ GET  /api/version                                dashboard + detected runtime ve
   ids/ports/PIDs.
 - **Theming:** **defaults to the light theme**, with a manual toggle persisted to
   `localStorage` (may optionally follow `prefers-color-scheme` when the user hasn't chosen).
-  CSS variables drive both themes. Brand-green text/labels (e.g. the `app` log source tag and
-  the application "A" marker) use a contrast-adjusted accent token — a deeper teal-green on
-  light, a brighter mint on dark — rather than the raw mint, which is too light for text on
-  white.
+  CSS variables drive both themes. **All brand-green accents** (text labels, stat numbers,
+  status dots, focus rings, selection highlights, primary-button fills) use a single
+  contrast-adjusted accent token — a deeper teal-green on light, a brighter mint on dark —
+  rather than the raw mint, which is too light on white. The raw mint remains the brand color
+  in the palette/logo, but on-screen accents resolve through the adjusted token.
 - **Autorefresh:** a central setting. Workflows + Overview poll on the interval
   (default 3 s, pausable). Logs stream over SSE.
 - **Tech:** React + Vite with a small dependency footprint; TanStack Query for
