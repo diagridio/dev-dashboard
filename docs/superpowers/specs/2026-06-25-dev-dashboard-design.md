@@ -201,6 +201,59 @@ GET  /api/version                                dashboard + detected runtime ve
   small. Syntax-highlighted YAML viewer (e.g. a lightweight highlighter or Monaco if the
   bundle cost is acceptable).
 
+### 9.1 Visual Identity & Theming
+
+The dashboard carries **Diagrid's brand identity as primary** (it will fold into the
+Diagrid CLI), and uses **Dapr's indigo only as a semantic accent** to tag Dapr-runtime
+elements. Brand values are taken from the live `dapr.io` stylesheet and the Diagrid
+frontend theme tokens (`…/diagrid-dashboard/src/styles/theme/palette.ts`).
+
+**Brand colors**
+
+- Primary (Diagrid mint): `#0BDDA3` — used for the logo, active nav indicator, focus
+  rings, badges, and primary-button *fills* with dark `#121C29` text on the mint (the
+  contrast of mint-on-white is too low for text, so mint is never used for text/links).
+- Secondary (Diagrid blue): `#129AF3` — interactive text/links and secondary actions.
+  Use the dark blue `#007AD3` on light backgrounds (≈4.5:1) and the light blue `#63B8F6`
+  on dark backgrounds.
+- Dapr accent (semantic only): indigo `#0D2192` on light / `#3EA9F5` on dark — used
+  sparingly to distinguish Dapr-runtime things (e.g. the `daprd` sidecar chip vs. the
+  application chip). Kept rare so the UI stays Diagrid-branded.
+
+**Theme tokens (CSS variables)**
+
+| Token | Light | Dark |
+|---|---|---|
+| `--bg` / `--surface` | `#FFFFFF` / `#F9FAFB` | `#161C24` / `#212B36` |
+| `--text` / `--text-muted` | `#212B36` / `#637381` | `#F9FAFB` / `#919EAB` |
+| `--border` | `#DFE3E8` | `#454F5B` |
+| `--primary` | `#0BDDA3` | `#0BDDA3` |
+| `--link` / `--secondary` | `#007AD3` | `#63B8F6` |
+| `--dapr-accent` | `#0D2192` | `#3EA9F5` |
+
+**Workflow status colors** (state encoded as color *and* a pill, for at-a-glance scanning)
+
+| Status | Color |
+|---|---|
+| Running | blue `#129AF3` |
+| Completed | green `#0BDD39` |
+| Failed | red `#DD0B46` |
+| Terminated | grey `#637381` |
+| Suspended | purple `#8330FF` |
+| Pending | amber `#B1AC00` (Diagrid's `#F6F100` yellow is too low-contrast as text) |
+
+Semantic status hues are kept distinct from the mint accent so "needs attention" reads on
+its own. Neutrals use the Diagrid grey scale: `#161C24 · #212B36 · #454F5B · #637381 ·
+#919EAB · #C4CDD5 · #DFE3E8 · #F4F6F8 · #F9FAFB · #FFFFFF`.
+
+**Logo assets** (copied into `web/src/assets/brand/`, bundled into the SPA, embedded in the
+binary — no runtime fetch, works offline):
+
+- Header wordmark — Diagrid horizontal wordmark. Source: `Diagrid_horiz.svg`. Themed
+  either by swapping in the white wordmark on dark, or (preferred) by porting the
+  `currentColor`-based logo component so one asset themes automatically.
+- Favicon / collapsed-nav mark — the Diagrid "D" icon. Source: `d.svg`.
+
 ## 10. Portability to the Diagrid Go CLI
 
 - All logic lives in `pkg/*` domain packages with no dependency on `cmd/`.
