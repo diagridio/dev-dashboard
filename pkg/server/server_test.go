@@ -44,3 +44,14 @@ func TestRouterUnderBasePath(t *testing.T) {
 	res, _ := get(t, h, "/dashboard/api/health")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 }
+
+func TestRouterServesApps(t *testing.T) {
+	h := NewRouter(Options{
+		DistFS:  fstest.MapFS{"index.html": {Data: []byte("shell")}},
+		Version: version.Info{Version: "test"},
+		Apps:    newFakeApps(),
+	})
+	res, body := get(t, h, "/api/apps")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, "appId")
+}

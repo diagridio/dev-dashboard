@@ -13,26 +13,25 @@ func appsRouter(svc discovery.Service) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
-		instances, err := svc.List(req.Context())
+		items, err := svc.List(req.Context())
 		if err != nil {
-			http.Error(w, "internal error", http.StatusInternalServerError)
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, http.StatusOK, instances)
+		writeJSON(w, http.StatusOK, items)
 	})
 
 	r.Get("/{appId}", func(w http.ResponseWriter, req *http.Request) {
-		appID := chi.URLParam(req, "appId")
-		instance, err := svc.Get(req.Context(), appID)
-		if err != nil {
-			if errors.Is(err, discovery.ErrNotFound) {
-				http.Error(w, "not found", http.StatusNotFound)
-				return
-			}
-			http.Error(w, "internal error", http.StatusInternalServerError)
+		in, err := svc.Get(req.Context(), chi.URLParam(req, "appId"))
+		if errors.Is(err, discovery.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "app not found"})
 			return
 		}
-		writeJSON(w, http.StatusOK, instance)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, in)
 	})
 
 	return r
