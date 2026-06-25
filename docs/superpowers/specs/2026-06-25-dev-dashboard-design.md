@@ -238,10 +238,12 @@ GET  /*                                           SPA: serve index.html (History
 
 ## 9. Frontend / UX
 
+### 9.1 Navigation & routing
+
 - **Minimal chrome:** a **top bar** holds the Diagrid logo, the **primary nav**
   (Applications · Workflows · Actors · Subscriptions · Components · Configurations · Logs),
   the global autorefresh control, and the theme toggle. A **collapsible left "Resources"
-  sidebar** (see below) is separate from primary nav. Dense tables; monospace + tabular
+  sidebar** (see §9.6) is separate from primary nav. Dense tables; monospace + tabular
   numerals for ids/ports/PIDs/timestamps.
 - **Routing & deep links:** client-side History-API routes (e.g. `/workflows/{app}/{id}`,
   `/apps/{id}`), with the Go server serving `index.html` for unknown paths. A configurable
@@ -250,30 +252,28 @@ GET  /*                                           SPA: serve index.html (History
   the URL query** so filtered/searched views are shareable and survive refresh and
   back/forward. The document `<title>` updates per view. Routes are shareable; back/forward
   work.
-- **Large surfaces are virtualized:** the workflow list, long history timelines, and the log
-  tail use list virtualization (e.g. TanStack Virtual) and bounded client buffers so they
-  stay responsive.
+- **Cross-navigation (deep links):** related entities link to each other so the user can
+  follow a debugging trail. From an application's detail page, each loaded component links
+  to that component's detail; on a component's detail, each app in its "loaded by" list
+  links back to that application's detail. The same app-id ↔ app-detail linking applies on
+  the Subscriptions and Actors pages (host/app columns are links).
+
+### 9.2 Data, refresh & performance
+
+- **Autorefresh:** a **single global interval** in the top bar drives every auto-refreshing
+  view (Applications, Workflows list + detail, Actors, Subscriptions). Options 1 s / 3 s /
+  5 s / 10 s / Off; default 3 s; pausable. Logs stream over SSE, independent of the interval.
 - **Refresh never fights interaction:** polling merges into existing state rather than
   replacing it, preserving row selection (for bulk purge), expanded rows, and scroll
   position. Destructive flows (purge) and open dialogs pause/ignore background refreshes.
-- **Accessibility floor (required):** WCAG AA contrast, visible keyboard focus, full keyboard
-  operation of tables/menus/dialogs, focus-trapped purge dialog (headless primitives), and
-  `prefers-reduced-motion` honored for the live pulse, wall-clock, and event fade-ins. State
-  is encoded as color **and** text/shape (pills), never color alone.
-- **Rows aren't links (no nested interactives):** table rows are *not* themselves links. The
-  id/name cell is the navigation link to detail; row checkboxes (bulk select), kebab menus,
-  and inline app/component links are independent focusable controls — never nested inside a
-  row-level link. Keeps keyboard/screen-reader behavior predictable.
-- **Action feedback:** non-blocking **toasts** confirm copies and report results; **bulk
-  purge** shows a succeeded/failed summary. Destructive confirmations state the **affected
-  count** (e.g. "Purge 37 completed workflows?") and which mechanism will run.
-- **Loading / empty / error states per view:** skeleton/loading placeholders while data
-  loads, a "discovering apps…" first-paint state, friendly empty states (no apps, no
-  workflows, no logs), inline error states that keep the rest of the dashboard usable, and
-  **per-view React error boundaries** so one failing view never white-screens the app.
-- **Keyboard (v1 minimal set):** `/` focuses search, `j`/`k` move row selection, `Enter`
-  opens the selected row, `g` then a key jumps between views, `?` shows a shortcuts overlay;
-  shortcuts are suppressed while a text input is focused.
+- **Large surfaces are virtualized:** the workflow list, long history timelines, and the log
+  tail use list virtualization (e.g. TanStack Virtual) and bounded client buffers so they
+  stay responsive.
+- **Typed API contract:** TS types for the HTTP API are generated from the Go types (e.g.
+  via an OpenAPI schema) so the front-end and backend can't drift.
+
+### 9.3 Layout, density & display
+
 - **Desktop-only + small-screen guard:** there is no responsive/mobile layout. Below a
   minimum content width (≈1024 px), the dashboard shows a centered overlay — "The dashboard
   is designed for a wider screen; please widen the window" — instead of letting the dense
@@ -283,32 +283,37 @@ GET  /*                                           SPA: serve index.html (History
   **Compact** (dense) to suit the audience.
 - **Timestamps:** rendered in the user's **local time zone** with tabular numerals; relative
   ages (e.g. "2m") shown alongside absolute times where it aids scanning.
-- **No theme flash:** an inline boot snippet applies the persisted theme (or
-  `prefers-color-scheme` when unset) and the persisted density before first paint. Default
-  theme is light; default density is Compact.
-- **Typed API contract:** TS types for the HTTP API are generated from the Go types (e.g.
-  via an OpenAPI schema) so the front-end and backend can't drift.
-- **Theming:** **defaults to the light theme**, with a manual toggle persisted to
-  `localStorage` (may optionally follow `prefers-color-scheme` when the user hasn't chosen).
-  CSS variables drive both themes. **All brand-green accents** (text labels, stat numbers,
-  status dots, focus rings, selection highlights, primary-button fills) use a single
-  contrast-adjusted accent token — a deeper teal-green on light, a brighter mint on dark —
-  rather than the raw mint, which is too light on white. The raw mint remains the brand color
-  in the palette/logo, but on-screen accents resolve through the adjusted token.
-- **Autorefresh:** a **single global interval** in the top bar drives every auto-refreshing
-  view (Applications, Workflows list + detail, Actors, Subscriptions). Options 1 s / 3 s /
-  5 s / 10 s / Off; default 3 s; pausable. Logs stream over SSE, independent of the interval.
+
+### 9.4 Accessibility & interaction
+
+- **Accessibility floor (required):** WCAG AA contrast, visible keyboard focus, full keyboard
+  operation of tables/menus/dialogs, focus-trapped purge dialog (headless primitives), and
+  `prefers-reduced-motion` honored for the live pulse, wall-clock, and event fade-ins. State
+  is encoded as color **and** text/shape (pills), never color alone.
+- **Rows aren't links (no nested interactives):** table rows are *not* themselves links. The
+  id/name cell is the navigation link to detail; row checkboxes (bulk select), kebab menus,
+  and inline app/component links are independent focusable controls — never nested inside a
+  row-level link. Keeps keyboard/screen-reader behavior predictable.
+- **Keyboard (v1 minimal set):** `/` focuses search, `j`/`k` move row selection, `Enter`
+  opens the selected row, `g` then a key jumps between views, `?` shows a shortcuts overlay;
+  shortcuts are suppressed while a text input is focused.
+- **Action feedback:** non-blocking **toasts** confirm copies and report results; **bulk
+  purge** shows a succeeded/failed summary. Destructive confirmations state the **affected
+  count** (e.g. "Purge 37 completed workflows?") and which mechanism will run.
+- **Loading / empty / error states per view:** skeleton/loading placeholders while data
+  loads, a "discovering apps…" first-paint state, friendly empty states (no apps, no
+  workflows, no logs), inline error states that keep the rest of the dashboard usable, and
+  **per-view React error boundaries** so one failing view never white-screens the app.
+
+### 9.5 Build & tooling
+
 - **Tech:** React + Vite, small dependency footprint. **TanStack Query** for polling/caching
   and **TanStack Virtual** for large lists. **Headless accessible primitives** (Radix/Ark)
   styled in-house — no heavy design system. Read-only YAML via a **lightweight syntax
   highlighter** (not Monaco). Clipboard uses the async Clipboard API (localhost is a secure
   context, so it works) with an `execCommand` fallback.
-- **Cross-navigation (deep links):** related entities link to each other so the user can
-  follow a debugging trail. From an application's detail page, each loaded component links
-  to that component's detail; on a component's detail, each app in its "loaded by" list
-  links back to that application's detail. The same app-id ↔ app-detail linking applies on
-  the Subscriptions and Actors pages (host/app columns are links). Each view is
-  addressable by a stable route so links are shareable.
+
+### 9.6 Resources menu & News
 - **Collapsible left "Resources" menu:** a left sidebar that follows the dashboard theme
   (`--surface` background, `--border`, themed text — light/dark), with uppercase section
   headers, rounded hover rows, ~240px wide, collapsible (state remembered). Text-only menu
@@ -344,7 +349,18 @@ GET  /*                                           SPA: serve index.html (History
   good result for offline, and means the SPA only ever talks to its own origin (rather than
   fetching `diagrid.io` directly, which would require loosening the page CSP).
 
-### 9.1 Visual Identity & Theming
+### 9.7 Theming & Visual Identity
+
+- **Theming:** **defaults to the light theme**, with a manual toggle persisted to
+  `localStorage` (may optionally follow `prefers-color-scheme` when the user hasn't chosen).
+  CSS variables drive both themes. **All brand-green accents** (text labels, stat numbers,
+  status dots, focus rings, selection highlights, primary-button fills) use a single
+  contrast-adjusted accent token — a deeper teal-green on light, a brighter mint on dark —
+  rather than the raw mint, which is too light on white. The raw mint remains the brand color
+  in the palette/logo, but on-screen accents resolve through the adjusted token.
+- **No theme flash:** an inline boot snippet applies the persisted theme (or
+  `prefers-color-scheme` when unset) and the persisted density before first paint. Default
+  theme is light; default density is Compact.
 
 The dashboard carries **Diagrid's brand identity as primary** (it will fold into the
 Diagrid CLI), and uses **Dapr's indigo only as a semantic accent** to tag Dapr-runtime
