@@ -231,7 +231,9 @@ GET  /api/version                                dashboard + detected runtime ve
   headers, rounded hover rows, ~240px wide, collapsible (state remembered). Text-only menu
   items (no icons). Kept minimal and dense to match the rest of the dashboard. All links
   open in a new tab. Sections and links:
-  - **News** (dynamic — see below): latest two Diagrid blog posts + the next upcoming webinar
+  - **News** (dynamic — see below): the latest blog post, the latest report/ebook, the first
+    upcoming webinar, and the first upcoming event (each slot shows a muted empty state when
+    the feed has no item for it — e.g. no upcoming events)
   - **Build**: Dapr Workflow Skills (<https://docs.diagrid.io/develop/workflows/dapr-skills/>) ·
     Dapr Composer (<https://workflows.diagrid.io/>)
   - **Learn**: Dapr University (<https://www.diagrid.io/university>) ·
