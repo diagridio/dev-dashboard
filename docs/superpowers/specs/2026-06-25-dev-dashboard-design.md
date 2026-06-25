@@ -22,6 +22,8 @@ lifted into the Diagrid CLI (Go).
 - Read-only **except** for workflow purge.
 - Degrade gracefully when a sidecar or state store is unavailable.
 - Minimal UI, high information density, light + dark themes.
+- **Desktop-only.** Optimized for desktop widths; below a minimum width the UI shows a
+  "best viewed on a wider screen" notice rather than reflowing to a mobile layout.
 - Local standalone (self-hosted) mode only. No Kubernetes, no docker-compose.
 
 ## 2. Decisions (locked)
@@ -41,6 +43,7 @@ lifted into the Diagrid CLI (Go).
 | Run model | Passive observer. Does not start/stop apps in v1. |
 | Default port | `9090` (configurable via `--port`), auto-opens browser on start (suppressible). |
 | Components/Configurations | Read-only viewers in v1 (no YAML editing). |
+| Layout & display | **Desktop-only** — small-screen warning below a minimum width, no mobile layout. **Density toggle** (Comfortable / Compact, persisted; default Compact). Timestamps shown in **local time**. |
 
 ## 3. Architecture
 
@@ -255,8 +258,18 @@ GET  /*                                           SPA: serve index.html (History
 - **Loading / empty / error states per view:** skeleton/loading placeholders while data
   loads, a "discovering apps…" first-paint state, friendly empty states (no apps, no
   workflows, no logs), and inline error states that keep the rest of the dashboard usable.
+- **Desktop-only + small-screen guard:** there is no responsive/mobile layout. Below a
+  minimum content width (≈1024 px), the dashboard shows a centered overlay — "The dashboard
+  is designed for a wider screen; please widen the window" — instead of letting the dense
+  tables overflow or reflow. The overlay clears automatically once the window is widened.
+- **Density toggle:** a **Comfortable / Compact** control in the top bar (persisted to
+  `localStorage`) scales row padding, font size, and spacing via CSS variables. Default is
+  **Compact** (dense) to suit the audience.
+- **Timestamps:** rendered in the user's **local time zone** with tabular numerals; relative
+  ages (e.g. "2m") shown alongside absolute times where it aids scanning.
 - **No theme flash:** an inline boot snippet applies the persisted theme (or
-  `prefers-color-scheme` when unset) before first paint. Default is light.
+  `prefers-color-scheme` when unset) and the persisted density before first paint. Default
+  theme is light; default density is Compact.
 - **Typed API contract:** TS types for the HTTP API are generated from the Go types (e.g.
   via an OpenAPI schema) so the front-end and backend can't drift.
 - **Theming:** **defaults to the light theme**, with a manual toggle persisted to
