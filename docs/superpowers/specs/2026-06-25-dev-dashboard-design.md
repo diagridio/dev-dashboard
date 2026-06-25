@@ -1,0 +1,251 @@
+# Dapr Dev Dashboard — Design Specification
+
+**Date:** 2026-06-25
+**Status:** Approved (design phase)
+**Author:** Marc Duiker
+
+## 1. Purpose & Principles
+
+A local-first, single-binary CLI that gives Dapr developers a live, dense, minimal-chrome
+view of everything Dapr running on their machine via `dapr run` / `dapr run -f`.
+
+The dashboard is a **passive observer**: it inspects running apps and reads/purges workflow
+state, but it does **not** launch or stop apps in v1.
+
+Distributed as a standalone CLI today, but architected so its functionality can later be
+lifted into the Diagrid CLI (Go).
+
+### Principles
+
+- Zero-config for the common case.
+- Single self-contained binary; no runtime dependencies (no Node.js at runtime).
+- Read-only **except** for workflow purge.
+- Degrade gracefully when a sidecar or state store is unavailable.
+- Minimal UI, high information density, light + dark themes.
+- Local standalone (self-hosted) mode only. No Kubernetes, no docker-compose.
+
+## 2. Decisions (locked)
+
+| Topic | Decision |
+|---|---|
+| v1 scope | The 6 requested areas **+ Actors + Subscriptions** (free from `/v1.0/metadata`). **No** Control Plane (Kubernetes-only, irrelevant for local dev). |
+| Backend | Go + `chi` router. Domain logic in isolated `pkg/*` packages. |
+| Frontend | React + TypeScript + Vite SPA, built to static assets and embedded via `go:embed`. No Node at runtime. |
+| Workflow purge | **Hybrid**: official Dapr purge API when possible, direct state-store deletion as an explicit "force" fallback. |
+| State store discovery | **Auto-detect** from running sidecars' metadata + resource paths; user picks if multiple; `--statestore <path>` override. |
+| Distribution | GoReleaser binaries (Win/macOS/Linux × amd64/arm64) on GitHub Releases. First-class v1 install: one-line install script (`curl \| sh` / `iwr \| iex`). `go install` works for free. Homebrew/Scoop/winget deferred. |
+| Run model | Passive observer. Does not start/stop apps in v1. |
+| Default port | `9090` (configurable via `--port`), auto-opens browser on start (suppressible). |
+| Components/Configurations | Read-only viewers in v1 (no YAML editing). |
+
+## 3. Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│  dev-dashboard (single Go binary)                     │
+│                                                       │
+│  cmd/           cobra root, flags, default `serve`    │
+│  pkg/server     chi router + go:embed SPA             │
+│  pkg/discovery  standalone.List() + /v1.0/metadata    │
+│  pkg/workflow   list / history / purge                │
+│  pkg/statestore client (redis / postgres / sqlite)    │
+│  pkg/resources  component + configuration YAML loader  │
+│  pkg/logs       file tail → SSE                        │
+│  web/           React + Vite SPA → dist/ (embedded)    │
+└─────────────────────────────────────────────────────┘
+        │ HTTP /v1.0/metadata, /healthz       │ files / TCP
+        ▼                                      ▼
+   running daprd sidecars        ~/.dapr, resource paths, state store backend
+```
+
+- **Backend:** Go + `chi`. Each domain is an isolated package with its own `service`
+  and `api` (response type) sub-packages, mirroring the Diagrid prototype's structure.
+  No domain package depends on `cmd/`.
+- **Frontend:** React + TypeScript + Vite, built to static assets, embedded via `go:embed`
+  as an `fs.FS` and served by the same binary. TanStack Query for polling/caching.
+- **Run model:** the default command starts the HTTP server, serves the SPA at
+  `http://localhost:9090`, and opens the browser. Discovery reuses
+  `github.com/dapr/cli/pkg/standalone` so behavior matches `dapr list`.
+
+## 4. Detection of Running Dapr Applications & Processes
+
+Detection reuses the same mechanism as `dapr list`
+(`github.com/dapr/cli/pkg/standalone.List()`). It is layered: the **process scan is the
+source of truth** for existence/ports/PIDs and always works; the **metadata call is
+enrichment** and degrades gracefully if a sidecar is down.
+
+### 4.1 Find the sidecar processes
+
+- Enumerate all OS processes with `go-ps` (cross-platform: `/proc` on Linux,
+  `sysctl`/`proc_pidpath` on macOS, toolhelp snapshot on Windows).
+- Keep only processes whose executable is **`daprd`** (or `daprd.exe`). Each `daprd`
+  process is one Dapr sidecar = one running Dapr app, and is the anchor for everything else.
+
+### 4.2 Read each sidecar's full command line
+
+- For every `daprd` PID, fetch the full argument list via `gopsutil`
+  (reads `/proc/<pid>/cmdline`, etc.). Read directly from the PID rather than trusting
+  `go-ps`, which truncates long command lines.
+- Parse flags (handles both `--flag value` and `--flag=value`):
+  - `--app-id` → app id
+  - `--dapr-http-port`, `--dapr-grpc-port` → sidecar ports
+  - `--app-port` → the application's own port
+  - `--resources-path` / `--components-path` (repeatable) → component/config YAML locations
+  - `--config` → configuration file path
+  - `--unix-domain-socket`, metrics flags, etc.
+
+This step alone yields app id, all ports, the daprd PID, and resource paths **with no
+sidecar interaction** — so it works even when the sidecar is unhealthy.
+
+### 4.3 Enrich from `/v1.0/metadata`
+
+- Using the discovered HTTP port, call `GET http://127.0.0.1:{httpPort}/v1.0/metadata`
+  (2 s timeout). Returns runtime version, loaded components, actor types/counts,
+  subscriptions, and an `extended` map populated by the Dapr CLI at `dapr run` time:
+  - `appPID`, `cliPID` → application PID and launching CLI PID
+  - `appCommand` → full app command (used to **infer runtime/language**)
+  - `appLogPath`, `daprdLogPath` → log file locations (present only for `dapr run -f`)
+  - `runTemplatePath`, `runTemplateName` → owning `dapr.yaml` template
+
+### 4.4 Health
+
+- A background poller calls `GET /v1.0/healthz` (~5 s) per sidecar to render the
+  healthy / starting / unhealthy badge.
+
+### 4.5 Consequences & edge cases
+
+- **App PID** comes from `appPID` in extended metadata, not from process scanning. If the
+  sidecar never received it (very ad-hoc launches), show the daprd PID and mark the app
+  PID unknown.
+- **Runtime/language detection is heuristic** — string-matching the app command
+  (`go run`, `python`, `node`, `dotnet`, `java`, …) with an "unknown" fallback.
+- Detection is **poll-based** (re-scan on the autorefresh interval), not event-driven;
+  new `dapr run` apps appear within one refresh cycle.
+
+## 5. Data Sources
+
+| Source | How | Used for |
+|---|---|---|
+| Process scan | `standalone.List()` (`go-ps` + `gopsutil`) | app id, http/grpc/app ports, daprd/app/cli PIDs, age, run-template, log/resource paths |
+| `/v1.0/metadata` | HTTP per sidecar | runtime version, loaded components, actor types/counts, subscriptions, extended metadata |
+| `/v1.0/healthz` | background poller (~5 s) | health badge |
+| Full cmdline via PID | `gopsutil` `/proc/<pid>` | runtime/language inference |
+| YAML files | walk `~/.dapr/components`, `~/.dapr/config.yaml`, live `--resources-path` from daprd args | components + configurations |
+| State store backend | client built from auto-detected component YAML | workflow list/history/purge |
+| Log files | `~/.dapr/logs/*` and metadata `appLogPath`/`daprdLogPath` | log tailing |
+
+## 6. Feature Views (v1)
+
+1. **Overview** — table of running apps/sidecars: app id, health, runtime/language,
+   app/http/grpc ports, daprd + app PIDs, age, run-template. Autorefreshes.
+2. **App / Sidecar detail** — tabs:
+   - Summary (ports, PIDs, command, resource/config paths)
+   - Metadata (runtime version, enabled features)
+   - **Actors** (types + counts)
+   - **Subscriptions** (topic, pubsub component, routes, dead-letter topic)
+   - **Logs**
+3. **Workflows** — list of executions across all apps with status filter
+   (Pending / Running / Completed / Failed / Terminated / Suspended), app/name/instance-id
+   search, and pagination. **Autorefreshes** (default 3 s, pausable, interval selector).
+   Detail drill-in: full history timeline (events, inputs/outputs, timestamps, elapsed,
+   replay count) + derived status. Purge actions (see §7).
+4. **Components & Configurations** — list + read-only YAML viewer, enriched with `LoadedBy`
+   (which app ids loaded each component, from metadata). Syntax-highlighted viewer.
+5. **Logs** — per-app daprd + app logs, live tail via SSE, log-level parsing/coloring,
+   keyword filter, follow toggle.
+
+## 7. Workflow Purge (Hybrid)
+
+- **Single instance**, terminal state, healthy sidecar with the workflow component present
+  → `POST /v1.0-beta1/workflows/{component}/{instanceId}/purge` (official Dapr API).
+- **Force / fallback** (running, stuck/orphaned, or no sidecar available) → direct
+  state-store key deletion: scan keys via the `KeysLike` pattern
+  (`<appId>||dapr.internal.<namespace>.<appId>.workflow||<instanceId>||...`) and delete
+  them. Clearly labeled "Force delete", separate confirmation.
+- **Bulk**: purge selected rows, and purge-all-matching-the-current-filter (e.g. all
+  Completed). Bulk applies the same per-item hybrid logic and returns a summary
+  (succeeded / failed counts).
+- Every destructive action requires explicit confirmation, and the UI states which
+  mechanism (API vs force delete) will be used before the user confirms.
+
+## 8. HTTP API (Backend → SPA)
+
+REST + JSON, with SSE for streams. Indicative surface:
+
+```
+GET  /api/apps                                  list sidecars/apps
+GET  /api/apps/{appId}                           detail incl. metadata
+GET  /api/apps/{appId}/logs?source=daprd|app     (SSE)
+GET  /api/workflows                              list (filter/search/paginate)
+GET  /api/workflows/{appId}/{instanceId}         detail + history
+POST /api/workflows/{appId}/{instanceId}/purge   body: { force?: bool }
+POST /api/workflows/purge                        bulk: { ids[], force?: bool }
+GET  /api/resources?kind=component|configuration list
+GET  /api/resources/{kind}/{name}                full YAML
+GET  /api/statestores                            detected stores (+ which is active)
+GET  /api/health                                 dashboard liveness
+GET  /api/version                                dashboard + detected runtime versions
+```
+
+## 9. Frontend / UX
+
+- **Minimal chrome:** left nav (Overview · Workflows · Components · Configurations),
+  top bar with theme toggle + global autorefresh control. Dense tables; monospace for
+  ids/ports/PIDs.
+- **Theming:** follows `prefers-color-scheme` by default with a manual toggle persisted to
+  `localStorage`. CSS variables drive both themes.
+- **Autorefresh:** a central setting. Workflows + Overview poll on the interval
+  (default 3 s, pausable). Logs stream over SSE.
+- **Tech:** React + Vite with a small dependency footprint; TanStack Query for
+  polling/caching; a lightweight component layer (no heavy design system) to keep bundles
+  small. Syntax-highlighted YAML viewer (e.g. a lightweight highlighter or Monaco if the
+  bundle cost is acceptable).
+
+## 10. Portability to the Diagrid Go CLI
+
+- All logic lives in `pkg/*` domain packages with no dependency on `cmd/`.
+- The server mounts as a `chi` sub-router; the SPA is an embedded `fs.FS`. Both can be
+  re-mounted under a `diagrid dashboard` subcommand.
+- Discovery already depends on `dapr/cli/pkg/standalone`, the same dependency the Diagrid
+  CLI can use.
+- Configuration is via flags/env with sane defaults; no global mutable state.
+
+## 11. Error Handling & Edge Cases
+
+- **No apps running** → friendly empty state, not an error.
+- **Sidecar down / metadata timeout (2 s)** → show process-scan data, mark metadata
+  "unavailable", keep going.
+- **State store not detected / unreachable** → Workflows view shows an actionable message
+  and the `--statestore` hint; the rest of the dashboard still works.
+- **Multiple state stores** → user picks the active store in the UI.
+- **Ad-hoc `dapr run` (no `-f`)** has no log files → Logs tab explains logs are only
+  available for file-logged runs.
+- **Purge of a non-terminal workflow via the official API** fails → UI offers the force path.
+
+## 12. Testing
+
+- **Go:** unit tests per service package (cmdline parsing, workflow state decoding,
+  purge-mechanism selection, YAML loading) with fakes for sidecar HTTP + state store;
+  table-driven. `httptest` for handlers.
+- **Frontend:** component tests (Vitest + Testing Library) for tables, filters, and the
+  purge-confirm flows; MSW to mock the API.
+- **E2E smoke:** one happy-path run against a real `dapr run -f` sample app (borrow example
+  apps from the Diagrid prototype).
+
+## 13. Out of Scope for v1
+
+Control plane status (Kubernetes-only), topology graph, metrics/sparklines, data browser,
+jobs/scheduler, agents, YAML editing, launching/stopping apps, and Kubernetes &
+docker-compose modes. Local standalone (self-hosted) mode only.
+
+## 14. References
+
+- Deprecated Dapr Dashboard — `/Users/marcduiker/dev/dapr/dashboard/`
+  (feature-parity baseline; Angular + Go, 10 s polling, K8s log streaming).
+- Dapr CLI — `/Users/marcduiker/dev/dapr/cli/`
+  (`pkg/standalone/list.go` discovery, `pkg/metadata/metadata.go`, `~/.dapr` layout,
+  `pkg/runfileconfig/` run templates).
+- Diagrid Dev Dashboard prototype —
+  `/Users/marcduiker/dev/diagrid/cloudgrid/tools/diagrid-dashboard`
+  (Go + chi + React; workflow list/history via state store `KeysLike`, SSE logs,
+  sidecar discovery, resource loading; read-only, no purge, no workflow autorefresh).
