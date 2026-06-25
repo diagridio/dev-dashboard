@@ -41,6 +41,7 @@ func TestSPAFallsBackToIndex(t *testing.T) {
 	res, body := get(t, h, "/workflows/order/abc123")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "shell")
+	require.Equal(t, "no-store", res.Header.Get("Cache-Control"))
 }
 
 func TestSPARespectsBasePath(t *testing.T) {

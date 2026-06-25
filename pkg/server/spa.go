@@ -1,11 +1,9 @@
 package server
 
 import (
-	"io"
 	"io/fs"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // SPAHandler serves static assets from fsys and falls back to index.html for
@@ -33,18 +31,14 @@ func SPAHandler(fsys fs.FS, basePath string) http.Handler {
 	})
 }
 
-func serveIndex(w http.ResponseWriter, r *http.Request, fsys fs.FS) {
-	f, err := fsys.Open("index.html")
+func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS) {
+	data, err := fs.ReadFile(fsys, "index.html")
 	if err != nil {
 		http.Error(w, "index.html not found", http.StatusInternalServerError)
 		return
 	}
-	defer func() { _ = f.Close() }()
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	if rs, ok := f.(io.ReadSeeker); ok {
-		http.ServeContent(w, r, "index.html", time.Time{}, rs)
-		return
-	}
-	_, _ = io.Copy(w, f)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
