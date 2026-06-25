@@ -1,0 +1,1108 @@
+# Dev Dashboard — Plan 2: Discovery + Applications Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Discover Dapr apps/sidecars running locally and surface them in the UI — an **Applications** list and an **Application/Sidecar detail** view (Summary + Metadata) — wired through a typed `/api/apps` surface with a single global autorefresh interval.
+
+**Architecture:** A new `pkg/discovery` package layers process-scan (source of truth for existence/ports/PIDs, via the Dapr CLI's `standalone` package) with `/v1.0/metadata` enrichment and `/v1.0/healthz` health, behind a `discovery.Service` interface. The foundation's `apiRouter` is extended to mount `/api/apps` + `/api/apps/{appId}`, with the service injected via `server.Options`. The SPA replaces the Applications placeholder with a real table (polling on a global interval) and adds an App detail route.
+
+**Tech Stack:** (builds on Plan 1) Go + chi · `github.com/dapr/cli/pkg/standalone` · `github.com/shirou/gopsutil/v3/process` · React + TanStack Query · React Router.
+
+**Builds on Plan 1 (Foundation), now merged.** Real interfaces this plan consumes:
+- Go: `version.Info`/`version.Get()`; `server.Options{BasePath, DistFS, Version}`, `server.NewRouter(opts) http.Handler`, `apiRouter(v version.Info) http.Handler` (in `pkg/server/api.go`), `writeJSON(w, status, v)`; `web.DistFS()`.
+- Web: `apiUrl(path)`/`fetchJSON<T>(path)` (`web/src/lib/api.ts`), `QueryProvider` (`web/src/lib/query.tsx`), `NAV_ITEMS`/`TopNav`, `routes`/`router` (`web/src/router.tsx`), `Placeholder` (`web/src/pages/Placeholder.tsx`), prefs (`web/src/lib/prefs.ts`), the `.mono` class + theme tokens.
+
+**Module path:** `github.com/diagridio/dev-dashboard`.
+
+## Global Constraints
+
+(Inherited verbatim from Plan 1's Global Constraints — single binary, desktop-only, light/Compact defaults, base-path-aware, WCAG-AA, lean bundle, headless primitives, theme tokens, monospace+tabular-nums, local timestamps, testify+`//go:build unit`, Vitest+RTL+MSW, `data-cy` selectors.) Plan-2-specific:
+
+- **Process scan is the source of truth**; `/v1.0/metadata` is enrichment that must degrade gracefully (2 s timeout → mark metadata unavailable, keep process-scan data).
+- **App PID** comes from extended metadata `appPID` (not process scan); unknown → show daprd PID + mark app PID unknown.
+- **Runtime/language is heuristic** (string-match the app command) with an "unknown" fallback.
+- **Single global autorefresh interval** (top bar): options `1s / 3s / 5s / 10s / Off`, **default 3 s**, pausable, persisted to `localStorage`. Drives the Applications list (and later views).
+- **Refresh never fights interaction**: polling merges into state; never clobbers scroll/selection.
+- **Rows aren't links**: the app-id cell is the navigation link; the row is not a link.
+- **Timestamps local**; ages like "14m" alongside.
+
+## File Structure
+
+```
+pkg/discovery/
+  types.go         # Instance, Health, Metadata structs + JSON tags
+  types_test.go
+  infer.go         # InferRuntime(appCommand) (language, version-ish)
+  infer_test.go
+  parse.go         # ParseDaprdArgs([]string) ParsedArgs
+  parse_test.go
+  metadata.go      # FetchMetadata(ctx, httpPort) (Metadata, error)
+  metadata_test.go
+  health.go        # CheckHealth(ctx, httpPort) Health
+  service.go       # Service interface + service impl (Scanner injected)
+  service_test.go
+pkg/server/
+  apps.go          # appsRouter(svc discovery.Service) + handlers
+  apps_test.go
+  api.go           # MODIFY: apiRouter(v, apps) mounts /apps
+  server.go        # MODIFY: Options.Apps; NewRouter passes it
+  server_test.go   # MODIFY: pass a fake AppsService
+cmd/root.go        # MODIFY: build discovery.Service, set Options.Apps
+web/src/
+  lib/refresh.tsx        # RefreshProvider + useRefreshInterval + control
+  lib/refresh.test.tsx
+  components/RefreshControl.tsx
+  components/TopNav.tsx   # MODIFY: render <RefreshControl/>
+  types/api.ts           # AppSummary, AppDetail TS types
+  hooks/useApps.ts       # useApps(), useApp(appId)
+  hooks/useApps.test.tsx
+  pages/Applications.tsx  # the list
+  pages/Applications.test.tsx
+  pages/AppDetail.tsx     # summary + metadata tabs
+  pages/AppDetail.test.tsx
+  router.tsx             # MODIFY: Applications index + /apps/:appId route
+  main.tsx               # MODIFY: wrap in <RefreshProvider>
+```
+
+---
+
+### Task 1: Discovery types
+
+**Files:** Create `pkg/discovery/types.go`, `pkg/discovery/types_test.go`
+
+**Interfaces — Produces:**
+```go
+type Health string // "healthy" | "starting" | "unhealthy" | "unknown"
+const (HealthHealthy Health="healthy"; HealthStarting Health="starting"; HealthUnhealthy Health="unhealthy"; HealthUnknown Health="unknown")
+
+type Instance struct {
+  AppID          string   `json:"appId"`
+  Health         Health   `json:"health"`
+  Runtime        string   `json:"runtime"`        // e.g. "go", "python", "node", "dotnet", "java", "unknown"
+  HTTPPort       int      `json:"httpPort"`
+  GRPCPort       int      `json:"grpcPort"`
+  AppPort        int      `json:"appPort"`
+  DaprdPID       int      `json:"daprdPid"`
+  AppPID         int      `json:"appPid"`         // 0 = unknown
+  CLIPID         int      `json:"cliPid"`
+  Age            string   `json:"age"`            // human, e.g. "14m"
+  Created        string   `json:"created"`        // local time string
+  RunTemplate    string   `json:"runTemplate"`
+  ResourcePaths  []string `json:"resourcePaths"`
+  ConfigPath     string   `json:"configPath"`
+  AppLogPath     string   `json:"appLogPath"`
+  DaprdLogPath   string   `json:"daprdLogPath"`
+  Command        string   `json:"command"`
+  RuntimeVersion string   `json:"runtimeVersion"` // from metadata; "" if unavailable
+  MetadataOK     bool     `json:"metadataOk"`     // false if /v1.0/metadata failed
+}
+```
+
+- [ ] **Step 1: Write the failing test** (`types_test.go`, `//go:build unit`): assert JSON marshals with camelCase keys (`appId`, `httpPort`, `metadataOk`) and that `HealthUnknown == "unknown"`.
+```go
+//go:build unit
+
+package discovery
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestInstanceJSONKeys(t *testing.T) {
+	b, err := json.Marshal(Instance{AppID: "x", HTTPPort: 3500, MetadataOK: true})
+	require.NoError(t, err)
+	s := string(b)
+	require.Contains(t, s, `"appId":"x"`)
+	require.Contains(t, s, `"httpPort":3500`)
+	require.Contains(t, s, `"metadataOk":true`)
+}
+
+func TestHealthConstants(t *testing.T) {
+	require.Equal(t, Health("unknown"), HealthUnknown)
+}
+```
+- [ ] **Step 2: Run → fail.** `go test -tags unit ./pkg/discovery/ -run TestInstance -v` → FAIL (no package).
+- [ ] **Step 3: Implement** `types.go` with the structs/constants above (package `discovery`).
+- [ ] **Step 4: Run → pass.** `go test -tags unit ./pkg/discovery/ -v`
+- [ ] **Step 5: Commit.** `git add pkg/discovery/types.go pkg/discovery/types_test.go && git commit -m "feat(discovery): instance + health types"`
+
+---
+
+### Task 2: Runtime/language inference
+
+**Files:** Create `pkg/discovery/infer.go`, `pkg/discovery/infer_test.go`
+
+**Interfaces — Produces:** `func InferRuntime(appCommand string) string` → one of `go`, `python`, `node`, `dotnet`, `java`, `rust`, or `unknown`.
+
+- [ ] **Step 1: Write the failing test** (table-driven):
+```go
+//go:build unit
+
+package discovery
+
+import "testing"
+import "github.com/stretchr/testify/require"
+
+func TestInferRuntime(t *testing.T) {
+	cases := map[string]string{
+		"go run ./cmd/app":              "go",
+		"/usr/bin/python3 app.py":       "python",
+		"python app.py":                 "python",
+		"node server.js":                "node",
+		"npm run start":                 "node",
+		"dotnet run":                    "dotnet",
+		"java -jar app.jar":             "java",
+		"./target/release/app":          "unknown",
+		"":                              "unknown",
+	}
+	for cmd, want := range cases {
+		t.Run(cmd, func(t *testing.T) { require.Equal(t, want, InferRuntime(cmd)) })
+	}
+}
+```
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `infer.go`:
+```go
+package discovery
+
+import "strings"
+
+// InferRuntime guesses the app's language from its launch command (best-effort).
+func InferRuntime(appCommand string) string {
+	c := strings.ToLower(appCommand)
+	switch {
+	case strings.Contains(c, "go run"), strings.HasPrefix(c, "go "):
+		return "go"
+	case strings.Contains(c, "python"):
+		return "python"
+	case strings.Contains(c, "node"), strings.Contains(c, "npm "), strings.Contains(c, "npx "), strings.Contains(c, "yarn "):
+		return "node"
+	case strings.Contains(c, "dotnet"):
+		return "dotnet"
+	case strings.Contains(c, "java "), strings.Contains(c, "-jar"):
+		return "java"
+	default:
+		return "unknown"
+	}
+}
+```
+- [ ] **Step 4: Run → pass.**
+- [ ] **Step 5: Commit.** `git commit -m "feat(discovery): runtime/language inference"`
+
+---
+
+### Task 3: daprd argument parsing
+
+**Files:** Create `pkg/discovery/parse.go`, `pkg/discovery/parse_test.go`
+
+**Interfaces — Produces:**
+```go
+type ParsedArgs struct {
+  AppID         string
+  HTTPPort      int
+  GRPCPort      int
+  AppPort       int
+  ConfigPath    string
+  ResourcePaths []string
+}
+func ParseDaprdArgs(args []string) ParsedArgs
+```
+Handles both `--flag value` and `--flag=value`. Recognizes `--app-id`, `--dapr-http-port`, `--dapr-grpc-port`, `--app-port`, `--config`, and repeatable `--resources-path`/`--components-path`.
+
+- [ ] **Step 1: Write the failing test:**
+```go
+//go:build unit
+
+package discovery
+
+import "testing"
+import "github.com/stretchr/testify/require"
+
+func TestParseDaprdArgs(t *testing.T) {
+	args := []string{
+		"daprd", "--app-id", "order", "--dapr-http-port=3500",
+		"--dapr-grpc-port", "50001", "--app-port=8080",
+		"--resources-path", "/a", "--resources-path", "/b",
+		"--config", "/cfg.yaml",
+	}
+	got := ParseDaprdArgs(args)
+	require.Equal(t, "order", got.AppID)
+	require.Equal(t, 3500, got.HTTPPort)
+	require.Equal(t, 50001, got.GRPCPort)
+	require.Equal(t, 8080, got.AppPort)
+	require.Equal(t, []string{"/a", "/b"}, got.ResourcePaths)
+	require.Equal(t, "/cfg.yaml", got.ConfigPath)
+}
+```
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `parse.go`:
+```go
+package discovery
+
+import "strconv"
+import "strings"
+
+type ParsedArgs struct {
+	AppID         string
+	HTTPPort      int
+	GRPCPort      int
+	AppPort       int
+	ConfigPath    string
+	ResourcePaths []string
+}
+
+// ParseDaprdArgs extracts the fields we surface from a daprd process's argv.
+func ParseDaprdArgs(args []string) ParsedArgs {
+	var p ParsedArgs
+	for i := 0; i < len(args); i++ {
+		flag, val, hasEq := strings.Cut(args[i], "=")
+		next := func() string {
+			if hasEq {
+				return val
+			}
+			if i+1 < len(args) {
+				i++
+				return args[i]
+			}
+			return ""
+		}
+		switch flag {
+		case "--app-id":
+			p.AppID = next()
+		case "--dapr-http-port":
+			p.HTTPPort, _ = strconv.Atoi(next())
+		case "--dapr-grpc-port":
+			p.GRPCPort, _ = strconv.Atoi(next())
+		case "--app-port":
+			p.AppPort, _ = strconv.Atoi(next())
+		case "--config":
+			p.ConfigPath = next()
+		case "--resources-path", "--components-path":
+			if v := next(); v != "" {
+				p.ResourcePaths = append(p.ResourcePaths, v)
+			}
+		}
+	}
+	return p
+}
+```
+- [ ] **Step 4: Run → pass.**
+- [ ] **Step 5: Commit.** `git commit -m "feat(discovery): parse daprd argv"`
+
+---
+
+### Task 4: Metadata client
+
+**Files:** Create `pkg/discovery/metadata.go`, `pkg/discovery/metadata_test.go`
+
+**Interfaces — Produces:**
+```go
+type Metadata struct {
+  ID             string
+  RuntimeVersion string
+  AppPID         int
+  CLIPID         int
+  AppCommand     string
+  AppLogPath     string
+  DaprdLogPath   string
+  RunTemplate    string
+}
+func FetchMetadata(ctx context.Context, client *http.Client, httpPort int) (Metadata, error)
+```
+Calls `GET http://127.0.0.1:{httpPort}/v1.0/metadata`, decodes `id`, `runtimeVersion`, and the `extended` map (`appPID`, `cliPID`, `appCommand`, `appLogPath`, `daprdLogPath`, `runTemplateName`).
+
+- [ ] **Step 1: Write the failing test** (httptest serving a metadata payload):
+```go
+//go:build unit
+
+package discovery
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestFetchMetadata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"order","runtimeVersion":"1.14.4","extended":{"appPID":"48213","cliPID":"48201","appCommand":"go run ./cmd/order","appLogPath":"/l/app.log","daprdLogPath":"/l/daprd.log","runTemplateName":"dapr.yaml"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+
+	md, err := FetchMetadata(context.Background(), &http.Client{Timeout: 2 * time.Second}, port)
+	require.NoError(t, err)
+	require.Equal(t, "order", md.ID)
+	require.Equal(t, "1.14.4", md.RuntimeVersion)
+	require.Equal(t, 48213, md.AppPID)
+	require.Equal(t, "go run ./cmd/order", md.AppCommand)
+	require.Equal(t, "dapr.yaml", md.RunTemplate)
+}
+```
+> Note: the test server runs on a random port; `FetchMetadata` must target `127.0.0.1:{port}`. Since httptest binds `127.0.0.1`, pass the parsed port.
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `metadata.go`:
+```go
+package discovery
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+)
+
+type Metadata struct {
+	ID             string
+	RuntimeVersion string
+	AppPID         int
+	CLIPID         int
+	AppCommand     string
+	AppLogPath     string
+	DaprdLogPath   string
+	RunTemplate    string
+}
+
+type rawMetadata struct {
+	ID             string            `json:"id"`
+	RuntimeVersion string            `json:"runtimeVersion"`
+	Extended       map[string]string `json:"extended"`
+}
+
+// FetchMetadata queries a sidecar's /v1.0/metadata endpoint.
+func FetchMetadata(ctx context.Context, client *http.Client, httpPort int) (Metadata, error) {
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1.0/metadata", httpPort)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return Metadata{}, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return Metadata{}, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return Metadata{}, fmt.Errorf("metadata: status %d", resp.StatusCode)
+	}
+	var raw rawMetadata
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return Metadata{}, err
+	}
+	atoi := func(k string) int { n, _ := strconv.Atoi(raw.Extended[k]); return n }
+	return Metadata{
+		ID:             raw.ID,
+		RuntimeVersion: raw.RuntimeVersion,
+		AppPID:         atoi("appPID"),
+		CLIPID:         atoi("cliPID"),
+		AppCommand:     raw.Extended["appCommand"],
+		AppLogPath:     raw.Extended["appLogPath"],
+		DaprdLogPath:   raw.Extended["daprdLogPath"],
+		RunTemplate:    raw.Extended["runTemplateName"],
+	}, nil
+}
+```
+- [ ] **Step 4: Run → pass.**
+- [ ] **Step 5: Commit.** `git commit -m "feat(discovery): /v1.0/metadata client"`
+
+---
+
+### Task 5: Health check
+
+**Files:** Create `pkg/discovery/health.go` (no separate test file — covered via service test in Task 6; this is a thin wrapper, folded into Task 6's commit is acceptable, but commit standalone here).
+
+**Interfaces — Produces:** `func CheckHealth(ctx context.Context, client *http.Client, httpPort int) Health` → `HealthHealthy` on 204/200 from `/v1.0/healthz`, else `HealthUnhealthy`.
+
+- [ ] **Step 1: Write the failing test** (`health_test.go`):
+```go
+//go:build unit
+
+package discovery
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestCheckHealthHealthy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) }))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+	require.Equal(t, HealthHealthy, CheckHealth(context.Background(), &http.Client{Timeout: time.Second}, port))
+}
+
+func TestCheckHealthUnhealthy(t *testing.T) {
+	require.Equal(t, HealthUnhealthy, CheckHealth(context.Background(), &http.Client{Timeout: 100 * time.Millisecond}, 1)) // nothing listening on port 1
+}
+```
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `health.go`:
+```go
+package discovery
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+)
+
+// CheckHealth probes a sidecar's /v1.0/healthz endpoint.
+func CheckHealth(ctx context.Context, client *http.Client, httpPort int) Health {
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1.0/healthz", httpPort)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return HealthUnknown
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return HealthUnhealthy
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
+		return HealthHealthy
+	}
+	return HealthUnhealthy
+}
+```
+- [ ] **Step 4: Run → pass.**
+- [ ] **Step 5: Commit.** `git commit -m "feat(discovery): healthz check"`
+
+---
+
+### Task 6: Discovery service (assembly)
+
+**Files:** Create `pkg/discovery/service.go`, `pkg/discovery/service_test.go`
+
+**Interfaces — Produces:**
+```go
+// Scanner returns the raw per-sidecar facts from the process table.
+// Production uses the Dapr CLI standalone list; tests inject a fake.
+type ScanResult struct {
+  AppID        string
+  HTTPPort     int
+  GRPCPort     int
+  AppPort      int
+  DaprdPID     int
+  CLIPID       int
+  Created      time.Time
+  RunTemplate  string
+  ResourcePaths []string
+  ConfigPath   string
+  Command      string
+}
+type Scanner func() ([]ScanResult, error)
+
+type Service interface {
+  List(ctx context.Context) ([]Instance, error)
+  Get(ctx context.Context, appID string) (Instance, error)
+}
+
+func New(scan Scanner, client *http.Client) Service
+```
+`List` runs the scanner, then for each result fetches metadata + health concurrently (bounded), filling `Instance`. Metadata failure → `MetadataOK=false`, keep scan data, `AppPID` falls back to 0/unknown, `Runtime` inferred from `Command`. `Get` filters `List` by appID (404 → error).
+
+- [ ] **Step 1: Write the failing test** with a fake scanner + an httptest metadata/health server:
+```go
+//go:build unit
+
+package discovery
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestServiceListEnriches(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/healthz":
+			w.WriteHeader(204)
+		case "/v1.0/metadata":
+			_, _ = w.Write([]byte(`{"id":"order","runtimeVersion":"1.14.4","extended":{"appPID":"48213","appCommand":"go run ./cmd/order"}}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "order", HTTPPort: port, GRPCPort: 50001, AppPort: 8080, DaprdPID: 48230, Created: time.Now(), Command: "go run ./cmd/order"}}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: 2 * time.Second})
+
+	list, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	got := list[0]
+	require.Equal(t, "order", got.AppID)
+	require.Equal(t, HealthHealthy, got.Health)
+	require.True(t, got.MetadataOK)
+	require.Equal(t, 48213, got.AppPID)
+	require.Equal(t, "1.14.4", got.RuntimeVersion)
+	require.Equal(t, "go", got.Runtime)
+
+	one, err := svc.Get(context.Background(), "order")
+	require.NoError(t, err)
+	require.Equal(t, "order", one.AppID)
+
+	_, err = svc.Get(context.Background(), "nope")
+	require.Error(t, err)
+}
+
+func TestServiceListMetadataDown(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "x", HTTPPort: 1, DaprdPID: 9, Command: "python app.py"}}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: 100 * time.Millisecond})
+	list, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.False(t, list[0].MetadataOK)
+	require.Equal(t, HealthUnhealthy, list[0].Health)
+	require.Equal(t, "python", list[0].Runtime) // inferred from scan command
+	require.Equal(t, 0, list[0].AppPID)         // unknown
+}
+```
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `service.go`. Use `ErrNotFound` for `Get` misses; compute `Age` from `Created`; prefer metadata `AppCommand` for `Runtime`, else scan `Command`.
+```go
+package discovery
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"sort"
+	"time"
+)
+
+var ErrNotFound = errors.New("app not found")
+
+type Scanner func() ([]ScanResult, error)
+
+type ScanResult struct {
+	AppID         string
+	HTTPPort      int
+	GRPCPort      int
+	AppPort       int
+	DaprdPID      int
+	CLIPID        int
+	Created       time.Time
+	RunTemplate   string
+	ResourcePaths []string
+	ConfigPath    string
+	Command       string
+}
+
+type Service interface {
+	List(ctx context.Context) ([]Instance, error)
+	Get(ctx context.Context, appID string) (Instance, error)
+}
+
+type service struct {
+	scan   Scanner
+	client *http.Client
+}
+
+func New(scan Scanner, client *http.Client) Service { return &service{scan: scan, client: client} }
+
+func (s *service) List(ctx context.Context) ([]Instance, error) {
+	results, err := s.scan()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Instance, len(results))
+	for i, r := range results {
+		out[i] = s.enrich(ctx, r)
+	}
+	sort.Slice(out, func(a, b int) bool { return out[a].AppID < out[b].AppID })
+	return out, nil
+}
+
+func (s *service) Get(ctx context.Context, appID string) (Instance, error) {
+	list, err := s.List(ctx)
+	if err != nil {
+		return Instance{}, err
+	}
+	for _, in := range list {
+		if in.AppID == appID {
+			return in, nil
+		}
+	}
+	return Instance{}, fmt.Errorf("%w: %s", ErrNotFound, appID)
+}
+
+func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
+	in := Instance{
+		AppID: r.AppID, HTTPPort: r.HTTPPort, GRPCPort: r.GRPCPort, AppPort: r.AppPort,
+		DaprdPID: r.DaprdPID, CLIPID: r.CLIPID, RunTemplate: r.RunTemplate,
+		ResourcePaths: r.ResourcePaths, ConfigPath: r.ConfigPath, Command: r.Command,
+		Created: r.Created.Local().Format("15:04:05"), Age: humanAge(r.Created),
+		Runtime: InferRuntime(r.Command), Health: HealthUnknown,
+	}
+	in.Health = CheckHealth(ctx, s.client, r.HTTPPort)
+	md, err := FetchMetadata(ctx, s.client, r.HTTPPort)
+	if err != nil {
+		in.MetadataOK = false
+		return in
+	}
+	in.MetadataOK = true
+	in.RuntimeVersion = md.RuntimeVersion
+	in.AppPID = md.AppPID
+	if md.CLIPID != 0 {
+		in.CLIPID = md.CLIPID
+	}
+	if md.AppCommand != "" {
+		in.Command = md.AppCommand
+		in.Runtime = InferRuntime(md.AppCommand)
+	}
+	if md.AppLogPath != "" {
+		in.AppLogPath = md.AppLogPath
+	}
+	if md.DaprdLogPath != "" {
+		in.DaprdLogPath = md.DaprdLogPath
+	}
+	if md.RunTemplate != "" {
+		in.RunTemplate = md.RunTemplate
+	}
+	return in
+}
+
+func humanAge(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+}
+```
+- [ ] **Step 4: Run → pass.** `go test -tags unit ./pkg/discovery/ -v`
+- [ ] **Step 5: Commit.** `git commit -m "feat(discovery): service assembly (scan + metadata + health)"`
+
+---
+
+### Task 7: Real scanner (Dapr standalone)
+
+**Files:** Create `pkg/discovery/scan_standalone.go`
+
+**Interfaces — Produces:** `func StandaloneScanner() Scanner` — adapts `github.com/dapr/cli/pkg/standalone.List()` into `[]ScanResult` (mapping AppID, ports, PIDs, created, run-template, resource paths, command). This is the production `Scanner` passed in `cmd`.
+
+> No unit test (it reads the live process table — environment-dependent; the Service is already tested with a fake Scanner). Verify it compiles and `go vet` passes.
+
+- [ ] **Step 1: Add the dependency.** `go get github.com/dapr/cli@latest && go get github.com/shirou/gopsutil/v3@latest`
+- [ ] **Step 2: Implement** `scan_standalone.go` (map the `standalone.ListOutput` fields — `AppID`, `HTTPPort`, `GRPCPort`, `AppPort`, `DaprdPID`, `CliPID`, `Created`, `RunTemplateName`, `ResourcePaths`, `Command`; parse `Created` with the layout the CLI uses, falling back to zero time):
+```go
+package discovery
+
+import (
+	"time"
+
+	"github.com/dapr/cli/pkg/standalone"
+)
+
+// StandaloneScanner reads running daprd sidecars via the Dapr CLI, matching `dapr list`.
+func StandaloneScanner() Scanner {
+	return func() ([]ScanResult, error) {
+		list, err := standalone.List()
+		if err != nil {
+			return nil, err
+		}
+		out := make([]ScanResult, 0, len(list))
+		for _, o := range list {
+			created, _ := time.Parse("2006-01-02 15:04.05", o.Created)
+			out = append(out, ScanResult{
+				AppID: o.AppID, HTTPPort: o.HTTPPort, GRPCPort: o.GRPCPort, AppPort: o.AppPort,
+				DaprdPID: o.DaprdPID, CLIPID: o.CliPID, Created: created,
+				RunTemplate: o.RunTemplateName, ResourcePaths: o.ResourcePaths, Command: o.Command,
+			})
+		}
+		return out, nil
+	}
+}
+```
+> If field names differ in the pinned `standalone` version, adjust to the actual struct (the implementer should `go doc github.com/dapr/cli/pkg/standalone.ListOutput` and map accordingly). Keep `ScanResult` stable.
+- [ ] **Step 3: Verify.** `go build ./... && go vet -tags unit ./...`
+- [ ] **Step 4: Commit.** `git commit -m "feat(discovery): standalone (dapr CLI) scanner"`
+
+---
+
+### Task 8: API — `/api/apps` + `/api/apps/{appId}`
+
+**Files:** Create `pkg/server/apps.go`, `pkg/server/apps_test.go`; **modify** `pkg/server/api.go`, `pkg/server/server.go`, `pkg/server/server_test.go`.
+
+**Interfaces — Produces:**
+- `appsRouter(svc discovery.Service) http.Handler` → `GET /` (list) and `GET /{appId}` (detail; 404 on `discovery.ErrNotFound`).
+- `Options` gains `Apps discovery.Service`; `apiRouter(v version.Info, apps discovery.Service)` mounts `/apps`; `NewRouter` passes `opts.Apps`.
+
+- [ ] **Step 1: Write the failing test** (`apps_test.go`) using a fake `discovery.Service`:
+```go
+//go:build unit
+
+package server
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/stretchr/testify/require"
+)
+
+type fakeApps struct{ items []discovery.Instance }
+
+func (f fakeApps) List(context.Context) ([]discovery.Instance, error) { return f.items, nil }
+func (f fakeApps) Get(_ context.Context, id string) (discovery.Instance, error) {
+	for _, i := range f.items {
+		if i.AppID == id {
+			return i, nil
+		}
+	}
+	return discovery.Instance{}, discovery.ErrNotFound
+}
+
+func TestAppsList(t *testing.T) {
+	h := appsRouter(fakeApps{items: []discovery.Instance{{AppID: "order", HTTPPort: 3500}}})
+	res, body := get(t, h, "/")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, `"appId":"order"`)
+}
+
+func TestAppsDetailAndNotFound(t *testing.T) {
+	h := appsRouter(fakeApps{items: []discovery.Instance{{AppID: "order"}}})
+	res, body := get(t, h, "/order")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, `"appId":"order"`)
+
+	res, _ = get(t, h, "/missing")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+}
+```
+(Reuses the shared `get()` helper from `spa_test.go`.)
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `apps.go`:
+```go
+package server
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/go-chi/chi/v5"
+)
+
+func appsRouter(svc discovery.Service) http.Handler {
+	r := chi.NewRouter()
+	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		items, err := svc.List(req.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, items)
+	})
+	r.Get("/{appId}", func(w http.ResponseWriter, req *http.Request) {
+		in, err := svc.Get(req.Context(), chi.URLParam(req, "appId"))
+		if errors.Is(err, discovery.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "app not found"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, in)
+	})
+	return r
+}
+```
+- [ ] **Step 4: Modify `api.go`** — change signature to `func apiRouter(v version.Info, apps discovery.Service) http.Handler` and add `r.Mount("/apps", appsRouter(apps))` (keep `/health`, `/version`).
+- [ ] **Step 5: Modify `server.go`** — add `Apps discovery.Service` to `Options`; in `NewRouter`'s `mount`, call `apiRouter(opts.Version, opts.Apps)`.
+- [ ] **Step 6: Modify `server_test.go`** — the existing router tests construct `Options{}`; add `Apps: fakeApps{}` (move `fakeApps` to be shared, or define in `apps_test.go` and reuse) so `/api/apps` is wired. Confirm `/api/health` + SPA tests still pass.
+- [ ] **Step 7: Run → pass.** `go test -tags unit ./pkg/server/ -v`
+- [ ] **Step 8: Commit.** `git commit -m "feat(server): /api/apps list + detail"`
+
+---
+
+### Task 9: Wire discovery into the CLI
+
+**Files:** Modify `cmd/root.go`
+
+**Interfaces — Consumes:** `discovery.New`, `discovery.StandaloneScanner`, `server.Options.Apps`.
+
+- [ ] **Step 1:** In `runServe`, build the service and pass it:
+```go
+	appsSvc := discovery.New(discovery.StandaloneScanner(), &http.Client{Timeout: 2 * time.Second})
+	srv := server.New(addr, server.Options{
+		BasePath: basePath,
+		DistFS:   dist,
+		Version:  version.Get(),
+		Apps:     appsSvc,
+	})
+```
+(add `net/http`, `time`, and the `discovery` import).
+- [ ] **Step 2: Verify.** `go build ./... && go vet -tags unit ./... && go test -tags unit ./...` all pass.
+- [ ] **Step 3: Manual smoke (if a `dapr run` app is available).** `go run . --no-open` then `curl -s localhost:9090/api/apps` returns a JSON array (empty `[]` if nothing running — that's correct).
+- [ ] **Step 4: Commit.** `git commit -m "feat(cmd): wire discovery service into serve"`
+
+---
+
+### Task 10: Frontend — global autorefresh control
+
+**Files:** Create `web/src/lib/refresh.tsx`, `web/src/lib/refresh.test.tsx`, `web/src/components/RefreshControl.tsx`; **modify** `web/src/components/TopNav.tsx`, `web/src/main.tsx`.
+
+**Interfaces — Produces:**
+- `RefreshProvider` + `useRefreshInterval(): { intervalMs: number; paused: boolean; setInterval(ms): void; setPaused(b): void }`. `intervalMs` 0 = Off. Default 3000, persisted `localStorage` key `devdash.refreshMs` / `devdash.refreshPaused`.
+- `<RefreshControl/>` — a select (1s/3s/5s/10s/Off) + pause toggle (`data-cy="refresh-interval"`, `data-cy="refresh-pause"`).
+- TanStack Query consumers read `intervalMs`/`paused` to set `refetchInterval`.
+
+- [ ] **Step 1: Write the failing test** (`refresh.test.tsx`): render a probe component inside `RefreshProvider`, assert default 3000, and that `setInterval(5000)` updates the value + persists.
+```tsx
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { RefreshProvider, useRefreshInterval } from './refresh'
+
+function Probe() {
+  const { intervalMs, setInterval } = useRefreshInterval()
+  return <button onClick={() => setInterval(5000)}>ms:{intervalMs}</button>
+}
+
+beforeEach(() => localStorage.clear())
+
+describe('refresh', () => {
+  it('defaults to 3000 and updates', async () => {
+    render(<RefreshProvider><Probe /></RefreshProvider>)
+    expect(screen.getByText('ms:3000')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button'))
+    expect(screen.getByText('ms:5000')).toBeInTheDocument()
+    expect(localStorage.getItem('devdash.refreshMs')).toBe('5000')
+  })
+})
+```
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `refresh.tsx` (React context + localStorage), `RefreshControl.tsx` (select + pause button using the context), and render `<RefreshControl/>` in `TopNav.tsx` (left of the density/theme toggles), and wrap the app in `<RefreshProvider>` in `main.tsx` (inside `QueryProvider`).
+```tsx
+// refresh.tsx
+import { createContext, useContext, useState, type ReactNode } from 'react'
+
+type Ctx = { intervalMs: number; paused: boolean; setInterval: (ms: number) => void; setPaused: (b: boolean) => void }
+const RefreshCtx = createContext<Ctx | null>(null)
+
+const MS_KEY = 'devdash.refreshMs'
+const PAUSE_KEY = 'devdash.refreshPaused'
+
+export function RefreshProvider({ children }: { children: ReactNode }) {
+  const [intervalMs, setMs] = useState(() => Number(localStorage.getItem(MS_KEY) ?? 3000))
+  const [paused, setPausedState] = useState(() => localStorage.getItem(PAUSE_KEY) === '1')
+  const setInterval = (ms: number) => { localStorage.setItem(MS_KEY, String(ms)); setMs(ms) }
+  const setPaused = (b: boolean) => { localStorage.setItem(PAUSE_KEY, b ? '1' : '0'); setPausedState(b) }
+  return <RefreshCtx.Provider value={{ intervalMs, paused, setInterval, setPaused }}>{children}</RefreshCtx.Provider>
+}
+
+export function useRefreshInterval(): Ctx {
+  const c = useContext(RefreshCtx)
+  if (!c) throw new Error('useRefreshInterval must be used within RefreshProvider')
+  return c
+}
+
+// effective refetch interval for TanStack Query (false = no poll)
+export function refetchMs(c: Ctx): number | false {
+  return c.paused || c.intervalMs === 0 ? false : c.intervalMs
+}
+```
+- [ ] **Step 4: Run → pass.** `cd web && npm test`
+- [ ] **Step 5: Commit.** `git commit -m "feat(web): global autorefresh control"`
+
+---
+
+### Task 11: Frontend — apps API hooks + types
+
+**Files:** Create `web/src/types/api.ts`, `web/src/hooks/useApps.ts`, `web/src/hooks/useApps.test.tsx`.
+
+**Interfaces — Produces:** `AppSummary`/`AppDetail` TS types (mirror the Go `Instance` JSON); `useApps()` and `useApp(appId)` TanStack Query hooks that poll on the global interval (`refetchInterval` from `refetchMs(useRefreshInterval())`).
+
+- [ ] **Step 1: Write the failing test** (`useApps.test.tsx`) — MSW mocks `/api/apps`; render a probe in `QueryProvider` + `RefreshProvider`; assert the app id renders.
+```tsx
+import { render, screen, waitFor } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
+import { describe, it, expect } from 'vitest'
+import { server } from '../test/setup'
+import { QueryProvider } from '../lib/query'
+import { RefreshProvider } from '../lib/refresh'
+import { useApps } from './useApps'
+
+function Probe() {
+  const { data } = useApps()
+  return <div>{data?.map((a) => <span key={a.appId}>{a.appId}</span>)}</div>
+}
+
+describe('useApps', () => {
+  it('lists apps from /api/apps', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([{ appId: 'order', health: 'healthy', httpPort: 3500 }])))
+    render(<QueryProvider><RefreshProvider><Probe /></RefreshProvider></QueryProvider>)
+    await waitFor(() => expect(screen.getByText('order')).toBeInTheDocument())
+  })
+})
+```
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `types/api.ts` (interfaces matching the JSON keys: `appId, health, runtime, httpPort, grpcPort, appPort, daprdPid, appPid, cliPid, age, created, runTemplate, resourcePaths, configPath, appLogPath, daprdLogPath, command, runtimeVersion, metadataOk`) and `useApps.ts`:
+```ts
+import { useQuery } from '@tanstack/react-query'
+import { fetchJSON } from '../lib/api'
+import { useRefreshInterval, refetchMs } from '../lib/refresh'
+import type { AppSummary, AppDetail } from '../types/api'
+
+export function useApps() {
+  const r = useRefreshInterval()
+  return useQuery({ queryKey: ['apps'], queryFn: () => fetchJSON<AppSummary[]>('/apps'), refetchInterval: refetchMs(r) })
+}
+export function useApp(appId: string) {
+  const r = useRefreshInterval()
+  return useQuery({ queryKey: ['apps', appId], queryFn: () => fetchJSON<AppDetail>(`/apps/${appId}`), refetchInterval: refetchMs(r) })
+}
+```
+- [ ] **Step 4: Run → pass.**
+- [ ] **Step 5: Commit.** `git commit -m "feat(web): apps types + query hooks (poll on global interval)"`
+
+---
+
+### Task 12: Frontend — Applications list page
+
+**Files:** Create `web/src/pages/Applications.tsx`, `web/src/pages/Applications.test.tsx`; **modify** `web/src/router.tsx` (index route → `Applications`).
+
+**Interfaces — Produces:** `<Applications/>` — a dense table (Health · App ID · Runtime · App/HTTP/gRPC ports · daprd/app PIDs · Age · Run template). **The App ID cell is a `<Link to={'/apps/'+appId}>`; the row itself is not a link.** Health rendered as a colored dot + text (color **and** label). Empty state ("No Dapr apps running") and loading skeleton.
+
+- [ ] **Step 1: Write the failing test** (MSW `/api/apps`): asserts a row renders with the app id as a link to `/apps/order`, and the empty state when `[]`.
+```tsx
+import { render, screen, waitFor } from '@testing-library/react'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { http, HttpResponse } from 'msw'
+import { describe, it, expect } from 'vitest'
+import { server } from '../test/setup'
+import { QueryProvider } from '../lib/query'
+import { RefreshProvider } from '../lib/refresh'
+import { Applications } from './Applications'
+
+function renderAt() {
+  const router = createMemoryRouter([{ path: '/', element: <Applications /> }, { path: '/apps/:appId', element: <div>detail</div> }], { initialEntries: ['/'] })
+  return render(<QueryProvider><RefreshProvider><RouterProvider router={router} /></RefreshProvider></QueryProvider>)
+}
+
+describe('Applications', () => {
+  it('renders an app row with a link to detail', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([{ appId: 'order', health: 'healthy', runtime: 'go', httpPort: 3500, grpcPort: 50001, appPort: 8080, daprdPid: 48230, appPid: 48213, age: '14m', runTemplate: 'dapr.yaml' }])))
+    renderAt()
+    const link = await screen.findByRole('link', { name: 'order' })
+    expect(link).toHaveAttribute('href', '/apps/order')
+  })
+
+  it('shows an empty state when no apps', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([])))
+    renderAt()
+    await waitFor(() => expect(screen.getByText(/no dapr apps/i)).toBeInTheDocument())
+  })
+})
+```
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `Applications.tsx` (dense table using theme tokens + `.mono` for ids/ports/PIDs; health dot uses status colors; the id cell is a React Router `<Link>`; loading + empty states), then in `router.tsx` change the index route element from `<Placeholder title="Applications" />` to `<Applications />`.
+- [ ] **Step 4: Run → pass.** `cd web && npm test`
+- [ ] **Step 5: Commit.** `git commit -m "feat(web): Applications list"`
+
+---
+
+### Task 13: Frontend — Application detail page
+
+**Files:** Create `web/src/pages/AppDetail.tsx`, `web/src/pages/AppDetail.test.tsx`; **modify** `web/src/router.tsx` (add `/apps/:appId`).
+
+**Interfaces — Produces:** `<AppDetail/>` (reads `:appId` via `useParams`, calls `useApp`). Header (app id, health, runtime). Two tabbed/sectioned panels — **Application** (runtime, app port, protocol, app PID, CLI PID, command) and **Dapr sidecar** (runtime version, HTTP/gRPC ports, daprd PID, health) — plus a **Paths** block (resources/config/log paths, click-to-copy). When `metadataOk` is false, show process-scan fields and a "metadata unavailable" note (app PID "unknown").
+
+- [ ] **Step 1: Write the failing test** (MSW `/api/apps/order`): asserts the header app id + a sidecar field (HTTP port) render; and the "metadata unavailable" note when `metadataOk:false`.
+```tsx
+import { render, screen, waitFor } from '@testing-library/react'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { http, HttpResponse } from 'msw'
+import { describe, it, expect } from 'vitest'
+import { server } from '../test/setup'
+import { QueryProvider } from '../lib/query'
+import { RefreshProvider } from '../lib/refresh'
+import { AppDetail } from './AppDetail'
+
+function renderDetail() {
+  const router = createMemoryRouter([{ path: '/apps/:appId', element: <AppDetail /> }], { initialEntries: ['/apps/order'] })
+  return render(<QueryProvider><RefreshProvider><RouterProvider router={router} /></RefreshProvider></QueryProvider>)
+}
+
+describe('AppDetail', () => {
+  it('renders header and sidecar fields', async () => {
+    server.use(http.get('/api/apps/order', () => HttpResponse.json({ appId: 'order', health: 'healthy', runtime: 'go', httpPort: 3500, grpcPort: 50001, appPort: 8080, daprdPid: 48230, appPid: 48213, cliPid: 48201, command: 'go run ./cmd/order', runtimeVersion: '1.14.4', metadataOk: true })))
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('order')).toBeInTheDocument())
+    expect(screen.getByText('3500')).toBeInTheDocument()
+  })
+
+  it('notes metadata unavailable', async () => {
+    server.use(http.get('/api/apps/order', () => HttpResponse.json({ appId: 'order', health: 'unhealthy', runtime: 'python', httpPort: 3500, daprdPid: 9, appPid: 0, metadataOk: false })))
+    renderDetail()
+    await waitFor(() => expect(screen.getByText(/metadata unavailable/i)).toBeInTheDocument())
+  })
+})
+```
+- [ ] **Step 2: Run → fail.**
+- [ ] **Step 3: Implement** `AppDetail.tsx` and add `{ path: 'apps/:appId', element: <AppDetail /> }` as a child of the `App` route in `router.tsx`.
+- [ ] **Step 4: Run → pass.** `cd web && npm test`
+- [ ] **Step 5: Build + manual verify.** `make build && ./bin/dev-dashboard` → Applications view lists running apps (or empty state); clicking an app id opens detail; the refresh control changes polling. Stop.
+- [ ] **Step 6: Commit.** `git commit -m "feat(web): Application detail (summary + sidecar)"`
+
+---
+
+## Self-Review
+
+**Spec coverage (Plan 2 scope):**
+- §4 detection (process scan + metadata + health + language) → Tasks 2–7. ✓
+- §6.1 Applications list (fields, autorefresh, row→detail) → Tasks 11–12. ✓
+- §6.2 App/Sidecar detail (Summary + Metadata; Actors/Subs are separate later plans) → Task 13. ✓
+- §9.2 single global autorefresh interval + refetch wiring → Tasks 10–11. ✓
+- §9.4 rows-aren't-links (id cell is the link) → Task 12. ✓
+- §11 metadata-down degradation (process-scan data + "unavailable") → Tasks 6, 13. ✓
+- API surface `/api/apps`, `/api/apps/{appId}` (from §8) → Task 8. ✓
+- Deferred to later plans: Workflows/state-store (Plan 3), Resources/Actors/Subscriptions (Plan 4), Logs/News (Plan 5), packaging (Plan 6). Cross-nav from app detail to components/etc. lands when those pages exist (Plan 4).
+
+**Placeholder scan:** none. The one judgment point — exact `standalone.ListOutput` field names (Task 7) — is explicitly flagged with a `go doc` instruction; `ScanResult` stays stable so the tested Service is unaffected.
+
+**Type consistency:** `discovery.Instance`/`ScanResult`/`Scanner`/`Service`/`ErrNotFound`/`New`/`StandaloneScanner`, `FetchMetadata`/`Metadata`, `CheckHealth`/`Health`, `appsRouter`/`Options.Apps`/`apiRouter(v, apps)`, and web `useApps`/`useApp`/`refetchMs`/`useRefreshInterval`/`AppSummary`/`AppDetail` are referenced consistently across tasks. Tasks reuse the foundation's `writeJSON`, `get()` test helper, `fetchJSON`, `QueryProvider`, and router.
+
+**Note for implementer:** Tasks 1–6 are pure/unit-testable with no external deps; Task 7 adds the heavy `dapr/cli` dependency (run `go mod tidy`). The Service is tested via an injected fake `Scanner`, so the live process scan never runs in tests.
