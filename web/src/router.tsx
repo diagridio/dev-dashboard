@@ -1,6 +1,7 @@
 import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { App } from './App'
 import { Applications } from './pages/Applications'
+import { AppDetail } from './pages/AppDetail'
 import { Placeholder } from './pages/Placeholder'
 
 export const routes: RouteObject[] = [
@@ -9,6 +10,7 @@ export const routes: RouteObject[] = [
     element: <App />,
     children: [
       { index: true, element: <Applications /> },
+      { path: 'apps/:appId', element: <AppDetail /> },
       { path: 'workflows', element: <Placeholder title="Workflows" /> },
       { path: 'actors', element: <Placeholder title="Actors" /> },
       { path: 'subscriptions', element: <Placeholder title="Subscriptions" /> },
