@@ -463,13 +463,36 @@ binary — no runtime fetch, works offline):
 
 ## 12. Testing
 
-- **Go:** unit tests per service package (cmdline parsing, workflow state decoding,
-  purge-mechanism selection, YAML loading) with fakes for sidecar HTTP + state store;
-  table-driven. `httptest` for handlers.
-- **Frontend:** component tests (Vitest + Testing Library) for tables, filters, and the
-  purge-confirm flows; MSW to mock the API.
-- **E2E smoke:** one happy-path run against a real `dapr run -f` sample app (borrow example
-  apps from the Diagrid prototype).
+The stack mirrors the Diagrid `cloudgrid` test conventions (scaled down to a local,
+non-Kubernetes tool); the prototype already tests its Redis state service with `miniredis`,
+so these tools are proven here. Tests are colocated (`*_test.go` next to code; `*.test.tsx`
+next to components), table-driven where it fits, and use stable `data-cy` selectors in the UI.
+
+- **Go — unit** (`//go:build unit`): standard `testing` + **testify** (`require`/`assert`),
+  **`go.uber.org/mock`** (gomock) for interface fakes (sidecar metadata client, state-store
+  client). Cover cmdline parsing, runtime/language inference, workflow state decoding,
+  history merge-by-sequence, **removal-tier selection** (Terminate→Purge / Purge / Force),
+  YAML loading, and news-feed parsing. `net/http/httptest` for chi handlers; golden files in
+  `testdata/` for serialized API responses.
+- **Go — state-store integration** (`//go:build integration`): **`miniredis`** for the Redis
+  workflow-state paths (list via `KeysLike`, history decode, purge/force-delete), a **real
+  temp-file SQLite** store, and **`testcontainers-go`** (or `go-sqlmock` for cheaper cases)
+  for PostgreSQL. Validates the auto-detect → client-build → read/purge flow against each
+  backend.
+- **Frontend — component** (**Vitest** + **React Testing Library**, jsdom): tables, filters,
+  the live workflow timeline merge, copy controls, density toggle, and the
+  terminate/purge-confirm flows. **MSW** mocks the `/api/*` surface (including SSE/log
+  streams and `/api/news`).
+- **Frontend — E2E** (**Cypress**, matching cloudgrid's UI e2e): key journeys —
+  filter/search workflows, open a detail, terminate/purge with confirmation, browse
+  components/configs, tail logs — driven by **fixtures** and intercepts (`cy.intercept`), no
+  live backend required.
+- **E2E smoke (manual/optional):** one happy-path run of the real binary against a live
+  `dapr run -f` sample app (borrow example apps from the Diagrid prototype) to exercise true
+  discovery + metadata end-to-end.
+- **CI:** `gotestsum` with `-race` and coverage (`-coverprofile`); unit tests on every PR,
+  integration (containers) gated behind the `integration` build tag; Vitest + Cypress for the
+  SPA. `golangci-lint` for Go lint.
 
 ## 13. Out of Scope for v1
 
@@ -489,3 +512,8 @@ docker-compose modes. Local standalone (self-hosted) mode only. The UI is **Engl
   `/Users/marcduiker/dev/diagrid/cloudgrid/tools/diagrid-dashboard`
   (Go + chi + React; workflow list/history via state store `KeysLike`, SSE logs,
   sidecar discovery, resource loading; read-only, no purge, no workflow autorefresh).
+- Diagrid `cloudgrid` test conventions — `/Users/marcduiker/dev/diagrid/cloudgrid/test`
+  (testify + `go.uber.org/mock`, `miniredis`, `testcontainers-go`/`go-sqlmock`, `gotestsum`;
+  Vitest + Testing Library + MSW + Cypress with `data-cy` selectors; `//go:build` tags). The
+  prototype's `pkg/state/service/service_test.go` already uses `miniredis`. Kubernetes-only
+  machinery (kind, envtest, Helm, multi-region, OIDC) is intentionally **not** adopted.
