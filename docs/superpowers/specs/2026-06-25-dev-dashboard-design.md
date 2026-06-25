@@ -206,6 +206,12 @@ GET  /api/version                                dashboard + detected runtime ve
   polling/caching; a lightweight component layer (no heavy design system) to keep bundles
   small. Syntax-highlighted YAML viewer (e.g. a lightweight highlighter or Monaco if the
   bundle cost is acceptable).
+- **Cross-navigation (deep links):** related entities link to each other so the user can
+  follow a debugging trail. From an application's detail page, each loaded component links
+  to that component's detail; on a component's detail, each app in its "loaded by" list
+  links back to that application's detail. The same app-id ↔ app-detail linking applies on
+  the Subscriptions and Actors pages (host/app columns are links). Each view is
+  addressable by a stable route so links are shareable.
 
 ### 9.1 Visual Identity & Theming
 
