@@ -45,7 +45,11 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool) error
 		return fmt.Errorf("load embedded UI: %w", err)
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	url := fmt.Sprintf("http://%s%s/", addr, "/"+trimSlash(basePath))
+	urlPath := ""
+	if trimmed := trimSlash(basePath); trimmed != "" {
+		urlPath = "/" + trimmed
+	}
+	url := fmt.Sprintf("http://%s%s/", addr, urlPath)
 
 	srv := server.New(addr, server.Options{
 		BasePath: basePath,

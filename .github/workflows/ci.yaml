@@ -10,6 +10,8 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version: '1.26.3' }
       - run: go install gotest.tools/gotestsum@latest
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet -tags unit ./...
       - run: gotestsum --format testname -- -tags unit -race ./...
   web:
     runs-on: ubuntu-latest

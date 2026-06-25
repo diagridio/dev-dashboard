@@ -14,8 +14,8 @@ import (
 
 func testFS() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html":      {Data: []byte("<!doctype html><title>shell</title>")},
-		"assets/app.js":   {Data: []byte("console.log(1)")},
+		"index.html":    {Data: []byte("<!doctype html><title>shell</title>")},
+		"assets/app.js": {Data: []byte("console.log(1)")},
 	}
 }
 
@@ -49,4 +49,11 @@ func TestSPARespectsBasePath(t *testing.T) {
 	res, body := get(t, h, "/dashboard/anything")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "shell")
+}
+
+func TestSPAMissingAssetReturns404(t *testing.T) {
+	h := SPAHandler(testFS(), "")
+	res, body := get(t, h, "/assets/missing.js")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+	require.NotContains(t, body, "shell")
 }

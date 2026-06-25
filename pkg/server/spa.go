@@ -3,6 +3,7 @@ package server
 import (
 	"io/fs"
 	"net/http"
+	"path"
 	"strings"
 )
 
@@ -17,7 +18,6 @@ func SPAHandler(fsys fs.FS, basePath string) http.Handler {
 		upath := strings.TrimPrefix(r.URL.Path, basePath)
 		upath = "/" + strings.TrimPrefix(upath, "/")
 
-		// Existing file? serve it. Otherwise serve index.html (SPA fallback).
 		if name := strings.TrimPrefix(upath, "/"); name != "" {
 			if f, err := fsys.Open(name); err == nil {
 				_ = f.Close()
@@ -26,6 +26,12 @@ func SPAHandler(fsys fs.FS, basePath string) http.Handler {
 				fileServer.ServeHTTP(w, r2)
 				return
 			}
+		}
+		// Missing path: only fall back to the SPA shell for client routes
+		// (no file extension). Missing static assets must 404, not return HTML.
+		if path.Ext(upath) != "" {
+			http.NotFound(w, r)
+			return
 		}
 		serveIndex(w, r, fsys)
 	})
