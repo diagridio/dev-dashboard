@@ -162,8 +162,8 @@ Components · Configurations · Logs**.
    accumulated rows are virtualized). **Autorefreshes** on the global interval (see §9).
    Detail drill-in: header (status, instance id, app, created/ended, duration, replay
    count), **input**, **output**, **custom status**, and the full history timeline (events
-   with per-event input/output, timestamps, elapsed, replay count) + derived status. Purge
-   actions (see §7).
+   with per-event input/output, timestamps, elapsed, replay count) + derived status.
+   Terminate / purge actions (see §7).
    - **Autorefresh on the detail page too:** the detail view autorefreshes on the **single
      global interval** (the top-bar control; pause/resume; options 1 s / 3 s / 5 s / 10 s /
      Off). 1 s is available globally for watching an in-progress run closely. The wall-clock
@@ -179,6 +179,9 @@ Components · Configurations · Logs**.
      counts continuously (independent of the refresh interval), so the user sees the
      workflow is doing something even when events are still in-flight between refreshes. It
      freezes and switches to total duration once the workflow reaches a terminal state.
+     Computed as `now − createdAt` from the workflow's own created timestamp (not a UI-local
+     start), so it survives reopening the detail; a Pending (not-yet-started) workflow shows
+     no clock until it starts.
    - **Custom status:** shown only when the workflow has set it via `ctx.SetCustomStatus()`;
      it updates live as the value changes during the run.
    - **Copyable fields:** input, output, and custom status (and each event's input/output)
@@ -201,19 +204,30 @@ Components · Configurations · Logs**.
    **reconnect with backoff, close on route change/unmount, and are capped** to avoid runaway
    connections. Ad-hoc `dapr run` (no `-f`) has no log file → an explanatory empty state.
 
-## 7. Workflow Purge (Hybrid)
+## 7. Workflow Removal — Terminate / Purge (Hybrid)
 
-- **Single instance**, terminal state, healthy sidecar with the workflow component present
-  → `POST /v1.0-beta1/workflows/{component}/{instanceId}/purge` (official Dapr API).
-- **Force / fallback** (running, stuck/orphaned, or no sidecar available) → direct
+The mechanism is chosen per workflow by its state and what's reachable:
+
+- **Terminal state** (Completed / Failed / Terminated) with a healthy sidecar that has the
+  workflow component → `POST /v1.0-beta1/workflows/{component}/{instanceId}/purge` (official
+  Dapr API).
+- **Running**, healthy sidecar → **Terminate first**
+  (`POST /v1.0-beta1/workflows/{component}/{instanceId}/terminate`, which the runtime and
+  scheduler honor and which unwinds the workflow's timers/reminders), **then purge**. This
+  avoids orphaning scheduler state — never raw-delete a running workflow when the API is
+  reachable.
+- **Force / fallback** (truly stuck/orphaned, or **no sidecar available**) → direct
   state-store key deletion: scan keys via the `KeysLike` pattern
-  (`<appId>||dapr.internal.<namespace>.<appId>.workflow||<instanceId>||...`) and delete
-  them. Clearly labeled "Force delete", separate confirmation.
-- **Bulk**: purge selected rows, and purge-all-matching-the-current-filter (e.g. all
-  Completed). Bulk applies the same per-item hybrid logic and returns a summary
-  (succeeded / failed counts).
-- Every destructive action requires explicit confirmation, and the UI states which
-  mechanism (API vs force delete) will be used before the user confirms.
+  (`<appId>||dapr.internal.<namespace>.<appId>.workflow||<instanceId>||...`) and delete them.
+  Clearly labeled "Force delete" with its own confirmation; used only when the API path
+  isn't possible, since it bypasses the runtime.
+- **Bulk:** remove **selected rows**, or **all workflows matching the current filter**. "All
+  matching" operates on the **full server-side filtered set** (across all pages), not just
+  the loaded rows; the confirmation shows the **true total count**. Each item uses the same
+  per-item tier logic (Terminate→Purge / Purge / Force) and the action returns a
+  succeeded / failed summary.
+- Every destructive action requires explicit confirmation that states the **affected count**
+  and **which mechanism** (Terminate + Purge, Purge, or Force delete) will run.
 
 ## 8. HTTP API (Backend → SPA)
 
@@ -225,8 +239,9 @@ GET  /api/apps/{appId}                           detail incl. metadata
 GET  /api/apps/{appId}/logs?source=daprd|app     (SSE)
 GET  /api/workflows                              list (filter/search/paginate)
 GET  /api/workflows/{appId}/{instanceId}         detail + history
+POST /api/workflows/{appId}/{instanceId}/terminate  graceful stop (running workflow)
 POST /api/workflows/{appId}/{instanceId}/purge   body: { force?: bool }
-POST /api/workflows/purge                        bulk: { ids[], force?: bool }
+POST /api/workflows/purge                        bulk: { ids[] | filter, force?: bool }
 GET  /api/resources?kind=component|configuration list
 GET  /api/resources/{kind}/{name}                full YAML
 GET  /api/statestores                            detected stores (+ which is active)
@@ -269,6 +284,8 @@ GET  /*                                           SPA: serve index.html (History
 - **Large surfaces are virtualized:** the workflow list, long history timelines, and the log
   tail use list virtualization (e.g. TanStack Virtual) and bounded client buffers so they
   stay responsive.
+- **Debounced search/filter:** search and filter inputs debounce (~250 ms) before querying;
+  the resulting query/filter state lives in the URL (see §9.1).
 - **Typed API contract:** TS types for the HTTP API are generated from the Go types (e.g.
   via an OpenAPI schema) so the front-end and backend can't drift.
 
@@ -277,7 +294,8 @@ GET  /*                                           SPA: serve index.html (History
 - **Desktop-only + small-screen guard:** there is no responsive/mobile layout. Below a
   minimum content width (≈1024 px), the dashboard shows a centered overlay — "The dashboard
   is designed for a wider screen; please widen the window" — instead of letting the dense
-  tables overflow or reflow. The overlay clears automatically once the window is widened.
+  tables overflow or reflow. The overlay clears automatically once the window is widened; it
+  **cannot be dismissed** below the threshold (no "continue anyway").
 - **Density toggle:** a **Comfortable / Compact** control in the top bar (persisted to
   `localStorage`) scales row padding, font size, and spacing via CSS variables. Default is
   **Compact** (dense) to suit the audience.
@@ -311,7 +329,8 @@ GET  /*                                           SPA: serve index.html (History
   and **TanStack Virtual** for large lists. **Headless accessible primitives** (Radix/Ark)
   styled in-house — no heavy design system. Read-only YAML via a **lightweight syntax
   highlighter** (not Monaco). Clipboard uses the async Clipboard API (localhost is a secure
-  context, so it works) with an `execCommand` fallback.
+  context, so it works) with an `execCommand` fallback. Target a **lean embedded bundle**
+  (soft budget ≈ 300 KB gzipped) — another reason to avoid Monaco and heavy design systems.
 
 ### 9.6 Resources menu & News
 - **Collapsible left "Resources" menu:** a left sidebar that follows the dashboard theme
@@ -369,9 +388,10 @@ frontend theme tokens (`…/diagrid-dashboard/src/styles/theme/palette.ts`).
 
 **Brand colors**
 
-- Primary (Diagrid mint): `#0BDDA3` — used for the logo, active nav indicator, focus
-  rings, badges, and primary-button *fills* with dark `#121C29` text on the mint (the
-  contrast of mint-on-white is too low for text, so mint is never used for text/links).
+- Primary (Diagrid mint): `#0BDDA3` — the **brand color** for the logo and palette. On
+  screen, mint-derived accents (active nav, focus rings, badges, primary-button fills) render
+  through the contrast-adjusted `--accent` token (see §9.7 Theming), since raw mint is too
+  light for small elements and text on white. Mint is never used for body text/links.
 - Secondary (Diagrid blue): `#129AF3` — interactive text/links and secondary actions.
   Use the dark blue `#007AD3` on light backgrounds (≈4.5:1) and the light blue `#63B8F6`
   on dark backgrounds.
@@ -455,7 +475,8 @@ binary — no runtime fetch, works offline):
 
 Control plane status (Kubernetes-only), topology graph, metrics/sparklines, data browser,
 jobs/scheduler, agents, YAML editing, launching/stopping apps, and Kubernetes &
-docker-compose modes. Local standalone (self-hosted) mode only.
+docker-compose modes. Local standalone (self-hosted) mode only. The UI is **English-only**
+(no i18n/RTL) and there is **no aggregate cross-app log view** (logs are per-app) in v1.
 
 ## 14. References
 
