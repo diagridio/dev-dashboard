@@ -245,6 +245,13 @@ GET  /api/version                                dashboard + detected runtime ve
     Diagrid Webinars (<https://www.diagrid.io/webinars>)
   - **Read**: Dapr Docs (<https://docs.dapr.io>) · Diagrid Docs (<https://docs.diagrid.io>)
   - **Run & Operate**: Diagrid Catalyst (<https://www.diagrid.io/catalyst>)
+- **Collapsed state & new-item indicator:** when collapsed, the rail shows the word
+  "Resources" rotated -90° (vertical), and clicking it (or the toggle) re-expands. A **bell
+  icon** appears — in both the expanded header and the collapsed rail — whenever the feed has
+  pulled items the user hasn't seen yet. Seen/new state is tracked in the browser's
+  `localStorage` (the set of item URLs already seen); clicking the bell, or opening a News
+  link, marks the current items as read and clears the indicator. New items arriving on a
+  later poll re-raise the bell.
 - **News feed (dynamic):** the News section is populated by periodically fetching the
   Diagrid website's existing product feed —
   **`GET https://www.diagrid.io/api/product-feed`** (JSON, CORS-enabled `*`, server-cached
