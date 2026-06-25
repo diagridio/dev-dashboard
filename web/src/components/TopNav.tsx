@@ -5,17 +5,17 @@ import { DensityToggle } from './DensityToggle'
 
 export interface NavItem {
   label: string
-  path: string
+  to: string
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Applications', path: '/' },
-  { label: 'Workflows', path: '/workflows' },
-  { label: 'Actors', path: '/actors' },
-  { label: 'Subscriptions', path: '/subscriptions' },
-  { label: 'Components', path: '/components' },
-  { label: 'Configurations', path: '/configurations' },
-  { label: 'Logs', path: '/logs' },
+  { label: 'Applications', to: '/' },
+  { label: 'Workflows', to: '/workflows' },
+  { label: 'Actors', to: '/actors' },
+  { label: 'Subscriptions', to: '/subscriptions' },
+  { label: 'Components', to: '/components' },
+  { label: 'Configurations', to: '/configurations' },
+  { label: 'Logs', to: '/logs' },
 ]
 
 export function TopNav() {
@@ -45,9 +45,9 @@ export function TopNav() {
       >
         {NAV_ITEMS.map((item) => (
           <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === '/'}
+            key={item.to}
+            to={item.to}
+            end={item.to === '/'}
             style={({ isActive }) => ({
               padding: '4px 10px',
               borderRadius: 'var(--radius-sm, 4px)',

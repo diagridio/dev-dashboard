@@ -1,8 +1,8 @@
-import { createBrowserRouter } from 'react-router-dom'
-import App from './App'
+import { createBrowserRouter, type RouteObject } from 'react-router-dom'
+import { App } from './App'
 import { Placeholder } from './pages/Placeholder'
 
-export const routes = [
+export const routes: RouteObject[] = [
   {
     path: '/',
     element: <App />,
@@ -19,5 +19,5 @@ export const routes = [
 ]
 
 export const router = createBrowserRouter(routes, {
-  basename: import.meta.env.BASE_URL,
+  basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/',
 })

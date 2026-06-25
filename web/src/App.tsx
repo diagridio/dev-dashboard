@@ -2,7 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
 
-export default function App() {
+export function App() {
   return (
     <SmallScreenGuard>
       <div

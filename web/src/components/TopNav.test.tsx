@@ -18,7 +18,7 @@ describe('NAV_ITEMS', () => {
   })
 
   it('has correct paths', () => {
-    const paths = NAV_ITEMS.map((i) => i.path)
+    const paths = NAV_ITEMS.map((i) => i.to)
     expect(paths).toEqual([
       '/',
       '/workflows',

@@ -1,8 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeAll } from 'vitest'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
-import App from './App'
+import { MemoryRouter, Routes, Route, createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { App } from './App'
 import { Placeholder } from './pages/Placeholder'
+import { routes } from './router'
 
 // jsdom does not implement matchMedia; stub it so SmallScreenGuard works
 beforeAll(() => {
@@ -53,5 +54,13 @@ describe('Placeholder', () => {
   it('renders with different titles', () => {
     render(<Placeholder title="Workflows" />)
     expect(screen.getByText('Workflows')).toBeInTheDocument()
+  })
+})
+
+describe('route switching', () => {
+  it('renders Workflows page at /workflows', () => {
+    const router = createMemoryRouter(routes, { initialEntries: ['/workflows'] })
+    render(<RouterProvider router={router} />)
+    expect(screen.getAllByText(/Workflows/i).length).toBeGreaterThan(0)
   })
 })
