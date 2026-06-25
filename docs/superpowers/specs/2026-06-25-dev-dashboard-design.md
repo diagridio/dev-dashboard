@@ -226,12 +226,11 @@ GET  /api/version                                dashboard + detected runtime ve
   links back to that application's detail. The same app-id ↔ app-detail linking applies on
   the Subscriptions and Actors pages (host/app columns are links). Each view is
   addressable by a stable route so links are shareable.
-- **Collapsible left "Resources" menu:** a left sidebar styled after the Catalyst/Conductor
-  navigation — a dark teal-green rail (`#294351`, constant across light & dark), white text,
-  mint `#0BDDA3` active accent with a translucent `#69F4B3` hover, uppercase section headers,
-  rounded items, ~248px wide, collapsible to an icon-only rail (state remembered). Kept
-  minimal and dense to match the rest of the dashboard. All links open in a new tab.
-  Sections and links:
+- **Collapsible left "Resources" menu:** a left sidebar that follows the dashboard theme
+  (`--surface` background, `--border`, themed text — light/dark), with uppercase section
+  headers, rounded hover rows, ~240px wide, collapsible (state remembered). Text-only menu
+  items (no icons). Kept minimal and dense to match the rest of the dashboard. All links
+  open in a new tab. Sections and links:
   - **News** (dynamic — see below): latest two Diagrid blog posts + the next upcoming webinar
   - **Build**: Dapr Workflow Skills (<https://docs.diagrid.io/develop/workflows/dapr-skills/>) ·
     Dapr Composer (<https://workflows.diagrid.io/>)
