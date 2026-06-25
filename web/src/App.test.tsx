@@ -1,9 +1,12 @@
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { MemoryRouter, Routes, Route, createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { http, HttpResponse } from 'msw'
+import { server } from './test/setup'
 import { App } from './App'
 import { Placeholder } from './pages/Placeholder'
 import { routes } from './router'
+import { QueryProvider, makeQueryClient } from './lib/query'
 
 // jsdom does not implement matchMedia; stub it so SmallScreenGuard works
 beforeAll(() => {
@@ -19,14 +22,25 @@ beforeAll(() => {
   }))
 })
 
+// Register MSW handlers so StatusFooter fetches don't error
+beforeEach(() => {
+  server.use(
+    http.get('/api/version', () => HttpResponse.json({ version: 'dev', commit: 'none', date: 'unknown' })),
+    http.get('/api/health', () => HttpResponse.json({ status: 'ok' })),
+  )
+})
+
 // Test App shell by wrapping with MemoryRouter (router.tsx uses createBrowserRouter externally)
 function renderApp(path = '/') {
+  const client = makeQueryClient()
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/*" element={<App />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/*" element={<App />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryProvider>,
   )
 }
 
@@ -42,6 +56,11 @@ describe('App shell', () => {
     renderApp()
     // If SmallScreenGuard is present and screen is wide, children render
     expect(screen.getByRole('navigation')).toBeInTheDocument()
+  })
+
+  it('renders StatusFooter', () => {
+    renderApp()
+    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
   })
 })
 
@@ -59,8 +78,13 @@ describe('Placeholder', () => {
 
 describe('route switching', () => {
   it('renders Workflows page at /workflows', () => {
+    const client = makeQueryClient()
     const router = createMemoryRouter(routes, { initialEntries: ['/workflows'] })
-    render(<RouterProvider router={router} />)
+    render(
+      <QueryProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryProvider>,
+    )
     expect(screen.getAllByText(/Workflows/i).length).toBeGreaterThan(0)
   })
 })

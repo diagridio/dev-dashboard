@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
+import { StatusFooter } from './components/StatusFooter'
 
 export function App() {
   return (
@@ -19,6 +20,7 @@ export function App() {
         <div style={{ flex: 1, overflow: 'auto' }}>
           <Outlet />
         </div>
+        <StatusFooter />
       </div>
     </SmallScreenGuard>
   )
