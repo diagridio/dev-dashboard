@@ -148,9 +148,23 @@ sidecar interaction** — so it works even when the sidecar is unhealthy.
    (Pending / Running / Completed / Failed / Terminated / Suspended), app/name/instance-id
    search, and pagination. **Autorefreshes** (default 3 s, pausable, interval selector).
    Detail drill-in: header (status, instance id, app, created/ended, duration, replay
-   count), **input**, **output**, **custom status** (set via `ctx.SetCustomStatus()`), and
-   the full history timeline (events with per-event input/output, timestamps, elapsed,
-   replay count) + derived status. Purge actions (see §7).
+   count), **input**, **output**, **custom status**, and the full history timeline (events
+   with per-event input/output, timestamps, elapsed, replay count) + derived status. Purge
+   actions (see §7).
+   - **Autorefresh on the detail page too:** the detail view autorefreshes with the same
+     controls as the list — pause/resume and a selectable interval that **includes 1 s**
+     (1 s / 3 s / 5 s / 10 s / Off; default 1 s for the detail page so an in-progress run
+     updates promptly).
+   - **Live event history:** while a workflow is running, the history timeline is appended
+     to on each refresh as new events are read — the list grows live rather than only on
+     reload. Status, event count, replay count, last-event, output, and custom status
+     update with it; on a terminal state the output and final custom status appear.
+   - **Wall-clock:** a running elapsed timer starts as soon as the workflow is scheduled and
+     counts continuously (independent of the refresh interval), so the user sees the
+     workflow is doing something even when events are still in-flight between refreshes. It
+     freezes and switches to total duration once the workflow reaches a terminal state.
+   - **Custom status:** shown only when the workflow has set it via `ctx.SetCustomStatus()`;
+     it updates live as the value changes during the run.
    - **Copyable fields:** input, output, and custom status (and each event's input/output)
      each have a one-click copy-to-clipboard control, plus the raw instance id. Copy yields
      the exact serialized JSON/text. The web UI uses the async Clipboard API with a
