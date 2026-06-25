@@ -31,6 +31,10 @@ lifted into the Diagrid CLI (Go).
 | v1 scope | The 6 requested areas **+ Actors + Subscriptions** (free from `/v1.0/metadata`). **No** Control Plane (Kubernetes-only, irrelevant for local dev). |
 | Backend | Go + `chi` router. Domain logic in isolated `pkg/*` packages. |
 | Frontend | React + TypeScript + Vite SPA, built to static assets and embedded via `go:embed`. No Node at runtime. |
+| Routing | Client-side **History API** routing; Go server **falls back to `index.html`** for unknown paths. **Base-path-aware** so it can mount under `diagrid dashboard` later. |
+| Code viewer | **Lightweight read-only syntax highlighter** (small bundle). Not Monaco. |
+| UI primitives | **Headless accessible component library** (e.g. Radix/Ark) styled in-house — for dialogs, menus, tabs, tooltips. No heavy design system. |
+| Actors / Subscriptions | **Global top-level pages** (aggregated across apps), not per-app detail tabs. |
 | Workflow purge | **Hybrid**: official Dapr purge API when possible, direct state-store deletion as an explicit "force" fallback. |
 | State store discovery | **Auto-detect** from running sidecars' metadata + resource paths; user picks if multiple; `--statestore <path>` override. |
 | Distribution | GoReleaser binaries (Win/macOS/Linux × amd64/arm64) on GitHub Releases. First-class v1 install: one-line install script (`curl \| sh` / `iwr \| iex`). `go install` works for free. Homebrew/Scoop/winget deferred. |
@@ -136,14 +140,19 @@ sidecar interaction** — so it works even when the sidecar is unhealthy.
 
 ## 6. Feature Views (v1)
 
-1. **Overview** — table of running apps/sidecars: app id, health, runtime/language,
-   app/http/grpc ports, daprd + app PIDs, age, run-template. Autorefreshes.
-2. **App / Sidecar detail** — tabs:
+View order matches the top nav: **Applications · Workflows · Actors · Subscriptions ·
+Components · Configurations · Logs**.
+
+1. **Applications** (default view) — table of running apps/sidecars: app id, health,
+   runtime/language, app/http/grpc ports, daprd + app PIDs, age, run-template. Autorefreshes.
+   Each row links to the Application detail.
+2. **Application / Sidecar detail** — tabs:
    - Summary (ports, PIDs, command, resource/config paths)
-   - Metadata (runtime version, enabled features)
-   - **Actors** (types + counts)
-   - **Subscriptions** (topic, pubsub component, routes, dead-letter topic)
-   - **Logs**
+   - Metadata (runtime version, enabled features, loaded components)
+   - **Logs** (this app's daprd + app logs)
+
+   Actors and Subscriptions are **global pages** (views 4 & 5), reached filtered to this app
+   via the app-id link rather than as detail tabs.
 3. **Workflows** — list of executions across all apps with status filter
    (Pending / Running / Completed / Failed / Terminated / Suspended), app/name/instance-id
    search, and pagination. **Autorefreshes** (default 3 s, pausable, interval selector).
@@ -159,6 +168,9 @@ sidecar interaction** — so it works even when the sidecar is unhealthy.
      to on each refresh as new events are read — the list grows live rather than only on
      reload. Status, event count, replay count, last-event, output, and custom status
      update with it; on a terminal state the output and final custom status appear.
+     *Mechanism:* workflows use **polling** (TanStack Query), not SSE; each refresh **merges
+     new events by sequence number** (no duplicates) and **preserves expanded events and
+     scroll position** across refreshes. (Only logs and other tails use SSE.)
    - **Wall-clock:** a running elapsed timer starts as soon as the workflow is scheduled and
      counts continuously (independent of the refresh interval), so the user sees the
      workflow is doing something even when events are still in-flight between refreshes. It
@@ -169,10 +181,20 @@ sidecar interaction** — so it works even when the sidecar is unhealthy.
      each have a one-click copy-to-clipboard control, plus the raw instance id. Copy yields
      the exact serialized JSON/text. The web UI uses the async Clipboard API with a
      `execCommand` fallback for restricted contexts.
-4. **Components & Configurations** — list + read-only YAML viewer, enriched with `LoadedBy`
-   (which app ids loaded each component, from metadata). Syntax-highlighted viewer.
-5. **Logs** — per-app daprd + app logs, live tail via SSE, log-level parsing/coloring,
-   keyword filter, follow toggle.
+4. **Actors** — global page aggregating active actor types across all hosts (host app,
+   actor type, active count, idle timeout, reminders, placement). The app column links to
+   the application detail; can be filtered to a single app.
+5. **Subscriptions** — global page aggregating pub/sub subscriptions across all apps (app,
+   pubsub component, topic, route(s) with a rules badge, dead-letter topic, scopes). The app
+   column links to the application detail.
+6. **Components & Configurations** — list + read-only YAML viewer (lightweight highlighter),
+   enriched with `LoadedBy` (which app ids loaded each component, from metadata). Component
+   chips on the app detail link here; the "loaded by" apps link back to app detail.
+7. **Logs** — per-app daprd + app logs, live tail via SSE; log-level parsing/coloring,
+   keyword highlight, and a follow toggle. **Auto-scrolls to newest while following; pauses
+   auto-scroll when the user scrolls up and offers "jump to latest".** Client keeps a bounded
+   buffer and the list is **virtualized** so large tails stay responsive. Ad-hoc `dapr run`
+   (no `-f`) has no log file → an explanatory empty state.
 
 ## 7. Workflow Purge (Hybrid)
 
@@ -203,15 +225,40 @@ POST /api/workflows/purge                        bulk: { ids[], force?: bool }
 GET  /api/resources?kind=component|configuration list
 GET  /api/resources/{kind}/{name}                full YAML
 GET  /api/statestores                            detected stores (+ which is active)
-GET  /api/health                                 dashboard liveness
-GET  /api/version                                dashboard + detected runtime versions
+GET  /api/news                                    proxied + cached diagrid.io product feed
+GET  /api/health                                  dashboard liveness
+GET  /api/version                                 dashboard + detected runtime versions
+GET  /*                                           SPA: serve index.html (History-API fallback)
 ```
 
 ## 9. Frontend / UX
 
-- **Minimal chrome:** left nav (Overview · Workflows · Components · Configurations),
-  top bar with theme toggle + global autorefresh control. Dense tables; monospace for
-  ids/ports/PIDs.
+- **Minimal chrome:** a **top bar** holds the Diagrid logo, the **primary nav**
+  (Applications · Workflows · Actors · Subscriptions · Components · Configurations · Logs),
+  the global autorefresh control, and the theme toggle. A **collapsible left "Resources"
+  sidebar** (see below) is separate from primary nav. Dense tables; monospace + tabular
+  numerals for ids/ports/PIDs/timestamps.
+- **Routing & deep links:** client-side History-API routes (e.g. `/workflows/{app}/{id}`,
+  `/apps/{id}`), with the Go server serving `index.html` for unknown paths. A configurable
+  **base path** lets the SPA mount under a subpath (e.g. `/dashboard`) when folded into the
+  Diagrid CLI. Routes are shareable; back/forward work.
+- **Large surfaces are virtualized:** the workflow list, long history timelines, and the log
+  tail use list virtualization (e.g. TanStack Virtual) and bounded client buffers so they
+  stay responsive.
+- **Refresh never fights interaction:** polling merges into existing state rather than
+  replacing it, preserving row selection (for bulk purge), expanded rows, and scroll
+  position. Destructive flows (purge) and open dialogs pause/ignore background refreshes.
+- **Accessibility floor (required):** WCAG AA contrast, visible keyboard focus, full keyboard
+  operation of tables/menus/dialogs, focus-trapped purge dialog (headless primitives), and
+  `prefers-reduced-motion` honored for the live pulse, wall-clock, and event fade-ins. State
+  is encoded as color **and** text/shape (pills), never color alone.
+- **Loading / empty / error states per view:** skeleton/loading placeholders while data
+  loads, a "discovering apps…" first-paint state, friendly empty states (no apps, no
+  workflows, no logs), and inline error states that keep the rest of the dashboard usable.
+- **No theme flash:** an inline boot snippet applies the persisted theme (or
+  `prefers-color-scheme` when unset) before first paint. Default is light.
+- **Typed API contract:** TS types for the HTTP API are generated from the Go types (e.g.
+  via an OpenAPI schema) so the front-end and backend can't drift.
 - **Theming:** **defaults to the light theme**, with a manual toggle persisted to
   `localStorage` (may optionally follow `prefers-color-scheme` when the user hasn't chosen).
   CSS variables drive both themes. **All brand-green accents** (text labels, stat numbers,
@@ -221,10 +268,11 @@ GET  /api/version                                dashboard + detected runtime ve
   in the palette/logo, but on-screen accents resolve through the adjusted token.
 - **Autorefresh:** a central setting. Workflows + Overview poll on the interval
   (default 3 s, pausable). Logs stream over SSE.
-- **Tech:** React + Vite with a small dependency footprint; TanStack Query for
-  polling/caching; a lightweight component layer (no heavy design system) to keep bundles
-  small. Syntax-highlighted YAML viewer (e.g. a lightweight highlighter or Monaco if the
-  bundle cost is acceptable).
+- **Tech:** React + Vite, small dependency footprint. **TanStack Query** for polling/caching
+  and **TanStack Virtual** for large lists. **Headless accessible primitives** (Radix/Ark)
+  styled in-house — no heavy design system. Read-only YAML via a **lightweight syntax
+  highlighter** (not Monaco). Clipboard uses the async Clipboard API (localhost is a secure
+  context, so it works) with an `execCommand` fallback.
 - **Cross-navigation (deep links):** related entities link to each other so the user can
   follow a debugging trail. From an application's detail page, each loaded component links
   to that component's detail; on a component's detail, each app in its "loaded by" list
@@ -261,8 +309,10 @@ GET  /api/version                                dashboard + detected runtime ve
   `eventStartDate`. The dashboard polls roughly hourly (no benefit to more frequent polling),
   caches the last good result, and degrades to the static Build/Learn/Read/Run links if the
   feed is unreachable (e.g. offline). No RSS/Atom feed exists today; the JSON feed is the
-  recommended source. The fetch can run from the Go backend (avoids any browser CORS concerns
-  and lets results be cached server-side) or directly from the SPA since CORS is open.
+  recommended source. **Recommended: the Go backend proxies and caches the feed behind one
+  same-origin endpoint (`GET /api/news`)** — this sidesteps CSP/mixed-content, keeps the last
+  good result for offline, and means the SPA only ever talks to its own origin (rather than
+  fetching `diagrid.io` directly, which would require loosening the page CSP).
 
 ### 9.1 Visual Identity & Theming
 
@@ -290,7 +340,8 @@ frontend theme tokens (`…/diagrid-dashboard/src/styles/theme/palette.ts`).
 | `--bg` / `--surface` | `#FFFFFF` / `#F9FAFB` | `#161C24` / `#212B36` |
 | `--text` / `--text-muted` | `#212B36` / `#637381` | `#F9FAFB` / `#919EAB` |
 | `--border` | `#DFE3E8` | `#454F5B` |
-| `--primary` | `#0BDDA3` | `#0BDDA3` |
+| `--primary` (brand mint, palette/logo) | `#0BDDA3` | `#0BDDA3` |
+| `--accent` (on-screen, contrast-adjusted) | `#0A8A6E` | `#2FE3AD` |
 | `--link` / `--secondary` | `#007AD3` | `#63B8F6` |
 | `--dapr-accent` | `#0D2192` | `#3EA9F5` |
 
