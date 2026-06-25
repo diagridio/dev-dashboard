@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
 import { DensityToggle } from './DensityToggle'
+import { RefreshControl } from './RefreshControl'
 
 export interface NavItem {
   label: string
@@ -55,7 +56,8 @@ export function TopNav() {
               fontSize: 'var(--text-sm, 13px)',
               fontWeight: isActive ? 600 : 400,
               color: isActive ? 'var(--text)' : 'var(--text-muted)',
-              background: isActive ? 'var(--bg-subtle, rgba(0,0,0,0.06))' : 'transparent',
+              background: isActive ? 'var(--surface)' : 'transparent',
+              boxShadow: isActive ? 'inset 0 0 0 1px var(--border)' : 'none',
             })}
           >
             {item.label}
@@ -64,6 +66,7 @@ export function TopNav() {
       </nav>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2, 8px)' }}>
+        <RefreshControl />
         <DensityToggle />
         <ThemeToggle />
       </div>

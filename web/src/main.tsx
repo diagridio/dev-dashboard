@@ -5,13 +5,16 @@ import './styles/theme.css'
 import { applyPrefs } from './lib/prefs'
 import { router } from './router'
 import { QueryProvider } from './lib/query'
+import { RefreshProvider } from './lib/refresh'
 
 applyPrefs()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryProvider>
-      <RouterProvider router={router} />
+      <RefreshProvider>
+        <RouterProvider router={router} />
+      </RefreshProvider>
     </QueryProvider>
   </StrictMode>,
 )

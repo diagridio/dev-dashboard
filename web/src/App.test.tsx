@@ -7,6 +7,7 @@ import { App } from './App'
 import { Placeholder } from './pages/Placeholder'
 import { routes } from './router'
 import { QueryProvider, makeQueryClient } from './lib/query'
+import { RefreshProvider } from './lib/refresh'
 
 // jsdom does not implement matchMedia; stub it so SmallScreenGuard works
 beforeAll(() => {
@@ -35,11 +36,13 @@ function renderApp(path = '/') {
   const client = makeQueryClient()
   return render(
     <QueryProvider client={client}>
-      <MemoryRouter initialEntries={[path]}>
-        <Routes>
-          <Route path="/*" element={<App />} />
-        </Routes>
-      </MemoryRouter>
+      <RefreshProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route path="/*" element={<App />} />
+          </Routes>
+        </MemoryRouter>
+      </RefreshProvider>
     </QueryProvider>,
   )
 }
@@ -82,7 +85,9 @@ describe('route switching', () => {
     const router = createMemoryRouter(routes, { initialEntries: ['/workflows'] })
     render(
       <QueryProvider client={client}>
-        <RouterProvider router={router} />
+        <RefreshProvider>
+          <RouterProvider router={router} />
+        </RefreshProvider>
       </QueryProvider>,
     )
     expect(screen.getAllByText(/Workflows/i).length).toBeGreaterThan(0)

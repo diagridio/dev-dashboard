@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { TopNav, NAV_ITEMS } from './TopNav'
+import { RefreshProvider } from '../lib/refresh'
 
 describe('NAV_ITEMS', () => {
   it('has exactly 7 items in the correct order', () => {
@@ -34,9 +35,11 @@ describe('NAV_ITEMS', () => {
 describe('TopNav', () => {
   function renderNav() {
     return render(
-      <MemoryRouter>
-        <TopNav />
-      </MemoryRouter>,
+      <RefreshProvider>
+        <MemoryRouter>
+          <TopNav />
+        </MemoryRouter>
+      </RefreshProvider>,
     )
   }
 
