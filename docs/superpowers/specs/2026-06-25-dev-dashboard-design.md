@@ -158,15 +158,16 @@ Components · Configurations · Logs**.
    via the app-id link rather than as detail tabs.
 3. **Workflows** — list of executions across all apps with status filter
    (Pending / Running / Completed / Failed / Terminated / Suspended), app/name/instance-id
-   search, and pagination. **Autorefreshes** (default 3 s, pausable, interval selector).
+   search, and **cursor-based "load more" paging** (state-store continuation tokens; the
+   accumulated rows are virtualized). **Autorefreshes** on the global interval (see §9).
    Detail drill-in: header (status, instance id, app, created/ended, duration, replay
    count), **input**, **output**, **custom status**, and the full history timeline (events
    with per-event input/output, timestamps, elapsed, replay count) + derived status. Purge
    actions (see §7).
-   - **Autorefresh on the detail page too:** the detail view autorefreshes with the same
-     controls as the list — pause/resume and a selectable interval that **includes 1 s**
-     (1 s / 3 s / 5 s / 10 s / Off; default 1 s for the detail page so an in-progress run
-     updates promptly).
+   - **Autorefresh on the detail page too:** the detail view autorefreshes on the **single
+     global interval** (the top-bar control; pause/resume; options 1 s / 3 s / 5 s / 10 s /
+     Off). 1 s is available globally for watching an in-progress run closely. The wall-clock
+     (below) ticks continuously regardless of the interval.
    - **Live event history:** while a workflow is running, the history timeline is appended
      to on each refresh as new events are read — the list grows live rather than only on
      reload. Status, event count, replay count, last-event, output, and custom status
@@ -196,8 +197,9 @@ Components · Configurations · Logs**.
 7. **Logs** — per-app daprd + app logs, live tail via SSE; log-level parsing/coloring,
    keyword highlight, and a follow toggle. **Auto-scrolls to newest while following; pauses
    auto-scroll when the user scrolls up and offers "jump to latest".** Client keeps a bounded
-   buffer and the list is **virtualized** so large tails stay responsive. Ad-hoc `dapr run`
-   (no `-f`) has no log file → an explanatory empty state.
+   buffer and the list is **virtualized** so large tails stay responsive. SSE streams
+   **reconnect with backoff, close on route change/unmount, and are capped** to avoid runaway
+   connections. Ad-hoc `dapr run` (no `-f`) has no log file → an explanatory empty state.
 
 ## 7. Workflow Purge (Hybrid)
 
@@ -244,7 +246,10 @@ GET  /*                                           SPA: serve index.html (History
 - **Routing & deep links:** client-side History-API routes (e.g. `/workflows/{app}/{id}`,
   `/apps/{id}`), with the Go server serving `index.html` for unknown paths. A configurable
   **base path** lets the SPA mount under a subpath (e.g. `/dashboard`) when folded into the
-  Diagrid CLI. Routes are shareable; back/forward work.
+  Diagrid CLI. **View state — filters, search, paging cursor, active store — is encoded in
+  the URL query** so filtered/searched views are shareable and survive refresh and
+  back/forward. The document `<title>` updates per view. Routes are shareable; back/forward
+  work.
 - **Large surfaces are virtualized:** the workflow list, long history timelines, and the log
   tail use list virtualization (e.g. TanStack Virtual) and bounded client buffers so they
   stay responsive.
@@ -255,9 +260,20 @@ GET  /*                                           SPA: serve index.html (History
   operation of tables/menus/dialogs, focus-trapped purge dialog (headless primitives), and
   `prefers-reduced-motion` honored for the live pulse, wall-clock, and event fade-ins. State
   is encoded as color **and** text/shape (pills), never color alone.
+- **Rows aren't links (no nested interactives):** table rows are *not* themselves links. The
+  id/name cell is the navigation link to detail; row checkboxes (bulk select), kebab menus,
+  and inline app/component links are independent focusable controls — never nested inside a
+  row-level link. Keeps keyboard/screen-reader behavior predictable.
+- **Action feedback:** non-blocking **toasts** confirm copies and report results; **bulk
+  purge** shows a succeeded/failed summary. Destructive confirmations state the **affected
+  count** (e.g. "Purge 37 completed workflows?") and which mechanism will run.
 - **Loading / empty / error states per view:** skeleton/loading placeholders while data
   loads, a "discovering apps…" first-paint state, friendly empty states (no apps, no
-  workflows, no logs), and inline error states that keep the rest of the dashboard usable.
+  workflows, no logs), inline error states that keep the rest of the dashboard usable, and
+  **per-view React error boundaries** so one failing view never white-screens the app.
+- **Keyboard (v1 minimal set):** `/` focuses search, `j`/`k` move row selection, `Enter`
+  opens the selected row, `g` then a key jumps between views, `?` shows a shortcuts overlay;
+  shortcuts are suppressed while a text input is focused.
 - **Desktop-only + small-screen guard:** there is no responsive/mobile layout. Below a
   minimum content width (≈1024 px), the dashboard shows a centered overlay — "The dashboard
   is designed for a wider screen; please widen the window" — instead of letting the dense
@@ -279,8 +295,9 @@ GET  /*                                           SPA: serve index.html (History
   contrast-adjusted accent token — a deeper teal-green on light, a brighter mint on dark —
   rather than the raw mint, which is too light on white. The raw mint remains the brand color
   in the palette/logo, but on-screen accents resolve through the adjusted token.
-- **Autorefresh:** a central setting. Workflows + Overview poll on the interval
-  (default 3 s, pausable). Logs stream over SSE.
+- **Autorefresh:** a **single global interval** in the top bar drives every auto-refreshing
+  view (Applications, Workflows list + detail, Actors, Subscriptions). Options 1 s / 3 s /
+  5 s / 10 s / Off; default 3 s; pausable. Logs stream over SSE, independent of the interval.
 - **Tech:** React + Vite, small dependency footprint. **TanStack Query** for polling/caching
   and **TanStack Virtual** for large lists. **Headless accessible primitives** (Radix/Ark)
   styled in-house — no heavy design system. Read-only YAML via a **lightweight syntax
@@ -352,7 +369,8 @@ frontend theme tokens (`…/diagrid-dashboard/src/styles/theme/palette.ts`).
 |---|---|---|
 | `--bg` / `--surface` | `#FFFFFF` / `#F9FAFB` | `#161C24` / `#212B36` |
 | `--text` / `--text-muted` | `#212B36` / `#637381` | `#F9FAFB` / `#919EAB` |
-| `--border` | `#DFE3E8` | `#454F5B` |
+| `--text-faint` (least emphasis) | `#919EAB` | `#6B7682` |
+| `--border` / `--border-soft` | `#DFE3E8` / `#ECEFF2` | `#454F5B` / `#28323D` |
 | `--primary` (brand mint, palette/logo) | `#0BDDA3` | `#0BDDA3` |
 | `--accent` (on-screen, contrast-adjusted) | `#0A8A6E` | `#2FE3AD` |
 | `--link` / `--secondary` | `#007AD3` | `#63B8F6` |
@@ -370,7 +388,10 @@ frontend theme tokens (`…/diagrid-dashboard/src/styles/theme/palette.ts`).
 | Pending | amber `#B1AC00` (Diagrid's `#F6F100` yellow is too low-contrast as text) |
 
 Semantic status hues are kept distinct from the mint accent so "needs attention" reads on
-its own. Neutrals use the Diagrid grey scale: `#161C24 · #212B36 · #454F5B · #637381 ·
+its own. Each status hue above is the *base*; in the UI it resolves to a **theme-aware pair**
+— a tinted background and a readable foreground — computed for light and dark separately
+(pills use the pair, not the raw hex), so every pill meets AA contrast in both themes.
+Neutrals use the Diagrid grey scale: `#161C24 · #212B36 · #454F5B · #637381 ·
 #919EAB · #C4CDD5 · #DFE3E8 · #F4F6F8 · #F9FAFB · #FFFFFF`.
 
 **Logo assets** (copied into `web/src/assets/brand/`, bundled into the SPA, embedded in the
