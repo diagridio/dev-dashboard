@@ -1818,6 +1818,7 @@ git commit -m "ci: go + web test workflow"
 - Default port 9090 + `--port`/`--base-path`/`--no-open`, browser open → Task 5. ✓
 - Testing per cloudgrid conventions (testify + build tags + httptest; Vitest + RTL + MSW; gotestsum -race) → throughout + Task 12. ✓
 - Deferred to later plans (correctly out of Plan 1 scope): discovery, workflows, statestore, resources, actors, subscriptions, logs, news/Resources sidebar, Terminate/Purge, virtualization, keyboard shortcuts, packaging.
+- **Icon library deferred to first-use plan (Plan 2):** the spec (§2, §9.5) locks in **MUI Icons Material** (`@mui/icons-material`) plus a copy of Catalyst's in-house `SvgIcon`-based icon system. Plan 1 renders **no** icons — the top nav is text-only, the theme/density toggles use text/glyphs, and the logo is a standalone wordmark SVG — so the deps are intentionally **not** added here. The first plan that renders an icon (Plan 2, app status badges) introduces `@mui/icons-material` + its required peers (`@mui/material`, `@emotion/react`, `@emotion/styled`) and vendors the in-house icons. Weigh that Emotion/`@mui/material` runtime (~tens of KB gzipped) against the ≈300 KB bundle budget at that point; the spec notes a no-Emotion fallback (tiny local `<svg>` wrapper) if needed.
 
 **Placeholder scan:** No "TBD/TODO" left. The only intentional note is the Logo SVG path data (Task 9) — the implementer pastes the real wordmark paths from the named asset; the interface/test are concrete and the stub compiles/passes.
 
