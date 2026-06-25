@@ -1,0 +1,45 @@
+//go:build unit
+
+package server
+
+import (
+	"net/http"
+	"testing"
+	"testing/fstest"
+
+	"github.com/diagridio/dev-dashboard/pkg/version"
+	"github.com/stretchr/testify/require"
+)
+
+func newTestRouter(basePath string) http.Handler {
+	return NewRouter(Options{
+		BasePath: basePath,
+		DistFS:   fstest.MapFS{"index.html": {Data: []byte("shell")}},
+		Version:  version.Info{Version: "test"},
+	})
+}
+
+func TestRouterServesAPIAndSPA(t *testing.T) {
+	h := newTestRouter("")
+
+	res, body := get(t, h, "/api/health")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, "ok")
+
+	res, body = get(t, h, "/workflows")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, "shell")
+}
+
+func TestUnknownAPIIs404NotIndex(t *testing.T) {
+	h := newTestRouter("")
+	res, body := get(t, h, "/api/does-not-exist")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+	require.NotContains(t, body, "shell")
+}
+
+func TestRouterUnderBasePath(t *testing.T) {
+	h := newTestRouter("/dashboard")
+	res, _ := get(t, h, "/dashboard/api/health")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+}
