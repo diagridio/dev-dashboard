@@ -4,10 +4,12 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os/exec"
 	"runtime"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/diagridio/dev-dashboard/web"
@@ -51,10 +53,12 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool) error
 	}
 	url := fmt.Sprintf("http://%s%s/", addr, urlPath)
 
+	appsSvc := discovery.New(discovery.StandaloneScanner(), &http.Client{Timeout: 2 * time.Second})
 	srv := server.New(addr, server.Options{
 		BasePath: basePath,
 		DistFS:   dist,
 		Version:  version.Get(),
+		Apps:     appsSvc,
 	})
 
 	fmt.Printf("dev-dashboard %s → %s\n", version.Get().Version, url)
