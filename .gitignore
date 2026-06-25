@@ -2,6 +2,7 @@
 web/node_modules/
 web/dist/assets/
 *.out
+*.tsbuildinfo
 coverage*
 .claude/worktrees/
 .claude/settings.local.json
