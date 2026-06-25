@@ -226,16 +226,30 @@ GET  /api/version                                dashboard + detected runtime ve
   links back to that application's detail. The same app-id ↔ app-detail linking applies on
   the Subscriptions and Actors pages (host/app columns are links). Each view is
   addressable by a stable route so links are shareable.
-- **Collapsible left "Resources" menu:** a left sidebar (collapsible to an icon-only rail,
-  state remembered) holds outgoing links to Dapr/Diagrid resources, opened in a new tab.
-  v1 links:
-  - Dapr Workflow Skills — <https://docs.diagrid.io/develop/workflows/dapr-skills/>
-  - Dapr Workflow Composer — <https://workflows.diagrid.io/>
-  - Dapr Docs — <https://docs.dapr.io>
-  - Diagrid Docs — <https://docs.diagrid.io>
-  - Dapr Discord — <https://bit.ly/dapr-discord>
-  - Catalyst — <https://www.diagrid.io/catalyst>
-  - Diagrid Webinars — <https://www.diagrid.io/webinars>
+- **Collapsible left "Resources" menu:** a left sidebar styled after the Catalyst/Conductor
+  navigation — a dark teal-green rail (`#294351`, constant across light & dark), white text,
+  mint `#0BDDA3` active accent with a translucent `#69F4B3` hover, uppercase section headers,
+  rounded items, ~248px wide, collapsible to an icon-only rail (state remembered). Kept
+  minimal and dense to match the rest of the dashboard. All links open in a new tab.
+  Sections and links:
+  - **News** (dynamic — see below): latest two Diagrid blog posts + the next upcoming webinar
+  - **Build**: Dapr Workflow Skills (<https://docs.diagrid.io/develop/workflows/dapr-skills/>) ·
+    Dapr Composer (<https://workflows.diagrid.io/>)
+  - **Learn**: Dapr University (<https://www.diagrid.io/university>) ·
+    Diagrid Webinars (<https://www.diagrid.io/webinars>)
+  - **Read**: Dapr Docs (<https://docs.dapr.io>) · Diagrid Docs (<https://docs.diagrid.io>)
+  - **Run & Operate**: Diagrid Catalyst (<https://www.diagrid.io/catalyst>)
+- **News feed (dynamic):** the News section is populated by periodically fetching the
+  Diagrid website's existing product feed —
+  **`GET https://www.diagrid.io/api/product-feed`** (JSON, CORS-enabled `*`, server-cached
+  ~1 h). It returns `latestBlogPosts`, `upcomingWebinars`, `upcomingEvents`, and
+  `latestReports`, each item with `title`, `url`, `excerpt`, `publishedAt`, and (for
+  webinars/events) `eventStartDate` / `eventLocation`; upcoming-vs-past is derived from
+  `eventStartDate`. The dashboard polls roughly hourly (no benefit to more frequent polling),
+  caches the last good result, and degrades to the static Build/Learn/Read/Run links if the
+  feed is unreachable (e.g. offline). No RSS/Atom feed exists today; the JSON feed is the
+  recommended source. The fetch can run from the Go backend (avoids any browser CORS concerns
+  and lets results be cached server-side) or directly from the SPA since CORS is open.
 
 ### 9.1 Visual Identity & Theming
 
