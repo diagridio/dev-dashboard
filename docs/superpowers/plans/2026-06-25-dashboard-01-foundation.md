@@ -10,7 +10,7 @@
 
 **Roadmap:** This is **Plan 1 of 6**. Later plans: (2) Discovery + Applications, (3) Workflows + state store + Terminate/Purge, (4) Resources/Actors/Subscriptions, (5) Logs + News, (6) Packaging. Each builds on this skeleton.
 
-**Module path:** `github.com/diagrid/dev-dashboard` (adjust if the repo's canonical path differs; keep consistent everywhere).
+**Module path:** `github.com/diagridio/dev-dashboard` (matches the git remote `github.com/diagridio/dev-dashboard.git`). Keep consistent everywhere.
 
 ## Global Constraints
 
@@ -94,7 +94,7 @@ dev-dashboard/
 
 Run:
 ```bash
-go mod init github.com/diagrid/dev-dashboard
+go mod init github.com/diagridio/dev-dashboard
 go get github.com/go-chi/chi/v5@latest github.com/spf13/cobra@latest github.com/stretchr/testify@latest
 ```
 
@@ -140,7 +140,7 @@ Expected: FAIL — `undefined: Get` / package does not compile.
 // Package version exposes build-stamped version information.
 package version
 
-// Overridable at build time with -ldflags "-X github.com/diagrid/dev-dashboard/pkg/version.Version=..."
+// Overridable at build time with -ldflags "-X github.com/diagridio/dev-dashboard/pkg/version.Version=..."
 var (
 	Version = "dev"
 	Commit  = "none"
@@ -198,7 +198,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/diagrid/dev-dashboard/pkg/version"
+	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/stretchr/testify/require"
 )
 
@@ -245,7 +245,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/diagrid/dev-dashboard/pkg/version"
+	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -449,7 +449,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/diagrid/dev-dashboard/pkg/version"
+	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/stretchr/testify/require"
 )
 
@@ -505,7 +505,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diagrid/dev-dashboard/pkg/version"
+	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -665,9 +665,9 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/diagrid/dev-dashboard/pkg/server"
-	"github.com/diagrid/dev-dashboard/pkg/version"
-	"github.com/diagrid/dev-dashboard/web"
+	"github.com/diagridio/dev-dashboard/pkg/server"
+	"github.com/diagridio/dev-dashboard/pkg/version"
+	"github.com/diagridio/dev-dashboard/web"
 	"github.com/spf13/cobra"
 )
 
@@ -744,7 +744,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/diagrid/dev-dashboard/cmd"
+	"github.com/diagridio/dev-dashboard/cmd"
 )
 
 func main() {

@@ -1,0 +1,8 @@
+/bin/
+web/node_modules/
+web/dist/assets/
+*.out
+coverage*
+.claude/worktrees/
+.claude/settings.local.json
+.superpowers/
