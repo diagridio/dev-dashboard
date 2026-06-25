@@ -14,15 +14,15 @@ const (
 type Instance struct {
 	AppID          string   `json:"appId"`
 	Health         Health   `json:"health"`
-	Runtime        string   `json:"runtime"`        // e.g. "go", "python", "node", "dotnet", "java", "unknown"
+	Runtime        string   `json:"runtime"` // e.g. "go", "python", "node", "dotnet", "java", "unknown"
 	HTTPPort       int      `json:"httpPort"`
 	GRPCPort       int      `json:"grpcPort"`
 	AppPort        int      `json:"appPort"`
 	DaprdPID       int      `json:"daprdPid"`
-	AppPID         int      `json:"appPid"`         // 0 = unknown
+	AppPID         int      `json:"appPid"` // 0 = unknown
 	CLIPID         int      `json:"cliPid"`
-	Age            string   `json:"age"`            // human, e.g. "14m"
-	Created        string   `json:"created"`        // local time string
+	Age            string   `json:"age"`     // human, e.g. "14m"
+	Created        string   `json:"created"` // local time string
 	RunTemplate    string   `json:"runTemplate"`
 	ResourcePaths  []string `json:"resourcePaths"`
 	ConfigPath     string   `json:"configPath"`
