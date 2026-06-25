@@ -147,8 +147,14 @@ sidecar interaction** — so it works even when the sidecar is unhealthy.
 3. **Workflows** — list of executions across all apps with status filter
    (Pending / Running / Completed / Failed / Terminated / Suspended), app/name/instance-id
    search, and pagination. **Autorefreshes** (default 3 s, pausable, interval selector).
-   Detail drill-in: full history timeline (events, inputs/outputs, timestamps, elapsed,
+   Detail drill-in: header (status, instance id, app, created/ended, duration, replay
+   count), **input**, **output**, **custom status** (set via `ctx.SetCustomStatus()`), and
+   the full history timeline (events with per-event input/output, timestamps, elapsed,
    replay count) + derived status. Purge actions (see §7).
+   - **Copyable fields:** input, output, and custom status (and each event's input/output)
+     each have a one-click copy-to-clipboard control, plus the raw instance id. Copy yields
+     the exact serialized JSON/text. The web UI uses the async Clipboard API with a
+     `execCommand` fallback for restricted contexts.
 4. **Components & Configurations** — list + read-only YAML viewer, enriched with `LoadedBy`
    (which app ids loaded each component, from metadata). Syntax-highlighted viewer.
 5. **Logs** — per-app daprd + app logs, live tail via SSE, log-level parsing/coloring,
