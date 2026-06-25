@@ -47,6 +47,34 @@ describe('AppDetail', () => {
     expect(screen.getByText('3500')).toBeInTheDocument()
   })
 
+  it('renders copy-path affordance on non-empty path values', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'order',
+          health: 'healthy',
+          runtime: 'go',
+          httpPort: 3500,
+          grpcPort: 50001,
+          appPort: 8080,
+          daprdPid: 48230,
+          appPid: 48213,
+          cliPid: 48201,
+          command: 'go run ./cmd/order',
+          runtimeVersion: '1.14.4',
+          metadataOk: true,
+          configPath: '/home/user/.dapr/config.yaml',
+          appLogPath: '/tmp/order.log',
+          resourcePaths: ['/home/user/.dapr/components'],
+        }),
+      ),
+    )
+    const { container } = renderDetail()
+    await waitFor(() => expect(screen.getByText('order')).toBeInTheDocument())
+    const copyEls = container.querySelectorAll('[data-cy="copy-path"]')
+    expect(copyEls.length).toBeGreaterThan(0)
+  })
+
   it('notes metadata unavailable', async () => {
     server.use(
       http.get('/api/apps/order', () =>

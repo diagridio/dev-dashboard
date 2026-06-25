@@ -2,6 +2,25 @@ import { useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
 import type { HealthStatus, AppDetail as AppDetailType } from '../types/api'
 
+function legacyCopy(t: string) {
+  const ta = document.createElement('textarea')
+  ta.value = t
+  ta.style.position = 'fixed'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.select()
+  document.execCommand('copy')
+  document.body.removeChild(ta)
+}
+
+function copyText(t: string) {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(t).catch(() => legacyCopy(t))
+  } else {
+    legacyCopy(t)
+  }
+}
+
 // Maps a health status to its CSS custom property color token
 function healthColor(health: HealthStatus): string {
   switch (health) {
@@ -72,10 +91,24 @@ function Field({ label, value, mono = false }: { label: string; value: React.Rea
   return (
     <div style={rowStyle}>
       <span style={labelStyle}>{label}</span>
-      <span style={{ ...valueStyle, ...(mono ? {} : {}) }} className={mono ? 'mono' : undefined}>
+      <span style={valueStyle} className={mono ? 'mono' : undefined}>
         {value ?? '—'}
       </span>
     </div>
+  )
+}
+
+function CopyablePath({ path }: { path: string }) {
+  return (
+    <span
+      className="mono"
+      data-cy="copy-path"
+      title="Click to copy"
+      style={{ cursor: 'copy' }}
+      onClick={() => copyText(path)}
+    >
+      {path}
+    </span>
   )
 }
 
@@ -141,14 +174,18 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         <div style={sectionHeadingStyle}>Paths</div>
         {app.resourcePaths && app.resourcePaths.length > 0 ? (
           app.resourcePaths.map((p, i) => (
-            <Field key={i} label={i === 0 ? 'Resources' : ''} value={p} mono />
+            <Field
+              key={i}
+              label={i === 0 ? 'Resources' : ''}
+              value={<CopyablePath path={p} />}
+            />
           ))
         ) : (
           <Field label="Resources" value="—" />
         )}
-        <Field label="Config" value={app.configPath || '—'} mono />
-        <Field label="App log" value={app.appLogPath || '—'} mono />
-        <Field label="daprd log" value={app.daprdLogPath || '—'} mono />
+        <Field label="Config" value={app.configPath ? <CopyablePath path={app.configPath} /> : '—'} />
+        <Field label="App log" value={app.appLogPath ? <CopyablePath path={app.appLogPath} /> : '—'} />
+        <Field label="daprd log" value={app.daprdLogPath ? <CopyablePath path={app.daprdLogPath} /> : '—'} />
       </div>
     </div>
   )
