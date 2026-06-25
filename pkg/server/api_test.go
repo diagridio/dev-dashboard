@@ -13,7 +13,7 @@ import (
 )
 
 func TestHealthEndpoint(t *testing.T) {
-	srv := httptest.NewServer(apiRouter(version.Info{Version: "test"}))
+	srv := httptest.NewServer(apiRouter(version.Info{Version: "test"}, newFakeApps()))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/health")
@@ -27,7 +27,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestVersionEndpoint(t *testing.T) {
-	srv := httptest.NewServer(apiRouter(version.Info{Version: "1.2.3", Commit: "abc", Date: "d"}))
+	srv := httptest.NewServer(apiRouter(version.Info{Version: "1.2.3", Commit: "abc", Date: "d"}, newFakeApps()))
 	t.Cleanup(srv.Close)
 
 	resp, err := http.Get(srv.URL + "/version")

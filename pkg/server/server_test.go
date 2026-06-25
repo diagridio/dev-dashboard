@@ -16,6 +16,7 @@ func newTestRouter(basePath string) http.Handler {
 		BasePath: basePath,
 		DistFS:   fstest.MapFS{"index.html": {Data: []byte("shell")}},
 		Version:  version.Info{Version: "test"},
+		Apps:     newFakeApps(),
 	})
 }
 

@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/go-chi/chi/v5"
 )
 
 // apiRouter builds the JSON API surface served under /api.
-func apiRouter(v version.Info) http.Handler {
+func apiRouter(v version.Info, apps discovery.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -17,6 +18,7 @@ func apiRouter(v version.Info) http.Handler {
 	r.Get("/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, v)
 	})
+	r.Mount("/apps", appsRouter(apps))
 	return r
 }
 

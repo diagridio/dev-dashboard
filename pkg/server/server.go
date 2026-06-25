@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -17,6 +18,7 @@ type Options struct {
 	BasePath string // "" or e.g. "/dashboard"
 	DistFS   fs.FS  // embedded SPA assets (contains index.html)
 	Version  version.Info
+	Apps     discovery.Service
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
@@ -28,7 +30,7 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(middleware.Recoverer)
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps))
 		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath))
 	}
 
