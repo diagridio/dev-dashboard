@@ -109,7 +109,7 @@ export function Applications() {
                 </Link>
               </td>
               <td style={tdStyle}>{app.runtime}</td>
-              <td style={{ ...tdStyle }} className="mono">
+              <td style={tdStyle} className="mono">
                 {app.appPort}
               </td>
               <td style={tdStyle} className="mono">
@@ -126,7 +126,7 @@ export function Applications() {
               </td>
               <td style={tdStyle}>{app.age}</td>
               <td style={tdStyle} className="mono">
-                {'runTemplate' in app ? (app as { runTemplate: string }).runTemplate : '—'}
+                {app.runTemplate || '—'}
               </td>
             </tr>
           ))}

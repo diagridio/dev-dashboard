@@ -33,6 +33,7 @@ const mockApps: AppSummary[] = [
     cliPid: 9012,
     age: '5m',
     created: '2024-01-01T00:00:00Z',
+    runTemplate: 'default',
   },
   {
     appId: 'other-app',
@@ -46,6 +47,7 @@ const mockApps: AppSummary[] = [
     cliPid: 9013,
     age: '2m',
     created: '2024-01-01T00:00:00Z',
+    runTemplate: '',
   },
 ]
 

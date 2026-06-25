@@ -17,6 +17,7 @@ export interface AppSummary {
   cliPid: number
   age: string
   created: string
+  runTemplate: string
 }
 
 /**
@@ -24,7 +25,6 @@ export interface AppSummary {
  * Extends AppSummary with additional fields available in the detail view.
  */
 export interface AppDetail extends AppSummary {
-  runTemplate: string
   resourcePaths: string[]
   configPath: string
   appLogPath: string
