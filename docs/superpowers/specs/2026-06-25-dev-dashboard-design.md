@@ -226,6 +226,16 @@ GET  /api/version                                dashboard + detected runtime ve
   links back to that application's detail. The same app-id ↔ app-detail linking applies on
   the Subscriptions and Actors pages (host/app columns are links). Each view is
   addressable by a stable route so links are shareable.
+- **Collapsible left "Resources" menu:** a left sidebar (collapsible to an icon-only rail,
+  state remembered) holds outgoing links to Dapr/Diagrid resources, opened in a new tab.
+  v1 links:
+  - Dapr Workflow Skills — <https://docs.diagrid.io/develop/workflows/dapr-skills/>
+  - Dapr Workflow Composer — <https://workflows.diagrid.io/>
+  - Dapr Docs — <https://docs.dapr.io>
+  - Diagrid Docs — <https://docs.diagrid.io>
+  - Dapr Discord — <https://bit.ly/dapr-discord>
+  - Catalyst — <https://www.diagrid.io/catalyst>
+  - Diagrid Webinars — <https://www.diagrid.io/webinars>
 
 ### 9.1 Visual Identity & Theming
 
@@ -275,10 +285,12 @@ its own. Neutrals use the Diagrid grey scale: `#161C24 · #212B36 · #454F5B · 
 **Logo assets** (copied into `web/src/assets/brand/`, bundled into the SPA, embedded in the
 binary — no runtime fetch, works offline):
 
-- Header wordmark — Diagrid horizontal wordmark. Source: `Diagrid_horiz.svg`. Themed
-  either by swapping in the white wordmark on dark, or (preferred) by porting the
-  `currentColor`-based logo component so one asset themes automatically.
-- Favicon / collapsed-nav mark — the Diagrid "D" icon. Source: `d.svg`.
+- Header logo — the **full Diagrid wordmark** (the complete "diagrid" logo, not just the
+  "D" mark). The wordmark SVG is made theme-aware by setting its text fills to
+  `currentColor` and driving the color from a per-theme `--logo-ink` token (dark ink on
+  light, white on dark); the brand accent stroke keeps its green. One asset themes
+  automatically.
+- Favicon / collapsed-rail mark — the Diagrid "D" icon. Source: `d.svg`.
 
 ## 10. Portability to the Diagrid Go CLI
 
