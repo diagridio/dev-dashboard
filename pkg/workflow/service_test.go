@@ -115,3 +115,26 @@ func TestServiceListNoStore(t *testing.T) {
 	_, err := svc.List(context.Background(), ListQuery{})
 	require.ErrorIs(t, err, ErrNoStore)
 }
+
+func TestServiceGetDetail(t *testing.T) {
+	f := newFakeStore()
+	completed := &protos.HistoryEvent{EventId: 1, Timestamp: timestamppb.Now(), EventType: &protos.HistoryEvent_ExecutionCompleted{
+		ExecutionCompleted: &protos.ExecutionCompletedEvent{
+			WorkflowStatus: protos.OrchestrationStatus_ORCHESTRATION_STATUS_COMPLETED,
+			Result:         &wrapperspb.StringValue{Value: `"ok"`},
+		},
+	}}
+	seedWorkflow(t, f, "default", "order", "inst-c", "OrderWorkflow",
+		[]*protos.HistoryEvent{startedEvent("OrderWorkflow"), completed})
+
+	svc := New(f, "default", func(context.Context) ([]string, error) { return []string{"order"}, nil })
+	ex, err := svc.Get(context.Background(), "order", "inst-c")
+	require.NoError(t, err)
+	require.Equal(t, StatusCompleted, ex.Status)
+	require.Len(t, ex.History, 2)
+	require.NotNil(t, ex.Output)
+	require.Equal(t, `"ok"`, *ex.Output)
+
+	_, err = svc.Get(context.Background(), "order", "missing")
+	require.ErrorIs(t, err, ErrNotFound)
+}
