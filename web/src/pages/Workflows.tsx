@@ -124,6 +124,7 @@ export function Workflows() {
   }
 
   function onBulkRemove() {
+    setRemoveStatus(null)
     setConfirmDialogOpen(true)
   }
 

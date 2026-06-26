@@ -118,7 +118,7 @@ export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel }: Prop
         <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 14, color: 'var(--text)', cursor: 'pointer' }}>
           <input
             type="checkbox"
-            data-testid="confirm-force"
+            data-cy="confirm-force"
             checked={force}
             onChange={(e) => setForce(e.target.checked)}
           />
@@ -141,7 +141,7 @@ export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel }: Prop
             Cancel
           </button>
           <button
-            data-testid="confirm-remove"
+            data-cy="confirm-remove"
             onClick={() => onConfirm(force)}
             style={{
               padding: 'var(--space-2) var(--space-4)',

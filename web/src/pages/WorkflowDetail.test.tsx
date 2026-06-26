@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect } from 'vitest'
@@ -30,5 +31,21 @@ describe('WorkflowDetail', () => {
     expect(screen.getByText('Running')).toBeInTheDocument()
     expect(screen.getByText('ExecutionStarted')).toBeInTheDocument()
     expect(screen.getByText('Charge')).toBeInTheDocument()
+  })
+
+  it('clicking wf-remove opens confirm-remove dialog', async () => {
+    server.use(http.get('/api/workflows/order/abc', () => HttpResponse.json({
+      appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running',
+      createdAt: '2026-06-26T10:00:00Z', replayCount: 0,
+      history: [],
+    })))
+    renderDetail()
+    await waitFor(() => expect(screen.getAllByText('OrderWorkflow').length).toBeGreaterThan(0))
+    // Dialog should not be visible yet
+    expect(document.querySelector('[data-cy="confirm-remove"]')).toBeNull()
+    // Click wf-remove button
+    await userEvent.click(document.querySelector('[data-cy="wf-remove"]') as HTMLElement)
+    // Dialog confirm button should now be in the DOM
+    expect(document.querySelector('[data-cy="confirm-remove"]')).not.toBeNull()
   })
 })
