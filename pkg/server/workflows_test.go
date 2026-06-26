@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/stretchr/testify/require"
 )
@@ -136,16 +137,16 @@ func TestWorkflowBulkPurge(t *testing.T) {
 
 func TestStateStoresEndpoint(t *testing.T) {
 	stores := fakeStoreRegistry{stores: []StoreInfo{
-		{Name: "redis", Type: "redis", Path: "/tmp/redis", Active: true},
+		{Name: "statestore", Type: "state.redis", Active: true},
 	}}
-	h := workflowsRouter(fakeWF{}, nil, stores, nil)
+	h := apiRouter(version.Info{}, nil, fakeWF{}, nil, stores, nil)
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
-	require.Contains(t, body, `"name":"redis"`)
+	require.Contains(t, body, `"name":"statestore"`)
 }
 
 func TestStateStoresNilRegistry(t *testing.T) {
-	h := workflowsRouter(fakeWF{}, nil, nil, nil)
+	h := apiRouter(version.Info{}, nil, fakeWF{}, nil, nil, nil)
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `[]`)

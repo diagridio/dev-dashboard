@@ -65,14 +65,6 @@ func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegi
 		writeJSON(w, http.StatusOK, res)
 	})
 
-	r.Get("/statestores", func(w http.ResponseWriter, _ *http.Request) {
-		if stores == nil {
-			writeJSON(w, http.StatusOK, []StoreInfo{})
-			return
-		}
-		writeJSON(w, http.StatusOK, stores.Stores())
-	})
-
 	r.Get("/{appId}/{instanceId}", func(w http.ResponseWriter, req *http.Request) {
 		ex, err := svc.Get(req.Context(), chi.URLParam(req, "appId"), chi.URLParam(req, "instanceId"))
 		switch {
