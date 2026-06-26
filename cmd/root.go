@@ -5,13 +5,17 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/server"
+	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/version"
+	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/diagridio/dev-dashboard/web"
 	"github.com/spf13/cobra"
 )
@@ -19,9 +23,11 @@ import (
 // NewRootCmd builds the root command (default action = serve).
 func NewRootCmd() *cobra.Command {
 	var (
-		port     int
-		basePath string
-		noOpen   bool
+		port       int
+		basePath   string
+		noOpen     bool
+		stateStore string
+		namespace  string
 	)
 	c := &cobra.Command{
 		Use:           "dev-dashboard",
@@ -29,19 +35,21 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runServe(cmd.Context(), port, basePath, noOpen)
+			return runServe(cmd.Context(), port, basePath, noOpen, stateStore, namespace)
 		},
 	}
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")
+	c.Flags().StringVar(&stateStore, "statestore", "", "path to a state-store component YAML (overrides auto-detect)")
+	c.Flags().StringVar(&namespace, "namespace", "default", "Dapr namespace for workflow keys")
 	return c
 }
 
 // Execute runs the CLI.
 func Execute() error { return NewRootCmd().ExecuteContext(context.Background()) }
 
-func runServe(ctx context.Context, port int, basePath string, noOpen bool) error {
+func runServe(ctx context.Context, port int, basePath string, noOpen bool, stateStore, namespace string) error {
 	dist, err := web.DistFS()
 	if err != nil {
 		return fmt.Errorf("load embedded UI: %w", err)
@@ -54,11 +62,59 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool) error
 	url := fmt.Sprintf("http://%s%s/", addr, urlPath)
 
 	appsSvc := discovery.New(discovery.StandaloneScanner(), &http.Client{Timeout: 2 * time.Second})
+
+	// Resolve resource paths to scan for state-store components.
+	var scanPaths []string
+	if stateStore != "" {
+		scanPaths = []string{stateStore}
+	} else {
+		// default Dapr components dir + any live --resources-path from running apps
+		if home, err := os.UserHomeDir(); err == nil {
+			scanPaths = append(scanPaths, filepath.Join(home, ".dapr", "components"))
+		}
+		if apps, err := appsSvc.List(ctx); err == nil {
+			for _, a := range apps {
+				scanPaths = append(scanPaths, a.ResourcePaths...)
+			}
+		}
+	}
+	detected, _ := statestore.Detect(scanPaths)
+	registry := newStoreRegistry(detected)
+
+	var wfStore statestore.Store
+	if active := registry.active(); active != nil {
+		if st, err := statestore.New(ctx, *active); err == nil {
+			wfStore = st
+			defer func() { _ = wfStore.Close() }()
+		} else {
+			fmt.Printf("warning: state store %q init failed: %v\n", active.Name, err)
+		}
+	}
+
+	appIDs := func(ctx context.Context) ([]string, error) {
+		apps, err := appsSvc.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ids := make([]string, 0, len(apps))
+		for _, a := range apps {
+			ids = append(ids, a.AppID)
+		}
+		return ids, nil
+	}
+	wfSvc := workflow.New(wfStore, namespace, appIDs)
+	remover := workflow.NewRemover(&http.Client{Timeout: 10 * time.Second}, wfStore, namespace)
+	resolver := newTargetResolver(appsSvc, wfSvc)
+
 	srv := server.New(addr, server.Options{
-		BasePath: basePath,
-		DistFS:   dist,
-		Version:  version.Get(),
-		Apps:     appsSvc,
+		BasePath:  basePath,
+		DistFS:    dist,
+		Version:   version.Get(),
+		Apps:      appsSvc,
+		Workflows: wfSvc,
+		Remover:   remover,
+		Stores:    registry,
+		Resolver:  resolver,
 	})
 
 	fmt.Printf("dev-dashboard %s → %s\n", version.Get().Version, url)
