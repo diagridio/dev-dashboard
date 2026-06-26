@@ -60,7 +60,7 @@ describe('Workflows', () => {
       ),
     )
     renderAt()
-    await waitFor(() => expect(screen.getAllByText(/state store/i).length).toBeGreaterThan(0))
+    await waitFor(() => expect(screen.getByText(/no state store detected/i)).toBeInTheDocument())
     expect(screen.getByText(/--statestore/)).toBeInTheDocument()
   })
 

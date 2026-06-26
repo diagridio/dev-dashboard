@@ -23,11 +23,12 @@ beforeAll(() => {
   }))
 })
 
-// Register MSW handlers so StatusFooter fetches don't error
+// Register MSW handlers so StatusFooter fetches and route-switch tests don't error
 beforeEach(() => {
   server.use(
     http.get('/api/version', () => HttpResponse.json({ version: 'dev', commit: 'none', date: 'unknown' })),
     http.get('/api/health', () => HttpResponse.json({ status: 'ok' })),
+    http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
   )
 })
 
