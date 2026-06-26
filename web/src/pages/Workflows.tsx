@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useWorkflows } from '../hooks/useWorkflows'
+import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
+import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import type { WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
 const ALL_STATUSES: WorkflowStatus[] = ['Pending', 'Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
@@ -61,9 +63,11 @@ export function Workflows() {
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch)
   const [page, setPage] = useState<string | undefined>(urlPage)
 
-  // Task-18 seam: dialog open state
-  const [_confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  // Task-18: dialog open state + removal hook
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [removeStatus, setRemoveStatus] = useState<{ ok: number; failed: number } | null>(null)
+  const { mutate: removeWorkflows } = useRemoveWorkflows()
 
   // Debounce search input ~250ms
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -120,9 +124,37 @@ export function Workflows() {
   }
 
   function onBulkRemove() {
-    // Task-18 will wire the confirm dialog; seam is here
     setConfirmDialogOpen(true)
   }
+
+  function onConfirmRemove(force: boolean) {
+    const ids = Array.from(selected).map((key) => {
+      const [appId, instanceId] = key.split('/')
+      return { appId, instanceId }
+    })
+    removeWorkflows(
+      { ids, force },
+      {
+        onSuccess: (results) => {
+          const ok = results.filter((r) => r.ok).length
+          const failed = results.filter((r) => !r.ok).length
+          setRemoveStatus({ ok, failed })
+          setSelected(new Set())
+          setConfirmDialogOpen(false)
+        },
+        onError: () => {
+          setConfirmDialogOpen(false)
+        },
+      },
+    )
+  }
+
+  // Build targets for the dialog from selected keys + items array
+  const dialogTargets = Array.from(selected).map((key) => {
+    const [appId, instanceId] = key.split('/')
+    const item = items.find((w) => w.appId === appId && w.instanceId === instanceId)
+    return { appId, instanceId, status: item?.status }
+  })
 
   // --- States ---
 
@@ -230,6 +262,12 @@ export function Workflows() {
       <div style={{ padding: 'var(--space-4)' }}>
         {toolbar}
         <p style={{ color: 'var(--text-muted)' }}>No workflows found</p>
+        <ConfirmRemoveDialog
+          open={confirmDialogOpen}
+          targets={dialogTargets}
+          onConfirm={onConfirmRemove}
+          onCancel={() => setConfirmDialogOpen(false)}
+        />
       </div>
     )
   }
@@ -238,6 +276,28 @@ export function Workflows() {
 
   return (
     <div style={{ padding: 'var(--space-4)' }}>
+      {removeStatus && (
+        <div
+          style={{
+            marginBottom: 'var(--space-3)',
+            padding: 'var(--space-2) var(--space-3)',
+            borderRadius: 4,
+            border: '1px solid var(--border)',
+            background: 'var(--surface)',
+            color: removeStatus.failed > 0 ? 'var(--bad)' : 'var(--good)',
+            fontSize: 'var(--font)',
+          }}
+        >
+          Removed {removeStatus.ok} workflow{removeStatus.ok !== 1 ? 's' : ''}
+          {removeStatus.failed > 0 ? `, ${removeStatus.failed} failed` : ''}.{' '}
+          <button
+            onClick={() => setRemoveStatus(null)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 'inherit', textDecoration: 'underline', padding: 0 }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {toolbar}
       <div style={{ overflowX: 'auto' }}>
         <table style={tableStyle}>
@@ -310,6 +370,12 @@ export function Workflows() {
           </button>
         </div>
       )}
+      <ConfirmRemoveDialog
+        open={confirmDialogOpen}
+        targets={dialogTargets}
+        onConfirm={onConfirmRemove}
+        onCancel={() => setConfirmDialogOpen(false)}
+      />
     </div>
   )
 }

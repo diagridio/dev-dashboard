@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useWorkflow } from '../hooks/useWorkflows'
+import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
+import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { elapsed } from '../lib/wallclock'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 
@@ -225,12 +227,14 @@ function useWallClock(
 export function WorkflowDetail() {
   const { appId, instanceId } = useParams<{ appId: string; instanceId: string }>()
   const { data: execution, isLoading, isError } = useWorkflow(appId ?? '', instanceId ?? '')
+  const navigate = useNavigate()
+  const { mutate: removeWorkflows } = useRemoveWorkflows()
 
   // Expanded history rows keyed by sequenceId
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
 
-  // Task-18 seam: confirm-remove dialog open state
-  const [_removeDialogOpen, setRemoveDialogOpen] = useState(false)
+  // Task-18: confirm-remove dialog open state
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
 
   const wallclock = useWallClock(
     execution?.createdAt,
@@ -261,6 +265,21 @@ export function WorkflowDetail() {
       else next.add(sequenceId)
       return next
     })
+  }
+
+  function onConfirmRemove(force: boolean) {
+    removeWorkflows(
+      { ids: [{ appId: appId ?? '', instanceId: instanceId ?? '' }], force },
+      {
+        onSuccess: () => {
+          setRemoveDialogOpen(false)
+          navigate('/workflows')
+        },
+        onError: () => {
+          setRemoveDialogOpen(false)
+        },
+      },
+    )
   }
 
   const history = execution.history ?? []
@@ -413,6 +432,12 @@ export function WorkflowDetail() {
           ))
         )}
       </div>
+      <ConfirmRemoveDialog
+        open={removeDialogOpen}
+        targets={[{ appId: appId ?? '', instanceId: instanceId ?? '', status: execution.status }]}
+        onConfirm={onConfirmRemove}
+        onCancel={() => setRemoveDialogOpen(false)}
+      />
     </div>
   )
 }
