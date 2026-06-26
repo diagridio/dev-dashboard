@@ -3,6 +3,7 @@ module github.com/diagridio/dev-dashboard
 go 1.26.4
 
 require (
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/dapr/cli v1.18.0
 	github.com/dapr/components-contrib v1.18.0
 	github.com/dapr/durabletask-go v0.12.1
@@ -11,6 +12,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/protobuf v1.36.11
+	sigs.k8s.io/yaml v1.5.0
 )
 
 require (
@@ -178,6 +180,7 @@ require (
 	github.com/vmware/vmware-go-kcl-v2 v1.0.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.mongodb.org/mongo-driver v1.14.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
@@ -229,5 +232,4 @@ require (
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.6.0 // indirect
-	sigs.k8s.io/yaml v1.5.0 // indirect
 )
