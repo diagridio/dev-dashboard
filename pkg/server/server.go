@@ -23,6 +23,7 @@ type Options struct {
 	Workflows workflow.Service
 	Remover   WorkflowRemover
 	Stores    StoreRegistry
+	Resolver  TargetResolver
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
@@ -34,7 +35,7 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(middleware.Recoverer)
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.Workflows, opts.Remover, opts.Stores))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.Workflows, opts.Remover, opts.Stores, opts.Resolver))
 		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath))
 	}
 

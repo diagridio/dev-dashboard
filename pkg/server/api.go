@@ -11,7 +11,7 @@ import (
 )
 
 // apiRouter builds the JSON API surface served under /api.
-func apiRouter(v version.Info, apps discovery.Service, wf workflow.Service, rem WorkflowRemover, stores StoreRegistry) http.Handler {
+func apiRouter(v version.Info, apps discovery.Service, wf workflow.Service, rem WorkflowRemover, stores StoreRegistry, targets TargetResolver) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -19,8 +19,15 @@ func apiRouter(v version.Info, apps discovery.Service, wf workflow.Service, rem 
 	r.Get("/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, v)
 	})
+	r.Get("/statestores", func(w http.ResponseWriter, _ *http.Request) {
+		if stores == nil {
+			writeJSON(w, http.StatusOK, []StoreInfo{})
+			return
+		}
+		writeJSON(w, http.StatusOK, stores.Stores())
+	})
 	r.Mount("/apps", appsRouter(apps))
-	r.Mount("/workflows", workflowsRouter(wf, rem, stores))
+	r.Mount("/workflows", workflowsRouter(wf, rem, stores, targets))
 	return r
 }
 

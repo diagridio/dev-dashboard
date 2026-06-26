@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -29,7 +30,25 @@ type StoreInfo struct {
 	Active bool   `json:"active"`
 }
 
-func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegistry) http.Handler {
+// TargetResolver resolves an (appID, instanceID) pair into a RemoveTarget.
+// Implemented in cmd (Task 13) by combining discovery.Service + workflow.Service.
+type TargetResolver interface {
+	Resolve(ctx context.Context, appID, instanceID string) (workflow.RemoveTarget, error)
+}
+
+// removeBody is the request body for single and bulk removal endpoints.
+type removeBody struct {
+	IDs   []targetRef `json:"ids"`
+	Force bool        `json:"force"`
+}
+
+// targetRef identifies a single workflow instance in a bulk request.
+type targetRef struct {
+	AppID      string `json:"appId"`
+	InstanceID string `json:"instanceId"`
+}
+
+func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegistry, targets TargetResolver) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
@@ -46,6 +65,14 @@ func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegi
 		writeJSON(w, http.StatusOK, res)
 	})
 
+	r.Get("/statestores", func(w http.ResponseWriter, _ *http.Request) {
+		if stores == nil {
+			writeJSON(w, http.StatusOK, []StoreInfo{})
+			return
+		}
+		writeJSON(w, http.StatusOK, stores.Stores())
+	})
+
 	r.Get("/{appId}/{instanceId}", func(w http.ResponseWriter, req *http.Request) {
 		ex, err := svc.Get(req.Context(), chi.URLParam(req, "appId"), chi.URLParam(req, "instanceId"))
 		switch {
@@ -60,10 +87,43 @@ func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegi
 		}
 	})
 
-	// removal + statestores handlers added in Task 12
-	_ = rem
-	_ = stores
+	r.Post("/{appId}/{instanceId}/terminate", removeOne(rem, targets))
+	r.Post("/{appId}/{instanceId}/purge", removeOne(rem, targets))
+
+	r.Post("/purge", func(w http.ResponseWriter, req *http.Request) {
+		var body removeBody
+		_ = json.NewDecoder(req.Body).Decode(&body)
+		var tgts []workflow.RemoveTarget
+		for _, ref := range body.IDs {
+			t, err := targets.Resolve(req.Context(), ref.AppID, ref.InstanceID)
+			if err != nil {
+				continue
+			}
+			tgts = append(tgts, t)
+		}
+		writeJSON(w, http.StatusOK, rem.RemoveMany(req.Context(), tgts, body.Force))
+	})
+
 	return r
+}
+
+// removeOne returns an http.HandlerFunc for single-instance terminate/purge.
+func removeOne(rem WorkflowRemover, targets TargetResolver) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		var body removeBody
+		_ = json.NewDecoder(req.Body).Decode(&body)
+		t, err := targets.Resolve(req.Context(), chi.URLParam(req, "appId"), chi.URLParam(req, "instanceId"))
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow not found"})
+			return
+		}
+		results := rem.RemoveMany(req.Context(), []workflow.RemoveTarget{t}, body.Force)
+		if len(results) == 1 {
+			writeJSON(w, http.StatusOK, results[0])
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "removal produced no result"})
+	}
 }
 
 func parseListQuery(req *http.Request) workflow.ListQuery {
