@@ -7,7 +7,7 @@ build: web
 	go build -o bin/dev-dashboard .
 
 test-go:
-	go test -tags unit -race ./...
+	@if command -v gotestsum >/dev/null 2>&1; then gotestsum -- -tags unit -race ./...; else go test -tags unit -race ./...; fi
 
 test-web:
 	cd web && npm install && npm test

@@ -25,7 +25,8 @@ func get(t *testing.T, h http.Handler, path string) (*http.Response, string) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	res := rec.Result()
-	b, _ := io.ReadAll(res.Body)
+	b, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
 	return res, string(b)
 }
 

@@ -16,8 +16,9 @@ func TestGetDefaults(t *testing.T) {
 }
 
 func TestGetReflectsVars(t *testing.T) {
+	origVersion, origCommit, origDate := Version, Commit, Date
+	t.Cleanup(func() { Version, Commit, Date = origVersion, origCommit, origDate })
 	Version, Commit, Date = "1.2.3", "abc123", "2026-06-25"
-	t.Cleanup(func() { Version, Commit, Date = "dev", "none", "unknown" })
 	got := Get()
 	require.Equal(t, "1.2.3", got.Version)
 	require.Equal(t, "abc123", got.Commit)

@@ -3,11 +3,77 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
+	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/stretchr/testify/require"
 )
+
+// --- targetResolver unit tests ---
+
+type fakeDiscovery struct {
+	inst discovery.Instance
+	err  error
+}
+
+func (f fakeDiscovery) List(_ context.Context) ([]discovery.Instance, error) {
+	return []discovery.Instance{f.inst}, f.err
+}
+
+func (f fakeDiscovery) Get(_ context.Context, _ string) (discovery.Instance, error) {
+	return f.inst, f.err
+}
+
+type fakeWorkflowSvc struct {
+	ex  workflow.Execution
+	err error
+}
+
+func (f fakeWorkflowSvc) List(_ context.Context, _ workflow.ListQuery) (workflow.ListResult, error) {
+	return workflow.ListResult{}, nil
+}
+
+func (f fakeWorkflowSvc) Get(_ context.Context, _, _ string) (workflow.Execution, error) {
+	return f.ex, f.err
+}
+
+func TestTargetResolver(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("happy path", func(t *testing.T) {
+		disc := fakeDiscovery{inst: discovery.Instance{AppID: "order", HTTPPort: 3500, Health: discovery.HealthHealthy}}
+		wf := fakeWorkflowSvc{ex: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "inst", Status: workflow.StatusRunning}}}
+		r := newTargetResolver(disc, wf)
+		got, err := r.Resolve(ctx, "order", "inst")
+		require.NoError(t, err)
+		require.Equal(t, workflow.StatusRunning, got.Status)
+		require.Equal(t, 3500, got.HTTPPort)
+		require.True(t, got.Healthy)
+	})
+
+	t.Run("discovery Get fails — still succeeds with HTTPPort=0 Healthy=false", func(t *testing.T) {
+		disc := fakeDiscovery{err: errors.New("not found")}
+		wf := fakeWorkflowSvc{ex: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "inst", Status: workflow.StatusCompleted}}}
+		r := newTargetResolver(disc, wf)
+		got, err := r.Resolve(ctx, "order", "inst")
+		require.NoError(t, err)
+		require.Equal(t, 0, got.HTTPPort)
+		require.False(t, got.Healthy)
+		require.Equal(t, workflow.StatusCompleted, got.Status)
+	})
+
+	t.Run("workflow Get fails — returns error", func(t *testing.T) {
+		disc := fakeDiscovery{inst: discovery.Instance{AppID: "order", HTTPPort: 3500, Health: discovery.HealthHealthy}}
+		wf := fakeWorkflowSvc{err: errors.New("db error")}
+		r := newTargetResolver(disc, wf)
+		_, err := r.Resolve(ctx, "order", "inst")
+		require.Error(t, err)
+	})
+}
 
 func TestStoreRegistry_Empty(t *testing.T) {
 	r := newStoreRegistry(nil)

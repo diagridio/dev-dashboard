@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -48,7 +50,11 @@ func NewRootCmd() *cobra.Command {
 }
 
 // Execute runs the CLI.
-func Execute() error { return NewRootCmd().ExecuteContext(context.Background()) }
+func Execute() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return NewRootCmd().ExecuteContext(ctx)
+}
 
 func runServe(ctx context.Context, port int, basePath string, noOpen bool, stateStore, namespace string) error {
 	dist, err := web.DistFS()
@@ -133,7 +139,19 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	if !noOpen {
 		go func() { time.Sleep(400 * time.Millisecond); _ = openBrowser(url) }()
 	}
-	return srv.Start()
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Start() }()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+		fmt.Println("shutting down…")
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutCtx)
+	}
 }
 
 func trimSlash(s string) string {
