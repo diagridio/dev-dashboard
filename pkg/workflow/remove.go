@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
@@ -40,8 +41,10 @@ func NewRemover(client *http.Client, store statestore.Store, namespace string) *
 }
 
 func (r *Remover) Remove(ctx context.Context, t RemoveTarget, force bool) RemoveResult {
+	log := slog.Default().With("component", "workflow")
 	mech := SelectMechanism(t.Status, t.Healthy && t.HTTPPort > 0, force)
 	res := RemoveResult{InstanceID: t.InstanceID, Mechanism: mech}
+	log.Info("workflow removal requested", "app", t.AppID, "instance", t.InstanceID, "mechanism", string(mech), "force", force)
 	var err error
 	switch mech {
 	case MechPurge:
@@ -55,17 +58,26 @@ func (r *Remover) Remove(ctx context.Context, t RemoveTarget, force bool) Remove
 	}
 	if err != nil {
 		res.Error = err.Error()
+		log.Error("workflow removal failed", "app", t.AppID, "instance", t.InstanceID, "mechanism", string(mech), "err", err)
 		return res
 	}
 	res.OK = true
+	log.Info("workflow removed", "app", t.AppID, "instance", t.InstanceID, "mechanism", string(mech))
 	return res
 }
 
 func (r *Remover) RemoveMany(ctx context.Context, targets []RemoveTarget, force bool) []RemoveResult {
 	out := make([]RemoveResult, 0, len(targets))
+	ok := 0
 	for _, t := range targets {
-		out = append(out, r.Remove(ctx, t, force))
+		res := r.Remove(ctx, t, force)
+		if res.OK {
+			ok++
+		}
+		out = append(out, res)
 	}
+	slog.Default().With("component", "workflow").Info("bulk removal complete",
+		"total", len(targets), "ok", ok, "failed", len(targets)-ok)
 	return out
 }
 
@@ -97,6 +109,7 @@ func (r *Remover) post(ctx context.Context, port int, instanceID, action string)
 
 func (r *Remover) forceDelete(ctx context.Context, t RemoveTarget) error {
 	if r.store == nil {
+		slog.Default().With("component", "workflow").Warn("force delete unavailable", "app", t.AppID, "instance", t.InstanceID)
 		return fmt.Errorf("force delete unavailable: no state store")
 	}
 	keys, _, err := r.store.Keys(ctx, statestore.InstanceKeyPattern(r.namespace, t.AppID, t.InstanceID), "", 0)
