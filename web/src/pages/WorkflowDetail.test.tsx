@@ -34,7 +34,7 @@ describe('WorkflowDetail', () => {
     expect(screen.getByText('Charge')).toBeInTheDocument()
   })
 
-  it('Running→Completed: preserves original history rows when new events arrive', async () => {
+  it('Running→Completed: refetch replaces history with updated server state (all rows present)', async () => {
     // Phase 1: Running with 2 history events
     server.use(http.get('/api/workflows/order/abc', () => HttpResponse.json({
       appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running',
