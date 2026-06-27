@@ -117,16 +117,6 @@ No additional setup is needed: the dashboard discovers running Dapr apps the sam
 `dapr list` does, so anything started with `dapr run` / `dapr run -f` shows up within one
 refresh cycle.
 
-## Troubleshooting
-
-If the dashboard does not behave as expected, run it with `--verbose` to print diagnostic logs to stderr:
-
-```sh
-dev-dashboard --verbose
-```
-
-Logs are grouped by `component=` (values: `server`, `discovery`, `statestore`, `workflow`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
-
 ### Mounting under a sub-path
 
 The SPA bakes its asset base URL at build time from the `DASH_BASE_PATH` environment
@@ -141,6 +131,16 @@ DASH_BASE_PATH=/dashboard/ make build
 
 `DASH_BASE_PATH` (used at Vite build time) must equal the `--base-path` flag value, and
 both must end with a trailing slash.
+
+## Troubleshooting
+
+If the dashboard does not behave as expected, run it with `--verbose` to print diagnostic logs to stderr:
+
+```sh
+dev-dashboard --verbose
+```
+
+Logs are grouped by `component=` (values: `server`, `discovery`, `statestore`, `workflow`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
 
 ## Building from source
 
