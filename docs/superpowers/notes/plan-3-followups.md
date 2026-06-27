@@ -1,5 +1,15 @@
 # Plan 3 (Workflows + State Store + Terminate/Purge) — Deferred Follow-ups
 
+> **Sweep 2 2026-06-27 (branch `chore/followups-sweep-2`):** ✅ RESOLVED — bulk-purge now appends a
+> failed `RemoveResult` per unresolvable ref (count reconciles); the two SPA-dead single-instance
+> `/terminate`+`/purge` routes DROPPED (+`removeOneViaBackend` deleted) — chosen over honoring the
+> verb since the UI only uses bulk purge; `Detect` abs-path dedup, `Get` heuristic, decode/ParseInstanceID
+> tests, `WorkflowsParams.status` typing, `log→fmt`, redundant key, StatusPill 2nd-status were done in
+> the `4c08021` pass; `targetResolver` unit test added; Running→Completed refetch regression test added;
+> dialog `role="none"` + singular "This workflow will be…" grammar; RR v7 future-flag warnings silenced.
+> **Still open (intentionally, low value):** list-paging cursor across apps (fine at local key counts);
+> 500 `err.Error()` leak (localhost-only); degraded-entry comment added (G4).
+
 Minor items deferred during Plan 3's subagent-driven implementation (per-task reviews + the
 whole-branch review). None block merge; all whole-branch "fix before merge" items were applied
 (the duplicate `/api/workflows/statestores` route removed; the `App.test.tsx` MSW pristine-output

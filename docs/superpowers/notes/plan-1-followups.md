@@ -1,5 +1,12 @@
 # Plan 1 (Foundation) — Deferred Follow-ups
 
+> **Sweep 2 2026-06-27 (branch `chore/followups-sweep-2`):** ✅ RESOLVED — graceful shutdown
+> (`signal.NotifyContext`→`srv.Shutdown` 5s, SIGTERM smoke clean); next-action toggle labels
+> ("Switch to dark/comfortable"); `Makefile test-go` prefers `gotestsum` if present; `pkg/version`
+> `t.Cleanup` captures originals; `pkg/server` `get()` asserts the ReadAll error; `api.ts`
+> `(await res.json()) as T`; `App.test` asserts the rendered version string. **Still open:** README
+> base-path note (→ Plan 6, packaging).
+
 > **Cleanup pass 2026-06-27 (commit `4c08021`):** ✅ `aria-pressed` added to `ThemeToggle`
 > + `DensityToggle`; ✅ `pkg/version` `TestGetDefaults` no-op `NotNil` replaced with real
 > default asserts (`Commit`/`Date`). ⚠️ `runServe` now *uses* `ctx` (Plan 3) but signal-based
