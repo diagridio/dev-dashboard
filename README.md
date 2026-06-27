@@ -48,23 +48,48 @@ control, keyboard shortcuts, and cross-navigation between related entities (app 
 
 ## User instructions (download, install, run)
 
-The dashboard ships as a standalone binary for Windows, macOS, and Linux (amd64/arm64),
-published on GitHub Releases via GoReleaser.
+The dashboard ships as a standalone binary published on GitHub Releases via GoReleaser.
+macOS and Linux ship amd64 + arm64; Windows ships amd64 only (Windows on ARM runs the x64
+build via built-in emulation — `install.ps1` handles this automatically).
 
 **Install (one-liner):**
 
 ```sh
-# macOS / Linux
-curl -sSL <release-install-script-url> | sh
+# macOS / Linux — installs to ~/.local/bin
+curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
 
-# Windows (PowerShell)
-iwr <release-install-script-url> | iex
+# Windows (PowerShell) — installs to %LOCALAPPDATA%\Programs\dev-dashboard
+iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
 ```
 
-**Install with Go:**
+To pin a specific version, set `VERSION` before piping:
 
 ```sh
-go install <module-path>@latest
+# sh
+VERSION=vX.Y.Z curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
+
+# PowerShell
+$env:VERSION='vX.Y.Z'; iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
+```
+
+If the install directory is not on your `PATH`, the script prints the export line to add.
+
+**Install with Go (≥ 1.26):**
+
+```sh
+go install github.com/diagridio/dev-dashboard@latest
+```
+
+> **Note:** tagged versions (`@vX.Y.Z`) embed the prebuilt UI, so `go install` ships the
+> full dashboard. `@latest` may resolve to `main`, which carries only a placeholder UI —
+> prefer a tagged version for a working install.
+
+**Manual download:**
+
+Download the archive for your platform from the [GitHub Releases](https://github.com/diagridio/dev-dashboard/releases) page, extract it, and place `dev-dashboard` (or `dev-dashboard.exe`) on your `PATH`. Verify with:
+
+```sh
+dev-dashboard --version
 ```
 
 > Homebrew / Scoop / winget packaging is planned but not part of v1.
@@ -72,23 +97,37 @@ go install <module-path>@latest
 **Run:**
 
 ```sh
+# Start on the default port (9090) and open your browser automatically
 dev-dashboard
+
+# Start without opening the browser
+dev-dashboard --no-open
+
+# Start on a custom port
+dev-dashboard --port 8080
 ```
 
 This starts the HTTP server, serves the dashboard at `http://localhost:9090`, and opens your
 browser automatically.
 
-Useful flags:
-
-| Flag | Purpose |
-|---|---|
-| `--port <n>` | Change the listen port (default `9090`). |
-| `--statestore <path>` | Override the auto-detected state-store component for workflows. |
-| (suppress browser open) | The auto-open browser behavior is suppressible on start. |
-
 No additional setup is needed: the dashboard discovers running Dapr apps the same way
 `dapr list` does, so anything started with `dapr run` / `dapr run -f` shows up within one
 refresh cycle.
+
+### Mounting under a sub-path
+
+The SPA bakes its asset base URL at build time from the `DASH_BASE_PATH` environment
+variable. Released binaries are built for root-mount (`/`).
+
+To run the dashboard under a sub-path, build from source:
+
+```sh
+DASH_BASE_PATH=/dashboard/ make build
+./bin/dev-dashboard --base-path /dashboard
+```
+
+`DASH_BASE_PATH` (used at Vite build time) must equal the `--base-path` flag value, and
+both must end with a trailing slash.
 
 ## Architecture
 
