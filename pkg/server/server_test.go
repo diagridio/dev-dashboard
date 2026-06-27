@@ -17,6 +17,7 @@ func newTestRouter(basePath string) http.Handler {
 		DistFS:   fstest.MapFS{"index.html": {Data: []byte("shell")}},
 		Version:  version.Info{Version: "test"},
 		Apps:     newFakeApps(),
+		Backend:  newFakeBackend(fakeWF{}),
 	})
 }
 
@@ -50,6 +51,7 @@ func TestRouterServesApps(t *testing.T) {
 		DistFS:  fstest.MapFS{"index.html": {Data: []byte("shell")}},
 		Version: version.Info{Version: "test"},
 		Apps:    newFakeApps(),
+		Backend: newFakeBackend(fakeWF{}),
 	})
 	res, body := get(t, h, "/api/apps")
 	require.Equal(t, http.StatusOK, res.StatusCode)

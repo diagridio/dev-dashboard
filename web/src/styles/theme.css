@@ -8,6 +8,12 @@
   --ok: #0a8a2c;        --warn: #8a6d00;         --bad: #b30a45;
   --space-1: 4px;       --space-2: 8px;          --space-3: 12px;
   --space-4: 16px;      --space-6: 24px;
+  --wf-running-bg:#e3f2fd;    --wf-running-fg:#0b66b3;
+  --wf-completed-bg:#e3f9e5;  --wf-completed-fg:#0a7a28;
+  --wf-failed-bg:#fde4ec;     --wf-failed-fg:#b30a45;
+  --wf-terminated-bg:#eceff2; --wf-terminated-fg:#4a5560;
+  --wf-suspended-bg:#f0e7ff;  --wf-suspended-fg:#6a1fd0;
+  --wf-pending-bg:#fbf8d8;    --wf-pending-fg:#7a7600;
 }
 :root[data-theme='dark'] {
   --bg: #161c24;        --surface: #212b36;
@@ -18,6 +24,12 @@
   --ok: #5fdd86;        --warn: #d8d24a;         --bad: #ff8198;
   --space-1: 4px;       --space-2: 8px;          --space-3: 12px;
   --space-4: 16px;      --space-6: 24px;
+  --wf-running-bg:#13344d;    --wf-running-fg:#7cc4f7;
+  --wf-completed-bg:#10331b;  --wf-completed-fg:#79e08f;
+  --wf-failed-bg:#3d1322;     --wf-failed-fg:#ff8198;
+  --wf-terminated-bg:#28323d; --wf-terminated-fg:#b0bac4;
+  --wf-suspended-bg:#2a1d44;  --wf-suspended-fg:#c4a3ff;
+  --wf-pending-bg:#33310f;    --wf-pending-fg:#e0da6a;
 }
 /* density scales spacing + font size */
 :root[data-density='compact']     { --row-pad: 6px 10px;  --font: 13px; --gap: 8px; }

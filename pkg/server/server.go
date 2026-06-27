@@ -19,6 +19,8 @@ type Options struct {
 	DistFS   fs.FS  // embedded SPA assets (contains index.html)
 	Version  version.Info
 	Apps     discovery.Service
+	Backend  WorkflowBackend
+	Stores   StoreRegistry
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
@@ -30,7 +32,7 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(middleware.Recoverer)
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version, opts.Apps))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.Backend, opts.Stores))
 		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath))
 	}
 

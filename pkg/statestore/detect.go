@@ -1,0 +1,67 @@
+package statestore
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"sigs.k8s.io/yaml"
+)
+
+type rawComponent struct {
+	Kind     string `json:"kind"`
+	Metadata struct {
+		Name string `json:"name"`
+	} `json:"metadata"`
+	Spec struct {
+		Type     string `json:"type"`
+		Version  string `json:"version"`
+		Metadata []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		} `json:"metadata"`
+	} `json:"spec"`
+}
+
+// Detect finds state-store components under the given files or directories.
+func Detect(paths []string) ([]Component, error) {
+	var out []Component
+	seen := map[string]bool{}
+	for _, p := range paths {
+		_ = filepath.Walk(p, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(path))
+			if ext != ".yaml" && ext != ".yml" {
+				return nil
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+			var rc rawComponent
+			if err := yaml.Unmarshal(data, &rc); err != nil {
+				return nil
+			}
+			if rc.Kind != "Component" || !strings.HasPrefix(rc.Spec.Type, "state.") {
+				return nil
+			}
+			md := make(map[string]string, len(rc.Spec.Metadata))
+			for _, m := range rc.Spec.Metadata {
+				md[m.Name] = m.Value
+			}
+			key := path
+			if seen[key] {
+				return nil
+			}
+			seen[key] = true
+			out = append(out, Component{
+				Name: rc.Metadata.Name, Type: rc.Spec.Type, Version: rc.Spec.Version,
+				Metadata: md, Path: path,
+			})
+			return nil
+		})
+	}
+	return out, nil
+}
