@@ -66,7 +66,7 @@ To pin a specific version, set `VERSION` before piping:
 
 ```sh
 # sh
-VERSION=vX.Y.Z curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | VERSION=vX.Y.Z sh
 
 # PowerShell
 $env:VERSION='vX.Y.Z'; iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
