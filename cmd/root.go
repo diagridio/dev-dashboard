@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
@@ -115,6 +116,8 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 		defer func() { _ = close() }()
 	}
 
+	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
+
 	srv := server.New(addr, server.Options{
 		BasePath:  basePath,
 		DistFS:    dist,
@@ -123,6 +126,7 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 		Backend:   backend,
 		Stores:    registry,
 		Resources: resSvc,
+		News:      newsSvc,
 	})
 
 	fmt.Printf("dev-dashboard %s → %s\n", version.Get().Version, url)

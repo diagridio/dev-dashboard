@@ -127,6 +127,21 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             {app.appId}
           </h1>
           <HealthDot health={app.health} />
+          <Link
+            to={`/logs?app=${app.appId}&source=daprd`}
+            style={{
+              marginLeft: 'auto',
+              padding: '3px 10px',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              color: 'var(--link)',
+              textDecoration: 'none',
+              fontSize: 13,
+            }}
+          >
+            View logs
+          </Link>
         </div>
         <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{app.runtime}</div>
       </div>

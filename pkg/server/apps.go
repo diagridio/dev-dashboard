@@ -34,5 +34,7 @@ func appsRouter(svc discovery.Service) http.Handler {
 		writeJSON(w, http.StatusOK, in)
 	})
 
+	r.Get("/{appId}/logs", logsHandler(svc))
+
 	return r
 }
