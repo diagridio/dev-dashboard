@@ -1,5 +1,9 @@
 # Plan 2 (Discovery + Applications) — Deferred Follow-ups
 
+> **Status (after sweeps):** ✅ ALL RESOLVED. The discovery-perf items (bounded-concurrency
+> `enrich`, single-app `Get`) were done in the `chore/followups-4-5` pass; the sort/ErrorIs/
+> staleTime/paused items were done earlier. `query.tsx` `staleTime` removed in `chore/followups-sweep-2`.
+
 > **Cleanup pass 2026-06-27 (commit `4c08021`):** ✅ `sort.Slice`→`sort.SliceStable` in
 > `service.List`; ✅ `service_test` Get-miss now `require.ErrorIs(err, ErrNotFound)`.
 > **Still open:** the two perf items (bounded-concurrency `enrich`, cheaper `Get`) — deferred

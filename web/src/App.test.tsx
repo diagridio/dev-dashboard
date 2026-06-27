@@ -26,7 +26,7 @@ beforeAll(() => {
 // Register MSW handlers so StatusFooter fetches and route-switch tests don't error
 beforeEach(() => {
   server.use(
-    http.get('/api/version', () => HttpResponse.json({ version: 'dev', commit: 'none', date: 'unknown' })),
+    http.get('/api/version', () => HttpResponse.json({ version: '9.9.9', commit: 'abc1234', date: '2026-01-01' })),
     http.get('/api/health', () => HttpResponse.json({ status: 'ok' })),
     http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
     http.get('/api/statestores', () => HttpResponse.json([])),
@@ -42,7 +42,7 @@ function renderApp(path = '/') {
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <MemoryRouter initialEntries={[path]}>
+        <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route path="/*" element={<App />} />
           </Routes>
@@ -67,9 +67,11 @@ describe('App shell', () => {
     expect(screen.getByRole('navigation', { name: 'Resources' })).toBeInTheDocument()
   })
 
-  it('renders StatusFooter', () => {
+  it('renders StatusFooter', async () => {
     renderApp()
     expect(screen.getByRole('contentinfo')).toBeInTheDocument()
+    // Version string from the mocked /api/version response should appear
+    await screen.findByText('v9.9.9')
   })
 })
 
@@ -88,11 +90,11 @@ describe('Placeholder', () => {
 describe('route switching', () => {
   it('renders Workflows page at /workflows', () => {
     const client = makeQueryClient()
-    const router = createMemoryRouter(routes, { initialEntries: ['/workflows'] })
+    const router = createMemoryRouter(routes, { initialEntries: ['/workflows'], future: { v7_relativeSplatPath: true } })
     render(
       <QueryProvider client={client}>
         <RefreshProvider>
-          <RouterProvider router={router} />
+          <RouterProvider router={router} future={{ v7_startTransition: true }} />
         </RefreshProvider>
       </QueryProvider>,
     )

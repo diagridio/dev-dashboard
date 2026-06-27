@@ -96,9 +96,6 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 		}
 	})
 
-	r.Post("/{appId}/{instanceId}/terminate", removeOneViaBackend(backend))
-	r.Post("/{appId}/{instanceId}/purge", removeOneViaBackend(backend))
-
 	r.Post("/purge", func(w http.ResponseWriter, req *http.Request) {
 		_, rem, targets, ok := backend.ServiceFor(req.URL.Query().Get("store"))
 		if !ok {
@@ -108,42 +105,20 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 		var body removeBody
 		_ = json.NewDecoder(req.Body).Decode(&body)
 		var tgts []workflow.RemoveTarget
+		var failed []workflow.RemoveResult
 		for _, ref := range body.IDs {
 			t, err := targets.Resolve(req.Context(), ref.AppID, ref.InstanceID)
 			if err != nil {
+				failed = append(failed, workflow.RemoveResult{InstanceID: ref.InstanceID, OK: false, Error: "could not resolve target"})
 				continue
 			}
 			tgts = append(tgts, t)
 		}
-		writeJSON(w, http.StatusOK, rem.RemoveMany(req.Context(), tgts, body.Force))
+		results := rem.RemoveMany(req.Context(), tgts, body.Force)
+		writeJSON(w, http.StatusOK, append(results, failed...))
 	})
 
 	return r
-}
-
-// removeOneViaBackend returns an http.HandlerFunc for single-instance terminate/purge.
-// It selects the workflow backend based on the ?store= query parameter.
-func removeOneViaBackend(backend WorkflowBackend) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		_, rem, targets, ok := backend.ServiceFor(req.URL.Query().Get("store"))
-		if !ok {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown state store"})
-			return
-		}
-		var body removeBody
-		_ = json.NewDecoder(req.Body).Decode(&body)
-		t, err := targets.Resolve(req.Context(), chi.URLParam(req, "appId"), chi.URLParam(req, "instanceId"))
-		if err != nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow not found"})
-			return
-		}
-		results := rem.RemoveMany(req.Context(), []workflow.RemoveTarget{t}, body.Force)
-		if len(results) == 1 {
-			writeJSON(w, http.StatusOK, results[0])
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "removal produced no result"})
-	}
 }
 
 func parseListQuery(req *http.Request) workflow.ListQuery {

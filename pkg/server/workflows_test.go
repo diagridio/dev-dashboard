@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,9 +31,15 @@ func (f *fakeRemover) RemoveMany(_ context.Context, targets []workflow.RemoveTar
 }
 
 // fakeResolver always returns a fixed RemoveTarget.
-type fakeResolver struct{}
+// If failIDs is non-empty, Resolve returns an error for those instance IDs.
+type fakeResolver struct {
+	failIDs map[string]bool
+}
 
-func (fakeResolver) Resolve(_ context.Context, appID, instanceID string) (workflow.RemoveTarget, error) {
+func (f fakeResolver) Resolve(_ context.Context, appID, instanceID string) (workflow.RemoveTarget, error) {
+	if f.failIDs[instanceID] {
+		return workflow.RemoveTarget{}, fmt.Errorf("resolve error for %s", instanceID)
+	}
 	return workflow.RemoveTarget{
 		AppID:      appID,
 		InstanceID: instanceID,
@@ -105,28 +112,6 @@ func TestWorkflowDetailNoStore(t *testing.T) {
 	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
 }
 
-func TestWorkflowPurgeSingle(t *testing.T) {
-	rem := &fakeRemover{}
-	backend := &fakeBackend{svc: fakeWF{}, rem: rem, targets: fakeResolver{}}
-	h := workflowsRouter(backend, nil)
-	res, body := postJSON(t, h, "/order/abc/purge", `{"force":false}`)
-	require.Equal(t, http.StatusOK, res.StatusCode)
-	require.Contains(t, body, `"ok":true`)
-	require.Len(t, rem.calls, 1)
-	require.Equal(t, "abc", rem.calls[0].InstanceID)
-}
-
-func TestWorkflowTerminateSingle(t *testing.T) {
-	rem := &fakeRemover{}
-	backend := &fakeBackend{svc: fakeWF{}, rem: rem, targets: fakeResolver{}}
-	h := workflowsRouter(backend, nil)
-	res, body := postJSON(t, h, "/order/abc/terminate", `{}`)
-	require.Equal(t, http.StatusOK, res.StatusCode)
-	require.Contains(t, body, `"ok":true`)
-	require.Len(t, rem.calls, 1)
-	require.Equal(t, "abc", rem.calls[0].InstanceID)
-}
-
 func TestWorkflowBulkPurge(t *testing.T) {
 	rem := &fakeRemover{}
 	backend := &fakeBackend{svc: fakeWF{}, rem: rem, targets: fakeResolver{}}
@@ -135,6 +120,24 @@ func TestWorkflowBulkPurge(t *testing.T) {
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"instanceId":"a"`)
 	require.Len(t, rem.calls, 2)
+}
+
+func TestWorkflowBulkPurgeReconcilesFailed(t *testing.T) {
+	rem := &fakeRemover{}
+	resolver := fakeResolver{failIDs: map[string]bool{"bad": true}}
+	backend := &fakeBackend{svc: fakeWF{}, rem: rem, targets: resolver}
+	h := workflowsRouter(backend, nil)
+	res, body := postJSON(t, h, "/purge", `{"ids":[{"appId":"order","instanceId":"good"},{"appId":"order","instanceId":"bad"}]}`)
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	// Both results must be present.
+	require.Contains(t, body, `"instanceId":"good"`)
+	require.Contains(t, body, `"instanceId":"bad"`)
+	// "good" resolved → remover called once and returned ok:true.
+	require.Len(t, rem.calls, 1)
+	require.Equal(t, "good", rem.calls[0].InstanceID)
+	// "bad" failed to resolve → ok:false in response.
+	require.Contains(t, body, `"ok":false`)
+	require.Contains(t, body, `"error":"could not resolve target"`)
 }
 
 func TestWorkflowUnknownStore(t *testing.T) {
@@ -150,16 +153,8 @@ func TestWorkflowUnknownStore(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 	require.Contains(t, body, "unknown state store")
 
-	// POST purge with unknown store → 404
+	// POST bulk purge with unknown store → 404
 	res, body = postJSON(t, h, "/purge?store=unknown", `{}`)
-	require.Equal(t, http.StatusNotFound, res.StatusCode)
-	require.Contains(t, body, "unknown state store")
-
-	res, body = postJSON(t, h, "/order/abc/terminate?store=unknown", `{}`)
-	require.Equal(t, http.StatusNotFound, res.StatusCode)
-	require.Contains(t, body, "unknown state store")
-
-	res, body = postJSON(t, h, "/order/abc/purge?store=unknown", `{}`)
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 	require.Contains(t, body, "unknown state store")
 }

@@ -181,6 +181,8 @@ func newStoreBackend(
 	}
 
 	// Build the degraded entry (nil store) used when no stores are configured.
+	// This is the no-store safety net: ServiceFor("") returns it so callers get
+	// a working (but limited) service even when no state stores are detected.
 	degradedSvc := workflow.New(nil, namespace, appIDs)
 	degradedRem := workflow.NewRemover(client, nil, namespace)
 	degradedRes := newTargetResolver(apps, degradedSvc)

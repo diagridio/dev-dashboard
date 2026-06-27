@@ -48,12 +48,12 @@ function renderAt(initialEntry = '/logs?app=order&source=daprd') {
   const client = makeQueryClient()
   const router = createMemoryRouter(
     [{ path: '/logs', element: <Logs /> }],
-    { initialEntries: [initialEntry] },
+    { initialEntries: [initialEntry], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )

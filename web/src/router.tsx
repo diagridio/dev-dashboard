@@ -31,4 +31,5 @@ export const routes: RouteObject[] = [
 
 export const router = createBrowserRouter(routes, {
   basename: import.meta.env.BASE_URL.replace(/\/$/, '') || '/',
+  future: { v7_relativeSplatPath: true },
 })

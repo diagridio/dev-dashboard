@@ -18,12 +18,12 @@ function renderAt(entry = '/actors') {
       { path: '/actors', element: <Actors /> },
       { path: '/apps/:appId', element: <div>app detail</div> },
     ],
-    { initialEntries: [entry] },
+    { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
   )
   return { router, ...render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )}
