@@ -154,6 +154,14 @@ func TestWorkflowUnknownStore(t *testing.T) {
 	res, body = postJSON(t, h, "/purge?store=unknown", `{}`)
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 	require.Contains(t, body, "unknown state store")
+
+	res, body = postJSON(t, h, "/order/abc/terminate?store=unknown", `{}`)
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+	require.Contains(t, body, "unknown state store")
+
+	res, body = postJSON(t, h, "/order/abc/purge?store=unknown", `{}`)
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+	require.Contains(t, body, "unknown state store")
 }
 
 func TestWorkflowActiveStore(t *testing.T) {

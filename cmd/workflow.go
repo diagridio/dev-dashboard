@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -163,7 +162,7 @@ func newStoreBackend(
 	for _, comp := range comps {
 		st, err := statestore.New(ctx, comp)
 		if err != nil {
-			log.Printf("warning: state store %q init failed: %v (skipping)", comp.Name, err)
+			fmt.Printf("warning: state store %q init failed: %v (skipping)\n", comp.Name, err)
 			continue
 		}
 		closers = append(closers, st.Close)

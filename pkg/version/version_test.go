@@ -11,7 +11,8 @@ import (
 func TestGetDefaults(t *testing.T) {
 	got := Get()
 	require.Equal(t, "dev", got.Version)
-	require.NotNil(t, got)
+	require.Equal(t, "none", got.Commit)
+	require.Equal(t, "unknown", got.Date)
 }
 
 func TestGetReflectsVars(t *testing.T) {

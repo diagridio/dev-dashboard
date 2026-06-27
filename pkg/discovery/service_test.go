@@ -48,7 +48,7 @@ func TestServiceListEnriches(t *testing.T) {
 	require.Equal(t, "order", one.AppID)
 
 	_, err = svc.Get(context.Background(), "nope")
-	require.Error(t, err)
+	require.ErrorIs(t, err, ErrNotFound)
 }
 
 func TestServiceListMetadataDown(t *testing.T) {

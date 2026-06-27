@@ -35,6 +35,21 @@ func TestDecodeExecutionRunning(t *testing.T) {
 	require.Len(t, ex.History, 3)
 	require.Equal(t, "ExecutionStarted", ex.History[1].Type)
 	require.Equal(t, "Charge", ex.History[2].Name)
+	require.Equal(t, 0, ex.ReplayCount)
+	require.Equal(t, "OrchestratorStarted", ex.History[0].Type)
+}
+
+func TestDecodeExecutionReplayCount(t *testing.T) {
+	now := timestamppb.Now()
+	history := []*protos.HistoryEvent{
+		{EventId: -1, Timestamp: now, EventType: &protos.HistoryEvent_WorkflowStarted{WorkflowStarted: &protos.WorkflowStartedEvent{}}},
+		{EventId: -1, Timestamp: now, EventType: &protos.HistoryEvent_WorkflowStarted{WorkflowStarted: &protos.WorkflowStartedEvent{}}},
+		{EventId: 0, Timestamp: now, EventType: &protos.HistoryEvent_ExecutionStarted{ExecutionStarted: &protos.ExecutionStartedEvent{
+			Name: "OrderWorkflow",
+		}}},
+	}
+	ex := DecodeExecution("order", "inst-3", history, "")
+	require.Equal(t, 1, ex.ReplayCount)
 }
 
 func TestDecodeExecutionCompleted(t *testing.T) {

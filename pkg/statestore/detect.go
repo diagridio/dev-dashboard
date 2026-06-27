@@ -51,14 +51,17 @@ func Detect(paths []string) ([]Component, error) {
 			for _, m := range rc.Spec.Metadata {
 				md[m.Name] = m.Value
 			}
-			key := path
-			if seen[key] {
+			absPath, err := filepath.Abs(path)
+			if err != nil {
+				absPath = path
+			}
+			if seen[absPath] {
 				return nil
 			}
-			seen[key] = true
+			seen[absPath] = true
 			out = append(out, Component{
 				Name: rc.Metadata.Name, Type: rc.Spec.Type, Version: rc.Spec.Version,
-				Metadata: md, Path: path,
+				Metadata: md, Path: absPath,
 			})
 			return nil
 		})

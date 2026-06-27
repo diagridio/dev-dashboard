@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchJSON } from '../lib/api'
 import { useRefreshInterval, refetchMs } from '../lib/refresh'
-import type { WorkflowExecution, WorkflowListResult, StateStore } from '../types/workflow'
+import type { WorkflowExecution, WorkflowListResult, StateStore, WorkflowStatus } from '../types/workflow'
 
 interface WorkflowsParams {
   appId?: string
-  status?: string[]
+  status?: WorkflowStatus[]
   search?: string
   page?: string
   limit?: number
