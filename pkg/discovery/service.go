@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"sync"
 	"time"
 )
 
@@ -39,27 +40,38 @@ type service struct {
 
 func New(scan Scanner, client *http.Client) Service { return &service{scan: scan, client: client} }
 
+const enrichWorkers = 8
+
 func (s *service) List(ctx context.Context) ([]Instance, error) {
 	results, err := s.scan()
 	if err != nil {
 		return nil, err
 	}
 	out := make([]Instance, len(results))
+	sem := make(chan struct{}, enrichWorkers)
+	var wg sync.WaitGroup
 	for i, r := range results {
-		out[i] = s.enrich(ctx, r)
+		wg.Add(1)
+		go func(idx int, sr ScanResult) {
+			defer wg.Done()
+			sem <- struct{}{}
+			out[idx] = s.enrich(ctx, sr)
+			<-sem
+		}(i, r)
 	}
+	wg.Wait()
 	sort.SliceStable(out, func(a, b int) bool { return out[a].AppID < out[b].AppID })
 	return out, nil
 }
 
 func (s *service) Get(ctx context.Context, appID string) (Instance, error) {
-	list, err := s.List(ctx)
+	results, err := s.scan()
 	if err != nil {
 		return Instance{}, err
 	}
-	for _, in := range list {
-		if in.AppID == appID {
-			return in, nil
+	for _, r := range results {
+		if r.AppID == appID {
+			return s.enrich(ctx, r), nil
 		}
 	}
 	return Instance{}, fmt.Errorf("%w: %s", ErrNotFound, appID)

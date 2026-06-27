@@ -89,3 +89,75 @@ func TestServiceListMetadataDown(t *testing.T) {
 	require.Equal(t, "python", list[0].Runtime) // inferred from scan command
 	require.Equal(t, 0, list[0].AppPID)         // unknown
 }
+
+func TestServiceListConcurrentEnrich(t *testing.T) {
+	// One shared httptest server responds for all five fake apps.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/healthz":
+			w.WriteHeader(204)
+		case "/v1.0/metadata":
+			_, _ = w.Write([]byte(`{"id":"app","runtimeVersion":"1.14.4","extended":{"appPID":"100","appCommand":"go run ./cmd/app"}}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+
+	appIDs := []string{"echo", "alpha", "delta", "bravo", "charlie"}
+	scan := func() ([]ScanResult, error) {
+		results := make([]ScanResult, len(appIDs))
+		for i, id := range appIDs {
+			results[i] = ScanResult{AppID: id, HTTPPort: port, Command: "go run ./cmd/" + id}
+		}
+		return results, nil
+	}
+	svc := New(scan, &http.Client{Timeout: 2 * time.Second})
+
+	list, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, list, 5)
+
+	// Must be sorted by AppID.
+	for i := 1; i < len(list); i++ {
+		require.Less(t, list[i-1].AppID, list[i].AppID, "list must be sorted by AppID")
+	}
+
+	// Every instance must be enriched (MetadataOK, HealthHealthy).
+	for _, inst := range list {
+		require.True(t, inst.MetadataOK, "expected MetadataOK for %s", inst.AppID)
+		require.Equal(t, HealthHealthy, inst.Health, "expected HealthHealthy for %s", inst.AppID)
+	}
+}
+
+func TestServiceGetFastPath(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/healthz":
+			w.WriteHeader(204)
+		case "/v1.0/metadata":
+			_, _ = w.Write([]byte(`{"id":"target","runtimeVersion":"1.15.0","extended":{"appPID":"200","appCommand":"go run ./cmd/target"}}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			{AppID: "other", HTTPPort: 1, Command: "go run ./cmd/other"},
+			{AppID: "target", HTTPPort: port, Command: "go run ./cmd/target"},
+		}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: 2 * time.Second})
+
+	// Get returns the right instance.
+	inst, err := svc.Get(context.Background(), "target")
+	require.NoError(t, err)
+	require.Equal(t, "target", inst.AppID)
+	require.True(t, inst.MetadataOK)
+
+	// Get returns ErrNotFound for unknown appID.
+	_, err = svc.Get(context.Background(), "missing")
+	require.ErrorIs(t, err, ErrNotFound)
+}
