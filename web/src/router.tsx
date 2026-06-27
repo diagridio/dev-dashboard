@@ -5,6 +5,10 @@ import { AppDetail } from './pages/AppDetail'
 import { Placeholder } from './pages/Placeholder'
 import { Workflows } from './pages/Workflows'
 import { WorkflowDetail } from './pages/WorkflowDetail'
+import { Actors } from './pages/Actors'
+import { Subscriptions } from './pages/Subscriptions'
+import { ResourceList } from './pages/ResourceList'
+import { ResourceDetail } from './pages/ResourceDetail'
 
 export const routes: RouteObject[] = [
   {
@@ -15,10 +19,11 @@ export const routes: RouteObject[] = [
       { path: 'apps/:appId', element: <AppDetail /> },
       { path: 'workflows', element: <Workflows /> },
       { path: 'workflows/:appId/:instanceId', element: <WorkflowDetail /> },
-      { path: 'actors', element: <Placeholder title="Actors" /> },
-      { path: 'subscriptions', element: <Placeholder title="Subscriptions" /> },
-      { path: 'components', element: <Placeholder title="Components" /> },
-      { path: 'configurations', element: <Placeholder title="Configurations" /> },
+      { path: 'actors', element: <Actors /> },
+      { path: 'subscriptions', element: <Subscriptions /> },
+      { path: 'components', element: <ResourceList kind="component" /> },
+      { path: 'configurations', element: <ResourceList kind="configuration" /> },
+      { path: 'resources/:kind/:name', element: <ResourceDetail /> },
       { path: 'logs', element: <Placeholder title="Logs" /> },
     ],
   },

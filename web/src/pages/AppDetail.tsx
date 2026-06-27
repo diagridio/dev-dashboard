@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
 import type { HealthStatus, AppDetail as AppDetailType } from '../types/api'
 
@@ -167,6 +167,48 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         <Field label="gRPC port" value={app.grpcPort ?? '—'} mono />
         <Field label="daprd PID" value={app.daprdPid ?? '—'} mono />
         <Field label="Health" value={<HealthDot health={app.health} />} />
+      </div>
+
+      {/* Metadata section */}
+      <div style={sectionStyle}>
+        <div style={sectionHeadingStyle}>Metadata</div>
+        <Field
+          label="Enabled features"
+          value={
+            app.enabledFeatures && app.enabledFeatures.length > 0
+              ? app.enabledFeatures.join(', ')
+              : '—'
+          }
+        />
+        <div style={rowStyle}>
+          <span style={labelStyle}>Components</span>
+          <span style={valueStyle}>
+            {app.components && app.components.length > 0 ? (
+              <span style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                {app.components.map((c) => (
+                  <Link
+                    key={c.name}
+                    to={`/resources/component/${c.name}`}
+                    style={{
+                      display: 'inline-block',
+                      padding: '2px var(--space-2)',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 4,
+                      color: 'var(--link)',
+                      textDecoration: 'none',
+                      fontSize: 13,
+                    }}
+                  >
+                    {c.name}
+                  </Link>
+                ))}
+              </span>
+            ) : (
+              '—'
+            )}
+          </span>
+        </div>
       </div>
 
       {/* Paths section */}

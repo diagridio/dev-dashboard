@@ -10,7 +10,10 @@ import { AppDetail } from './AppDetail'
 function renderDetail() {
   const client = makeQueryClient()
   const router = createMemoryRouter(
-    [{ path: '/apps/:appId', element: <AppDetail /> }],
+    [
+      { path: '/apps/:appId', element: <AppDetail /> },
+      { path: '/resources/:kind/:name', element: <div>Resource detail</div> },
+    ],
     { initialEntries: ['/apps/order'] },
   )
   return render(
@@ -91,5 +94,38 @@ describe('AppDetail', () => {
     )
     renderDetail()
     await waitFor(() => expect(screen.getByText(/metadata unavailable/i)).toBeInTheDocument())
+  })
+
+  it('renders metadata section with component chips and enabled features', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'order',
+          health: 'healthy',
+          runtime: 'go',
+          httpPort: 3500,
+          grpcPort: 50001,
+          appPort: 8080,
+          daprdPid: 48230,
+          appPid: 48213,
+          cliPid: 48201,
+          command: 'go run ./cmd/order',
+          runtimeVersion: '1.14.4',
+          metadataOk: true,
+          components: [{ name: 'statestore', type: 'state.redis', version: 'v1' }],
+          enabledFeatures: ['StateStore'],
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('order')).toBeInTheDocument())
+
+    // Component chip should be a link to /resources/component/statestore
+    const chip = screen.getByRole('link', { name: 'statestore' })
+    expect(chip).toBeInTheDocument()
+    expect(chip).toHaveAttribute('href', '/resources/component/statestore')
+
+    // Enabled features should render
+    expect(screen.getByText('StateStore')).toBeInTheDocument()
   })
 })
