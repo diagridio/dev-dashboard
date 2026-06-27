@@ -32,15 +32,18 @@ func NewRootCmd() *cobra.Command {
 		stateStore string
 		namespace  string
 	)
+	info := version.Get()
 	c := &cobra.Command{
 		Use:           "dev-dashboard",
 		Short:         "Local dashboard for Dapr apps, workflows, and sidecars",
+		Version:       info.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runServe(cmd.Context(), port, basePath, noOpen, stateStore, namespace)
 		},
 	}
+	c.SetVersionTemplate(fmt.Sprintf("dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")

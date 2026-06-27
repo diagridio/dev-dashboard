@@ -3,10 +3,23 @@
 package cmd
 
 import (
+	"bytes"
 	"testing"
 
+	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/stretchr/testify/require"
 )
+
+func TestVersionFlag(t *testing.T) {
+	c := NewRootCmd()
+	var buf bytes.Buffer
+	c.SetOut(&buf)
+	c.SetArgs([]string{"--version"})
+	require.NoError(t, c.Execute())
+	out := buf.String()
+	require.Contains(t, out, version.Get().Version)
+	require.Contains(t, out, "dev-dashboard")
+}
 
 func TestRootDefaults(t *testing.T) {
 	c := NewRootCmd()
