@@ -25,4 +25,7 @@ func TestParseInstanceID(t *testing.T) {
 
 	_, ok = ParseInstanceID("too||few")
 	require.False(t, ok)
+
+	_, ok = ParseInstanceID("a||b||||metadata")
+	require.False(t, ok)
 }

@@ -48,7 +48,7 @@ func (s *service) List(ctx context.Context) ([]Instance, error) {
 	for i, r := range results {
 		out[i] = s.enrich(ctx, r)
 	}
-	sort.Slice(out, func(a, b int) bool { return out[a].AppID < out[b].AppID })
+	sort.SliceStable(out, func(a, b int) bool { return out[a].AppID < out[b].AppID })
 	return out, nil
 }
 

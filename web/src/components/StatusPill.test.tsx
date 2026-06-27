@@ -9,4 +9,11 @@ describe('StatusPill', () => {
     expect(pill).toBeInTheDocument()
     expect(pill).toHaveAttribute('data-cy', 'status-pill')
   })
+
+  it('renders Running status', () => {
+    render(<StatusPill status="Running" />)
+    const pill = screen.getByText('Running')
+    expect(pill).toBeInTheDocument()
+    expect(pill).toHaveAttribute('data-cy', 'status-pill')
+  })
 })

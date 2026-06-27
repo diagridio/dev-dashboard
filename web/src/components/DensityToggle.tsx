@@ -7,6 +7,7 @@ export function DensityToggle() {
     <button
       data-cy="density-toggle"
       aria-label="Toggle density"
+      aria-pressed={density === 'compact'}
       onClick={() => {
         const next: Density = density === 'compact' ? 'comfortable' : 'compact'
         setDensity(next)

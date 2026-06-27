@@ -121,7 +121,6 @@ function HistoryRow({
 
   return (
     <div
-      key={event.sequenceId}
       style={{
         borderBottom: '1px solid var(--border-soft)',
         padding: 'var(--space-2) 0',

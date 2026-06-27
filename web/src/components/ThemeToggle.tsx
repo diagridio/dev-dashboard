@@ -7,6 +7,7 @@ export function ThemeToggle() {
     <button
       data-cy="theme-toggle"
       aria-label="Toggle theme"
+      aria-pressed={theme === 'dark'}
       onClick={() => {
         const next: Theme = theme === 'dark' ? 'light' : 'dark'
         setTheme(next)
