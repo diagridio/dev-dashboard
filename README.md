@@ -105,6 +105,9 @@ dev-dashboard --no-open
 
 # Start on a custom port
 dev-dashboard --port 8080
+
+# Enable diagnostic logging to stderr (server startup, app discovery, state-store connection, log streams, workflow operations)
+dev-dashboard --verbose
 ```
 
 This starts the HTTP server, serves the dashboard at `http://localhost:9090`, and opens your
@@ -113,6 +116,16 @@ browser automatically.
 No additional setup is needed: the dashboard discovers running Dapr apps the same way
 `dapr list` does, so anything started with `dapr run` / `dapr run -f` shows up within one
 refresh cycle.
+
+## Troubleshooting
+
+If the dashboard does not behave as expected, run it with `--verbose` to print diagnostic logs to stderr:
+
+```sh
+dev-dashboard --verbose
+```
+
+Logs are grouped by `component=` (values: `server`, `discovery`, `statestore`, `workflow`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
 
 ### Mounting under a sub-path
 
