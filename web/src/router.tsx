@@ -2,7 +2,7 @@ import { createBrowserRouter, type RouteObject } from 'react-router-dom'
 import { App } from './App'
 import { Applications } from './pages/Applications'
 import { AppDetail } from './pages/AppDetail'
-import { Placeholder } from './pages/Placeholder'
+import { Logs } from './pages/Logs'
 import { Workflows } from './pages/Workflows'
 import { WorkflowDetail } from './pages/WorkflowDetail'
 import { Actors } from './pages/Actors'
@@ -24,7 +24,7 @@ export const routes: RouteObject[] = [
       { path: 'components', element: <ResourceList kind="component" /> },
       { path: 'configurations', element: <ResourceList kind="configuration" /> },
       { path: 'resources/:kind/:name', element: <ResourceDetail /> },
-      { path: 'logs', element: <Placeholder title="Logs" /> },
+      { path: 'logs', element: <Logs /> },
     ],
   },
 ]
