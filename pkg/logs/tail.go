@@ -2,6 +2,7 @@ package logs
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -17,8 +18,8 @@ func Tail(ctx context.Context, path string, backfillLines int, pollInterval time
 		return nil, err
 	}
 
-	// Read the entire file for backfill.
-	data, err := os.ReadFile(path)
+	// Read the entire file for backfill using the same descriptor (no TOCTOU).
+	data, err := io.ReadAll(f)
 	if err != nil {
 		f.Close()
 		return nil, err
@@ -58,15 +59,18 @@ func Tail(ctx context.Context, path string, backfillLines int, pollInterval time
 		defer ticker.Stop()
 
 		var carry []byte
+		buf := make([]byte, 32*1024)
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				buf := make([]byte, 32*1024)
-				n, _ := f.ReadAt(buf, offset)
+				n, rerr := f.ReadAt(buf, offset)
 				if n == 0 {
+					if rerr != nil && rerr != io.EOF {
+						return
+					}
 					continue
 				}
 
