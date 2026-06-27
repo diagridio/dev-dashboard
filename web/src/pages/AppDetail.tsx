@@ -172,7 +172,6 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       {/* Metadata section */}
       <div style={sectionStyle}>
         <div style={sectionHeadingStyle}>Metadata</div>
-        <Field label="Runtime version" value={app.runtimeVersion || '—'} mono />
         <Field
           label="Enabled features"
           value={
