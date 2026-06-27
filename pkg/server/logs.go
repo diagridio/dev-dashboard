@@ -32,7 +32,7 @@ func logsHandler(svc discovery.Service) http.HandlerFunc {
 			path = in.AppLogPath
 		}
 		if path == "" {
-			log.Warn("log stream source unavailable", "app", appID, "source", source)
+			log.Warn("log stream source unavailable", "app", appID, "source", source, "path", path)
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no log file for this app/source"})
 			return
 		}

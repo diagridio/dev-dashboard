@@ -191,7 +191,7 @@ func TestList_LogsDiscoveredCount(t *testing.T) {
 	buf := captureLogs(t)
 	svc := New(func() ([]ScanResult, error) {
 		return []ScanResult{{AppID: "a", HTTPPort: 0}}, nil
-	}, &http.Client{Timeout: 1})
+	}, &http.Client{Timeout: 1}) // 1ns: force immediate timeout — we only assert the discovered-count log
 	_, _ = svc.List(context.Background())
 	if !strings.Contains(buf.String(), "discovered Dapr apps") {
 		t.Fatalf("expected 'discovered Dapr apps' INFO, got %q", buf.String())

@@ -77,6 +77,8 @@ func New(verbose bool) *slog.Logger {
 
 Tests can swap the default logger (or pass one in) to assert on output.
 
+> Implementation note: shipped as pure Approach A — every package (including pkg/server) logs via slog.Default().With("component", …); the Options.Logger injection described above was dropped as unnecessary since slog.SetDefault is process-global.
+
 ## Level semantics
 
 - **INFO** — normal lifecycle milestones worth confirming: server up, N apps
