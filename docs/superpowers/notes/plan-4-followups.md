@@ -1,5 +1,14 @@
 # Plan 4 (Resources / Actors / Subscriptions) — Deferred Follow-ups
 
+> **Cleanup pass 2026-06-27 (branch `chore/followups-4-5`):** ✅ RESOLVED — `copyText` extracted to
+> `web/src/lib/clipboard.ts` (3 pages); **discovery bounded-concurrency `enrich` (max 8) + single-app
+> `Get` fast path** (`-race` clean); `loadedByFor` scoped detail lookup; `/api/resources` detail
+> 400-on-bad-kind; `actors_test` tightened + `resources_test` pubsub-exclusion fixture;
+> `document.title` unmount-restore via a shared `useDocumentTitle` hook; filter badge shown during
+> loading (Actors/Subscriptions); ResourceDetail top-level type import; ResourceList kind→labels map.
+> **Still open (intentionally skipped — low value):** `filepath.Walk` debug logging (spec'd silent);
+> `cmd` resources-path unit test (thin glue); nav-icon `logs` glyph restyle + `Icon` size-prop test.
+
 Minor items deferred during Plan 4's subagent-driven implementation (per-task reviews + the
 whole-branch review). None block merge; the one whole-branch/per-task "fix before merge" item
 was applied (the duplicate **Runtime version** row on App detail — removed from the new Metadata

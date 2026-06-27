@@ -1,5 +1,17 @@
 # Plan 5 (Logs SSE + News / Resources Sidebar) — Deferred Follow-ups
 
+> **Cleanup pass 2026-06-27 (branch `chore/followups-4-5`):** ✅ RESOLVED — ResourcesSidebar
+> seen-state refactored to React `seen: Set` (dropped the `void seenVersion` counter) + shared
+> `handleMarkSeen`; collapsed-rail a11y (sibling buttons, no nested interactives); sidebar hover via
+> `.sidebar-link` CSS (`:hover`+`:focus-visible`); Logs `document.title` via `useDocumentTitle`; Logs
+> follow auto-re-enables on scroll-to-bottom; `useLogStream` `max` dropped from effect deps (read via
+> ref) + buffer-cap/status-transition tests added; `App.test` nav assertion tightened + redundant
+> `data-testid` removed. Plus the carry-forward items (discovery perf, clipboard extraction) — see
+> `plan-4-followups.md`. **Still open (intentionally skipped — low value/deferred):** `pkg/news`
+> fetch-under-mutex refactor (fine at this scale); log-list virtualization (no new dep); `pkg/logs`
+> rotation/truncation handling (rare). **Known minor behavior note:** sidebar `seen` now initializes
+> at mount, so cross-tab "mark seen" won't reflect until remount (single-tab unchanged).
+
 Minor items deferred during Plan 5's subagent-driven implementation (per-task reviews + the
 whole-branch review). The whole-branch review found **no Critical or Important** issues and cleared
 the branch to merge. One per-task Important finding was fixed during the run (the `pkg/logs` tailer:
