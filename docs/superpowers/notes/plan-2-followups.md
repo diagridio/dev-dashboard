@@ -1,5 +1,11 @@
 # Plan 2 (Discovery + Applications) — Deferred Follow-ups
 
+> **Cleanup pass 2026-06-27 (commit `4c08021`):** ✅ `sort.Slice`→`sort.SliceStable` in
+> `service.List`; ✅ `service_test` Get-miss now `require.ErrorIs(err, ErrNotFound)`.
+> **Still open:** the two perf items (bounded-concurrency `enrich`, cheaper `Get`) — deferred
+> to **Plan 4** (Actors/Subscriptions add more discovery-polling pages, so it matters there).
+> `query.tsx` `staleTime` kept as-is (harmless); paused-persistence is a non-issue (consistent).
+
 Minor items deferred during Plan 2's subagent-driven implementation (per-task reviews + the
 whole-branch review). None block merge; the whole-branch "fix before merge" item (gofmt) was
 applied. Good candidates for a fast-follow / early Plan 3 cleanup.

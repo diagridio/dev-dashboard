@@ -1,5 +1,12 @@
 # Plan 1 (Foundation) — Deferred Follow-ups
 
+> **Cleanup pass 2026-06-27 (commit `4c08021`):** ✅ `aria-pressed` added to `ThemeToggle`
+> + `DensityToggle`; ✅ `pkg/version` `TestGetDefaults` no-op `NotNil` replaced with real
+> default asserts (`Commit`/`Date`). ⚠️ `runServe` now *uses* `ctx` (Plan 3) but signal-based
+> graceful shutdown (`ctx`→`Server.Start/Shutdown`) is still pending.
+> **Still open:** toggle label wording (current-vs-next), Makefile/`gotestsum` mismatch, the
+> `get()`/`api.ts` micro-nits, graceful shutdown, README base-path note (→ Plan 6).
+
 These are the **Minor** findings deferred during Plan 1's subagent-driven implementation
 (per-task reviews + the whole-branch review). None block the foundation; address them in a
 later UI-polish pass or fold into the relevant feature plan. The whole-branch review's

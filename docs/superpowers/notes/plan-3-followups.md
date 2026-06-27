@@ -7,6 +7,16 @@ gap fixed; the WorkflowDetail Remove button wired; `data-cy` selectors on the di
 explicit user decision — the multi-store **picker** was fully wired, not deferred). Good candidates
 for a fast-follow / early Plan 4 cleanup.
 
+> **Cleanup pass 2026-06-27 (commit `4c08021`):** ✅ `TestWorkflowUnknownStore` now covers the
+> single-instance `/terminate` + `/purge` 404 verbs; ✅ `decode_test` asserts `ReplayCount` +
+> `History[0].Type` (+ a 2-`WorkflowStarted` case); ✅ `ParseInstanceID` empty-segment test;
+> ✅ `WorkflowsParams.status` → `WorkflowStatus[]`; ✅ redundant inner `key` removed; ✅
+> `log.Printf`→`fmt.Printf`; ✅ `Detect` dedup by `filepath.Abs`; ✅ `StatusPill` 2nd-status test.
+> **Still open** (behavior/judgment, not mechanical): bulk-purge dropped-target reporting,
+> single-route verb semantics (+`?non_recursive=false`), list-paging cursor, `Get` heuristic,
+> 500 `err.Error()` leak, the missing Running→Completed merge test, the frontend
+> `setSearchParams`/debounce nits, remaining cosmetics, and the RR v7 future-flag warnings.
+
 ## Backend
 - **Bulk purge silently drops unresolvable targets.** `workflowsRouter` `POST /purge` skips any
   ref whose `TargetResolver.Resolve` fails, so the returned `RemoveResult[]` omits them and the SPA
