@@ -75,7 +75,7 @@ func (f fakeWF) Get(_ context.Context, appID, id string) (workflow.Execution, er
 
 func TestWorkflowsList(t *testing.T) {
 	svc := fakeWF{list: workflow.ListResult{Items: []workflow.ExecutionSummary{{AppID: "order", InstanceID: "abc", Status: workflow.StatusRunning}}}}
-	h := workflowsRouter(svc, nil, nil, nil)
+	h := workflowsRouter(newFakeBackend(svc), nil)
 	res, body := get(t, h, "/?status=Running&search=ab")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"instanceId":"abc"`)
@@ -83,7 +83,7 @@ func TestWorkflowsList(t *testing.T) {
 
 func TestWorkflowDetailAndNotFound(t *testing.T) {
 	svc := fakeWF{one: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "abc", Status: workflow.StatusCompleted}}}
-	h := workflowsRouter(svc, nil, nil, nil)
+	h := workflowsRouter(newFakeBackend(svc), nil)
 	res, body := get(t, h, "/order/abc")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"status":"Completed"`)
@@ -93,22 +93,22 @@ func TestWorkflowDetailAndNotFound(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 
 	noStore := fakeWF{err: workflow.ErrNoStore}
-	h2 := workflowsRouter(noStore, nil, nil, nil)
+	h2 := workflowsRouter(newFakeBackend(noStore), nil)
 	res, _ = get(t, h2, "/")
 	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
 }
 
 func TestWorkflowDetailNoStore(t *testing.T) {
 	noStore := fakeWF{err: workflow.ErrNoStore}
-	h := workflowsRouter(noStore, nil, nil, nil)
+	h := workflowsRouter(newFakeBackend(noStore), nil)
 	res, _ := get(t, h, "/order/abc")
 	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
 }
 
 func TestWorkflowPurgeSingle(t *testing.T) {
 	rem := &fakeRemover{}
-	resolver := fakeResolver{}
-	h := workflowsRouter(fakeWF{}, rem, nil, resolver)
+	backend := &fakeBackend{svc: fakeWF{}, rem: rem, targets: fakeResolver{}}
+	h := workflowsRouter(backend, nil)
 	res, body := postJSON(t, h, "/order/abc/purge", `{"force":false}`)
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"ok":true`)
@@ -118,7 +118,8 @@ func TestWorkflowPurgeSingle(t *testing.T) {
 
 func TestWorkflowTerminateSingle(t *testing.T) {
 	rem := &fakeRemover{}
-	h := workflowsRouter(fakeWF{}, rem, nil, fakeResolver{})
+	backend := &fakeBackend{svc: fakeWF{}, rem: rem, targets: fakeResolver{}}
+	h := workflowsRouter(backend, nil)
 	res, body := postJSON(t, h, "/order/abc/terminate", `{}`)
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"ok":true`)
@@ -128,25 +129,55 @@ func TestWorkflowTerminateSingle(t *testing.T) {
 
 func TestWorkflowBulkPurge(t *testing.T) {
 	rem := &fakeRemover{}
-	h := workflowsRouter(fakeWF{}, rem, nil, fakeResolver{})
+	backend := &fakeBackend{svc: fakeWF{}, rem: rem, targets: fakeResolver{}}
+	h := workflowsRouter(backend, nil)
 	res, body := postJSON(t, h, "/purge", `{"ids":[{"appId":"order","instanceId":"a"},{"appId":"order","instanceId":"b"}],"force":true}`)
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"instanceId":"a"`)
 	require.Len(t, rem.calls, 2)
 }
 
+func TestWorkflowUnknownStore(t *testing.T) {
+	h := workflowsRouter(newFakeBackend(fakeWF{}), nil)
+
+	// GET list with unknown store → 404
+	res, body := get(t, h, "/?store=unknown")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+	require.Contains(t, body, "unknown state store")
+
+	// GET detail with unknown store → 404
+	res, body = get(t, h, "/order/abc?store=unknown")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+	require.Contains(t, body, "unknown state store")
+
+	// POST purge with unknown store → 404
+	res, body = postJSON(t, h, "/purge?store=unknown", `{}`)
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+	require.Contains(t, body, "unknown state store")
+}
+
+func TestWorkflowActiveStore(t *testing.T) {
+	svc := fakeWF{list: workflow.ListResult{Items: []workflow.ExecutionSummary{{AppID: "app1", InstanceID: "i1", Status: workflow.StatusRunning}}}}
+	h := workflowsRouter(newFakeBackend(svc), nil)
+
+	// GET list with empty store= (active) → 200
+	res, body := get(t, h, "/?store=")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, `"instanceId":"i1"`)
+}
+
 func TestStateStoresEndpoint(t *testing.T) {
 	stores := fakeStoreRegistry{stores: []StoreInfo{
 		{Name: "statestore", Type: "state.redis", Active: true},
 	}}
-	h := apiRouter(version.Info{}, nil, fakeWF{}, nil, stores, nil)
+	h := apiRouter(version.Info{}, nil, newFakeBackend(fakeWF{}), stores)
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"name":"statestore"`)
 }
 
 func TestStateStoresNilRegistry(t *testing.T) {
-	h := apiRouter(version.Info{}, nil, fakeWF{}, nil, nil, nil)
+	h := apiRouter(version.Info{}, nil, newFakeBackend(fakeWF{}), nil)
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `[]`)
@@ -158,3 +189,22 @@ type fakeStoreRegistry struct {
 }
 
 func (f fakeStoreRegistry) Stores() []StoreInfo { return f.stores }
+
+// fakeBackend implements WorkflowBackend for tests.
+// It returns a fixed svc/rem/resolver for any store name except "unknown".
+type fakeBackend struct {
+	svc     workflow.Service
+	rem     WorkflowRemover
+	targets TargetResolver
+}
+
+func newFakeBackend(svc workflow.Service) *fakeBackend {
+	return &fakeBackend{svc: svc, rem: &fakeRemover{}, targets: fakeResolver{}}
+}
+
+func (f *fakeBackend) ServiceFor(store string) (workflow.Service, WorkflowRemover, TargetResolver, bool) {
+	if store == "unknown" {
+		return nil, nil, nil, false
+	}
+	return f.svc, f.rem, f.targets, true
+}

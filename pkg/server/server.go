@@ -9,21 +9,18 @@ import (
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/version"
-	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 // Options configures the HTTP router.
 type Options struct {
-	BasePath  string // "" or e.g. "/dashboard"
-	DistFS    fs.FS  // embedded SPA assets (contains index.html)
-	Version   version.Info
-	Apps      discovery.Service
-	Workflows workflow.Service
-	Remover   WorkflowRemover
-	Stores    StoreRegistry
-	Resolver  TargetResolver
+	BasePath string // "" or e.g. "/dashboard"
+	DistFS   fs.FS  // embedded SPA assets (contains index.html)
+	Version  version.Info
+	Apps     discovery.Service
+	Backend  WorkflowBackend
+	Stores   StoreRegistry
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
@@ -35,7 +32,7 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(middleware.Recoverer)
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.Workflows, opts.Remover, opts.Stores, opts.Resolver))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.Backend, opts.Stores))
 		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath))
 	}
 

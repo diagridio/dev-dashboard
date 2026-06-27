@@ -15,7 +15,6 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/version"
-	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/diagridio/dev-dashboard/web"
 	"github.com/spf13/cobra"
 )
@@ -81,16 +80,6 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	detected, _ := statestore.Detect(scanPaths)
 	registry := newStoreRegistry(detected)
 
-	var wfStore statestore.Store
-	if active := registry.active(); active != nil {
-		if st, err := statestore.New(ctx, *active); err == nil {
-			wfStore = st
-			defer func() { _ = wfStore.Close() }()
-		} else {
-			fmt.Printf("warning: state store %q init failed: %v\n", active.Name, err)
-		}
-	}
-
 	appIDs := func(ctx context.Context) ([]string, error) {
 		apps, err := appsSvc.List(ctx)
 		if err != nil {
@@ -102,19 +91,21 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 		}
 		return ids, nil
 	}
-	wfSvc := workflow.New(wfStore, namespace, appIDs)
-	remover := workflow.NewRemover(&http.Client{Timeout: 10 * time.Second}, wfStore, namespace)
-	resolver := newTargetResolver(appsSvc, wfSvc)
+
+	wfClient := &http.Client{Timeout: 10 * time.Second}
+	backend, closers := newStoreBackend(ctx, detected, namespace, wfClient, appsSvc, appIDs)
+	for _, close := range closers {
+		close := close
+		defer func() { _ = close() }()
+	}
 
 	srv := server.New(addr, server.Options{
-		BasePath:  basePath,
-		DistFS:    dist,
-		Version:   version.Get(),
-		Apps:      appsSvc,
-		Workflows: wfSvc,
-		Remover:   remover,
-		Stores:    registry,
-		Resolver:  resolver,
+		BasePath: basePath,
+		DistFS:   dist,
+		Version:  version.Get(),
+		Apps:     appsSvc,
+		Backend:  backend,
+		Stores:   registry,
 	})
 
 	fmt.Printf("dev-dashboard %s → %s\n", version.Get().Version, url)

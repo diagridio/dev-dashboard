@@ -36,6 +36,13 @@ type TargetResolver interface {
 	Resolve(ctx context.Context, appID, instanceID string) (workflow.RemoveTarget, error)
 }
 
+// WorkflowBackend selects the workflow service/remover/resolver for a named
+// state store. An empty name selects the active store; ok=false means the
+// named store is unknown.
+type WorkflowBackend interface {
+	ServiceFor(store string) (svc workflow.Service, rem WorkflowRemover, targets TargetResolver, ok bool)
+}
+
 // removeBody is the request body for single and bulk removal endpoints.
 type removeBody struct {
 	IDs   []targetRef `json:"ids"`
@@ -48,10 +55,15 @@ type targetRef struct {
 	InstanceID string `json:"instanceId"`
 }
 
-func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegistry, targets TargetResolver) http.Handler {
+func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		svc, _, _, ok := backend.ServiceFor(req.URL.Query().Get("store"))
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown state store"})
+			return
+		}
 		q := parseListQuery(req)
 		res, err := svc.List(req.Context(), q)
 		if errors.Is(err, workflow.ErrNoStore) {
@@ -66,6 +78,11 @@ func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegi
 	})
 
 	r.Get("/{appId}/{instanceId}", func(w http.ResponseWriter, req *http.Request) {
+		svc, _, _, ok := backend.ServiceFor(req.URL.Query().Get("store"))
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown state store"})
+			return
+		}
 		ex, err := svc.Get(req.Context(), chi.URLParam(req, "appId"), chi.URLParam(req, "instanceId"))
 		switch {
 		case errors.Is(err, workflow.ErrNotFound):
@@ -79,10 +96,15 @@ func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegi
 		}
 	})
 
-	r.Post("/{appId}/{instanceId}/terminate", removeOne(rem, targets))
-	r.Post("/{appId}/{instanceId}/purge", removeOne(rem, targets))
+	r.Post("/{appId}/{instanceId}/terminate", removeOneViaBackend(backend))
+	r.Post("/{appId}/{instanceId}/purge", removeOneViaBackend(backend))
 
 	r.Post("/purge", func(w http.ResponseWriter, req *http.Request) {
+		_, rem, targets, ok := backend.ServiceFor(req.URL.Query().Get("store"))
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown state store"})
+			return
+		}
 		var body removeBody
 		_ = json.NewDecoder(req.Body).Decode(&body)
 		var tgts []workflow.RemoveTarget
@@ -99,9 +121,15 @@ func workflowsRouter(svc workflow.Service, rem WorkflowRemover, stores StoreRegi
 	return r
 }
 
-// removeOne returns an http.HandlerFunc for single-instance terminate/purge.
-func removeOne(rem WorkflowRemover, targets TargetResolver) http.HandlerFunc {
+// removeOneViaBackend returns an http.HandlerFunc for single-instance terminate/purge.
+// It selects the workflow backend based on the ?store= query parameter.
+func removeOneViaBackend(backend WorkflowBackend) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
+		_, rem, targets, ok := backend.ServiceFor(req.URL.Query().Get("store"))
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown state store"})
+			return
+		}
 		var body removeBody
 		_ = json.NewDecoder(req.Body).Decode(&body)
 		t, err := targets.Resolve(req.Context(), chi.URLParam(req, "appId"), chi.URLParam(req, "instanceId"))

@@ -6,12 +6,11 @@ import (
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/version"
-	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/go-chi/chi/v5"
 )
 
 // apiRouter builds the JSON API surface served under /api.
-func apiRouter(v version.Info, apps discovery.Service, wf workflow.Service, rem WorkflowRemover, stores StoreRegistry, targets TargetResolver) http.Handler {
+func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, stores StoreRegistry) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -27,7 +26,7 @@ func apiRouter(v version.Info, apps discovery.Service, wf workflow.Service, rem 
 		writeJSON(w, http.StatusOK, stores.Stores())
 	})
 	r.Mount("/apps", appsRouter(apps))
-	r.Mount("/workflows", workflowsRouter(wf, rem, stores, targets))
+	r.Mount("/workflows", workflowsRouter(backend, stores))
 	return r
 }
 

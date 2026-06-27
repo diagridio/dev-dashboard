@@ -74,3 +74,49 @@ func TestNewRootCmd_NewFlags(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "default", ns)
 }
+
+// --- storeBackend unit tests ---
+
+// buildTestBackend builds a storeBackend with a hand-crafted services map,
+// bypassing the real statestore.New (which needs disk/network).
+func buildTestBackend(activeName string, names ...string) *storeBackend {
+	b := &storeBackend{
+		services:   make(map[string]storeEntry),
+		activeName: activeName,
+		degraded:   storeEntry{}, // nil svc/rem/targets — sufficient for name-routing tests
+	}
+	for _, n := range names {
+		b.services[n] = storeEntry{} // entries just need to be present
+	}
+	return b
+}
+
+func TestStoreBackend_EmptyNameReturnsActive(t *testing.T) {
+	b := buildTestBackend("redis", "redis", "pg")
+	_, _, _, ok := b.ServiceFor("")
+	require.True(t, ok)
+}
+
+func TestStoreBackend_KnownNameReturnsEntry(t *testing.T) {
+	b := buildTestBackend("redis", "redis", "pg")
+	_, _, _, ok := b.ServiceFor("pg")
+	require.True(t, ok)
+}
+
+func TestStoreBackend_UnknownNameReturnsFalse(t *testing.T) {
+	b := buildTestBackend("redis", "redis", "pg")
+	_, _, _, ok := b.ServiceFor("nosuchstore")
+	require.False(t, ok)
+}
+
+func TestStoreBackend_NoStoresDegraded(t *testing.T) {
+	b := buildTestBackend("") // no stores, no activeName
+	_, _, _, ok := b.ServiceFor("")
+	require.True(t, ok, "degraded entry should always return ok=true")
+}
+
+func TestStoreBackend_NoStoresUnknownExplicit(t *testing.T) {
+	b := buildTestBackend("") // no stores
+	_, _, _, ok := b.ServiceFor("anything")
+	require.False(t, ok)
+}

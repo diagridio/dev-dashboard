@@ -13,11 +13,11 @@ import (
 
 func newTestRouter(basePath string) http.Handler {
 	return NewRouter(Options{
-		BasePath:  basePath,
-		DistFS:    fstest.MapFS{"index.html": {Data: []byte("shell")}},
-		Version:   version.Info{Version: "test"},
-		Apps:      newFakeApps(),
-		Workflows: fakeWF{},
+		BasePath: basePath,
+		DistFS:   fstest.MapFS{"index.html": {Data: []byte("shell")}},
+		Version:  version.Info{Version: "test"},
+		Apps:     newFakeApps(),
+		Backend:  newFakeBackend(fakeWF{}),
 	})
 }
 
@@ -48,10 +48,10 @@ func TestRouterUnderBasePath(t *testing.T) {
 
 func TestRouterServesApps(t *testing.T) {
 	h := NewRouter(Options{
-		DistFS:    fstest.MapFS{"index.html": {Data: []byte("shell")}},
-		Version:   version.Info{Version: "test"},
-		Apps:      newFakeApps(),
-		Workflows: fakeWF{},
+		DistFS:  fstest.MapFS{"index.html": {Data: []byte("shell")}},
+		Version: version.Info{Version: "test"},
+		Apps:    newFakeApps(),
+		Backend: newFakeBackend(fakeWF{}),
 	})
 	res, body := get(t, h, "/api/apps")
 	require.Equal(t, http.StatusOK, res.StatusCode)
