@@ -4,7 +4,9 @@ package server
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -72,4 +74,21 @@ func TestLogsNoFile404(t *testing.T) {
 	r.Get("/{appId}/logs", logsHandler(svc))
 	res, _ := get(t, r, "/order/logs?source=daprd")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
+}
+
+func TestLogsHandler_LogsSourceUnavailable(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	svc := &fakeApps{instances: []discovery.Instance{{AppID: "order"}}} // no DaprdLogPath
+	r := chi.NewRouter()
+	r.Get("/{appId}/logs", logsHandler(svc))
+	res, _ := get(t, r, "/order/logs?source=daprd")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+
+	if !strings.Contains(buf.String(), "log stream source unavailable") {
+		t.Fatalf("expected 'log stream source unavailable' WARN, got %q", buf.String())
+	}
 }

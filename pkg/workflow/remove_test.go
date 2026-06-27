@@ -3,7 +3,9 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,6 +17,33 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/stretchr/testify/require"
 )
+
+func captureWFLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	return &buf
+}
+
+func TestRemove_LogsForceUnavailableWhenNoStore(t *testing.T) {
+	buf := captureWFLogs(t)
+	r := NewRemover(nil, nil, "default") // nil store -> force delete unavailable
+	res := r.Remove(context.Background(), RemoveTarget{
+		AppID: "app1", InstanceID: "inst1", HTTPPort: 0, Healthy: false,
+	}, true) // force=true and unhealthy -> MechForce
+	if res.OK {
+		t.Fatal("expected force delete to fail with no store")
+	}
+	out := buf.String()
+	if !strings.Contains(out, "workflow removal requested") {
+		t.Fatalf("expected request INFO, got %q", out)
+	}
+	if !strings.Contains(out, "workflow removal failed") {
+		t.Fatalf("expected failure ERROR, got %q", out)
+	}
+}
 
 func TestRemovePurgeTerminal(t *testing.T) {
 	var gotPath string

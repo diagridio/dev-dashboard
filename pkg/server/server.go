@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -45,6 +46,7 @@ func NewRouter(opts Options) http.Handler {
 	} else {
 		r.Route(base, func(sub chi.Router) { mount(sub) })
 	}
+	slog.Default().With("component", "server").Info("serving embedded UI", "basePath", opts.BasePath)
 	return r
 }
 

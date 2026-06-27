@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"sort"
 	"sync"
@@ -11,6 +12,8 @@ import (
 )
 
 var ErrNotFound = errors.New("app not found")
+
+func logger() *slog.Logger { return slog.Default().With("component", "discovery") }
 
 type Scanner func() ([]ScanResult, error)
 
@@ -45,6 +48,7 @@ const enrichWorkers = 8
 func (s *service) List(ctx context.Context) ([]Instance, error) {
 	results, err := s.scan()
 	if err != nil {
+		logger().Error("app scan failed", "err", err)
 		return nil, err
 	}
 	out := make([]Instance, len(results))
@@ -61,12 +65,14 @@ func (s *service) List(ctx context.Context) ([]Instance, error) {
 	}
 	wg.Wait()
 	sort.SliceStable(out, func(a, b int) bool { return out[a].AppID < out[b].AppID })
+	logger().Info("discovered Dapr apps", "count", len(out))
 	return out, nil
 }
 
 func (s *service) Get(ctx context.Context, appID string) (Instance, error) {
 	results, err := s.scan()
 	if err != nil {
+		logger().Error("app scan failed", "err", err)
 		return Instance{}, err
 	}
 	for _, r := range results {
@@ -89,6 +95,7 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	md, err := FetchMetadata(ctx, s.client, r.HTTPPort)
 	if err != nil {
 		in.MetadataOK = false
+		logger().Warn("app metadata unavailable", "appID", r.AppID, "httpPort", r.HTTPPort, "err", err)
 		return in
 	}
 	in.MetadataOK = true
