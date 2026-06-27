@@ -110,13 +110,31 @@ describe('Workflows', () => {
         return HttpResponse.json({ items: [] })
       }),
     )
-    renderAt()
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: 0, staleTime: 0 } },
+    })
+    const router = createMemoryRouter(
+      [
+        { path: '/workflows', element: <Workflows /> },
+        { path: '/workflows/:appId/:instanceId', element: <div>detail</div> },
+      ],
+      { initialEntries: ['/workflows'] },
+    )
+    render(
+      <QueryProvider client={client}>
+        <RefreshProvider>
+          <RouterProvider router={router} />
+        </RefreshProvider>
+      </QueryProvider>,
+    )
     // Wait for store-select to appear with stores loaded
     await waitFor(() => expect(document.querySelector('[data-cy="store-select"]')).not.toBeNull())
     const select = document.querySelector('[data-cy="store-select"]') as HTMLSelectElement
     // Change to the non-active store
     await userEvent.selectOptions(select, 'postgres')
-    // Wait for workflow query with store param to fire
+    // Assert URL search params updated
+    await waitFor(() => expect(router.state.location.search).toContain('store=postgres'))
+    // Assert workflow query fired with store param
     await waitFor(() => expect(capturedStoreParam).toBe('postgres'))
   })
 })
