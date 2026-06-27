@@ -129,13 +129,89 @@ DASH_BASE_PATH=/dashboard/ make build
 `DASH_BASE_PATH` (used at Vite build time) must equal the `--base-path` flag value, and
 both must end with a trailing slash.
 
+## Building from source
+
+**Prerequisites:** Go ≥ 1.26 and Node.js 20 (with `npm`). The binary embeds the React SPA via
+`go:embed`, so the web assets (`web/dist`) must be built **before** the Go binary — `make build`
+does both in the right order.
+
+**macOS / Linux:**
+
+```sh
+make build            # builds web/dist, then the Go binary at bin/dev-dashboard
+./bin/dev-dashboard
+```
+
+Equivalent manual steps (if you don't have `make`):
+
+```sh
+cd web && npm install && npm run build && cd ..
+go build -o bin/dev-dashboard .
+./bin/dev-dashboard
+```
+
+**Windows (PowerShell):** `make` is usually unavailable, so run the steps directly:
+
+```powershell
+cd web; npm install; npm run build; cd ..
+go build -o bin/dev-dashboard.exe .
+.\bin\dev-dashboard.exe
+```
+
+To build for a sub-path mount, set `DASH_BASE_PATH` before building (see
+[Mounting under a sub-path](#mounting-under-a-sub-path)). On Windows that is
+`$env:DASH_BASE_PATH='/dashboard/'` before the `npm run build` step.
+
+Other useful targets: `make test` (Go + web suites), `make test-go`, `make test-web`,
+`make tidy`.
+
+## Releasing
+
+> For maintainers with push access. Releases are built and published by the
+> [`release` GitHub Actions workflow](.github/workflows/release.yaml): pushing a `vX.Y.Z` tag
+> runs [GoReleaser](https://goreleaser.com), which compiles the cross-platform archives plus
+> `checksums.txt` and publishes them to a GitHub Release. The version (`dev-dashboard --version`)
+> is injected from the tag via build-time ldflags.
+
+Because `go install` cannot run `npm`, the release tag commit must embed the prebuilt
+`web/dist`. `scripts/release.sh` handles this: it builds the SPA, creates a **detached** commit
+that force-adds `web/dist` (past `.gitignore`), tags it, and returns you to your branch — so the
+tagged commit ships the full UI for `go install` while `main` stays free of built assets.
+
+**Cut a release (macOS / Linux, or Git Bash / WSL on Windows — `release.sh` is a POSIX `sh` script):**
+
+1. Be on an up-to-date `main` with a clean working tree.
+2. Build + tag the release:
+   ```sh
+   scripts/release.sh vX.Y.Z
+   ```
+   It builds the SPA, creates the tag on a detached commit embedding the UI, and prints the
+   push command.
+3. Push the tag to trigger the release workflow:
+   ```sh
+   git push origin vX.Y.Z
+   ```
+4. Wait for the `release` workflow to finish. It publishes a GitHub Release with one archive per
+   platform + `checksums.txt`. After that, the install one-liners and
+   `go install github.com/diagridio/dev-dashboard@vX.Y.Z` resolve to the new version.
+
+**Validate locally before tagging (optional, requires GoReleaser v2):**
+
+```sh
+make release-check      # validate .goreleaser.yaml
+make release-snapshot   # build a local snapshot into dist/ without publishing
+```
+
+> The release matrix is **5 archives**: macOS and Linux (amd64 + arm64) and Windows (amd64).
+> There is no native Windows/arm64 build — Windows on ARM uses the amd64 build via emulation.
+
 ## Architecture
 
 The dashboard is a **single Go binary** that embeds a React SPA and talks to your local Dapr
 sidecars and state store.
 
 ```
-┌─────────────────────────────────────────────────────┐
+┌───────────────────────────────────────────────────────┐
 │  dev-dashboard (single Go binary)                     │
 │                                                       │
 │  cmd/           cobra root, flags, default `serve`    │
@@ -144,30 +220,32 @@ sidecars and state store.
 │  pkg/workflow   list / history / purge                │
 │  pkg/statestore client (redis / postgres / sqlite)    │
 │  pkg/resources  component + configuration YAML loader │
-│  pkg/logs       file tail → SSE                        │
+│  pkg/logs       file tail → SSE                       │
 │  web/           React + Vite SPA → dist/ (embedded)   │
-└─────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────┘
         │ HTTP /v1.0/metadata, /healthz       │ files / TCP
-        ▼                                      ▼
+        ▼                                     ▼
    running daprd sidecars        ~/.dapr, resource paths, state store backend
 ```
 
 **Components**
 
 - **Backend (Go + `chi`)** — exposes a REST + JSON API (with SSE for log/stream tails) and
-  serves the embedded SPA. Each domain lives in an isolated `pkg/*` package with its own
-  `service` and `api` (response-type) sub-packages; no domain package depends on `cmd/`.
+  serves the embedded SPA. Each domain lives in an isolated `pkg/*` package (a `service.go`
+  plus its response types); the HTTP layer lives in `pkg/server`, one file per domain. No
+  domain package depends on `cmd/`.
 - **Frontend (React + TypeScript + Vite)** — a single-page app built to static assets and
   embedded into the binary via `go:embed`. Uses **TanStack Query** for polling/caching,
-  **TanStack Virtual** for large lists, headless accessible primitives styled in-house, and a
-  lightweight read-only syntax highlighter (not Monaco). Client-side History-API routing; the
-  Go server falls back to `index.html` for unknown paths and is base-path-aware.
+  headless accessible primitives styled in-house, and a custom lightweight read-only YAML
+  highlighter (not Monaco). Client-side History-API routing (`react-router-dom`); the Go
+  server falls back to `index.html` for unknown paths and is base-path-aware. List
+  virtualization is planned, not yet in v1.
 
 **Key dependencies & data sources**
 
 - **App discovery** reuses `github.com/dapr/cli/pkg/standalone` (the same mechanism as
-  `dapr list`). A **process scan** (`go-ps` + `gopsutil`) is the source of truth for
-  existence/ports/PIDs; the **`/v1.0/metadata`** call per sidecar is enrichment (runtime
+  `dapr list`). `standalone.List()` reads the local process table and is the source of truth
+  for existence/ports/PIDs; the **`/v1.0/metadata`** call per sidecar is enrichment (runtime
   version, components, actors, subscriptions, extended metadata) and degrades gracefully when
   a sidecar is down. A background **`/v1.0/healthz`** poller drives the health badge.
 - **Workflows** are read from the detected **state store backend** (Redis / PostgreSQL /
