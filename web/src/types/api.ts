@@ -32,4 +32,9 @@ export interface AppDetail extends AppSummary {
   command: string
   runtimeVersion: string
   metadataOk: boolean
+  enabledFeatures?: string[]
+  actors?: { type: string; count: number }[]
+  subscriptions?: { pubsubName: string; topic: string; [key: string]: unknown }[]
+  components?: { name: string; type: string; version?: string }[]
+  placement?: string
 }
