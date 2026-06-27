@@ -3,16 +3,29 @@
 package discovery
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func captureLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	return &buf
+}
 
 func TestServiceListEnriches(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -160,4 +173,27 @@ func TestServiceGetFastPath(t *testing.T) {
 	// Get returns ErrNotFound for unknown appID.
 	_, err = svc.Get(context.Background(), "missing")
 	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestList_LogsScanFailure(t *testing.T) {
+	buf := captureLogs(t)
+	svc := New(func() ([]ScanResult, error) { return nil, errors.New("boom") }, &http.Client{})
+	_, err := svc.List(context.Background())
+	if err == nil {
+		t.Fatal("expected error from List")
+	}
+	if !strings.Contains(buf.String(), "app scan failed") {
+		t.Fatalf("expected 'app scan failed' ERROR, got %q", buf.String())
+	}
+}
+
+func TestList_LogsDiscoveredCount(t *testing.T) {
+	buf := captureLogs(t)
+	svc := New(func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "a", HTTPPort: 0}}, nil
+	}, &http.Client{Timeout: 1})
+	_, _ = svc.List(context.Background())
+	if !strings.Contains(buf.String(), "discovered Dapr apps") {
+		t.Fatalf("expected 'discovered Dapr apps' INFO, got %q", buf.String())
+	}
 }
