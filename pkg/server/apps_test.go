@@ -69,3 +69,9 @@ func TestAppsDetailReturns404ForUnknownApp(t *testing.T) {
 	res, _ := get(t, h, "/does-not-exist")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
+
+func TestAppsLogsReturns404WhenNoLogPath(t *testing.T) {
+	h := appsRouter(&fakeApps{instances: []discovery.Instance{{AppID: "order"}}})
+	res, _ := get(t, h, "/order/logs")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+}
