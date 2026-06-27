@@ -11,6 +11,11 @@ function Probe() {
   return <div>{data?.items.map((w) => <span key={w.instanceId}>{w.instanceId}</span>)}</div>
 }
 
+function ProbeWithStore() {
+  const { data } = useWorkflows({ status: ['Running'], store: 'postgres' })
+  return <div>{data?.items.map((w) => <span key={w.instanceId}>{w.instanceId}</span>)}</div>
+}
+
 describe('useWorkflows', () => {
   it('lists workflows with filter params', async () => {
     server.use(http.get('/api/workflows', ({ request }) => {
@@ -21,5 +26,17 @@ describe('useWorkflows', () => {
     }))
     render(<QueryProvider><RefreshProvider><Probe /></RefreshProvider></QueryProvider>)
     await waitFor(() => expect(screen.getByText('abc')).toBeInTheDocument())
+  })
+
+  it('passes store param in the request query string', async () => {
+    let capturedStore: string | null = null
+    server.use(http.get('/api/workflows', ({ request }) => {
+      const url = new URL(request.url)
+      capturedStore = url.searchParams.get('store')
+      return HttpResponse.json({ items: [{ appId: 'order', instanceId: 'xyz', name: 'W', status: 'Running' }] })
+    }))
+    render(<QueryProvider><RefreshProvider><ProbeWithStore /></RefreshProvider></QueryProvider>)
+    await waitFor(() => expect(screen.getByText('xyz')).toBeInTheDocument())
+    expect(capturedStore).toBe('postgres')
   })
 })

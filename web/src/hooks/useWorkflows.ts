@@ -9,6 +9,7 @@ interface WorkflowsParams {
   search?: string
   page?: string
   limit?: number
+  store?: string
 }
 
 function queryString(p: WorkflowsParams): string {
@@ -18,6 +19,7 @@ function queryString(p: WorkflowsParams): string {
   if (p.search) sp.set('search', p.search)
   if (p.page) sp.set('page', p.page)
   if (p.limit) sp.set('limit', String(p.limit))
+  if (p.store) sp.set('store', p.store)
   const s = sp.toString()
   return s ? `?${s}` : ''
 }
@@ -32,11 +34,12 @@ export function useWorkflows(params: WorkflowsParams) {
   })
 }
 
-export function useWorkflow(appId: string, instanceId: string) {
+export function useWorkflow(appId: string, instanceId: string, store?: string) {
   const ctx = useRefreshInterval()
+  const qs = store ? `?store=${encodeURIComponent(store)}` : ''
   return useQuery<WorkflowExecution>({
-    queryKey: ['workflow', appId, instanceId],
-    queryFn: () => fetchJSON<WorkflowExecution>(`/workflows/${appId}/${instanceId}`),
+    queryKey: ['workflow', appId, instanceId, store],
+    queryFn: () => fetchJSON<WorkflowExecution>(`/workflows/${appId}/${instanceId}${qs}`),
     refetchInterval: refetchMs(ctx),
     enabled: !!appId && !!instanceId,
   })

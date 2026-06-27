@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflow } from '../hooks/useWorkflows'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
@@ -226,7 +226,9 @@ function useWallClock(
 
 export function WorkflowDetail() {
   const { appId, instanceId } = useParams<{ appId: string; instanceId: string }>()
-  const { data: execution, isLoading, isError } = useWorkflow(appId ?? '', instanceId ?? '')
+  const [searchParams] = useSearchParams()
+  const store = searchParams.get('store') ?? undefined
+  const { data: execution, isLoading, isError } = useWorkflow(appId ?? '', instanceId ?? '', store)
   const navigate = useNavigate()
   const { mutate: removeWorkflows } = useRemoveWorkflows()
 
@@ -269,11 +271,11 @@ export function WorkflowDetail() {
 
   function onConfirmRemove(force: boolean) {
     removeWorkflows(
-      { ids: [{ appId: appId ?? '', instanceId: instanceId ?? '' }], force },
+      { ids: [{ appId: appId ?? '', instanceId: instanceId ?? '' }], force, store },
       {
         onSuccess: () => {
           setRemoveDialogOpen(false)
-          navigate('/workflows')
+          navigate('/workflows' + (store ? `?store=${encodeURIComponent(store)}` : ''))
         },
         onError: () => {
           setRemoveDialogOpen(false)

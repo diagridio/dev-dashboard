@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { useWorkflows } from '../hooks/useWorkflows'
+import { useWorkflows, useStateStores } from '../hooks/useWorkflows'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
@@ -55,6 +55,7 @@ export function Workflows() {
   const urlStatus = searchParams.get('status')
   const urlSearch = searchParams.get('search') ?? ''
   const urlPage = searchParams.get('page') ?? undefined
+  const urlStore = searchParams.get('store') ?? ''
 
   const [selectedStatuses, setSelectedStatuses] = useState<WorkflowStatus[]>(
     urlStatus ? (urlStatus.split(',') as WorkflowStatus[]) : [],
@@ -68,6 +69,12 @@ export function Workflows() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [removeStatus, setRemoveStatus] = useState<{ ok: number; failed: number } | null>(null)
   const { mutate: removeWorkflows } = useRemoveWorkflows()
+
+  // State store picker
+  const { data: storeList } = useStateStores()
+  // Effective store: URL ?store= value if set; otherwise use the active store name for display (but don't write to URL)
+  const activeStoreName = storeList?.find((s) => s.active)?.name ?? ''
+  const selectedStore = urlStore || activeStoreName
 
   // Debounce search input ~250ms
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -87,13 +94,15 @@ export function Workflows() {
     if (selectedStatuses.length > 0) params.status = selectedStatuses.join(',')
     if (debouncedSearch) params.search = debouncedSearch
     if (page) params.page = page
+    if (urlStore) params.store = urlStore
     setSearchParams(params, { replace: true })
-  }, [selectedStatuses, debouncedSearch, page, setSearchParams])
+  }, [selectedStatuses, debouncedSearch, page, urlStore, setSearchParams])
 
   const { data, isLoading, isError, error } = useWorkflows({
     status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
     search: debouncedSearch || undefined,
     page,
+    store: selectedStore || undefined,
   })
 
   // Null-safe guard: the API may return {"items": null} for empty results
@@ -134,7 +143,7 @@ export function Workflows() {
       return { appId, instanceId }
     })
     removeWorkflows(
-      { ids, force },
+      { ids, force, store: selectedStore || undefined },
       {
         onSuccess: (results) => {
           const ok = results.filter((r) => r.ok).length
@@ -199,6 +208,37 @@ export function Workflows() {
         marginBottom: 'var(--space-3)',
       }}
     >
+      <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font)', color: 'var(--text-muted)' }}>
+        Store:
+        <select
+          data-cy="store-select"
+          value={selectedStore}
+          onChange={(e) => {
+            const next = e.target.value
+            const params: Record<string, string> = {}
+            if (selectedStatuses.length > 0) params.status = selectedStatuses.join(',')
+            if (debouncedSearch) params.search = debouncedSearch
+            if (page) params.page = page
+            if (next) params.store = next
+            setSearchParams(params, { replace: true })
+            setPage(undefined)
+          }}
+          style={{
+            padding: 'var(--space-2) var(--space-3)',
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+            background: 'var(--surface)',
+            color: 'var(--text)',
+            fontSize: 'var(--font)',
+          }}
+        >
+          {storeList?.map((s) => (
+            <option key={s.name} value={s.name}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </label>
       <input
         type="search"
         placeholder="Search workflows…"

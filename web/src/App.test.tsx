@@ -29,6 +29,7 @@ beforeEach(() => {
     http.get('/api/version', () => HttpResponse.json({ version: 'dev', commit: 'none', date: 'unknown' })),
     http.get('/api/health', () => HttpResponse.json({ status: 'ok' })),
     http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+    http.get('/api/statestores', () => HttpResponse.json([])),
   )
 })
 
