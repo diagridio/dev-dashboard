@@ -37,3 +37,14 @@ func TestRootDefaults(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "", base)
 }
+
+func TestRootCmd_HasVerboseFlag(t *testing.T) {
+	c := NewRootCmd()
+	f := c.Flags().Lookup("verbose")
+	if f == nil {
+		t.Fatal("expected --verbose flag to be registered")
+	}
+	if f.DefValue != "false" {
+		t.Fatalf("expected --verbose default false, got %q", f.DefValue)
+	}
+}
