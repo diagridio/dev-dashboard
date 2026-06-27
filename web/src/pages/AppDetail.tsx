@@ -1,25 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
 import type { HealthStatus, AppDetail as AppDetailType } from '../types/api'
-
-function legacyCopy(t: string) {
-  const ta = document.createElement('textarea')
-  ta.value = t
-  ta.style.position = 'fixed'
-  ta.style.opacity = '0'
-  document.body.appendChild(ta)
-  ta.select()
-  document.execCommand('copy')
-  document.body.removeChild(ta)
-}
-
-function copyText(t: string) {
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(t).catch(() => legacyCopy(t))
-  } else {
-    legacyCopy(t)
-  }
-}
+import { copyText } from '../lib/clipboard'
 
 // Maps a health status to its CSS custom property color token
 function healthColor(health: HealthStatus): string {

@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useSubscriptions } from '../hooks/useResources'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 const tableStyle: React.CSSProperties = {
   width: '100%',
@@ -39,22 +39,12 @@ export function Subscriptions() {
   const [searchParams, setSearchParams] = useSearchParams()
   const appIdFilter = searchParams.get('appId') ?? undefined
 
-  useEffect(() => {
-    document.title = appIdFilter ? `Subscriptions — ${appIdFilter}` : 'Subscriptions'
-  }, [appIdFilter])
+  useDocumentTitle(appIdFilter ? `Subscriptions — ${appIdFilter}` : 'Subscriptions')
 
   const { data: subscriptions, isLoading } = useSubscriptions(appIdFilter)
 
   function clearFilter() {
     setSearchParams({})
-  }
-
-  if (isLoading) {
-    return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
-      </div>
-    )
   }
 
   const filterBadge = appIdFilter ? (
@@ -90,6 +80,15 @@ export function Subscriptions() {
       </button>
     </div>
   ) : null
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: 'var(--space-4)' }}>
+        {filterBadge}
+        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      </div>
+    )
+  }
 
   if (!subscriptions || subscriptions.length === 0) {
     return (

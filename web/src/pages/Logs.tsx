@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useApps, useApp } from '../hooks/useApps'
 import { useLogStream } from '../hooks/useLogStream'
 import type { LogLine, LogLevel } from '../types/logs'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 // Level → CSS color token
 function levelColor(level?: LogLevel): string {
@@ -249,12 +250,6 @@ function LogsWithApp({
   const logPath = app ? (source === 'daprd' ? app.daprdLogPath : app.appLogPath) : undefined
   const hasPath = !!logPath
 
-  // Set document title
-  useEffect(() => {
-    document.title = `Logs — ${appId} (${source})`
-    return () => { document.title = 'Dapr Dev Dashboard' }
-  }, [appId, source])
-
   if (isLoading) {
     return (
       <div style={{ padding: 'var(--space-4)', color: 'var(--text-faint)' }}>
@@ -319,10 +314,7 @@ export function Logs() {
     })
   }
 
-  // Set document title when no app is selected
-  useEffect(() => {
-    if (!appId) document.title = 'Logs — Dapr Dev Dashboard'
-  }, [appId])
+  useDocumentTitle(appId ? `Logs — ${appId} (${source})` : 'Logs — Dapr Dev Dashboard')
 
   if (!appId) {
     return (
