@@ -19,6 +19,8 @@ func TestVersionFlag(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, version.Get().Version)
 	require.Contains(t, out, "dev-dashboard")
+	require.Contains(t, out, "commit none")
+	require.Contains(t, out, "built unknown")
 }
 
 func TestRootDefaults(t *testing.T) {
