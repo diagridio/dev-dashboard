@@ -51,6 +51,32 @@ func TestServiceListEnriches(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
+func TestServiceEnrichCarriesMetadataCollections(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/healthz":
+			w.WriteHeader(204)
+		case "/v1.0/metadata":
+			_, _ = w.Write([]byte(`{"id":"order","runtimeVersion":"1.18.0","enabledFeatures":["StateStore"],"actors":[{"type":"OrderActor","count":2}],"components":[{"name":"statestore","type":"state.redis","version":"v1"}],"subscriptions":[{"pubsubname":"pubsub","topic":"orders"}],"actorRuntime":{"placement":"connected"}}`))
+		}
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "order", HTTPPort: port, Command: "go run ./cmd/order"}}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: 2 * time.Second})
+	list, err := svc.List(context.Background())
+	require.NoError(t, err)
+	in := list[0]
+	require.Equal(t, []string{"StateStore"}, in.EnabledFeatures)
+	require.Equal(t, "OrderActor", in.Actors[0].Type)
+	require.Equal(t, "statestore", in.Components[0].Name)
+	require.Equal(t, "orders", in.Subscriptions[0].Topic)
+	require.Equal(t, "connected", in.Placement)
+}
+
 func TestServiceListMetadataDown(t *testing.T) {
 	scan := func() ([]ScanResult, error) {
 		return []ScanResult{{AppID: "x", HTTPPort: 1, DaprdPID: 9, Command: "python app.py"}}, nil

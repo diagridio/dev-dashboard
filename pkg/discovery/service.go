@@ -82,6 +82,11 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	in.MetadataOK = true
 	in.RuntimeVersion = md.RuntimeVersion
 	in.AppPID = md.AppPID
+	in.Actors = md.Actors
+	in.Subscriptions = md.Subscriptions
+	in.Components = md.Components
+	in.EnabledFeatures = md.EnabledFeatures
+	in.Placement = md.Placement
 	if md.CLIPID != 0 {
 		in.CLIPID = md.CLIPID
 	}
