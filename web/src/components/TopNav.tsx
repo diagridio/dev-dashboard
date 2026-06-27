@@ -3,20 +3,22 @@ import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
 import { DensityToggle } from './DensityToggle'
 import { RefreshControl } from './RefreshControl'
+import { Icon, IconName } from './icons/Icon'
 
 export interface NavItem {
   label: string
   to: string
+  icon: IconName
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Applications', to: '/' },
-  { label: 'Workflows', to: '/workflows' },
-  { label: 'Actors', to: '/actors' },
-  { label: 'Subscriptions', to: '/subscriptions' },
-  { label: 'Components', to: '/components' },
-  { label: 'Configurations', to: '/configurations' },
-  { label: 'Logs', to: '/logs' },
+  { label: 'Applications', to: '/', icon: 'applications' },
+  { label: 'Workflows', to: '/workflows', icon: 'workflows' },
+  { label: 'Actors', to: '/actors', icon: 'actors' },
+  { label: 'Subscriptions', to: '/subscriptions', icon: 'subscriptions' },
+  { label: 'Components', to: '/components', icon: 'components' },
+  { label: 'Configurations', to: '/configurations', icon: 'configurations' },
+  { label: 'Logs', to: '/logs', icon: 'logs' },
 ]
 
 export function TopNav() {
@@ -60,7 +62,10 @@ export function TopNav() {
               boxShadow: isActive ? 'inset 0 0 0 1px var(--border)' : 'none',
             })}
           >
-            {item.label}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1, 4px)' }}>
+              <Icon name={item.icon} />
+              {item.label}
+            </span>
           </NavLink>
         ))}
       </nav>
