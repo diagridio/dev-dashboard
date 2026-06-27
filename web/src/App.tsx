@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
 import { StatusFooter } from './components/StatusFooter'
+import { ResourcesSidebar } from './components/ResourcesSidebar'
 
 export function App() {
   return (
@@ -17,8 +18,11 @@ export function App() {
         }}
       >
         <TopNav />
-        <div style={{ flex: 1, overflow: 'auto' }}>
-          <Outlet />
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <ResourcesSidebar />
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            <Outlet />
+          </div>
         </div>
         <StatusFooter />
       </div>
