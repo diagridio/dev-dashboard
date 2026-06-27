@@ -27,6 +27,7 @@ func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, 
 	})
 	r.Mount("/apps", appsRouter(apps))
 	r.Mount("/actors", actorsRouter(apps))
+	r.Mount("/subscriptions", subscriptionsRouter(apps))
 	r.Mount("/workflows", workflowsRouter(backend, stores))
 	return r
 }
