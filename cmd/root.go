@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/resources"
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/version"
@@ -80,6 +81,21 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	detected, _ := statestore.Detect(scanPaths)
 	registry := newStoreRegistry(detected)
 
+	// Resolve resource paths for the resources loader (components, configs, subscriptions, etc.).
+	var resPaths []string
+	if home, err := os.UserHomeDir(); err == nil {
+		resPaths = append(resPaths, filepath.Join(home, ".dapr", "components"), filepath.Join(home, ".dapr"))
+	}
+	if apps, err := appsSvc.List(ctx); err == nil {
+		for _, a := range apps {
+			resPaths = append(resPaths, a.ResourcePaths...)
+			if a.ConfigPath != "" {
+				resPaths = append(resPaths, filepath.Dir(a.ConfigPath))
+			}
+		}
+	}
+	resSvc := resources.New(resPaths)
+
 	appIDs := func(ctx context.Context) ([]string, error) {
 		apps, err := appsSvc.List(ctx)
 		if err != nil {
@@ -100,12 +116,13 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	}
 
 	srv := server.New(addr, server.Options{
-		BasePath: basePath,
-		DistFS:   dist,
-		Version:  version.Get(),
-		Apps:     appsSvc,
-		Backend:  backend,
-		Stores:   registry,
+		BasePath:  basePath,
+		DistFS:    dist,
+		Version:   version.Get(),
+		Apps:      appsSvc,
+		Backend:   backend,
+		Stores:    registry,
+		Resources: resSvc,
 	})
 
 	fmt.Printf("dev-dashboard %s → %s\n", version.Get().Version, url)
