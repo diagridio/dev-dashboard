@@ -21,12 +21,12 @@ if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
   exit 1
 fi
 
-START_REF="$(git rev-parse --abbrev-ref HEAD)"
+START_REF="$(git symbolic-ref --quiet HEAD || git rev-parse HEAD)"
 cleanup() {
   # Always return to the original branch and drop built assets from the worktree.
   git checkout -q "$START_REF" 2>/dev/null || true
+  rm -rf web/dist 2>/dev/null || true
   git checkout -q -- web/dist 2>/dev/null || true
-  rm -rf web/dist/assets 2>/dev/null || true
 }
 trap cleanup EXIT
 
