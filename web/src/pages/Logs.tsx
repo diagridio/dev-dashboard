@@ -82,8 +82,12 @@ function LogViewer({ appId, source }: LogViewerProps) {
   function handleScroll() {
     const el = scrollRef.current
     if (!el) return
+    // jsdom has no real layout; scrollHeight may be 0
+    if (el.scrollHeight === 0) return
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-    if (!nearBottom && following) {
+    if (nearBottom && !following) {
+      setFollowing(true)
+    } else if (!nearBottom && following) {
       setFollowing(false)
     }
   }

@@ -19,7 +19,9 @@ export function useLogStream(
   const [lines, setLines] = useState<LogLine[]>([])
   const [status, setStatus] = useState<Status>('idle')
   const seqRef = useRef(0)
-  const max = opts?.max ?? 2000
+  // Keep max current via a ref so changes don't tear down the EventSource connection
+  const maxRef = useRef(opts?.max ?? 2000)
+  maxRef.current = opts?.max ?? 2000
 
   const clear = useCallback(() => setLines([]), [])
 
@@ -48,9 +50,10 @@ export function useLogStream(
         text: e.data,
         level: parseLogLevel(e.data),
       }
+      const cap = maxRef.current
       setLines(prev => {
         const next = [...prev, line]
-        return next.length > max ? next.slice(next.length - max) : next
+        return next.length > cap ? next.slice(next.length - cap) : next
       })
     }
 
@@ -61,7 +64,7 @@ export function useLogStream(
     return () => {
       es.close()
     }
-  }, [appId, source, max])
+  }, [appId, source])
 
   return { lines, status, clear }
 }

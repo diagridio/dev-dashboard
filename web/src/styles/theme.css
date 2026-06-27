@@ -42,4 +42,6 @@ body {
   font-size: var(--font);
 }
 .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.sidebar-link { color: var(--text-muted); }
+.sidebar-link:hover, .sidebar-link:focus-visible { background: var(--surface-hover, var(--border-soft)); color: var(--text); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
