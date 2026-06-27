@@ -1,0 +1,48 @@
+version: 2
+project_name: dev-dashboard
+
+before:
+  hooks:
+    - go mod tidy
+    - sh -c "cd web && npm ci && npm run build"
+
+builds:
+  - id: dev-dashboard
+    main: .
+    binary: dev-dashboard
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/diagridio/dev-dashboard/pkg/version.Version={{ .Version }}
+      - -X github.com/diagridio/dev-dashboard/pkg/version.Commit={{ .Commit }}
+      - -X github.com/diagridio/dev-dashboard/pkg/version.Date={{ .Date }}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+release:
+  github:
+    owner: diagridio
+    name: dev-dashboard
+  draft: false
+  prerelease: auto
+
+changelog:
+  use: github

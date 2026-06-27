@@ -1,4 +1,5 @@
 /bin/
+/dist/
 web/node_modules/
 web/dist/assets/
 *.out

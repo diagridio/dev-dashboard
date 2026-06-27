@@ -1,4 +1,4 @@
-.PHONY: web build test test-go test-web tidy
+.PHONY: web build test test-go test-web tidy release-snapshot release-check
 
 web:
 	cd web && npm install && npm run build
@@ -16,3 +16,9 @@ test: test-go test-web
 
 tidy:
 	go mod tidy
+
+release-snapshot:
+	goreleaser release --snapshot --clean --skip=publish
+
+release-check:
+	goreleaser check
