@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -157,12 +158,19 @@ func newStoreBackend(
 	}
 	var closers []func() error
 
+	log := slog.Default().With("component", "statestore")
+	log.Info("detected state-store components", "count", len(comps))
+	if len(comps) == 0 {
+		log.Warn("no state store detected")
+	}
+
 	registry := newStoreRegistry(comps)
 
 	for _, comp := range comps {
 		st, err := statestore.New(ctx, comp)
 		if err != nil {
 			fmt.Printf("warning: state store %q init failed: %v (skipping)\n", comp.Name, err)
+			log.Warn("state store init failed, skipping", "name", comp.Name, "err", err)
 			continue
 		}
 		closers = append(closers, st.Close)
@@ -171,12 +179,14 @@ func newStoreBackend(
 		rem := workflow.NewRemover(client, st, namespace)
 		res := newTargetResolver(apps, svc)
 		b.services[comp.Name] = storeEntry{svc: svc, rem: rem, targets: res}
+		log.Info("state store connected", "name", comp.Name, "type", comp.Type)
 	}
 
 	// Set activeName from the registry (actorStateStore wins, else first).
 	if active := registry.active(); active != nil {
 		if _, ok := b.services[active.Name]; ok {
 			b.activeName = active.Name
+			log.Info("active state store selected", "name", active.Name)
 		}
 	}
 

@@ -3,8 +3,12 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -12,6 +16,16 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/stretchr/testify/require"
 )
+
+// withCapturedLogs swaps the default logger for one writing to buf, returns a restore func.
+func withCapturedLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(old) })
+	return &buf
+}
 
 // --- targetResolver unit tests ---
 
@@ -185,4 +199,16 @@ func TestStoreBackend_NoStoresUnknownExplicit(t *testing.T) {
 	b := buildTestBackend("") // no stores
 	_, _, _, ok := b.ServiceFor("anything")
 	require.False(t, ok)
+}
+
+func TestNewStoreBackend_LogsNoStoreDetected(t *testing.T) {
+	buf := withCapturedLogs(t)
+	appIDs := func(context.Context) ([]string, error) { return nil, nil }
+	_, closers := newStoreBackend(context.Background(), nil, "default", &http.Client{}, nil, appIDs)
+	for _, c := range closers {
+		_ = c()
+	}
+	if !strings.Contains(buf.String(), "no state store detected") {
+		t.Fatalf("expected 'no state store detected' WARN, got %q", buf.String())
+	}
 }
