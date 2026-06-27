@@ -21,9 +21,10 @@ func TestActorsAggregate(t *testing.T) {
 	require.Contains(t, body, `"appId":"order"`)
 	require.Contains(t, body, `"type":"OrderActor"`)
 	require.Contains(t, body, `"type":"CartActor"`)
+	require.Contains(t, body, `"appId":"cart"`)
 
 	res, body = get(t, h, "/?appId=order")
 	require.Equal(t, http.StatusOK, res.StatusCode)
-	require.Contains(t, body, `"OrderActor"`)
-	require.NotContains(t, body, `"CartActor"`)
+	require.Contains(t, body, `"type":"OrderActor"`)
+	require.NotContains(t, body, `"type":"CartActor"`)
 }
