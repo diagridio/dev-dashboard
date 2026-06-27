@@ -26,12 +26,12 @@ function renderResourceDetail(entry = '/resources/component/statestore') {
       { path: '/resources/:kind/:name', element: <ResourceDetail /> },
       { path: '/apps/:appId', element: <div data-testid="app-detail">app detail</div> },
     ],
-    { initialEntries: [entry] },
+    { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )

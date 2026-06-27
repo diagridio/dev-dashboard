@@ -12,5 +12,5 @@ export async function fetchJSON<T>(path: string): Promise<T> {
   if (!res.ok) {
     throw new Error(`API error ${res.status} for ${path}`)
   }
-  return res.json() as Promise<T>
+  return (await res.json()) as T
 }

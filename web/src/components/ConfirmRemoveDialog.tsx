@@ -78,12 +78,14 @@ export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel }: Prop
   if (isMixed) {
     mechanismSummary = mechanisms.map((m) => `${counts[m]} will be ${m.toLowerCase()}`).join(', ')
   } else {
-    mechanismSummary = `All ${targets.length} will be ${mechanisms[0]?.toLowerCase() ?? ''}`
+    mechanismSummary = targets.length === 1
+      ? `This workflow will be ${mechanisms[0]?.toLowerCase() ?? ''}`
+      : `All ${targets.length} will be ${mechanisms[0]?.toLowerCase() ?? ''}`
   }
 
   return (
     <div
-      role="presentation"
+      role="none"
       style={{
         position: 'fixed', inset: 0,
         background: 'rgba(0,0,0,0.5)',

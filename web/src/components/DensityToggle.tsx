@@ -14,7 +14,7 @@ export function DensityToggle() {
         setD(next)
       }}
     >
-      {density === 'compact' ? 'Compact' : 'Comfortable'}
+      {density === 'compact' ? 'Switch to comfortable' : 'Switch to compact'}
     </button>
   )
 }

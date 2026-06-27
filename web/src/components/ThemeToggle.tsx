@@ -14,7 +14,7 @@ export function ThemeToggle() {
         setT(next)
       }}
     >
-      ◐ {theme === 'dark' ? 'Dark' : 'Light'}
+      ◐ {theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
     </button>
   )
 }

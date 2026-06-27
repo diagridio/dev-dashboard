@@ -18,12 +18,12 @@ function renderComponents(entry = '/components') {
       { path: '/resources/:kind/:name', element: <div>resource detail</div> },
       { path: '/apps/:appId', element: <div>app detail</div> },
     ],
-    { initialEntries: [entry] },
+    { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )
@@ -39,12 +39,12 @@ function renderConfigurations(entry = '/configurations') {
       { path: '/resources/:kind/:name', element: <div>resource detail</div> },
       { path: '/apps/:appId', element: <div>app detail</div> },
     ],
-    { initialEntries: [entry] },
+    { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )

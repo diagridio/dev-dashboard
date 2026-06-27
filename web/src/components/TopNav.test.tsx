@@ -36,7 +36,7 @@ describe('TopNav', () => {
   function renderNav() {
     return render(
       <RefreshProvider>
-        <MemoryRouter>
+        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <TopNav />
         </MemoryRouter>
       </RefreshProvider>,

@@ -14,12 +14,12 @@ function renderDetail() {
       { path: '/apps/:appId', element: <AppDetail /> },
       { path: '/resources/:kind/:name', element: <div>Resource detail</div> },
     ],
-    { initialEntries: ['/apps/order'] },
+    { initialEntries: ['/apps/order'], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )

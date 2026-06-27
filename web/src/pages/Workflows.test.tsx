@@ -31,12 +31,12 @@ function renderAt(entry = '/workflows', retries = 0) {
       { path: '/workflows', element: <Workflows /> },
       { path: '/workflows/:appId/:instanceId', element: <div>detail</div> },
     ],
-    { initialEntries: [entry] },
+    { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} />
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )
@@ -118,12 +118,12 @@ describe('Workflows', () => {
         { path: '/workflows', element: <Workflows /> },
         { path: '/workflows/:appId/:instanceId', element: <div>detail</div> },
       ],
-      { initialEntries: ['/workflows'] },
+      { initialEntries: ['/workflows'], future: { v7_relativeSplatPath: true } },
     )
     render(
       <QueryProvider client={client}>
         <RefreshProvider>
-          <RouterProvider router={router} />
+          <RouterProvider router={router} future={{ v7_startTransition: true }} />
         </RefreshProvider>
       </QueryProvider>,
     )
