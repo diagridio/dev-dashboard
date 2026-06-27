@@ -165,6 +165,109 @@ To build for a sub-path mount, set `DASH_BASE_PATH` before building (see
 Other useful targets: `make test` (Go + web suites), `make test-go`, `make test-web`,
 `make tidy`.
 
+### Trying it against a real workflow app
+
+The dashboard is a **passive observer**: it discovers your app the same way `dapr list` does
+and reads workflow data directly from your Dapr **state store**. You don't point it at your app —
+you just run both on the same machine.
+
+**Prerequisites:**
+
+- `dapr init` has been run. This creates `~/.dapr/components/statestore.yaml` (a Redis store with
+  `actorStateStore: "true"`) and starts Redis. That `actorStateStore` store is what Dapr
+  Workflows persist to, and what the dashboard reads.
+- A Dapr workflow app — e.g. the
+  [Dapr Workflow quickstart](https://github.com/dapr/quickstarts/tree/master/workflows), or any
+  app using the Workflow API.
+
+**Steps:**
+
+1. Run your workflow app with Dapr (from the app's directory):
+   ```sh
+   dapr run --app-id order-processor --app-port 6001 -- <your app start command>
+   # or, for a multi-app project:
+   dapr run -f .
+   ```
+2. Trigger at least one workflow instance (via the app's endpoint / the quickstart's flow). The
+   dashboard only shows state that already exists — an idle store shows an empty list.
+3. Start your from-source build:
+   ```sh
+   ./bin/dev-dashboard            # opens http://localhost:9090
+   ```
+4. In the UI: the **Apps** table shows your app (health, ports, PIDs); the **Workflows** page
+   lists instances read from the state store — open one for its live event history, input/output,
+   status, and a ticking wall-clock. You can also terminate / purge an instance (with the
+   force-delete fallback).
+
+**If the Workflows page is empty:** the dashboard auto-detects state-store components from
+`~/.dapr/components` and from the live `--resources-path` of running apps, then uses the one
+marked `actorStateStore: "true"` (falling back to the first detected). Check:
+
+- If detection is ambiguous (several stores), point it explicitly:
+  `./bin/dev-dashboard --statestore ~/.dapr/components/statestore.yaml`.
+- Workflow keys are namespaced; the dashboard defaults to `default`. For another namespace, pass
+  `--namespace <ns>`.
+- Only **Redis / PostgreSQL / SQLite** state stores are supported.
+- Confirm the app actually persisted a workflow (an empty store → empty list).
+
+## Testing
+
+There are three suites: Go **unit** tests, Go **integration** tests, and the **web**
+(frontend) tests. All are self-contained — no Docker or external services required (the
+integration tests run an in-process Redis via `miniredis` and a temporary SQLite database).
+
+**Prerequisites:** Go ≥ 1.26 (Go tests) and Node.js 20 with `npm` (web tests).
+
+**Run everything (macOS / Linux):**
+
+```sh
+make test          # Go unit tests (with -race) + web tests
+```
+
+`make test` runs `make test-go` then `make test-web`. It does **not** run the Go integration
+tests — run those separately (see below).
+
+**Go unit tests** — gated by `//go:build unit`:
+
+```sh
+make test-go                        # = go test -tags unit -race ./...
+# or directly:
+go test -tags unit ./...
+go test -tags unit -race ./cmd/...  # one package, with the race detector
+```
+
+(`make test-go` uses `gotestsum` for nicer output if it's installed, otherwise plain `go test`.)
+
+**Go integration tests** — gated by `//go:build integration`; they exercise the state-store and
+workflow read paths against an in-process Redis (`miniredis`) and a temp SQLite DB, so no
+external services are needed. They are not part of `make test`:
+
+```sh
+go test -tags integration ./...
+```
+
+**Web tests** — Vitest:
+
+```sh
+make test-web            # = cd web && npm install && npm test  (vitest run)
+# or from web/:
+cd web
+npm install
+npm test                 # single run
+npm run test:watch       # watch mode
+```
+
+**Windows (PowerShell)** — `make` is usually unavailable, so run the commands directly:
+
+```powershell
+go test -tags unit -race ./...
+go test -tags integration ./...
+cd web; npm install; npm test; cd ..
+```
+
+> **Tip:** the Go tests are build-tag-gated, so a plain `go test ./...` (without `-tags unit`
+> or `-tags integration`) reports "no test files" for most packages. Always pass the tag.
+
 ## Releasing
 
 > For maintainers with push access. Releases are built and published by the
