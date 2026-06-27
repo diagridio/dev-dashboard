@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, delay } from 'msw'
 import { describe, it, expect } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
@@ -102,5 +102,22 @@ describe('Subscriptions', () => {
     const clearBtn = screen.getByRole('button', { name: /clear filter/i })
     await userEvent.click(clearBtn)
     await waitFor(() => expect(router.state.location.search).toBe(''))
+  })
+
+  it('shows filter badge during loading when ?appId= is set', async () => {
+    server.use(
+      http.get('/api/subscriptions', async () => {
+        await delay(200)
+        return HttpResponse.json([
+          { appId: 'order', pubsubName: 'pubsub', topic: 'orders', rules: [{ match: '', path: '/orders' }] },
+        ])
+      }),
+    )
+    renderAt('/subscriptions?appId=order')
+    // Badge should be present immediately (during loading)
+    expect(screen.getByText(/filtered to order/i)).toBeInTheDocument()
+    expect(screen.getByText(/loading/i)).toBeInTheDocument()
+    // Wait for data to settle
+    await screen.findByText('orders')
   })
 })

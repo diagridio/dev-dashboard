@@ -51,4 +51,8 @@ func TestResourcesListWithLoadedBy(t *testing.T) {
 
 	r4, _ := get(t, h, "/component/missing")
 	require.Equal(t, http.StatusNotFound, r4.StatusCode)
+
+	r5, body5 := get(t, h, "/badkind/foo")
+	require.Equal(t, http.StatusBadRequest, r5.StatusCode)
+	require.Contains(t, body5, `"error":"kind must be component or configuration"`)
 }

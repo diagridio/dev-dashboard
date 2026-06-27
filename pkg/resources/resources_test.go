@@ -13,11 +13,13 @@ import (
 
 const compYAML = "apiVersion: dapr.io/v1alpha1\nkind: Component\nmetadata:\n  name: statestore\nspec:\n  type: state.redis\n  version: v1\n"
 const cfgYAML = "apiVersion: dapr.io/v1alpha1\nkind: Configuration\nmetadata:\n  name: appconfig\nspec:\n  tracing:\n    samplingRate: \"1\"\n"
+const subYAML = "apiVersion: dapr.io/v2alpha1\nkind: Subscription\nmetadata:\n  name: orders-sub\nspec:\n  topic: orders\n  routes:\n    default: /orders\n  pubsubname: pubsub\n"
 
 func TestResourcesListAndGet(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "statestore.yaml"), []byte(compYAML), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "appconfig.yaml"), []byte(cfgYAML), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "orders-sub.yaml"), []byte(subYAML), 0o600))
 	svc := New([]string{dir})
 
 	comps, err := svc.List(context.Background(), KindComponent)

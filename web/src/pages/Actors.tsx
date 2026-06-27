@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useActors } from '../hooks/useResources'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 const tableStyle: React.CSSProperties = {
   width: '100%',
@@ -27,22 +27,12 @@ export function Actors() {
   const [searchParams, setSearchParams] = useSearchParams()
   const appIdFilter = searchParams.get('appId') ?? undefined
 
-  useEffect(() => {
-    document.title = appIdFilter ? `Actors — ${appIdFilter}` : 'Actors'
-  }, [appIdFilter])
+  useDocumentTitle(appIdFilter ? `Actors — ${appIdFilter}` : 'Actors')
 
   const { data: actors, isLoading } = useActors(appIdFilter)
 
   function clearFilter() {
     setSearchParams({})
-  }
-
-  if (isLoading) {
-    return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
-      </div>
-    )
   }
 
   const filterBadge = appIdFilter ? (
@@ -78,6 +68,15 @@ export function Actors() {
       </button>
     </div>
   ) : null
+
+  if (isLoading) {
+    return (
+      <div style={{ padding: 'var(--space-4)' }}>
+        {filterBadge}
+        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      </div>
+    )
+  }
 
   if (!actors || actors.length === 0) {
     return (

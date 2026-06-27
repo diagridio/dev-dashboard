@@ -24,4 +24,27 @@ describe('useLogStream', () => {
     unmount()
     expect(es.closed).toBe(true)
   })
+
+  it('buffer cap: drops oldest when max is exceeded', () => {
+    const { result } = renderHook(() => useLogStream('order', 'daprd', { max: 2 }))
+    const es = FakeES.instances[0]
+    act(() => {
+      es.onmessage?.({ data: 'line1' })
+      es.onmessage?.({ data: 'line2' })
+      es.onmessage?.({ data: 'line3' })
+    })
+    expect(result.current.lines).toHaveLength(2)
+    expect(result.current.lines[0].text).toBe('line2')
+    expect(result.current.lines[1].text).toBe('line3')
+  })
+
+  it('status transitions: connecting → open → error', () => {
+    const { result } = renderHook(() => useLogStream('order', 'daprd'))
+    expect(result.current.status).toBe('connecting')
+    const es = FakeES.instances[0]
+    act(() => { es.onopen?.() })
+    expect(result.current.status).toBe('open')
+    act(() => { es.onerror?.() })
+    expect(result.current.status).toBe('error')
+  })
 })

@@ -1,26 +1,10 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useResource } from '../hooks/useResources'
 import { highlightYaml } from '../lib/yaml-highlight'
-
-function legacyCopy(t: string) {
-  const ta = document.createElement('textarea')
-  ta.value = t
-  ta.style.position = 'fixed'
-  ta.style.opacity = '0'
-  document.body.appendChild(ta)
-  ta.select()
-  document.execCommand('copy')
-  document.body.removeChild(ta)
-}
-
-function copyText(t: string) {
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(t).catch(() => legacyCopy(t))
-  } else {
-    legacyCopy(t)
-  }
-}
+import { copyText } from '../lib/clipboard'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
+import type { ResourceKind } from '../types/resources'
 
 const sectionStyle: React.CSSProperties = {
   marginBottom: 'var(--space-6)',
@@ -40,15 +24,11 @@ const sectionHeadingStyle: React.CSSProperties = {
 export function ResourceDetail() {
   const { kind, name } = useParams<{ kind: string; name: string }>()
   const { data: detail, isLoading, isError } = useResource(
-    (kind ?? '') as import('../types/resources').ResourceKind,
+    (kind ?? '') as ResourceKind,
     name ?? '',
   )
 
-  useEffect(() => {
-    if (name) {
-      document.title = name
-    }
-  }, [name])
+  useDocumentTitle(name ?? '')
 
   if (isLoading) {
     return (

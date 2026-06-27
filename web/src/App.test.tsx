@@ -62,9 +62,9 @@ describe('App shell', () => {
   it('wraps content in SmallScreenGuard', () => {
     // SmallScreenGuard shows children when screen is wide (jsdom default)
     renderApp()
-    // If SmallScreenGuard is present and screen is wide, children render
-    // Note: there are multiple navs (TopNav primary nav + ResourcesSidebar nav)
-    expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0)
+    // TopNav has aria-label="Primary navigation"; ResourcesSidebar has aria-label="Resources"
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument()
+    expect(screen.getByRole('navigation', { name: 'Resources' })).toBeInTheDocument()
   })
 
   it('renders StatusFooter', () => {

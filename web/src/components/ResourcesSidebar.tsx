@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useNews } from '../hooks/useNews'
-import { newsUrls, hasUnseen, markSeen } from '../lib/newsSeen'
+import { newsUrls, getSeen, markSeen } from '../lib/newsSeen'
 import type { NewsResponse, NewsItem } from '../types/logs'
 
 const STORAGE_KEY = 'devdash.sidebarCollapsed'
@@ -83,22 +83,11 @@ const NEWS_SLOTS: Array<{ key: 'blog' | 'report' | 'webinar' | 'event'; label: s
 
 interface NewsSectionProps {
   news: NewsResponse
+  unseen: boolean
   onMarkSeen: () => void
 }
 
-function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
-  const unseen = hasUnseen(news)
-
-  function handleBellClick() {
-    markSeen(newsUrls(news))
-    onMarkSeen()
-  }
-
-  function handleLinkClick() {
-    markSeen(newsUrls(news))
-    onMarkSeen()
-  }
-
+function NewsSection({ news, unseen, onMarkSeen }: NewsSectionProps) {
   return (
     <div style={{ marginBottom: 'var(--space-3, 12px)' }}>
       {/* NEWS header with bell */}
@@ -119,8 +108,7 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
         {unseen && (
           <button
             data-cy="news-bell"
-            data-testid="news-bell"
-            onClick={handleBellClick}
+            onClick={onMarkSeen}
             aria-label="Mark news as seen"
             style={{
               background: 'transparent',
@@ -148,8 +136,9 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
               href={item.url}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={handleLinkClick}
+              onClick={onMarkSeen}
               title={label}
+              className="sidebar-link"
               style={{
                 display: 'block',
                 padding: '5px var(--space-3, 12px)',
@@ -159,14 +148,6 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
                 borderRadius: 'var(--radius-sm, 4px)',
                 margin: '1px var(--space-2, 8px)',
                 transition: 'background 0.12s, color 0.12s',
-              }}
-              onMouseEnter={(e) => {
-                ;(e.currentTarget as HTMLAnchorElement).style.background = 'var(--border-soft, #eceff2)'
-                ;(e.currentTarget as HTMLAnchorElement).style.color = 'var(--text)'
-              }}
-              onMouseLeave={(e) => {
-                ;(e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
-                ;(e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-muted)'
               }}
             >
               <span style={{ display: 'block', fontWeight: 500 }}>{item.title}</span>
@@ -206,7 +187,7 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
 
 export function ResourcesSidebar() {
   const [collapsed, setCollapsed] = useState<boolean>(readInitialCollapsed)
-  const [seenVersion, setSeenVersion] = useState(0)
+  const [seen, setSeen] = useState<Set<string>>(() => getSeen())
   const { data: news } = useNews()
 
   function toggle() {
@@ -221,15 +202,15 @@ export function ResourcesSidebar() {
     })
   }
 
-  function handleMarkSeen() {
-    setSeenVersion((v) => v + 1)
-  }
+  const handleMarkSeen = useCallback(() => {
+    if (!news) return
+    const urls = newsUrls(news)
+    markSeen(urls)
+    setSeen(new Set([...seen, ...urls]))
+  }, [news, seen])
 
-  // Determine if bell should show in collapsed rail
-  const showBell = news != null && hasUnseen(news)
-
-  // Suppress unused variable warning — seenVersion forces re-render to re-check hasUnseen
-  void seenVersion
+  // Derive unseen from news + React state (no localStorage read during render)
+  const unseen = news != null && newsUrls(news).some((url) => !seen.has(url))
 
   const expandedWidth = 240
   const collapsedWidth = 36
@@ -250,7 +231,6 @@ export function ResourcesSidebar() {
       {/* Toggle button */}
       <button
         data-cy="sidebar-toggle"
-        data-testid="sidebar-toggle"
         onClick={toggle}
         aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         style={{
@@ -271,29 +251,22 @@ export function ResourcesSidebar() {
       </button>
 
       {collapsed ? (
-        /* Collapsed state: rotated "Resources" label + bell if unseen */
+        /* Collapsed state: rotated "Resources" label + bell if unseen, as sibling buttons */
         <div
           data-testid="sidebar-collapsed-label"
-          onClick={toggle}
           style={{
             flex: 1,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: 'pointer',
             gap: 8,
           }}
         >
-          {showBell && (
+          {unseen && (
             <button
               data-cy="news-bell"
-              data-testid="news-bell"
-              onClick={(e) => {
-                e.stopPropagation()
-                if (news) markSeen(newsUrls(news))
-                handleMarkSeen()
-              }}
+              onClick={handleMarkSeen}
               aria-label="Mark news as seen"
               style={{
                 background: 'transparent',
@@ -308,20 +281,36 @@ export function ResourcesSidebar() {
               🔔
             </button>
           )}
-          <span
+          <button
+            onClick={toggle}
+            aria-label="Resources — expand sidebar"
             style={{
-              writingMode: 'vertical-rl',
-              transform: 'rotate(-90deg)',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px 0',
               color: 'var(--text-muted)',
-              fontSize: 'var(--text-sm, 13px)',
-              fontWeight: 600,
-              letterSpacing: '0.05em',
-              userSelect: 'none',
-              whiteSpace: 'nowrap',
+              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            Resources
-          </span>
+            <span
+              style={{
+                writingMode: 'vertical-rl',
+                transform: 'rotate(-90deg)',
+                color: 'var(--text-muted)',
+                fontSize: 'var(--text-sm, 13px)',
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                userSelect: 'none',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Resources
+            </span>
+          </button>
         </div>
       ) : (
         /* Expanded state: full link sections */
@@ -334,7 +323,7 @@ export function ResourcesSidebar() {
           }}
         >
           {/* News section */}
-          {news && <NewsSection news={news} onMarkSeen={handleMarkSeen} />}
+          {news && <NewsSection news={news} unseen={unseen} onMarkSeen={handleMarkSeen} />}
 
           {SECTIONS.map((section) => (
             <div key={section.heading} style={{ marginBottom: 'var(--space-3, 12px)' }}>
@@ -356,6 +345,7 @@ export function ResourcesSidebar() {
                   href={link.href}
                   target="_blank"
                   rel="noopener noreferrer"
+                  className="sidebar-link"
                   style={{
                     display: 'block',
                     padding: '5px var(--space-3, 12px)',
@@ -365,14 +355,6 @@ export function ResourcesSidebar() {
                     borderRadius: 'var(--radius-sm, 4px)',
                     margin: '1px var(--space-2, 8px)',
                     transition: 'background 0.12s, color 0.12s',
-                  }}
-                  onMouseEnter={(e) => {
-                    ;(e.currentTarget as HTMLAnchorElement).style.background = 'var(--border-soft, #eceff2)'
-                    ;(e.currentTarget as HTMLAnchorElement).style.color = 'var(--text)'
-                  }}
-                  onMouseLeave={(e) => {
-                    ;(e.currentTarget as HTMLAnchorElement).style.background = 'transparent'
-                    ;(e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-muted)'
                   }}
                 >
                   {link.label}

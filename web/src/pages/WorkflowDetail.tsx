@@ -6,29 +6,7 @@ import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { elapsed } from '../lib/wallclock'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
-
-// ---------------------------------------------------------------------------
-// Clipboard helpers (same pattern as AppDetail.tsx)
-// ---------------------------------------------------------------------------
-
-function legacyCopy(t: string) {
-  const ta = document.createElement('textarea')
-  ta.value = t
-  ta.style.position = 'fixed'
-  ta.style.opacity = '0'
-  document.body.appendChild(ta)
-  ta.select()
-  document.execCommand('copy')
-  document.body.removeChild(ta)
-}
-
-function copyText(t: string) {
-  if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(t).catch(() => legacyCopy(t))
-  } else {
-    legacyCopy(t)
-  }
-}
+import { copyText } from '../lib/clipboard'
 
 // ---------------------------------------------------------------------------
 // Status helpers

@@ -100,35 +100,38 @@ describe('ResourcesSidebar collapse toggle', () => {
 
   it('clicking toggle collapses the sidebar', () => {
     renderSidebar()
-    const toggle = screen.getByTestId('sidebar-toggle')
+    const toggle = screen.getByRole('button', { name: 'Collapse sidebar' })
     fireEvent.click(toggle)
     // When collapsed, section links should be hidden (not in DOM or hidden)
     expect(screen.queryByRole('link', { name: 'Dapr Docs' })).not.toBeInTheDocument()
-    // Vertical "Resources" label should appear
+    // Vertical "Resources" label container should appear
     expect(screen.getByTestId('sidebar-collapsed-label')).toBeInTheDocument()
   })
 
   it('clicking toggle twice restores expanded state', () => {
     renderSidebar()
-    const toggle = screen.getByTestId('sidebar-toggle')
+    const toggle = screen.getByRole('button', { name: 'Collapse sidebar' })
     fireEvent.click(toggle)
-    fireEvent.click(toggle)
+    // After collapse, top toggle has aria-label "Expand sidebar"
+    const toggleAgain = screen.getByRole('button', { name: 'Expand sidebar' })
+    fireEvent.click(toggleAgain)
     expect(screen.getByRole('link', { name: 'Dapr Docs' })).toBeInTheDocument()
     expect(screen.queryByTestId('sidebar-collapsed-label')).not.toBeInTheDocument()
   })
 
   it('persists collapsed state to localStorage', () => {
     renderSidebar()
-    const toggle = screen.getByTestId('sidebar-toggle')
+    const toggle = screen.getByRole('button', { name: 'Collapse sidebar' })
     fireEvent.click(toggle)
     expect(localStorage.getItem('devdash.sidebarCollapsed')).toBe('true')
   })
 
   it('persists expanded state to localStorage after re-expanding', () => {
     renderSidebar()
-    const toggle = screen.getByTestId('sidebar-toggle')
+    const toggle = screen.getByRole('button', { name: 'Collapse sidebar' })
     fireEvent.click(toggle)
-    fireEvent.click(toggle)
+    const toggleAgain = screen.getByRole('button', { name: 'Expand sidebar' })
+    fireEvent.click(toggleAgain)
     expect(localStorage.getItem('devdash.sidebarCollapsed')).toBe('false')
   })
 
@@ -143,7 +146,7 @@ describe('ResourcesSidebar collapse toggle', () => {
   it('clicking vertical Resources label in collapsed state expands sidebar', () => {
     localStorage.setItem('devdash.sidebarCollapsed', 'true')
     renderSidebar()
-    const label = screen.getByTestId('sidebar-collapsed-label')
+    const label = screen.getByRole('button', { name: 'Resources — expand sidebar' })
     fireEvent.click(label)
     expect(screen.getByRole('link', { name: 'Dapr Docs' })).toBeInTheDocument()
   })
@@ -181,15 +184,15 @@ describe('ResourcesSidebar News section', () => {
   it('shows bell indicator (data-cy=news-bell) when items are unseen', async () => {
     renderSidebar()
     await screen.findByRole('link', { name: /Blog A/i })
-    expect(screen.getByTestId('news-bell')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mark news as seen' })).toBeInTheDocument()
   })
 
   it('clicking bell marks items as seen and hides the bell', async () => {
     renderSidebar()
-    const bell = await screen.findByTestId('news-bell')
+    const bell = await screen.findByRole('button', { name: 'Mark news as seen' })
     fireEvent.click(bell)
     await waitFor(() => {
-      expect(screen.queryByTestId('news-bell')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Mark news as seen' })).not.toBeInTheDocument()
     })
     // Persisted to localStorage
     const raw = localStorage.getItem('devdash.newsSeen')
@@ -204,7 +207,7 @@ describe('ResourcesSidebar News section', () => {
     const link = await screen.findByRole('link', { name: /Blog A/i })
     fireEvent.click(link)
     await waitFor(() => {
-      expect(screen.queryByTestId('news-bell')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Mark news as seen' })).not.toBeInTheDocument()
     })
   })
 
@@ -213,16 +216,16 @@ describe('ResourcesSidebar News section', () => {
     localStorage.setItem('devdash.newsSeen', JSON.stringify(['u1', 'u2']))
     renderSidebar()
     await screen.findByRole('link', { name: /Blog A/i })
-    expect(screen.queryByTestId('news-bell')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark news as seen' })).not.toBeInTheDocument()
   })
 
   it('shows bell in collapsed rail when items are unseen', async () => {
     renderSidebar()
-    // Wait for news to load
-    await screen.findByTestId('news-bell')
+    // Wait for news to load (bell present in expanded state)
+    await screen.findByRole('button', { name: 'Mark news as seen' })
     // Collapse the sidebar
-    fireEvent.click(screen.getByTestId('sidebar-toggle'))
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
     // Bell should still be present in collapsed state
-    expect(screen.getByTestId('news-bell')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mark news as seen' })).toBeInTheDocument()
   })
 })

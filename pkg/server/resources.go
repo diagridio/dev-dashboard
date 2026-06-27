@@ -37,7 +37,12 @@ func resourcesRouter(res resources.Service, apps discovery.Service) http.Handler
 	})
 	r.Get("/{kind}/{name}", func(w http.ResponseWriter, req *http.Request) {
 		kind := resources.Kind(chi.URLParam(req, "kind"))
-		got, err := res.Get(req.Context(), kind, chi.URLParam(req, "name"))
+		if kind != resources.KindComponent && kind != resources.KindConfiguration {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component or configuration"})
+			return
+		}
+		name := chi.URLParam(req, "name")
+		got, err := res.Get(req.Context(), kind, name)
 		if errors.Is(err, resources.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "resource not found"})
 			return
@@ -47,11 +52,31 @@ func resourcesRouter(res resources.Service, apps discovery.Service) http.Handler
 			return
 		}
 		if kind == resources.KindComponent {
-			got.LoadedBy = loadedByIndex(req.Context(), apps)[got.Name]
+			got.LoadedBy = loadedByFor(req.Context(), apps, got.Name)
 		}
 		writeJSON(w, http.StatusOK, got)
 	})
 	return r
+}
+
+// loadedByFor returns the sorted app ids whose instance contains component name.
+// It lists apps once and scans only for the requested name, avoiding a full index build.
+func loadedByFor(ctx context.Context, apps discovery.Service, name string) []string {
+	list, err := apps.List(ctx)
+	if err != nil {
+		return nil
+	}
+	var ids []string
+	for _, in := range list {
+		for _, c := range in.Components {
+			if c.Name == name {
+				ids = append(ids, in.AppID)
+				break
+			}
+		}
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 // loadedByIndex maps component name -> sorted app ids that loaded it.

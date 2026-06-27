@@ -1,7 +1,7 @@
-import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useResources } from '../hooks/useResources'
 import type { ResourceKind } from '../types/resources'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 const tableStyle: React.CSSProperties = {
   width: '100%',
@@ -36,18 +36,20 @@ const chipStyle: React.CSSProperties = {
   textDecoration: 'none',
 }
 
+const LABELS: Record<ResourceKind, { title: string; empty: string }> = {
+  component: { title: 'Components', empty: 'No components' },
+  configuration: { title: 'Configurations', empty: 'No configurations' },
+}
+
 interface ResourceListProps {
   kind: ResourceKind
 }
 
 export function ResourceList({ kind }: ResourceListProps) {
   const { data: resources, isLoading } = useResources(kind)
+  const { title, empty } = LABELS[kind]
 
-  const title = kind === 'component' ? 'Components' : 'Configurations'
-
-  useEffect(() => {
-    document.title = title
-  }, [title])
+  useDocumentTitle(title)
 
   if (isLoading) {
     return (
@@ -61,7 +63,7 @@ export function ResourceList({ kind }: ResourceListProps) {
     return (
       <div style={{ padding: 'var(--space-4)' }}>
         <p style={{ color: 'var(--text-muted)' }}>
-          {kind === 'component' ? 'No components' : 'No configurations'}
+          {empty}
         </p>
       </div>
     )
