@@ -26,12 +26,16 @@ $url = "https://github.com/$repo/releases/download/$version/$file"
 if ($env:DRY_RUN -eq '1') { Write-Output $url; exit 0 }
 
 Write-Host "downloading $file ..."
-$tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ([guid]::NewGuid()))
-Invoke-WebRequest $url -OutFile (Join-Path $tmp $file)
-Expand-Archive -Path (Join-Path $tmp $file) -DestinationPath $tmp -Force
-New-Item -ItemType Directory -Force -Path $binDir | Out-Null
-Copy-Item (Join-Path $tmp 'dev-dashboard.exe') (Join-Path $binDir 'dev-dashboard.exe') -Force
-Write-Host "installed dev-dashboard $version -> $binDir\dev-dashboard.exe"
+try {
+    $tmp = New-Item -ItemType Directory -Path (Join-Path $env:TEMP ([guid]::NewGuid()))
+    Invoke-WebRequest $url -OutFile (Join-Path $tmp $file)
+    Expand-Archive -Path (Join-Path $tmp $file) -DestinationPath $tmp -Force
+    New-Item -ItemType Directory -Force -Path $binDir | Out-Null
+    Copy-Item (Join-Path $tmp 'dev-dashboard.exe') (Join-Path $binDir 'dev-dashboard.exe') -Force
+    Write-Host "installed dev-dashboard $version -> $binDir\dev-dashboard.exe"
+} finally {
+    if ($tmp -and (Test-Path $tmp)) { Remove-Item -Recurse -Force $tmp }
+}
 
 if (($env:PATH -split ';') -notcontains $binDir) {
     Write-Host "note: $binDir is not on your PATH. Add it (user scope):"
