@@ -30,6 +30,9 @@ beforeEach(() => {
     http.get('/api/health', () => HttpResponse.json({ status: 'ok' })),
     http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
     http.get('/api/statestores', () => HttpResponse.json([])),
+    http.get('/api/news', () =>
+      HttpResponse.json({ blog: null, report: null, webinar: null, event: null }),
+    ),
   )
 })
 
