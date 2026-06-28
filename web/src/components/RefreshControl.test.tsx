@@ -1,6 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, beforeEach } from 'vitest'
-import React from 'react'
 import { RefreshProvider } from '../lib/refresh'
 import { RefreshControl } from './RefreshControl'
 

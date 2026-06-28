@@ -240,7 +240,7 @@ describe('ResourcesSidebar footer', () => {
 
 describe('ResourcesSidebar onHasNewChange contract', () => {
   /** Minimal wrapper that passes a spy as onHasNewChange so we can assert on it. */
-  function renderWithSpy(onHasNewChange: ReturnType<typeof vi.fn>) {
+  function renderWithSpy(onHasNewChange: (v: boolean) => void) {
     const client = makeQueryClient()
     return render(
       <QueryProvider client={client}>

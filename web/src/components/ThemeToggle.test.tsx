@@ -15,14 +15,14 @@ describe('ThemeToggle', () => {
   })
 
   it('calls onThemeChange with "dark" when toggling from light', async () => {
-    const spy = vi.fn<[Theme], void>()
+    const spy = vi.fn<(t: Theme) => void>()
     render(<ThemeToggle theme="light" onThemeChange={spy} />)
     await userEvent.click(screen.getByRole('button', { name: /toggle theme/i }))
     expect(spy).toHaveBeenCalledWith('dark')
   })
 
   it('calls onThemeChange with "light" when toggling from dark', async () => {
-    const spy = vi.fn<[Theme], void>()
+    const spy = vi.fn<(t: Theme) => void>()
     render(<ThemeToggle theme="dark" onThemeChange={spy} />)
     await userEvent.click(screen.getByRole('button', { name: /toggle theme/i }))
     expect(spy).toHaveBeenCalledWith('light')
