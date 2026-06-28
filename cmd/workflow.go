@@ -168,28 +168,23 @@ func newStoreBackend(
 	}
 
 	registry := newStoreRegistry(comps)
+	active := registry.active()
 
-	for _, comp := range comps {
-		st, err := statestore.New(ctx, comp)
+	// Only the active state store (the one Dapr Workflow uses) is initialised
+	// and served. Non-active components are detected but never connected.
+	if active != nil {
+		st, err := statestore.New(ctx, *active)
 		if err != nil {
-			fmt.Printf("warning: state store %q init failed: %v (skipping)\n", comp.Name, err)
-			log.Warn("state store init failed, skipping", "name", comp.Name, "err", err)
-			continue
-		}
-		closers = append(closers, st.Close)
-
-		svc := workflow.New(st, namespace, appIDs)
-		rem := workflow.NewRemover(client, st, namespace)
-		res := newTargetResolver(apps, svc)
-		b.services[comp.Name] = storeEntry{svc: svc, rem: rem, targets: res}
-		log.Info("state store connected", "name", comp.Name, "type", comp.Type)
-	}
-
-	// Set activeName from the registry (actorStateStore wins, else first).
-	if active := registry.active(); active != nil {
-		if _, ok := b.services[active.Name]; ok {
+			fmt.Printf("warning: state store %q init failed: %v (skipping)\n", active.Name, err)
+			log.Warn("state store init failed, skipping", "name", active.Name, "err", err)
+		} else {
+			closers = append(closers, st.Close)
+			svc := workflow.New(st, namespace, appIDs)
+			rem := workflow.NewRemover(client, st, namespace)
+			res := newTargetResolver(apps, svc)
+			b.services[active.Name] = storeEntry{svc: svc, rem: rem, targets: res}
 			b.activeName = active.Name
-			log.Info("active state store selected", "name", active.Name)
+			log.Info("active state store connected", "name", active.Name, "type", active.Type)
 		}
 	}
 

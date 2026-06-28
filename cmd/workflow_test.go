@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -217,4 +218,47 @@ func TestNewStoreBackend_LogsNoStoreDetected(t *testing.T) {
 	if !strings.Contains(buf.String(), "no state store detected") {
 		t.Fatalf("expected 'no state store detected' WARN, got %q", buf.String())
 	}
+}
+
+func TestNewStoreBackend_RegistersOnlyActiveStore(t *testing.T) {
+	_ = withCapturedLogs(t)
+	appIDs := func(context.Context) ([]string, error) { return nil, nil }
+
+	dir := t.TempDir()
+	comps := []statestore.Component{
+		// Active: sqlite with actorStateStore=true (initialises from a local file).
+		{
+			Name: "wfstore", Type: "state.sqlite", Path: "/x/wf.yaml",
+			Metadata: map[string]string{
+				"actorStateStore":  "true",
+				"connectionString": filepath.Join(dir, "wf.db"),
+			},
+		},
+		// Non-active: sqlite, different name. Must NOT be served.
+		{
+			Name: "other", Type: "state.sqlite", Path: "/x/other.yaml",
+			Metadata: map[string]string{"connectionString": filepath.Join(dir, "other.db")},
+		},
+	}
+
+	b, closers := newStoreBackend(context.Background(), comps, "default", &http.Client{}, nil, appIDs)
+	defer func() {
+		for _, c := range closers {
+			_ = c()
+		}
+	}()
+
+	require.Equal(t, "wfstore", b.activeName)
+
+	// Active store (explicit name) is served.
+	_, _, _, ok := b.ServiceFor("wfstore")
+	require.True(t, ok)
+
+	// Empty name resolves to the active store.
+	_, _, _, ok = b.ServiceFor("")
+	require.True(t, ok)
+
+	// Non-active store name is rejected.
+	_, _, _, ok = b.ServiceFor("other")
+	require.False(t, ok, "non-active store must not be served")
 }
