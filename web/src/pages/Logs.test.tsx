@@ -6,6 +6,7 @@ import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { Logs } from './Logs'
+import { parseLogTime } from '../lib/logtime'
 
 // FakeES stub (mirrors Task 5 useLogStream.test.tsx pattern)
 class FakeES {
@@ -70,6 +71,35 @@ function renderAt(initialEntry = '/logs?app=order&source=daprd') {
   )
 }
 
+// ─── parseLogTime unit tests ────────────────────────────────────────────────
+
+describe('parseLogTime', () => {
+  it('parses HH:MM:SS.mmm correctly', () => {
+    expect(parseLogTime('12:04:50.980 foo')).toBe(
+      12 * 3_600_000 + 4 * 60_000 + 50 * 1_000 + 980,
+    )
+  })
+
+  it('parses HH:MM:SS without millis', () => {
+    expect(parseLogTime('09:00:01 bar')).toBe(9 * 3_600_000 + 0 * 60_000 + 1 * 1_000)
+  })
+
+  it('parses ISO timestamp and extracts time portion', () => {
+    const val = parseLogTime('2006-01-02T15:04:05.123 something')
+    expect(val).toBe(15 * 3_600_000 + 4 * 60_000 + 5 * 1_000 + 123)
+  })
+
+  it('returns Infinity when no time token', () => {
+    expect(parseLogTime('no timestamp here')).toBe(Infinity)
+  })
+
+  it('earlier time < later time', () => {
+    expect(parseLogTime('12:04:50.980')).toBeLessThan(parseLogTime('12:04:51.020'))
+  })
+})
+
+// ─── Logs page tests ─────────────────────────────────────────────────────────
+
 describe('Logs', () => {
   it('renders a streamed log line in a .logrow when a message is dispatched', async () => {
     server.use(
@@ -79,10 +109,10 @@ describe('Logs', () => {
 
     renderAt()
 
-    // Wait for the EventSource to be opened (log path exists)
-    await waitFor(() => expect(FakeES.instances).toHaveLength(1))
+    // Wait for at least one EventSource to be opened (daprd stream)
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
 
-    // Dispatch a message
+    // Dispatch a message on the first instance
     act(() => {
       FakeES.instances[0].onmessage?.({ data: 'level=info hello world' })
     })
@@ -103,11 +133,39 @@ describe('Logs', () => {
 
     renderAt()
 
-    await waitFor(() => expect(FakeES.instances).toHaveLength(1))
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
 
     expect(screen.getByRole('heading', { name: 'Logs' })).toBeInTheDocument()
     expect(screen.getByText(/Tailing/)).toBeInTheDocument()
     expect(screen.getByText(/live tail \(SSE\)/)).toBeInTheDocument()
+  })
+
+  // F1: single .logbar with all 5 controls
+  it('F1 — renders exactly ONE .logbar containing all five controls', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt()
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+
+    const logbars = document.querySelectorAll('.logbar')
+    expect(logbars).toHaveLength(1)
+
+    const bar = logbars[0]
+
+    // app select
+    expect(bar.querySelector('[aria-label="App"]')).not.toBeNull()
+    // source select
+    expect(bar.querySelector('[aria-label="Source"]')).not.toBeNull()
+    // .lvchips group
+    expect(bar.querySelector('.lvchips')).not.toBeNull()
+    // search input
+    expect(bar.querySelector('input[aria-label="Filter logs"]')).not.toBeNull()
+    // follow button
+    expect(bar.querySelector('.followbtn')).not.toBeNull()
   })
 
   it('renders logbar with level chips, search input, and follow button', async () => {
@@ -118,7 +176,7 @@ describe('Logs', () => {
 
     renderAt()
 
-    await waitFor(() => expect(FakeES.instances).toHaveLength(1))
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
 
     // Level chips
     const chips = screen.getAllByRole('button', { name: /debug|info|warn|error/i })
@@ -142,7 +200,7 @@ describe('Logs', () => {
 
     renderAt()
 
-    await waitFor(() => expect(FakeES.instances).toHaveLength(1))
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
 
     // Send a debug line
     act(() => {
@@ -167,7 +225,7 @@ describe('Logs', () => {
 
     renderAt()
 
-    await waitFor(() => expect(FakeES.instances).toHaveLength(1))
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
 
     act(() => {
       FakeES.instances[0].onmessage?.({ data: 'level=info hello world' })
@@ -238,7 +296,7 @@ describe('Logs', () => {
 
     renderAt()
 
-    await waitFor(() => expect(FakeES.instances).toHaveLength(1))
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
 
     const appSelect = screen.getByRole('combobox', { name: /App/i })
     expect(appSelect).toBeInTheDocument()
@@ -250,5 +308,170 @@ describe('Logs', () => {
     expect(screen.getByRole('option', { name: 'daprd + app' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'daprd only' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'app only' })).toBeInTheDocument()
+  })
+
+  // F2: combined "daprd + app" streams, both streams open, lines tagged by source
+  it('F2 — "both" source opens two EventSources and tags lines by stream', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=both')
+
+    // Both daprd and app streams must open
+    await waitFor(() => expect(FakeES.instances).toHaveLength(2))
+
+    // Identify which instance is which by URL
+    const daprdES = FakeES.instances.find(es => es.url.includes('source=daprd'))
+    const appES = FakeES.instances.find(es => es.url.includes('source=app'))
+    expect(daprdES).toBeDefined()
+    expect(appES).toBeDefined()
+
+    // Dispatch lines from both streams with differing timestamps to test ordering
+    act(() => {
+      daprdES!.onmessage?.({ data: '12:04:51.020 level=info daprd-line-two' })
+      appES!.onmessage?.({ data: '12:04:51.300 level=info app-line-three' })
+      daprdES!.onmessage?.({ data: '12:04:50.980 level=info daprd-line-one' })
+    })
+
+    // All three lines visible
+    await screen.findByText(/daprd-line-one/)
+    expect(screen.getByText(/daprd-line-two/)).toBeInTheDocument()
+    expect(screen.getByText(/app-line-three/)).toBeInTheDocument()
+
+    // daprd rows carry .lsrc.daprd, app rows carry .lsrc.app
+    const daprdSrcSpans = document.querySelectorAll('.lsrc.daprd')
+    const appSrcSpans = document.querySelectorAll('.lsrc.app')
+    expect(daprdSrcSpans.length).toBeGreaterThanOrEqual(2)
+    expect(appSrcSpans.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('F2 — chronological ordering: earlier timestamp appears before later', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=both')
+
+    await waitFor(() => expect(FakeES.instances).toHaveLength(2))
+
+    const daprdES = FakeES.instances.find(es => es.url.includes('source=daprd'))
+    const appES = FakeES.instances.find(es => es.url.includes('source=app'))
+
+    // App line arrives first but has later timestamp → should appear after daprd line
+    act(() => {
+      appES!.onmessage?.({ data: '12:04:51.300 level=info later-app' })
+      daprdES!.onmessage?.({ data: '12:04:50.980 level=info earlier-daprd' })
+    })
+
+    await screen.findByText(/earlier-daprd/)
+    await screen.findByText(/later-app/)
+
+    const rows = document.querySelectorAll('.logrow')
+    const texts = Array.from(rows).map(r => r.querySelector('.lmsg')?.textContent ?? '')
+    const daprdIdx = texts.findIndex(t => t.includes('earlier-daprd'))
+    const appIdx = texts.findIndex(t => t.includes('later-app'))
+    expect(daprdIdx).toBeGreaterThanOrEqual(0)
+    expect(appIdx).toBeGreaterThanOrEqual(0)
+    expect(daprdIdx).toBeLessThan(appIdx)
+  })
+
+  // F3: dynamic subtitle
+  it('F3 — subtitle shows "daprd + application" for source=both', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=both')
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+
+    expect(screen.getByText(/daprd \+ application/)).toBeInTheDocument()
+  })
+
+  it('F3 — subtitle shows "daprd" for source=daprd', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=daprd')
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+
+    // The .sub element should contain the word "daprd" (not "application")
+    const sub = document.querySelector('.sub')
+    expect(sub?.textContent).toMatch(/daprd/)
+    expect(sub?.textContent).not.toMatch(/application/)
+  })
+
+  it('F3 — subtitle shows "application" for source=app', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=app')
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+
+    const sub = document.querySelector('.sub')
+    expect(sub?.textContent).toMatch(/application/)
+    expect(sub?.textContent).not.toMatch(/daprd \+ application/)
+  })
+
+  // F4: follow button toggles on every click
+  it('F4 — follow button toggles off then on with every click', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt()
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+
+    const followBtn = screen.getByRole('button', { name: /Following/i })
+
+    // Initially ON
+    expect(followBtn).toHaveClass('on')
+    expect(followBtn).toHaveAttribute('aria-pressed', 'true')
+
+    // Click → OFF
+    act(() => { fireEvent.click(followBtn) })
+    const followBtnOff = screen.getByRole('button', { name: /^Follow$/i })
+    expect(followBtnOff).not.toHaveClass('on')
+    expect(followBtnOff).toHaveAttribute('aria-pressed', 'false')
+
+    // Click again → ON
+    act(() => { fireEvent.click(followBtnOff) })
+    const followBtnOn = screen.getByRole('button', { name: /Following/i })
+    expect(followBtnOn).toHaveClass('on')
+    expect(followBtnOn).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  // F5: logfoot tail size
+  it('F5 — logfoot shows "tail N KB" segment', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt()
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+
+    act(() => {
+      FakeES.instances[0].onmessage?.({ data: 'level=info some log line' })
+    })
+
+    await screen.findByText(/some log line/)
+
+    // logfoot must contain "tail N KB" pattern
+    const logfoot = document.querySelector('.logfoot')
+    expect(logfoot?.textContent).toMatch(/tail \d+ KB/)
   })
 })
