@@ -648,6 +648,10 @@ describe('EventRow', () => {
     expect(container.querySelector('.caret')).toBeNull()
     expect(screen.queryByText(/Event ID/)).toBeNull()
     expect(screen.getByText('OrchestratorStarted')).toBeInTheDocument()
+    // Caret-width spacer keeps the event name aligned with expandable rows,
+    // without introducing a real caret.
+    expect(container.querySelector('.caretspace')).not.toBeNull()
+    expect(container.querySelector('.caret')).toBeNull()
   })
 
   it('shows "Event ID 0" for ExecutionStarted with input (expandable)', () => {
@@ -660,5 +664,20 @@ describe('EventRow', () => {
     })
     expect(screen.getByText('Event ID 0')).toBeInTheDocument()
     expect(container.querySelector('details')).not.toBeNull()
+  })
+
+  it('renders the offset and a localized date-time in the timestamp column', () => {
+    const ts = '2026-06-28T10:00:05.600Z'
+    const { container } = row({
+      type: 'ExecutionCompleted',
+      sequenceId: 2,
+      timestamp: ts,
+      output: '"ok"',
+    })
+    expect(container.querySelector('.t .off')?.textContent).toBe('+5.60s')
+    const d = new Date(ts)
+    expect(container.querySelector('.t .dt')?.textContent).toBe(
+      `${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`,
+    )
   })
 })

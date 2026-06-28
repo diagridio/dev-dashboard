@@ -24,3 +24,32 @@ export function elapsedTenths(createdAt: string, endedAt?: string | null, now?: 
   if (h > 0) return `${h}:${pad(m)}:${pad(s)}.${t}`
   return `${m}:${pad(s)}.${t}`
 }
+
+/**
+ * Format the signed offset between two timestamps as +[Hh][Mm]S.SSs.
+ * Minutes appear only at >= 60s, hours only at >= 60m; seconds always carry
+ * two decimals. Negative deltas clamp to +0.00s. Returns '' on bad input.
+ */
+export function formatOffset(fromTs: string | undefined, toTs: string | undefined): string {
+  if (!fromTs || !toTs) return ''
+  const from = Date.parse(fromTs)
+  const to = Date.parse(toTs)
+  if (isNaN(from) || isNaN(to)) return ''
+  const totalSecs = Math.max(0, to - from) / 1000
+  const h = Math.floor(totalSecs / 3600)
+  const m = Math.floor((totalSecs % 3600) / 60)
+  const s = totalSecs % 60
+  let out = '+'
+  if (h > 0) out += `${h}h`
+  if (h > 0 || m > 0) out += `${m}m`
+  out += `${s.toFixed(2)}s`
+  return out
+}
+
+/** Format a timestamp as localized "date - time", or undefined on bad input. */
+export function formatDateTime(ts: string | undefined): string | undefined {
+  if (!ts) return undefined
+  const d = new Date(ts)
+  if (isNaN(d.getTime())) return undefined
+  return `${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`
+}

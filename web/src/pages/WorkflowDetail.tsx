@@ -5,7 +5,7 @@ import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { RefreshControl } from '../components/RefreshControl'
-import { elapsed, elapsedTenths } from '../lib/wallclock'
+import { elapsed, elapsedTenths, formatOffset, formatDateTime } from '../lib/wallclock'
 import { highlightJson } from '../lib/json-highlight'
 import { useToast, type ToastHandle } from '../lib/toast'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
@@ -91,18 +91,6 @@ function nodeClass(eventType: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Relative time from createdAt
-// ---------------------------------------------------------------------------
-
-function relativeTime(eventTs: string | undefined, createdAt: string | undefined): string {
-  if (!eventTs || !createdAt) return ''
-  const delta = Date.parse(eventTs) - Date.parse(createdAt)
-  if (isNaN(delta)) return ''
-  const secs = delta / 1000
-  return `+${secs.toFixed(3)}s`
-}
-
-// ---------------------------------------------------------------------------
 // History event row rendered as details/summary
 // ---------------------------------------------------------------------------
 
@@ -117,8 +105,8 @@ export function EventRow({
   isNewest: boolean
   toast: ToastHandle
 }) {
-  const relTime = relativeTime(event.timestamp, createdAt)
-  const absTime = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : ''
+  const offset = formatOffset(createdAt, event.timestamp)
+  const dateTime = formatDateTime(event.timestamp) ?? ''
   const nCls = nodeClass(event.type)
 
   // sequenceId -1 is durabletask's sentinel for OrchestratorStarted (replay) events —
@@ -130,8 +118,8 @@ export function EventRow({
   return (
     <div className={`ev${isNewest ? ' reveal' : ''}`}>
       <div className="t">
-        {relTime}
-        <span className="abs">{absTime}</span>
+        <span className="off">{offset}</span>
+        <span className="dt">{dateTime}</span>
       </div>
       <div className="rail">
         <span className={`node ${nCls}`} />
@@ -185,6 +173,7 @@ export function EventRow({
         ) : (
           <div className="evd evstatic">
             <div className="evstatic-head">
+              <span className="caretspace" aria-hidden="true">▸</span>
               <span className="evtype">{event.type}</span>
               {event.name && <span className="evname">{event.name}</span>}
               {eventIdTag && <span className="evtag">{eventIdTag}</span>}
@@ -268,8 +257,7 @@ export function WorkflowDetail() {
   const terminal = isTerminal(execution.status)
 
   // Metagrid helpers
-  const fmt = (ts: string | undefined) =>
-    ts ? new Date(ts).toLocaleTimeString() : undefined
+  const fmt = (ts: string | undefined) => formatDateTime(ts)
 
   const duration =
     execution.createdAt && execution.lastUpdatedAt && terminal
