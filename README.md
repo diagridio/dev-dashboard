@@ -175,8 +175,8 @@ To build for a sub-path mount, set `DASH_BASE_PATH` before building (see
 [Mounting under a sub-path](#mounting-under-a-sub-path)). On Windows that is
 `$env:DASH_BASE_PATH='/dashboard/'` before the `npm run build` step.
 
-Other useful targets: `make test` (Go + web suites), `make test-go`, `make test-web`,
-`make tidy`.
+Other useful targets: `make test` (Go unit + web suites), `make test-go`, `make test-web`,
+`make test-integration`, `make test-e2e`, `make tidy`.
 
 ### Trying it against a real workflow app
 
@@ -225,9 +225,11 @@ marked `actorStateStore: "true"` (falling back to the first detected). Check:
 
 ## Testing
 
-There are three suites: Go **unit** tests, Go **integration** tests, and the **web**
-(frontend) tests. All are self-contained — no Docker or external services required (the
-integration tests run an in-process Redis via `miniredis` and a temporary SQLite database).
+There are four suites: Go **unit** tests, Go **integration** tests, the **web**
+(frontend) tests, and an opt-in Go **e2e** suite. The unit, integration, and web suites are
+self-contained — no Docker or external services required (the integration tests run an
+in-process Redis via `miniredis` and a temporary SQLite database). The **e2e** suite drives a
+real `daprd` and is local-only — it skips automatically when Dapr is not installed (see below).
 
 **Prerequisites:** Go ≥ 1.26 (Go tests) and Node.js 20 with `npm` (web tests).
 
@@ -252,11 +254,28 @@ go test -tags unit -race ./cmd/...  # one package, with the race detector
 (`make test-go` uses `gotestsum` for nicer output if it's installed, otherwise plain `go test`.)
 
 **Go integration tests** — gated by `//go:build integration`; they exercise the state-store and
-workflow read paths against an in-process Redis (`miniredis`) and a temp SQLite DB, so no
-external services are needed. They are not part of `make test`:
+workflow read paths, the parsed sidecar `/v1.0/metadata`, and the full assembled HTTP server,
+against an in-process Redis (`miniredis`) and a temp SQLite DB, so no external services are
+needed. They run in CI but are not part of `make test`:
 
 ```sh
+make test-integration               # = go test -tags integration -race ./...
+# or directly:
 go test -tags integration ./...
+```
+
+Some integration tests use golden files (`testdata/golden/*`); regenerate them after an
+intentional shape change with `-update`, e.g.
+`go test -tags integration ./pkg/workflow -run Golden -update`.
+
+**Go e2e tests** — gated by `//go:build e2e`; they run a real Dapr workflow app under
+`dapr run` and read its state back through the dashboard's own packages, validating against
+state authored by a live runtime. They require a local Dapr install (`dapr init`) — `dapr` on
+your `PATH` and `daprd` on `PATH` or in `~/.dapr/bin` — and **skip automatically** when Dapr is
+not found. They are local-only and not run in CI:
+
+```sh
+make test-e2e                       # = go test -tags e2e ./...
 ```
 
 **Web tests** — Vitest:
@@ -278,8 +297,9 @@ go test -tags integration ./...
 cd web; npm install; npm test; cd ..
 ```
 
-> **Tip:** the Go tests are build-tag-gated, so a plain `go test ./...` (without `-tags unit`
-> or `-tags integration`) reports "no test files" for most packages. Always pass the tag.
+> **Tip:** the Go tests are build-tag-gated, so a plain `go test ./...` (without `-tags unit`,
+> `-tags integration`, or `-tags e2e`) reports "no test files" for most packages. Always pass
+> the tag.
 
 ## Releasing
 
