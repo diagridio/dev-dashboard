@@ -1,79 +1,52 @@
 import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
-import { DensityToggle } from './DensityToggle'
-import { RefreshControl } from './RefreshControl'
-import { Icon, IconName } from './icons/Icon'
+import type { Theme } from '../lib/prefs'
 
 export interface NavItem {
   label: string
   to: string
-  icon: IconName
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Applications', to: '/', icon: 'applications' },
-  { label: 'Workflows', to: '/workflows', icon: 'workflows' },
-  { label: 'Actors', to: '/actors', icon: 'actors' },
-  { label: 'Subscriptions', to: '/subscriptions', icon: 'subscriptions' },
-  { label: 'Components', to: '/components', icon: 'components' },
-  { label: 'Configurations', to: '/configurations', icon: 'configurations' },
-  { label: 'Logs', to: '/logs', icon: 'logs' },
+  { label: 'Applications', to: '/' },
+  { label: 'Workflows', to: '/workflows' },
+  { label: 'Actors', to: '/actors' },
+  { label: 'Subscriptions', to: '/subscriptions' },
+  { label: 'Components', to: '/components' },
+  { label: 'Configurations', to: '/configurations' },
+  { label: 'Logs', to: '/logs' },
 ]
 
-export function TopNav() {
-  return (
-    <header
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--space-4, 16px)',
-        padding: '0 var(--space-4, 16px)',
-        height: 'var(--nav-height, 52px)',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--bg)',
-        flexShrink: 0,
-      }}
-    >
-      <Logo height={21} />
+interface TopNavProps {
+  theme: Theme
+  onThemeChange: (t: Theme) => void
+}
 
-      <nav
-        aria-label="Primary navigation"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-1, 4px)',
-          flex: 1,
-        }}
-      >
+export function TopNav({ theme, onThemeChange }: TopNavProps) {
+  return (
+    <header className="topbar">
+      <span className="brand">
+        <Logo height={21} />
+        <span className="dot">/</span>
+        <span className="app-name">Dev Dashboard</span>
+      </span>
+
+      <nav className="nav" aria-label="Primary navigation">
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to === '/'}
-            style={({ isActive }) => ({
-              padding: '4px 10px',
-              borderRadius: 'var(--radius-sm, 4px)',
-              textDecoration: 'none',
-              fontSize: 'var(--text-sm, 13px)',
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--text)' : 'var(--text-muted)',
-              background: isActive ? 'var(--surface)' : 'transparent',
-              boxShadow: isActive ? 'inset 0 0 0 1px var(--border)' : 'none',
-            })}
+            className={({ isActive }) => (isActive ? 'active' : undefined)}
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1, 4px)' }}>
-              <Icon name={item.icon} />
-              {item.label}
-            </span>
+            {item.label}
           </NavLink>
         ))}
       </nav>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2, 8px)' }}>
-        <RefreshControl />
-        <DensityToggle />
-        <ThemeToggle />
+      <div className="topright">
+        <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
       </div>
     </header>
   )

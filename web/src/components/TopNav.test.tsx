@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom'
 import { TopNav, NAV_ITEMS } from './TopNav'
 import { RefreshProvider } from '../lib/refresh'
 
+const noop = () => {}
+
 describe('NAV_ITEMS', () => {
   it('has exactly 7 items in the correct order', () => {
     const labels = NAV_ITEMS.map((i) => i.label)
@@ -37,7 +39,7 @@ describe('TopNav', () => {
     return render(
       <RefreshProvider>
         <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <TopNav />
+          <TopNav theme="light" onThemeChange={noop} />
         </MemoryRouter>
       </RefreshProvider>,
     )
@@ -60,9 +62,9 @@ describe('TopNav', () => {
     expect(screen.getByRole('button', { name: /toggle theme/i })).toBeInTheDocument()
   })
 
-  it('renders DensityToggle', () => {
+  it('does not render DensityToggle', () => {
     renderNav()
-    expect(screen.getByRole('button', { name: /toggle density/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /toggle density/i })).not.toBeInTheDocument()
   })
 
   it('Applications link points to /', () => {

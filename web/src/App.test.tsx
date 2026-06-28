@@ -23,7 +23,7 @@ beforeAll(() => {
   }))
 })
 
-// Register MSW handlers so StatusFooter fetches and route-switch tests don't error
+// Register MSW handlers so route-switch tests and sidebar fetches don't error
 beforeEach(() => {
   server.use(
     http.get('/api/version', () => HttpResponse.json({ version: '9.9.9', commit: 'abc1234', date: '2026-01-01' })),
@@ -36,7 +36,7 @@ beforeEach(() => {
   )
 })
 
-// Test App shell by wrapping with MemoryRouter (router.tsx uses createBrowserRouter externally)
+// Test App shell by wrapping with MemoryRouter
 function renderApp(path = '/') {
   const client = makeQueryClient()
   return render(
@@ -67,11 +67,17 @@ describe('App shell', () => {
     expect(screen.getByRole('navigation', { name: 'Resources' })).toBeInTheDocument()
   })
 
-  it('renders StatusFooter', async () => {
+  it('does not render StatusFooter', () => {
     renderApp()
-    expect(screen.getByRole('contentinfo')).toBeInTheDocument()
-    // Version string from the mocked /api/version response should appear
-    await screen.findByText('v9.9.9')
+    // The old footer had role="contentinfo" (<footer>)
+    expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
+  })
+
+  it('renders .app root with data-theme attribute', () => {
+    const { container } = renderApp()
+    const appDiv = container.querySelector('.app')
+    expect(appDiv).not.toBeNull()
+    expect(appDiv?.getAttribute('data-theme')).toBe('light')
   })
 })
 

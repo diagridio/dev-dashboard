@@ -1,30 +1,30 @@
+import { useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
-import { StatusFooter } from './components/StatusFooter'
 import { ResourcesSidebar } from './components/ResourcesSidebar'
+import { getTheme, type Theme } from './lib/prefs'
 
 export function App() {
+  const [theme, setTheme] = useState<Theme>(getTheme)
+  const [collapsed, setCollapsed] = useState(false)
+  const [hasNew, setHasNew] = useState(false)
+
+  const appClass = ['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : ''].filter(Boolean).join(' ')
+
   return (
     <SmallScreenGuard>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100dvh',
-          overflow: 'hidden',
-          background: 'var(--bg)',
-          color: 'var(--text)',
-        }}
-      >
-        <TopNav />
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-          <ResourcesSidebar />
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            <Outlet />
-          </div>
+      <div className={appClass} data-theme={theme}>
+        <TopNav theme={theme} onThemeChange={setTheme} />
+        <ResourcesSidebar
+          collapsed={collapsed}
+          onCollapsedChange={setCollapsed}
+          hasNew={hasNew}
+          onHasNewChange={setHasNew}
+        />
+        <div className="body">
+          <Outlet />
         </div>
-        <StatusFooter />
       </div>
     </SmallScreenGuard>
   )

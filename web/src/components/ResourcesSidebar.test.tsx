@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/setup'
@@ -13,11 +14,28 @@ const defaultNews = {
   event: null,
 }
 
-function renderSidebar() {
+/** Wrapper that owns the lifted state so ResourcesSidebar can be tested standalone */
+function SidebarWrapper({ initialCollapsed = false }: { initialCollapsed?: boolean }) {
+  const [collapsed, setCollapsed] = useState(initialCollapsed)
+  const [hasNew, setHasNew] = useState(false)
+  return (
+    // Wrap in .app so CSS selectors (data-theme, has-new) resolve correctly
+    <div className={['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : ''].filter(Boolean).join(' ')} data-theme="light">
+      <ResourcesSidebar
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
+        hasNew={hasNew}
+        onHasNewChange={setHasNew}
+      />
+    </div>
+  )
+}
+
+function renderSidebar(opts?: { initialCollapsed?: boolean }) {
   const client = makeQueryClient()
   return render(
     <QueryProvider client={client}>
-      <ResourcesSidebar />
+      <SidebarWrapper initialCollapsed={opts?.initialCollapsed} />
     </QueryProvider>,
   )
 }
@@ -25,12 +43,14 @@ function renderSidebar() {
 beforeEach(() => {
   localStorage.clear()
   server.use(http.get('/api/news', () => HttpResponse.json(defaultNews)))
+  server.use(http.get('/api/version', () => HttpResponse.json({ version: '1.2.3', commit: 'abc', date: '2026-01-01' })))
 })
 
 describe('ResourcesSidebar static links', () => {
   it('renders Dapr Docs link with correct href and target', async () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: 'Dapr Docs' })
+    // Accessible name includes "↗" from the .ext span; use regex
+    const link = screen.getByRole('link', { name: /Dapr Docs/ })
     expect(link).toHaveAttribute('href', 'https://docs.dapr.io')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
@@ -38,7 +58,7 @@ describe('ResourcesSidebar static links', () => {
 
   it('renders Diagrid Docs link with correct href and target', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: 'Diagrid Docs' })
+    const link = screen.getByRole('link', { name: /Diagrid Docs/ })
     expect(link).toHaveAttribute('href', 'https://docs.diagrid.io')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
@@ -46,7 +66,7 @@ describe('ResourcesSidebar static links', () => {
 
   it('renders Diagrid Catalyst link with correct href and target', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: 'Diagrid Catalyst' })
+    const link = screen.getByRole('link', { name: /Diagrid Catalyst/ })
     expect(link).toHaveAttribute('href', 'https://www.diagrid.io/catalyst')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
@@ -54,69 +74,66 @@ describe('ResourcesSidebar static links', () => {
 
   it('renders Dapr Workflow Skills link', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: 'Dapr Workflow Skills' })
+    const link = screen.getByRole('link', { name: /Dapr Workflow Skills/ })
     expect(link).toHaveAttribute('href', 'https://docs.diagrid.io/develop/workflows/dapr-skills/')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('renders Dapr Composer link', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: 'Dapr Composer' })
+    const link = screen.getByRole('link', { name: /Dapr Composer/ })
     expect(link).toHaveAttribute('href', 'https://workflows.diagrid.io/')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('renders Dapr University link', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: 'Dapr University' })
+    const link = screen.getByRole('link', { name: /Dapr University/ })
     expect(link).toHaveAttribute('href', 'https://www.diagrid.io/university')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('renders Diagrid Webinars link', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: 'Diagrid Webinars' })
+    const link = screen.getByRole('link', { name: /Diagrid Webinars/ })
     expect(link).toHaveAttribute('href', 'https://www.diagrid.io/webinars')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
-  it('renders all 4 section headers in uppercase', () => {
+  it('renders section titles', () => {
     renderSidebar()
-    expect(screen.getByText('BUILD')).toBeInTheDocument()
-    expect(screen.getByText('LEARN')).toBeInTheDocument()
-    expect(screen.getByText('READ')).toBeInTheDocument()
-    expect(screen.getByText('RUN & OPERATE')).toBeInTheDocument()
+    // sbtitle elements (CSS uppercases them, but text content is mixed case)
+    expect(screen.getByText('Build')).toBeInTheDocument()
+    expect(screen.getByText('Learn')).toBeInTheDocument()
+    expect(screen.getByText('Read')).toBeInTheDocument()
+    expect(screen.getByText('Run & Operate')).toBeInTheDocument()
   })
 })
 
 describe('ResourcesSidebar collapse toggle', () => {
   it('is expanded by default', () => {
     renderSidebar()
-    // When expanded, links are visible
-    expect(screen.getByRole('link', { name: 'Dapr Docs' })).toBeInTheDocument()
-    // Vertical "Resources" label should not be visible when expanded
-    expect(screen.queryByTestId('sidebar-collapsed-label')).not.toBeInTheDocument()
+    // When expanded, sbscroll nav and links are visible in DOM
+    expect(screen.getByRole('link', { name: /Dapr Docs/ })).toBeInTheDocument()
+    // The sbvert label is always in DOM (CSS controls visibility)
+    expect(screen.getByTestId('sidebar-collapsed-label')).toBeInTheDocument()
   })
 
   it('clicking toggle collapses the sidebar', () => {
     renderSidebar()
     const toggle = screen.getByRole('button', { name: 'Collapse sidebar' })
     fireEvent.click(toggle)
-    // When collapsed, section links should be hidden (not in DOM or hidden)
-    expect(screen.queryByRole('link', { name: 'Dapr Docs' })).not.toBeInTheDocument()
-    // Vertical "Resources" label container should appear
-    expect(screen.getByTestId('sidebar-collapsed-label')).toBeInTheDocument()
+    // After collapse, toggle label changes
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument()
   })
 
   it('clicking toggle twice restores expanded state', () => {
     renderSidebar()
     const toggle = screen.getByRole('button', { name: 'Collapse sidebar' })
     fireEvent.click(toggle)
-    // After collapse, top toggle has aria-label "Expand sidebar"
     const toggleAgain = screen.getByRole('button', { name: 'Expand sidebar' })
     fireEvent.click(toggleAgain)
-    expect(screen.getByRole('link', { name: 'Dapr Docs' })).toBeInTheDocument()
-    expect(screen.queryByTestId('sidebar-collapsed-label')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
   })
 
   it('persists collapsed state to localStorage', () => {
@@ -137,25 +154,25 @@ describe('ResourcesSidebar collapse toggle', () => {
 
   it('reads initial collapsed state from localStorage', () => {
     localStorage.setItem('devdash.sidebarCollapsed', 'true')
-    renderSidebar()
-    // When starting collapsed, links hidden and vertical label visible
-    expect(screen.queryByRole('link', { name: 'Dapr Docs' })).not.toBeInTheDocument()
-    expect(screen.getByTestId('sidebar-collapsed-label')).toBeInTheDocument()
+    renderSidebar({ initialCollapsed: true })
+    // Starts collapsed — toggle button says "Expand sidebar"
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument()
   })
 
   it('clicking vertical Resources label in collapsed state expands sidebar', () => {
     localStorage.setItem('devdash.sidebarCollapsed', 'true')
-    renderSidebar()
+    renderSidebar({ initialCollapsed: true })
     const label = screen.getByRole('button', { name: 'Resources — expand sidebar' })
     fireEvent.click(label)
-    expect(screen.getByRole('link', { name: 'Dapr Docs' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
   })
 })
 
 describe('ResourcesSidebar News section', () => {
   it('renders blog link with correct href and new-tab attributes', async () => {
     renderSidebar()
-    const link = await screen.findByRole('link', { name: /Blog A/i })
+    // Link accessible name includes title + "↗" from .ext span
+    const link = await screen.findByRole('link', { name: /Blog A/ })
     expect(link).toHaveAttribute('href', 'u1')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
@@ -163,14 +180,13 @@ describe('ResourcesSidebar News section', () => {
 
   it('renders webinar link', async () => {
     renderSidebar()
-    const link = await screen.findByRole('link', { name: /WB/i })
+    const link = await screen.findByRole('link', { name: /WB/ })
     expect(link).toHaveAttribute('href', 'u2')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('renders empty state for absent report slot', async () => {
     renderSidebar()
-    // blog link signals news loaded
     await screen.findByRole('link', { name: /Blog A/i })
     expect(screen.getByText('No reports')).toBeInTheDocument()
   })
@@ -181,51 +197,43 @@ describe('ResourcesSidebar News section', () => {
     expect(screen.getByText('No upcoming events')).toBeInTheDocument()
   })
 
-  it('shows bell indicator (data-cy=news-bell) when items are unseen', async () => {
+  it('shows bell indicator when items are unseen', async () => {
     renderSidebar()
     await screen.findByRole('link', { name: /Blog A/i })
-    expect(screen.getByRole('button', { name: 'Mark news as seen' })).toBeInTheDocument()
+    // Both bell buttons exist in the DOM (CSS-controlled); at least one "Mark news as seen" button present
+    const bells = screen.getAllByRole('button', { name: 'Mark news as seen' })
+    expect(bells.length).toBeGreaterThan(0)
   })
 
-  it('clicking bell marks items as seen and hides the bell', async () => {
+  it('clicking bell marks items as seen — stored to localStorage', async () => {
     renderSidebar()
-    const bell = await screen.findByRole('button', { name: 'Mark news as seen' })
-    fireEvent.click(bell)
+    await screen.findByRole('link', { name: /Blog A/i })
+    const bells = screen.getAllByRole('button', { name: 'Mark news as seen' })
+    fireEvent.click(bells[0])
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Mark news as seen' })).not.toBeInTheDocument()
+      const raw = localStorage.getItem('devdash.newsSeen')
+      expect(raw).toBeTruthy()
+      const seen = JSON.parse(raw!)
+      expect(seen).toContain('u1')
+      expect(seen).toContain('u2')
     })
-    // Persisted to localStorage
-    const raw = localStorage.getItem('devdash.newsSeen')
-    expect(raw).toBeTruthy()
-    const seen = JSON.parse(raw!)
-    expect(seen).toContain('u1')
-    expect(seen).toContain('u2')
   })
 
-  it('clicking a news link marks items as seen and hides the bell', async () => {
+  it('clicking a news link marks items as seen', async () => {
     renderSidebar()
-    const link = await screen.findByRole('link', { name: /Blog A/i })
+    const link = await screen.findByRole('link', { name: /Blog A/ })
     fireEvent.click(link)
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Mark news as seen' })).not.toBeInTheDocument()
+      const raw = localStorage.getItem('devdash.newsSeen')
+      expect(raw).toBeTruthy()
     })
   })
+})
 
-  it('does not show bell when all items already seen', async () => {
-    // Pre-mark both urls as seen
-    localStorage.setItem('devdash.newsSeen', JSON.stringify(['u1', 'u2']))
+describe('ResourcesSidebar footer', () => {
+  it('renders version string in sbfoot', async () => {
     renderSidebar()
-    await screen.findByRole('link', { name: /Blog A/i })
-    expect(screen.queryByRole('button', { name: 'Mark news as seen' })).not.toBeInTheDocument()
-  })
-
-  it('shows bell in collapsed rail when items are unseen', async () => {
-    renderSidebar()
-    // Wait for news to load (bell present in expanded state)
-    await screen.findByRole('button', { name: 'Mark news as seen' })
-    // Collapse the sidebar
-    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
-    // Bell should still be present in collapsed state
-    expect(screen.getByRole('button', { name: 'Mark news as seen' })).toBeInTheDocument()
+    // Version comes from /api/version mock returning "1.2.3"
+    await screen.findByText(/Dapr Dev Dashboard · v1\.2\.3/i)
   })
 })

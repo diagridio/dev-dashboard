@@ -1,35 +1,45 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { ThemeToggle } from './ThemeToggle'
+import type { Theme } from '../lib/prefs'
 
 beforeEach(() => {
   localStorage.clear()
 })
 
 describe('ThemeToggle', () => {
-  it('shows "Switch to dark" when current theme is light', () => {
-    render(<ThemeToggle />)
-    expect(screen.getByRole('button', { name: /toggle theme/i })).toHaveTextContent('Switch to dark')
+  it('renders ◐ Theme label', () => {
+    render(<ThemeToggle theme="light" onThemeChange={() => {}} />)
+    expect(screen.getByRole('button', { name: /toggle theme/i })).toHaveTextContent('◐ Theme')
   })
 
-  it('shows "Switch to light" after toggling to dark', async () => {
-    render(<ThemeToggle />)
-    const btn = screen.getByRole('button', { name: /toggle theme/i })
-    await userEvent.click(btn)
-    expect(btn).toHaveTextContent('Switch to light')
+  it('calls onThemeChange with "dark" when toggling from light', async () => {
+    const spy = vi.fn<[Theme], void>()
+    render(<ThemeToggle theme="light" onThemeChange={spy} />)
+    await userEvent.click(screen.getByRole('button', { name: /toggle theme/i }))
+    expect(spy).toHaveBeenCalledWith('dark')
   })
 
-  it('has aria-pressed reflecting dark state', async () => {
-    render(<ThemeToggle />)
-    const btn = screen.getByRole('button', { name: /toggle theme/i })
-    expect(btn).toHaveAttribute('aria-pressed', 'false')
-    await userEvent.click(btn)
-    expect(btn).toHaveAttribute('aria-pressed', 'true')
+  it('calls onThemeChange with "light" when toggling from dark', async () => {
+    const spy = vi.fn<[Theme], void>()
+    render(<ThemeToggle theme="dark" onThemeChange={spy} />)
+    await userEvent.click(screen.getByRole('button', { name: /toggle theme/i }))
+    expect(spy).toHaveBeenCalledWith('light')
+  })
+
+  it('has aria-pressed false when theme is light', () => {
+    render(<ThemeToggle theme="light" onThemeChange={() => {}} />)
+    expect(screen.getByRole('button', { name: /toggle theme/i })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('has aria-pressed true when theme is dark', () => {
+    render(<ThemeToggle theme="dark" onThemeChange={() => {}} />)
+    expect(screen.getByRole('button', { name: /toggle theme/i })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('has data-cy="theme-toggle"', () => {
-    render(<ThemeToggle />)
+    render(<ThemeToggle theme="light" onThemeChange={() => {}} />)
     expect(document.querySelector('[data-cy="theme-toggle"]')).not.toBeNull()
   })
 })
