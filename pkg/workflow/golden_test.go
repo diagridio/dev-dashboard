@@ -27,6 +27,7 @@ var update = flag.Bool("update", false, "regenerate golden files")
 // workflow instance decoded from seeded durabletask proto state. The seeded
 // timestamp is fixed so the golden output is deterministic.
 func TestWorkflowDecodeGolden(t *testing.T) {
+	time.Local = time.UTC // make the .Local() conversion in decode deterministic across machines
 	dbPath := filepath.Join(t.TempDir(), "wf.db")
 	store, err := statestore.New(context.Background(), statestore.Component{
 		Name:    "statestore",

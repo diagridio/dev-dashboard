@@ -15,6 +15,9 @@ import (
 // (re)writes the golden file (creating parent dirs) instead of comparing.
 func Assert(t *testing.T, update bool, path string, got []byte) {
 	t.Helper()
+	if len(got) == 0 || got[len(got)-1] != '\n' {
+		got = append(got, '\n')
+	}
 	if update {
 		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 		require.NoError(t, os.WriteFile(path, got, 0o644))
