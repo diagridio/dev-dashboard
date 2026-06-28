@@ -228,6 +228,31 @@ describe('ResourcesSidebar News section', () => {
       expect(raw).toBeTruthy()
     })
   })
+
+  it('news item shows type + publish date, not the description', async () => {
+    // Arrange: blog item with an excerpt that must NOT render, and a publish date
+    server.use(
+      http.get('/api/news', () =>
+        HttpResponse.json({
+          blog: {
+            title: 'Durable Execution',
+            url: 'https://example.com/blog',
+            excerpt: 'THIS DESCRIPTION SHOULD NOT RENDER',
+            publishedAt: '2026-06-22T09:00:00Z',
+          },
+          report: null,
+          webinar: null,
+          event: null,
+        }),
+      ),
+    )
+    renderSidebar() // use the existing render helper in this file
+    expect(await screen.findByText('Durable Execution')).toBeInTheDocument()
+    // Type + date (time excluded)
+    expect(screen.getByText('Blog · Jun 22')).toBeInTheDocument()
+    // Description must not appear
+    expect(screen.queryByText(/THIS DESCRIPTION SHOULD NOT RENDER/)).not.toBeInTheDocument()
+  })
 })
 
 describe('ResourcesSidebar footer', () => {

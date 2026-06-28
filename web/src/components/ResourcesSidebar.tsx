@@ -64,14 +64,22 @@ const SECTIONS: Section[] = [
   },
 ]
 
-function newsSubtitle(item: NewsItem, type: 'blog' | 'report' | 'webinar' | 'event'): string | undefined {
-  if (type === 'event' || type === 'webinar') {
-    const parts: string[] = []
-    if (item.eventStartDate) parts.push(item.eventStartDate)
-    if (item.eventLocation) parts.push(item.eventLocation)
-    if (parts.length > 0) return parts.join(' · ')
-  }
-  return item.excerpt
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** Formats an ISO publish date as "Jun 22" (time excluded). Returns undefined if unparseable. */
+function formatPublishDate(iso?: string): string | undefined {
+  if (!iso) return undefined
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) // matches date prefix of YYYY-MM-DD[THH:MM…]
+  if (!m) return undefined
+  const month = MONTHS[Number(m[2]) - 1]
+  if (!month) return undefined
+  return `${month} ${Number(m[3])}`
+}
+
+/** Subtitle = content type, plus publish date when available (e.g. "Blog · Jun 22"). */
+function newsSubtitle(item: NewsItem, label: string): string {
+  const date = formatPublishDate(item.publishedAt)
+  return date ? `${label} · ${date}` : label
 }
 
 function emptyStateText(type: 'blog' | 'report' | 'webinar' | 'event'): string {
@@ -103,10 +111,10 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
   return (
     <div className="sbsection">
       <div className="sbtitle">News</div>
-      {NEWS_SLOTS.map(({ key }) => {
+      {NEWS_SLOTS.map(({ key, label }) => {
         const item = news[key]
         if (item) {
-          const subtitle = newsSubtitle(item, key)
+          const subtitle = newsSubtitle(item, label)
           return (
             <a
               key={key}
@@ -118,7 +126,7 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
             >
               <span className="col">
                 <span className="txt">{item.title}</span>
-                {subtitle && <span className="sub">{subtitle}</span>}
+                <span className="sub">{subtitle}</span>
               </span>
               <span className="ext">↗</span>
             </a>
