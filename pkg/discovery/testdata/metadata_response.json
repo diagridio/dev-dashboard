@@ -1,0 +1,29 @@
+{
+  "id": "order",
+  "runtimeVersion": "1.15.0",
+  "enabledFeatures": ["ServiceInvocation", "StateManagement"],
+  "actors": [
+    { "type": "dapr.internal.default.order.workflow", "count": 2 }
+  ],
+  "components": [
+    { "name": "statestore", "type": "state.sqlite", "version": "v1" }
+  ],
+  "subscriptions": [
+    {
+      "pubsubname": "pubsub",
+      "topic": "orders",
+      "rules": [{ "match": "", "path": "/orders" }],
+      "deadLetterTopic": "",
+      "type": "PROGRAMMATIC"
+    }
+  ],
+  "actorRuntime": { "placement": "placement: connected" },
+  "extended": {
+    "appPID": "12345",
+    "cliPID": "12000",
+    "appCommand": "go run .",
+    "appLogPath": "/home/dev/.dapr/logs/order_app.log",
+    "daprdLogPath": "/home/dev/.dapr/logs/order_daprd.log",
+    "runTemplateName": "dapr.yaml"
+  }
+}
