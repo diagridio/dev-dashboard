@@ -71,16 +71,15 @@ export function Actors() {
       {header}
       <div className="stats">
         <div className="stat">
-          {/* ​ (zero-width space) prevents DOM textContent collision with table cell values in tests */}
-          <div className="n mint">{activeActors}{'​'}</div>
+          <div className="n mint">{activeActors}</div>
           <div className="l">Active actors</div>
         </div>
         <div className="stat">
-          <div className="n">{actorTypes}{'​'}</div>
+          <div className="n">{actorTypes}</div>
           <div className="l">Actor types</div>
         </div>
         <div className="stat">
-          <div className="n">{hostingApps}{'​'}</div>
+          <div className="n">{hostingApps}</div>
           <div className="l">Hosting apps</div>
         </div>
         <div className="stat">
@@ -89,7 +88,7 @@ export function Actors() {
               <span className="led ok" />
             </span>
           </div>
-          <div className="l">Placement</div>
+          <div className="l">Placement connected</div>
         </div>
       </div>
       <div className="card">
@@ -115,8 +114,8 @@ export function Actors() {
       </div>
       <p className="hint">
         Dapr Workflow runs on internal actor types (<span className="mono">workflow</span> /{' '}
-        <span className="mono">activity</span>) — tagged with the{' '}
-        <span className="tag-int" aria-label="internal">int</span> badge and shown for completeness.
+        <span className="mono">activity</span>) — tagged <span className="tag-int">internal</span> and
+        shown for completeness.
       </p>
     </div>
   )

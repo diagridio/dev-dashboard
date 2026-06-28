@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse, delay } from 'msw'
@@ -44,10 +44,13 @@ describe('Actors', () => {
     renderAt()
     const link = await screen.findByRole('link', { name: 'order' })
     expect(link).toHaveAttribute('href', '/apps/order')
-    expect(screen.getByText('OrderActor')).toBeInTheDocument()
-    expect(screen.getByText('3')).toBeInTheDocument()
+    // Scope assertions to the table row so they don't collide with stat cards
+    const row = within(link.closest('tr') as HTMLElement)
+    expect(row.getByText('OrderActor')).toBeInTheDocument()
+    expect(row.getByText('3')).toBeInTheDocument()
     // Placement shown as a "connected" health pill, not the raw address
-    expect(screen.getByText(/connected/i)).toBeInTheDocument()
+    expect(row.getByText(/connected/i)).toBeInTheDocument()
+    expect(screen.queryByText('localhost:50005')).not.toBeInTheDocument()
   })
 
   it('tags internal actor types with an internal badge', async () => {
@@ -59,8 +62,11 @@ describe('Actors', () => {
       ),
     )
     renderAt()
-    await screen.findByText(/dapr\.internal/i)
-    expect(screen.getByText(/^internal$/i)).toBeInTheDocument()
+    const link = await screen.findByRole('link', { name: 'order' })
+    // Scope to the table row so the .tag-int badge in the hint footer doesn't collide
+    const row = within(link.closest('tr') as HTMLElement)
+    expect(row.getByText(/dapr\.internal/i)).toBeInTheDocument()
+    expect(row.getByText(/^internal$/i)).toBeInTheDocument()
   })
 
   it('shows friendly empty state when no actors are registered', async () => {
