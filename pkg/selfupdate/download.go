@@ -1,9 +1,13 @@
 package selfupdate
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"strings"
 )
 
@@ -26,4 +30,28 @@ func verifyChecksum(archive []byte, name, checksumsTxt string) error {
 		}
 	}
 	return fmt.Errorf("no checksum entry for %s", name)
+}
+
+// errNotFound is returned by httpGet when the server responds 404.
+var errNotFound = errors.New("not found")
+
+// httpGet fetches url and returns the response body, mapping a 404 to
+// errNotFound and any other non-200 status to an error.
+func httpGet(ctx context.Context, client *http.Client, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errNotFound
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: status %s", url, resp.Status)
+	}
+	return io.ReadAll(resp.Body)
 }

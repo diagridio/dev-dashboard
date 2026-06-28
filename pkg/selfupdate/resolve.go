@@ -1,7 +1,13 @@
 // Package selfupdate updates the dev-dashboard binary in place from GitHub Releases.
 package selfupdate
 
-import "strings"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+)
 
 // normalizeVersion ensures a single leading "v" and trims surrounding space.
 // "1.2.0" -> "v1.2.0"; " v1.2.0 " -> "v1.2.0"; "" -> "".
@@ -18,4 +24,24 @@ func normalizeVersion(v string) string {
 func versionsEqual(a, b string) bool {
 	return strings.TrimPrefix(strings.TrimSpace(a), "v") ==
 		strings.TrimPrefix(strings.TrimSpace(b), "v")
+}
+
+// resolveLatest queries the GitHub releases API for repo's latest tag_name and
+// returns it normalized (with a leading "v").
+func resolveLatest(ctx context.Context, client *http.Client, apiBase, repo string) (string, error) {
+	url := fmt.Sprintf("%s/repos/%s/releases/latest", apiBase, repo)
+	body, err := httpGet(ctx, client, url)
+	if err != nil {
+		return "", fmt.Errorf("resolve latest release: %w", err)
+	}
+	var rel struct {
+		TagName string `json:"tag_name"`
+	}
+	if err := json.Unmarshal(body, &rel); err != nil {
+		return "", fmt.Errorf("parse latest release: %w", err)
+	}
+	if rel.TagName == "" {
+		return "", fmt.Errorf("latest release has no tag_name")
+	}
+	return normalizeVersion(rel.TagName), nil
 }
