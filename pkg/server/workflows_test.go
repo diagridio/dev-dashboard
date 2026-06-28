@@ -171,12 +171,13 @@ func TestWorkflowActiveStore(t *testing.T) {
 
 func TestStateStoresEndpoint(t *testing.T) {
 	stores := fakeStoreRegistry{stores: []StoreInfo{
-		{Name: "statestore", Type: "state.redis", Active: true},
+		{Name: "statestore", Type: "state.redis", Active: true, Connection: "localhost:6379"},
 	}}
 	h := apiRouter(version.Info{}, nil, newFakeBackend(fakeWF{}), stores, fakeResources{}, fakeNews{})
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"name":"statestore"`)
+	require.Contains(t, body, `"connection":"localhost:6379"`)
 }
 
 func TestStateStoresNilRegistry(t *testing.T) {
