@@ -91,7 +91,7 @@ export function Subscriptions() {
   )
 }
 
-function SubscriptionRow({ sub }: { sub: Subscription & { scopes?: string[] } }) {
+function SubscriptionRow({ sub }: { sub: Subscription }) {
   const rules = sub.rules ?? []
   const firstPath = rules[0]?.path
   const hasMultipleRules = rules.length > 1

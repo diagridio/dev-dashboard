@@ -4,16 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dev Dashboard</title>
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem('devdash.theme');
-          var d = localStorage.getItem('devdash.density');
-          document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
-          document.documentElement.setAttribute('data-density', d === 'comfortable' ? 'comfortable' : 'compact');
-        } catch (e) {}
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>
