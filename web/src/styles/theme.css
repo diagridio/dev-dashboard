@@ -368,9 +368,9 @@ details.evd > summary::-webkit-details-marker { display: none; }
 details[open] .caret { transform: rotate(90deg); }
 .caretspace { visibility: hidden; }
 .evbody { border-top: 1px solid var(--line-soft); padding: 11px 12px; display: grid; gap: 10px; }
-.evbody .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
+.evbody .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .evbody pre { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px 11px; max-height: 23.25em; overflow: auto; }
-.evbody .lblrow { display: flex; align-items: center; gap: 8px; }
+.evbody .lblrow { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
 .evbody .lblrow .copybtn { padding: 2px 7px; font-size: 10px; }
 .retrybadge { font-family: var(--mono); font-size: 10px; color: var(--pend-fg); background: var(--pend-bg); border-radius: 5px; padding: 1px 6px; }
 .err { color: var(--fail-fg); }
