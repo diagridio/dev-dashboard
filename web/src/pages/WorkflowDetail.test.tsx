@@ -648,6 +648,10 @@ describe('EventRow', () => {
     expect(container.querySelector('.caret')).toBeNull()
     expect(screen.queryByText(/Event ID/)).toBeNull()
     expect(screen.getByText('OrchestratorStarted')).toBeInTheDocument()
+    // Caret-width spacer keeps the event name aligned with expandable rows,
+    // without introducing a real caret.
+    expect(container.querySelector('.caretspace')).not.toBeNull()
+    expect(container.querySelector('.caret')).toBeNull()
   })
 
   it('shows "Event ID 0" for ExecutionStarted with input (expandable)', () => {

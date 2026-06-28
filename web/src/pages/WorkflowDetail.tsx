@@ -173,6 +173,7 @@ export function EventRow({
         ) : (
           <div className="evd evstatic">
             <div className="evstatic-head">
+              <span className="caretspace" aria-hidden="true">▸</span>
               <span className="evtype">{event.type}</span>
               {event.name && <span className="evname">{event.name}</span>}
               {eventIdTag && <span className="evtag">{eventIdTag}</span>}
