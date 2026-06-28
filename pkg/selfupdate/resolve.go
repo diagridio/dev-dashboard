@@ -27,7 +27,8 @@ func versionsEqual(a, b string) bool {
 }
 
 // resolveLatest queries the GitHub releases API for repo's latest tag_name and
-// returns it normalized (with a leading "v").
+// returns it normalized (with a leading "v"). The /releases/latest endpoint
+// excludes prereleases by design, so this always resolves to the latest stable release.
 func resolveLatest(ctx context.Context, client *http.Client, apiBase, repo string) (string, error) {
 	url := fmt.Sprintf("%s/repos/%s/releases/latest", apiBase, repo)
 	body, err := httpGet(ctx, client, url)

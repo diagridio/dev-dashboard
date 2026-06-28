@@ -31,8 +31,9 @@ func TestHTTPGetOKAndNotFound(t *testing.T) {
 }
 
 func TestResolveLatest(t *testing.T) {
+	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/repos/diagridio/dev-dashboard/releases/latest", r.URL.Path)
+		gotPath = r.URL.Path
 		_, _ = w.Write([]byte(`{"tag_name":"v1.2.0"}`))
 	}))
 	defer srv.Close()
@@ -40,6 +41,18 @@ func TestResolveLatest(t *testing.T) {
 	v, err := resolveLatest(context.Background(), srv.Client(), srv.URL, "diagridio/dev-dashboard")
 	require.NoError(t, err)
 	require.Equal(t, "v1.2.0", v)
+	require.Equal(t, "/repos/diagridio/dev-dashboard/releases/latest", gotPath)
+}
+
+func TestHTTPGetServerError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+
+	_, err := httpGet(context.Background(), srv.Client(), srv.URL+"/any")
+	require.Error(t, err)
+	require.NotErrorIs(t, err, errNotFound)
 }
 
 func TestResolveLatestEmptyTag(t *testing.T) {
