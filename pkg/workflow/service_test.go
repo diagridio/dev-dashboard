@@ -138,3 +138,23 @@ func TestServiceGetDetail(t *testing.T) {
 	_, err = svc.Get(context.Background(), "order", "missing")
 	require.ErrorIs(t, err, ErrNotFound)
 }
+
+func TestServiceListDedupesByInstanceID(t *testing.T) {
+	f := newFakeStore()
+	seedWorkflow(t, f, "default", "order", "inst-a", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
+	seedWorkflow(t, f, "default", "order", "inst-b", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
+
+	// App discovery returns "order" twice — without dedup the loop appends each instance twice.
+	svc := New(f, "default", func(context.Context) ([]string, error) { return []string{"order", "order"}, nil })
+
+	res, err := svc.List(context.Background(), ListQuery{})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 2, "each instance must appear exactly once")
+
+	seen := map[string]bool{}
+	for _, it := range res.Items {
+		key := it.AppID + "/" + it.InstanceID
+		require.False(t, seen[key], "duplicate item: %s", key)
+		seen[key] = true
+	}
+}

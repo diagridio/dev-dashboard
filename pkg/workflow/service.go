@@ -62,6 +62,7 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	}
 
 	var items []ExecutionSummary
+	seen := make(map[string]struct{})
 	var next string
 	for _, appID := range apps {
 		keys, tok, err := s.store.Keys(ctx, statestore.InstanceMetaPattern(s.namespace, appID), q.PageToken, pageSize)
@@ -76,6 +77,11 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 			if !ok {
 				continue
 			}
+			dedupKey := appID + "/" + id
+			if _, dup := seen[dedupKey]; dup {
+				continue
+			}
+			seen[dedupKey] = struct{}{}
 			ex, err := s.load(ctx, appID, id)
 			if err != nil {
 				continue
