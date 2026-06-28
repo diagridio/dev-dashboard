@@ -391,7 +391,9 @@ sidecars and state store.
   headless accessible primitives styled in-house, and a custom lightweight read-only YAML
   highlighter (not Monaco). Client-side History-API routing (`react-router-dom`); the Go
   server falls back to `index.html` for unknown paths and is base-path-aware. List
-  virtualization is planned, not yet in v1.
+  virtualization is planned, not yet in v1. The UI styling conventions (design tokens,
+  page anatomy, component classes) are documented in
+  [`web/STYLEGUIDE.md`](web/STYLEGUIDE.md).
 
 **Key dependencies & data sources**
 

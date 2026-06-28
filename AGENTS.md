@@ -27,6 +27,7 @@ pkg/               domain packages — each is isolated, none import cmd/
   news/ logging/ selfupdate/ version/
 internal/golden/   golden-file test helpers
 web/               React + TypeScript + Vite SPA → web/dist (embedded via web/embed.go)
+                   see web/STYLEGUIDE.md for UI styling conventions
 scripts/           install.sh, install.ps1, release.sh
 test/              test fixtures
 ```
@@ -124,6 +125,9 @@ via ldflags (`dev-dashboard --version`).
 - **Don't commit `web/dist`** to `main`; it's gitignored and only embedded on release tags.
 - **Keep `pkg/*` free of `cmd/` imports.** New domain logic goes in a `pkg/<domain>` package
   with its `service.go` + response types; HTTP wiring goes in `pkg/server` (one file per domain).
+- **Follow the UI style guide for frontend work.** New pages/components compose the existing
+  class vocabulary and design tokens in `web/src/styles/theme.css` — don't hardcode colors or
+  reinvent primitives. See [`web/STYLEGUIDE.md`](web/STYLEGUIDE.md).
 - **Read-only product surface:** the dashboard never starts/stops apps; the only mutating
   operation is workflow terminate/purge. Don't add side-effecting behavior without explicit ask.
 - Commit/push only when asked; the project uses Conventional Commit prefixes (`feat:`, `refactor:`,
