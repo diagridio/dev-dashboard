@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { elapsed, elapsedTenths } from './wallclock'
+import { elapsed, elapsedTenths, formatOffset, formatDateTime } from './wallclock'
 
 describe('elapsed', () => {
   it('formats mm:ss between created and now', () => {
@@ -33,5 +33,48 @@ describe('elapsedTenths', () => {
     const created = '2026-06-26T10:00:00.000Z'
     const ended = '2026-06-26T10:00:30.500Z'
     expect(elapsedTenths(created, ended)).toBe('0:30.5')
+  })
+})
+
+describe('formatOffset', () => {
+  const created = '2026-06-28T10:00:00.000Z'
+
+  it('returns +0.00s for a zero offset', () => {
+    expect(formatOffset(created, created)).toBe('+0.00s')
+  })
+
+  it('formats sub-minute offsets as seconds with hundredths', () => {
+    expect(formatOffset(created, '2026-06-28T10:00:05.600Z')).toBe('+5.60s')
+  })
+
+  it('adds a minutes prefix once the offset reaches 60s', () => {
+    expect(formatOffset(created, '2026-06-28T10:06:09.310Z')).toBe('+6m9.31s')
+  })
+
+  it('adds hours and minutes prefixes for long offsets', () => {
+    expect(formatOffset(created, '2026-06-28T12:30:10.010Z')).toBe('+2h30m10.01s')
+  })
+
+  it('clamps negative offsets to +0.00s', () => {
+    expect(formatOffset(created, '2026-06-28T09:59:59.000Z')).toBe('+0.00s')
+  })
+
+  it('returns empty string when an input is missing or unparseable', () => {
+    expect(formatOffset(undefined, created)).toBe('')
+    expect(formatOffset(created, undefined)).toBe('')
+    expect(formatOffset(created, 'not-a-date')).toBe('')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('returns undefined for missing or unparseable input', () => {
+    expect(formatDateTime(undefined)).toBeUndefined()
+    expect(formatDateTime('not-a-date')).toBeUndefined()
+  })
+
+  it('joins the localized date and time with " - "', () => {
+    const ts = '2026-06-28T10:00:05.600Z'
+    const d = new Date(ts)
+    expect(formatDateTime(ts)).toBe(`${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`)
   })
 })
