@@ -62,3 +62,40 @@ func TestNewsLastGoodOnFailure(t *testing.T) {
 	require.NotNil(t, r2.Blog)
 	require.Equal(t, "Blog A", r2.Blog.Title)
 }
+
+func TestWithUTM(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "diagrid host gets utm params",
+			in:   "https://www.diagrid.io/blog/some-post",
+			want: "https://www.diagrid.io/blog/some-post?utm_medium=menu&utm_source=dev-dashboard",
+		},
+		{
+			name: "bare diagrid host gets utm params",
+			in:   "https://diagrid.io/events/webinar",
+			want: "https://diagrid.io/events/webinar?utm_medium=menu&utm_source=dev-dashboard",
+		},
+		{
+			name: "non-diagrid host unchanged",
+			in:   "https://example.com/article",
+			want: "https://example.com/article",
+		},
+		{
+			name: "existing query param preserved",
+			in:   "https://www.diagrid.io/blog/post?ref=newsletter",
+			want: "https://www.diagrid.io/blog/post?ref=newsletter&utm_medium=menu&utm_source=dev-dashboard",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := withUTM(tc.in)
+			if got != tc.want {
+				t.Fatalf("withUTM(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
