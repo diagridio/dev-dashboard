@@ -251,7 +251,17 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, hasNew, onHasNe
       </div>
 
       <div className="sbfoot">
-        <span className="pw">Dapr Dev Dashboard · v{version}</span>
+        <span className="pw">
+          Powered by{' '}
+          <a
+            href="https://diagrid.io/?utm_source=dev-dashboard&utm_medium=footer"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Diagrid
+          </a>
+          {' · '}v{version}
+        </span>
       </div>
     </aside>
   )

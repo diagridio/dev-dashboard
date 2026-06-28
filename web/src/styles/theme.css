@@ -92,6 +92,8 @@ body {
 .sblink .col .sub { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
 .sbfoot { padding: 10px 14px; border-top: 1px solid var(--line-soft); }
 .sbfoot .pw { font-family: var(--mono); font-size: 9.5px; color: var(--faint); line-height: 1.4; white-space: nowrap; }
+.pw a { color: inherit; text-decoration: none; }
+.pw a:hover { text-decoration: underline; }
 .app.collapsed .sbfoot { display: none; }
 
 /* Bell + collapsed vertical label */
@@ -329,7 +331,7 @@ tr.sel:hover { background: color-mix(in srgb, var(--accent2) 13%, var(--surface)
 /* Panel variant for workflow detail (override panel border-radius) */
 .io .panel, .io > .panel { border-radius: 12px; }
 .panel > .ph .tagdot { width: 7px; height: 7px; border-radius: 50%; }
-pre.json { margin: 0; padding: 13px; font-family: var(--mono); font-size: 12px; line-height: 1.6; overflow-x: auto; white-space: pre; }
+pre.json { margin: 0; padding: 13px; font-family: var(--mono); font-size: 12px; line-height: 1.6; max-height: 24em; overflow: auto; white-space: pre; }
 .json .k { color: var(--jkey); }
 .json .s { color: var(--jstr); }
 .json .n { color: var(--jnum); }
@@ -365,7 +367,7 @@ details.evd > summary::-webkit-details-marker { display: none; }
 details[open] .caret { transform: rotate(90deg); }
 .evbody { border-top: 1px solid var(--line-soft); padding: 11px 12px; display: grid; gap: 10px; }
 .evbody .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 5px; }
-.evbody pre { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px 11px; overflow-x: auto; }
+.evbody pre { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px 11px; max-height: 23.25em; overflow: auto; }
 .evbody .lblrow { display: flex; align-items: center; gap: 8px; }
 .evbody .lblrow .copybtn { padding: 2px 7px; font-size: 10px; }
 .retrybadge { font-family: var(--mono); font-size: 10px; color: var(--pend-fg); background: var(--pend-bg); border-radius: 5px; padding: 1px 6px; }

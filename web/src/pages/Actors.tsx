@@ -126,7 +126,7 @@ function ActorRow({ actor }: { actor: Actor }) {
   return (
     <tr>
       <td className="b">
-        <Link to={`/apps/${actor.appId}`}>{actor.appId}</Link>
+        <Link className="celllink" to={`/apps/${actor.appId}`}>{actor.appId}</Link>
       </td>
       <td className="mono">
         {actor.type}

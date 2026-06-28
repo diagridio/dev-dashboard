@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -110,16 +112,37 @@ func (e *httpError) Error() string {
 	return "news: upstream returned status " + http.StatusText(e.code)
 }
 
+// withUTM appends dev-dashboard UTM parameters to URLs on the diagrid.io
+// domain, preserving any existing query parameters. URLs on other hosts (or
+// that fail to parse) are returned unchanged.
+func withUTM(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "diagrid.io" && host != "www.diagrid.io" {
+		return raw
+	}
+	q := u.Query()
+	q.Set("utm_source", "dev-dashboard")
+	q.Set("utm_medium", "menu")
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
 // derive converts a raw feed payload into the four content slots.
 func derive(p *feedPayload) Response {
 	var r Response
 
 	if len(p.LatestBlogPosts) > 0 {
 		item := p.LatestBlogPosts[0]
+		item.URL = withUTM(item.URL)
 		r.Blog = &item
 	}
 	if len(p.LatestReports) > 0 {
 		item := p.LatestReports[0]
+		item.URL = withUTM(item.URL)
 		r.Report = &item
 	}
 
@@ -132,6 +155,7 @@ func derive(p *feedPayload) Response {
 		}
 		if t.After(now) {
 			item := p.UpcomingWebinars[i]
+			item.URL = withUTM(item.URL)
 			r.Webinar = &item
 			break
 		}
@@ -144,6 +168,7 @@ func derive(p *feedPayload) Response {
 		}
 		if t.After(now) {
 			item := p.UpcomingEvents[i]
+			item.URL = withUTM(item.URL)
 			r.Event = &item
 			break
 		}

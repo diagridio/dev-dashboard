@@ -256,10 +256,21 @@ describe('ResourcesSidebar News section', () => {
 })
 
 describe('ResourcesSidebar footer', () => {
-  it('renders version string in sbfoot', async () => {
+  it('renders Powered by Diagrid link and version in sbfoot', async () => {
     renderSidebar()
+    // Wait for the Diagrid link to appear
+    const link = await screen.findByRole('link', { name: 'Diagrid' })
+    expect(link).toHaveAttribute(
+      'href',
+      'https://diagrid.io/?utm_source=dev-dashboard&utm_medium=footer',
+    )
+    expect(link).toHaveAttribute('target', '_blank')
     // Version comes from /api/version mock returning "1.2.3"
-    await screen.findByText(/Dapr Dev Dashboard · v1\.2\.3/i)
+    // Text is split across nodes, so poll until the async version resolves
+    const sbfoot = document.querySelector('.sbfoot')
+    await waitFor(() => {
+      expect(sbfoot?.textContent).toContain('Powered by Diagrid · v1.2.3')
+    })
   })
 })
 

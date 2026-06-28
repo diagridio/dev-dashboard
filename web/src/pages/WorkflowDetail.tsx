@@ -7,7 +7,7 @@ import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { RefreshControl } from '../components/RefreshControl'
 import { elapsed, elapsedTenths } from '../lib/wallclock'
 import { highlightJson } from '../lib/json-highlight'
-import { useToast } from '../lib/toast'
+import { useToast, type ToastHandle } from '../lib/toast'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
 import { sortHistoryForDisplay } from '../lib/eventOrder'
@@ -110,10 +110,12 @@ export function EventRow({
   event,
   createdAt,
   isNewest,
+  toast,
 }: {
   event: WorkflowHistoryEvent
   createdAt: string | undefined
   isNewest: boolean
+  toast: ToastHandle
 }) {
   const relTime = relativeTime(event.timestamp, createdAt)
   const absTime = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : ''
@@ -146,13 +148,35 @@ export function EventRow({
             <div className="evbody">
               {event.input && (
                 <div>
-                  <div className="lbl">Input</div>
+                  <div className="lblrow">
+                    <span className="lbl">Input</span>
+                    <button
+                      className="copybtn"
+                      onClick={() => {
+                        copyText(event.input ?? '')
+                        toast.show('Input copied')
+                      }}
+                    >
+                      ⧉ Copy
+                    </button>
+                  </div>
                   <pre className="json">{highlightJson(event.input)}</pre>
                 </div>
               )}
               {event.output && (
                 <div>
-                  <div className="lbl">Output</div>
+                  <div className="lblrow">
+                    <span className="lbl">Output</span>
+                    <button
+                      className="copybtn"
+                      onClick={() => {
+                        copyText(event.output ?? '')
+                        toast.show('Output copied')
+                      }}
+                    >
+                      ⧉ Copy
+                    </button>
+                  </div>
                   <pre className="json">{highlightJson(event.output)}</pre>
                 </div>
               )}
@@ -502,6 +526,7 @@ export function WorkflowDetail() {
               event={event}
               createdAt={execution.createdAt}
               isNewest={idx === orderedHistory.length - 1}
+              toast={toast}
             />
           ))}
         </div>
