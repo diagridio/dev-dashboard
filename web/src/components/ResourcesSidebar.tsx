@@ -64,14 +64,6 @@ const SECTIONS: Section[] = [
   },
 ]
 
-function readInitialCollapsed(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === 'true'
-  } catch {
-    return false
-  }
-}
-
 function newsSubtitle(item: NewsItem, type: 'blog' | 'report' | 'webinar' | 'event'): string | undefined {
   if (type === 'event' || type === 'webinar') {
     const parts: string[] = []
@@ -154,12 +146,6 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, hasNew, onHasNe
   const { data: news } = useNews()
   const { data: versionData } = useVersion()
 
-  // Initialise collapsed from localStorage on mount
-  useEffect(() => {
-    onCollapsedChange(readInitialCollapsed())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   // Derive unseen → bubble up has-new to parent
   const unseen = news != null && newsUrls(news).some((url) => !seen.has(url))
   useEffect(() => {
@@ -210,7 +196,7 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, hasNew, onHasNe
         </button>
       </div>
 
-      <nav className="sbscroll" aria-label="Resources">
+      <nav className="sbscroll">
         {/* News section */}
         {news && <NewsSection news={news} onMarkSeen={handleMarkSeen} />}
 

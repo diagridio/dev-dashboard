@@ -62,9 +62,9 @@ describe('App shell', () => {
   it('wraps content in SmallScreenGuard', () => {
     // SmallScreenGuard shows children when screen is wide (jsdom default)
     renderApp()
-    // TopNav has aria-label="Primary navigation"; ResourcesSidebar has aria-label="Resources"
+    // TopNav has aria-label="Primary navigation"; ResourcesSidebar aside has aria-label="Resources"
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: 'Resources' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: 'Resources' })).toBeInTheDocument()
   })
 
   it('does not render StatusFooter', () => {

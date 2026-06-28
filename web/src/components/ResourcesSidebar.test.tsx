@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { useState } from 'react'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/setup'
 import { ResourcesSidebar } from './ResourcesSidebar'
@@ -235,5 +235,56 @@ describe('ResourcesSidebar footer', () => {
     renderSidebar()
     // Version comes from /api/version mock returning "1.2.3"
     await screen.findByText(/Dapr Dev Dashboard · v1\.2\.3/i)
+  })
+})
+
+describe('ResourcesSidebar onHasNewChange contract', () => {
+  /** Minimal wrapper that passes a spy as onHasNewChange so we can assert on it. */
+  function renderWithSpy(onHasNewChange: ReturnType<typeof vi.fn>) {
+    const client = makeQueryClient()
+    return render(
+      <QueryProvider client={client}>
+        <div className="app" data-theme="light">
+          <ResourcesSidebar
+            collapsed={false}
+            onCollapsedChange={() => undefined}
+            hasNew={false}
+            onHasNewChange={onHasNewChange}
+          />
+        </div>
+      </QueryProvider>,
+    )
+  }
+
+  it('calls onHasNewChange(true) when news has unseen URLs', async () => {
+    // defaultNews has blog (u1) and webinar (u2) — localStorage is clear so both are unseen
+    const spy = vi.fn()
+    renderWithSpy(spy)
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith(true)
+    })
+  })
+
+  it('calls onHasNewChange(false) when all news URLs have been seen', async () => {
+    // Pre-mark both URLs from defaultNews as seen
+    localStorage.setItem('devdash.newsSeen', JSON.stringify(['u1', 'u2']))
+    const spy = vi.fn()
+    renderWithSpy(spy)
+    await waitFor(() => {
+      // After news loads, unseen = false → callback fires with false
+      expect(spy).toHaveBeenCalledWith(false)
+    })
+    // Must never have been called with true
+    expect(spy).not.toHaveBeenCalledWith(true)
+  })
+
+  it('calls onHasNewChange(false) when news API returns no items', async () => {
+    server.use(http.get('/api/news', () => HttpResponse.json({ blog: null, report: null, webinar: null, event: null })))
+    const spy = vi.fn()
+    renderWithSpy(spy)
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith(false)
+    })
+    expect(spy).not.toHaveBeenCalledWith(true)
   })
 })
