@@ -9,17 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"syscall"
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/logging"
-	"github.com/diagridio/dev-dashboard/pkg/news"
-	"github.com/diagridio/dev-dashboard/pkg/resources"
 	"github.com/diagridio/dev-dashboard/pkg/server"
-	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/diagridio/dev-dashboard/web"
 	"github.com/spf13/cobra"
@@ -79,72 +75,21 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	}
 	url := fmt.Sprintf("http://%s%s/", addr, urlPath)
 
-	appsSvc := discovery.New(discovery.StandaloneScanner(), &http.Client{Timeout: 2 * time.Second})
-
-	// Resolve resource paths to scan for state-store components.
-	var scanPaths []string
-	if stateStore != "" {
-		scanPaths = []string{stateStore}
-	} else {
-		// default Dapr components dir + any live --resources-path from running apps
-		if home, err := os.UserHomeDir(); err == nil {
-			scanPaths = append(scanPaths, filepath.Join(home, ".dapr", "components"))
-		}
-		if apps, err := appsSvc.List(ctx); err == nil {
-			for _, a := range apps {
-				scanPaths = append(scanPaths, a.ResourcePaths...)
-			}
-		}
-	}
-	detected, _ := statestore.Detect(scanPaths)
-	registry := newStoreRegistry(detected)
-
-	// Resolve resource paths for the resources loader (components, configs, subscriptions, etc.).
-	var resPaths []string
-	if home, err := os.UserHomeDir(); err == nil {
-		resPaths = append(resPaths, filepath.Join(home, ".dapr", "components"), filepath.Join(home, ".dapr"))
-	}
-	if apps, err := appsSvc.List(ctx); err == nil {
-		for _, a := range apps {
-			resPaths = append(resPaths, a.ResourcePaths...)
-			if a.ConfigPath != "" {
-				resPaths = append(resPaths, filepath.Dir(a.ConfigPath))
-			}
-		}
-	}
-	resSvc := resources.New(resPaths)
-
-	appIDs := func(ctx context.Context) ([]string, error) {
-		apps, err := appsSvc.List(ctx)
-		if err != nil {
-			return nil, err
-		}
-		ids := make([]string, 0, len(apps))
-		for _, a := range apps {
-			ids = append(ids, a.AppID)
-		}
-		return ids, nil
-	}
-
-	wfClient := &http.Client{Timeout: 10 * time.Second}
-	backend, closers := newStoreBackend(ctx, detected, namespace, wfClient, appsSvc, appIDs)
+	home, _ := os.UserHomeDir()
+	opts, closers := assembleOptions(ctx, serveDeps{
+		BasePath:       basePath,
+		StateStorePath: stateStore,
+		Namespace:      namespace,
+		Apps:           discovery.New(discovery.StandaloneScanner(), &http.Client{Timeout: 2 * time.Second}),
+		HomeDir:        home,
+		HTTPClient:     &http.Client{Timeout: 10 * time.Second},
+	}, dist)
 	for _, close := range closers {
 		close := close
 		defer func() { _ = close() }()
 	}
 
-	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
-
-	srv := server.New(addr, server.Options{
-		BasePath:  basePath,
-		DistFS:    dist,
-		Version:   version.Get(),
-		Apps:      appsSvc,
-		Backend:   backend,
-		Stores:    registry,
-		Resources: resSvc,
-		News:      newsSvc,
-	})
+	srv := server.New(addr, opts)
 
 	fmt.Printf("dev-dashboard %s → %s\n", version.Get().Version, url)
 	if !noOpen {
