@@ -1,231 +1,265 @@
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
-import type { HealthStatus, AppDetail as AppDetailType } from '../types/api'
+import type { AppDetail as AppDetailType, HealthStatus } from '../types/api'
 import { copyText } from '../lib/clipboard'
 
-// Maps a health status to its CSS custom property color token
-function healthColor(health: HealthStatus): string {
+// ---------- helpers ----------
+
+function ledClass(health: HealthStatus): string {
   switch (health) {
     case 'healthy':
-      return 'var(--ok)'
+      return 'ok'
     case 'starting':
-      return 'var(--warn)'
+      return 'warn'
     case 'unhealthy':
-      return 'var(--bad)'
+      return 'bad'
     default:
-      return 'var(--text-faint)'
+      return 'warn'
   }
 }
 
-function HealthDot({ health }: { health: HealthStatus }) {
-  const color = healthColor(health)
+function runtimeSwatch(runtime: string): string {
+  const r = runtime.toLowerCase()
+  if (r.includes('go')) return '#00ADD8'
+  if (r.includes('python') || r.includes('py')) return '#3776AB'
+  if (r.includes('node') || r.includes('js')) return '#539E43'
+  if (r.includes('.net') || r.includes('dotnet')) return '#8330FF'
+  return 'var(--faint)'
+}
+
+// ---------- tiny toast ----------
+
+function useToast() {
+  const [msg, setMsg] = useState<string | null>(null)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const show = useCallback((text: string) => {
+    setMsg(text)
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => setMsg(null), 1400)
+  }, [])
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+  return { msg, show }
+}
+
+function Toast({ msg }: { msg: string | null }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)', color }}>
-      <span
-        aria-hidden="true"
-        style={{
-          display: 'inline-block',
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          background: color,
-          flexShrink: 0,
-        }}
-      />
-      {health}
-    </span>
-  )
-}
-
-const sectionStyle: React.CSSProperties = {
-  marginBottom: 'var(--space-6)',
-}
-
-const sectionHeadingStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: 'var(--text-muted)',
-  marginBottom: 'var(--space-3)',
-  paddingBottom: 'var(--space-2)',
-  borderBottom: '1px solid var(--border)',
-}
-
-const rowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 'var(--space-3)',
-  padding: 'var(--space-2) 0',
-  borderBottom: '1px solid var(--border-soft)',
-}
-
-const labelStyle: React.CSSProperties = {
-  color: 'var(--text-muted)',
-  minWidth: 140,
-  flexShrink: 0,
-}
-
-const valueStyle: React.CSSProperties = {
-  color: 'var(--text)',
-}
-
-function Field({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return (
-    <div style={rowStyle}>
-      <span style={labelStyle}>{label}</span>
-      <span style={valueStyle} className={mono ? 'mono' : undefined}>
-        {value ?? '—'}
-      </span>
+    <div className={`toast${msg ? ' show' : ''}`} aria-live="polite">
+      <span className="d" />
+      <span className="tx">{msg ?? ''}</span>
     </div>
   )
 }
 
-function CopyablePath({ path }: { path: string }) {
-  return (
-    <span
-      className="mono"
-      data-cy="copy-path"
-      title="Click to copy"
-      style={{ cursor: 'copy' }}
-      onClick={() => copyText(path)}
-    >
-      {path}
-    </span>
-  )
-}
+// ---------- content ----------
 
 function AppDetailContent({ app }: { app: AppDetailType }) {
+  const navigate = useNavigate()
+  const { msg, show } = useToast()
+
+  const copyPath = (path: string) => {
+    copyText(path)
+    show('Path copied')
+  }
+
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
 
   return (
-    <div style={{ padding: 'var(--space-4)' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginBottom: 'var(--space-2)' }}>
-          <h1
-            className="mono"
-            style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'var(--text)' }}
-          >
-            {app.appId}
-          </h1>
-          <HealthDot health={app.health} />
-          <Link
-            to={`/logs?app=${app.appId}&source=daprd`}
-            style={{
-              marginLeft: 'auto',
-              padding: '3px 10px',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: 4,
-              color: 'var(--link)',
-              textDecoration: 'none',
-              fontSize: 13,
-            }}
-          >
-            View logs
-          </Link>
+    <div className="page">
+      {/* Breadcrumbs */}
+      <div className="crumbs">
+        <Link to="/apps">Applications</Link>
+        <span className="sep">/</span>
+        <span className="cur">{app.appId}</span>
+      </div>
+
+      {/* Page header */}
+      <div className="phead">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <h1>{app.appId}</h1>
+          <span className="health">
+            <span className={`led ${ledClass(app.health)}`} /> {app.health}
+          </span>
+          <span className="lang">
+            <span className="sw" style={{ background: runtimeSwatch(app.runtime) }} />
+            {app.runtime}
+          </span>
         </div>
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>{app.runtime}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="tbtn" onClick={() => navigate('/apps')}>← Back</button>
+          <Link className="tbtn" to={`/logs?app=${app.appId}&source=daprd`}>View logs</Link>
+        </div>
       </div>
 
       {/* Metadata unavailable note */}
       {!app.metadataOk && (
-        <div
-          style={{
-            padding: 'var(--space-3)',
-            marginBottom: 'var(--space-4)',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 4,
-            color: 'var(--warn)',
-            fontSize: 13,
-          }}
-        >
+        <div className="hint">
           metadata unavailable — showing process-scan data only
         </div>
       )}
 
-      {/* Application section */}
-      <div style={sectionStyle}>
-        <div style={sectionHeadingStyle}>Application</div>
-        <Field label="Runtime" value={app.runtime} />
-        <Field label="App port" value={app.appPort ?? '—'} mono />
-        <Field label="Protocol" value="http" />
-        <Field label="App PID" value={appPidDisplay} mono />
-        <Field label="CLI PID" value={app.cliPid ?? '—'} mono />
-        <Field label="Command" value={app.command || '—'} mono />
-      </div>
+      {/* Two-column: Application + Dapr sidecar */}
+      <div className="twocol">
+        {/* Application panel */}
+        <div className="panel">
+          <div className="ph">
+            <span className="ic" style={{ background: 'var(--surface-2)', color: 'var(--accent2)' }}>A</span>
+            Application
+          </div>
+          <div className="kv">
+            <div className="kk">Runtime</div>
+            <div className="vv">{app.runtime || <span className="faint">—</span>}</div>
 
-      {/* Dapr sidecar section */}
-      <div style={sectionStyle}>
-        <div style={sectionHeadingStyle}>Dapr sidecar</div>
-        <Field label="Runtime version" value={app.runtimeVersion || '—'} mono />
-        <Field label="HTTP port" value={app.httpPort ?? '—'} mono />
-        <Field label="gRPC port" value={app.grpcPort ?? '—'} mono />
-        <Field label="daprd PID" value={app.daprdPid ?? '—'} mono />
-        <Field label="Health" value={<HealthDot health={app.health} />} />
-      </div>
+            <div className="kk">App port</div>
+            <div className="vv mono">{app.appPort || <span className="faint">—</span>}</div>
 
-      {/* Metadata section */}
-      <div style={sectionStyle}>
-        <div style={sectionHeadingStyle}>Metadata</div>
-        <Field
-          label="Enabled features"
-          value={
-            app.enabledFeatures && app.enabledFeatures.length > 0
-              ? app.enabledFeatures.join(', ')
-              : '—'
-          }
-        />
-        <div style={rowStyle}>
-          <span style={labelStyle}>Components</span>
-          <span style={valueStyle}>
-            {app.components && app.components.length > 0 ? (
-              <span style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                {app.components.map((c) => (
-                  <Link
-                    key={c.name}
-                    to={`/resources/component/${c.name}`}
-                    style={{
-                      display: 'inline-block',
-                      padding: '2px var(--space-2)',
-                      background: 'var(--surface)',
-                      border: '1px solid var(--border)',
-                      borderRadius: 4,
-                      color: 'var(--link)',
-                      textDecoration: 'none',
-                      fontSize: 13,
-                    }}
-                  >
-                    {c.name}
-                  </Link>
-                ))}
-              </span>
-            ) : (
-              '—'
-            )}
-          </span>
+            <div className="kk">App protocol</div>
+            <div className="vv mono"><span className="faint">—</span></div>
+
+            <div className="kk">App PID</div>
+            <div className="vv mono">{appPidDisplay}</div>
+
+            <div className="kk">CLI PID</div>
+            <div className="vv mono">{app.cliPid || <span className="faint">—</span>}</div>
+
+            <div className="kk">Command</div>
+            <div className="vv mono">{app.command || <span className="faint">—</span>}</div>
+          </div>
+        </div>
+
+        {/* Dapr sidecar panel */}
+        <div className="panel">
+          <div className="ph">
+            <span className="ic" style={{ background: 'var(--dapr)', color: '#fff' }}>d</span>
+            Dapr sidecar (daprd)
+          </div>
+          <div className="kv">
+            <div className="kk">Runtime ver.</div>
+            <div className="vv mono">{app.runtimeVersion || <span className="faint">—</span>}</div>
+
+            <div className="kk">HTTP port</div>
+            <div className="vv mono">{app.httpPort || <span className="faint">—</span>}</div>
+
+            <div className="kk">gRPC port</div>
+            <div className="vv mono">{app.grpcPort || <span className="faint">—</span>}</div>
+
+            <div className="kk">Metrics port</div>
+            <div className="vv mono"><span className="faint">—</span></div>
+
+            <div className="kk">daprd PID</div>
+            <div className="vv mono">{app.daprdPid || <span className="faint">—</span>}</div>
+
+            <div className="kk">Placement</div>
+            <div className="vv">
+              {app.placement ? (
+                <span className="health">
+                  <span className="led ok" /> connected
+                </span>
+              ) : (
+                <span className="faint">—</span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Paths section */}
-      <div style={sectionStyle}>
-        <div style={sectionHeadingStyle}>Paths</div>
-        {app.resourcePaths && app.resourcePaths.length > 0 ? (
-          app.resourcePaths.map((p, i) => (
-            <Field
-              key={i}
-              label={i === 0 ? 'Resources' : ''}
-              value={<CopyablePath path={p} />}
-            />
-          ))
-        ) : (
-          <Field label="Resources" value="—" />
-        )}
-        <Field label="Config" value={app.configPath ? <CopyablePath path={app.configPath} /> : '—'} />
-        <Field label="App log" value={app.appLogPath ? <CopyablePath path={app.appLogPath} /> : '—'} />
-        <Field label="daprd log" value={app.daprdLogPath ? <CopyablePath path={app.daprdLogPath} /> : '—'} />
+      {/* Paths panel */}
+      <div className="panel paths">
+        <div className="ph">
+          Paths <span className="faint" style={{ fontWeight: 400, fontSize: 11 }}>— click any path to copy</span>
+        </div>
+        <div className="kv">
+          <div className="kk">Resources</div>
+          <div className="vv mono">
+            {app.resourcePaths && app.resourcePaths.length > 0 ? (
+              app.resourcePaths.map((p, i) => (
+                <span
+                  key={i}
+                  data-cy="copy-path"
+                  title="Click to copy"
+                  style={{ display: 'block' }}
+                  onClick={() => copyPath(p)}
+                >
+                  {p}
+                </span>
+              ))
+            ) : (
+              <span className="faint">—</span>
+            )}
+          </div>
+
+          <div className="kk">Config</div>
+          <div className="vv mono">
+            {app.configPath ? (
+              <span data-cy="copy-path" title="Click to copy" onClick={() => copyPath(app.configPath)}>
+                {app.configPath}
+              </span>
+            ) : (
+              <span className="faint">—</span>
+            )}
+          </div>
+
+          <div className="kk">App log</div>
+          <div className="vv mono">
+            {app.appLogPath ? (
+              <span data-cy="copy-path" title="Click to copy" onClick={() => copyPath(app.appLogPath)}>
+                {app.appLogPath}
+              </span>
+            ) : (
+              <span className="faint">—</span>
+            )}
+          </div>
+
+          <div className="kk">daprd log</div>
+          <div className="vv mono">
+            {app.daprdLogPath ? (
+              <span data-cy="copy-path" title="Click to copy" onClick={() => copyPath(app.daprdLogPath)}>
+                {app.daprdLogPath}
+              </span>
+            ) : (
+              <span className="faint">—</span>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Enabled features (preserved data, not in mock layout but present in data) */}
+      {app.enabledFeatures && app.enabledFeatures.length > 0 && (
+        <div className="panel" style={{ marginTop: 14 }}>
+          <div className="ph">Enabled features</div>
+          <div className="kv">
+            <div className="kk">Features</div>
+            <div className="vv">{app.enabledFeatures.join(', ')}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Loaded components */}
+      <div className="sec-title">
+        Loaded components{' '}
+        <span className="faint" style={{ textTransform: 'none', letterSpacing: 0 }}>
+          — from /v1.0/metadata
+        </span>
+      </div>
+      <div className="panel">
+        <div className="compchips">
+          {app.components && app.components.length > 0 ? (
+            app.components.map((c) => (
+              <Link
+                key={c.name}
+                className="chip k link"
+                to={`/resources/component/${c.name}`}
+              >
+                {c.name} <span className="muted">{c.type}</span>
+              </Link>
+            ))
+          ) : (
+            <span className="faint">No components loaded</span>
+          )}
+        </div>
+      </div>
+
+      <Toast msg={msg} />
     </div>
   )
 }
@@ -236,16 +270,16 @@ export function AppDetail() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      <div className="page">
+        <p className="muted">Loading…</p>
       </div>
     )
   }
 
   if (isError || !app) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--bad)' }}>App not found or failed to load.</p>
+      <div className="page">
+        <p style={{ color: 'var(--fail-fg)' }}>App not found or failed to load.</p>
       </div>
     )
   }

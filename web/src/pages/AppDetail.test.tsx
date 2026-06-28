@@ -46,7 +46,7 @@ describe('AppDetail', () => {
       ),
     )
     renderDetail()
-    await waitFor(() => expect(screen.getByText('order')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     expect(screen.getByText('3500')).toBeInTheDocument()
   })
 
@@ -73,7 +73,7 @@ describe('AppDetail', () => {
       ),
     )
     const { container } = renderDetail()
-    await waitFor(() => expect(screen.getByText('order')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     const copyEls = container.querySelectorAll('[data-cy="copy-path"]')
     expect(copyEls.length).toBeGreaterThan(0)
   })
@@ -118,10 +118,10 @@ describe('AppDetail', () => {
       ),
     )
     renderDetail()
-    await waitFor(() => expect(screen.getByText('order')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
 
     // Component chip should be a link to /resources/component/statestore
-    const chip = screen.getByRole('link', { name: 'statestore' })
+    const chip = screen.getByRole('link', { name: /statestore/ })
     expect(chip).toBeInTheDocument()
     expect(chip).toHaveAttribute('href', '/resources/component/statestore')
 
