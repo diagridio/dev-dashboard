@@ -62,8 +62,8 @@ describe('Workflows', () => {
     renderAt()
     const link = await screen.findByRole('link', { name: 'abc' })
     expect(link).toHaveAttribute('href', '/workflows/order/abc')
-    // StatusPill in the row shows the workflow status (filter buttons also show status names, so use getAllByText)
-    expect(screen.getAllByText('Running').length).toBeGreaterThan(0)
+    // StatusPill renders status in UPPERCASE per mock design
+    expect(screen.getByText('RUNNING')).toBeInTheDocument()
   })
 
   it('shows the no-store message on 503', async () => {

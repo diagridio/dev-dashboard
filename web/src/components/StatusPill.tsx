@@ -1,32 +1,22 @@
 import type { WorkflowStatus } from '../types/workflow'
 
-const TOKENS: Record<WorkflowStatus, string> = {
-  Running: 'running',
-  Completed: 'completed',
-  Failed: 'failed',
-  Terminated: 'terminated',
-  Suspended: 'suspended',
-  Pending: 'pending',
+const STATUS_CLASS: Record<WorkflowStatus, string> = {
+  Running: 's-run',
+  Completed: 's-done',
+  Failed: 's-fail',
+  Terminated: 's-term',
+  Suspended: 's-susp',
+  Pending: 's-pend',
 }
 
 export function StatusPill({ status }: { status: WorkflowStatus }) {
-  const t = TOKENS[status] ?? 'pending'
+  const cls = STATUS_CLASS[status] ?? 's-pend'
   return (
     <span
       data-cy="status-pill"
-      style={{
-        display: 'inline-block',
-        padding: '2px 8px',
-        borderRadius: 10,
-        fontSize: 12,
-        fontWeight: 600,
-        lineHeight: 1.5,
-        background: `var(--wf-${t}-bg)`,
-        color: `var(--wf-${t}-fg)`,
-        whiteSpace: 'nowrap',
-      }}
+      className={'pill ' + cls}
     >
-      {status}
+      {status.toUpperCase()}
     </span>
   )
 }

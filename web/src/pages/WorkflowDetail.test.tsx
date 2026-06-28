@@ -29,7 +29,7 @@ describe('WorkflowDetail', () => {
     })))
     renderDetail()
     await waitFor(() => expect(screen.getAllByText('OrderWorkflow').length).toBeGreaterThan(0))
-    expect(screen.getByText('Running')).toBeInTheDocument()
+    expect(screen.getByText('RUNNING')).toBeInTheDocument()
     expect(screen.getByText('ExecutionStarted')).toBeInTheDocument()
     expect(screen.getByText('Charge')).toBeInTheDocument()
   })
@@ -46,7 +46,7 @@ describe('WorkflowDetail', () => {
     })))
     const client = makeQueryClient()
     renderDetail(client)
-    await waitFor(() => expect(screen.getByText('Running')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('RUNNING')).toBeInTheDocument())
     expect(screen.getByText('ExecutionStarted')).toBeInTheDocument()
     expect(screen.getByText('Charge')).toBeInTheDocument()
 
@@ -66,7 +66,7 @@ describe('WorkflowDetail', () => {
       await client.invalidateQueries({ queryKey: ['workflow', 'order', 'abc'] })
     })
 
-    await waitFor(() => expect(screen.getByText('Completed')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('COMPLETED')).toBeInTheDocument())
     // All 3 events rendered
     expect(screen.getByText('ExecutionStarted')).toBeInTheDocument()
     expect(screen.getByText('Charge')).toBeInTheDocument()
