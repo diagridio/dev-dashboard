@@ -79,6 +79,7 @@ interface LogViewerCoreProps {
   onToggleLevel: (level: LogLevel) => void
   onSearchChange: (s: string) => void
   onFollowToggle: () => void
+  onFollowDisengage: () => void
 }
 
 const LINE_CAP = 2000
@@ -92,10 +93,11 @@ function LogViewerCore({
   onToggleLevel,
   onSearchChange,
   onFollowToggle,
+  onFollowDisengage,
 }: LogViewerCoreProps) {
-  // Always call both hooks — conditionally ignore lines for single-source modes
-  const daprdResult = useLogStream(appId, 'daprd')
-  const appResult = useLogStream(appId, 'app')
+  // Always call both hooks — pass undefined appId for the unused stream so no EventSource opens
+  const daprdResult = useLogStream(source === 'app' ? undefined : appId, 'daprd')
+  const appResult = useLogStream(source === 'daprd' ? undefined : appId, 'app')
 
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -143,20 +145,16 @@ function LogViewerCore({
     }
   }, [mergedLen, following])
 
+  const SCROLL_THRESHOLD = 24
+
   function handleScroll() {
     const el = scrollRef.current
     if (!el) return
     if (el.scrollHeight === 0) return
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
-    if (nearBottom && !following) {
-      // User scrolled to bottom manually — re-engage follow silently
-    } else if (!nearBottom && following) {
-      // User scrolled away — disengage follow (no direct state access here;
-      // the parent owns follow state and handles this via onFollowToggle).
-      // We signal disengage by checking in the parent. But since parent
-      // passes following, we need a separate callback for disengage.
-      // For simplicity: scroll-away disengages via the parent's handler only
-      // when the user explicitly clicks; manual scroll won't auto-disengage.
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (distFromBottom > SCROLL_THRESHOLD && following) {
+      // User scrolled away from the bottom — pause following
+      onFollowDisengage()
     }
   }
 
@@ -171,8 +169,8 @@ function LogViewerCore({
     ? merged.filter(({ line }) => line.text.toLowerCase().includes(search.toLowerCase())).length
     : 0
 
-  // Approximate tail size: sum of rendered line text byte lengths
-  const tailBytes = filtered.reduce((acc, { line }) => acc + line.text.length, 0)
+  // Approximate tail size: sum of full buffer line text byte lengths (not filtered view)
+  const tailBytes = merged.reduce((acc, { line }) => acc + line.text.length, 0)
   const tailKB = Math.round(tailBytes / 1024)
 
   return (
@@ -377,6 +375,7 @@ export function Logs() {
           onToggleLevel={toggleLevel}
           onSearchChange={setSearch}
           onFollowToggle={handleFollowToggle}
+          onFollowDisengage={() => setFollowing(false)}
         />
       )}
 
