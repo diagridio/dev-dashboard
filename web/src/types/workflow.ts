@@ -37,4 +37,5 @@ export interface StateStore {
   type: string
   path: string
   active: boolean
+  connection: string
 }
