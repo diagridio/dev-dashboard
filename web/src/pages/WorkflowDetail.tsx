@@ -256,8 +256,7 @@ export function WorkflowDetail() {
   const terminal = isTerminal(execution.status)
 
   // Metagrid helpers
-  const fmt = (ts: string | undefined) =>
-    ts ? new Date(ts).toLocaleTimeString() : undefined
+  const fmt = (ts: string | undefined) => formatDateTime(ts)
 
   const duration =
     execution.createdAt && execution.lastUpdatedAt && terminal
