@@ -147,7 +147,9 @@ func TestStoreRegistry_StoreInfoMapping(t *testing.T) {
 func TestStoreRegistry_StoresEmptyWhenNoComponents(t *testing.T) {
 	r := newStoreRegistry(nil)
 	require.Nil(t, r.active())
-	require.Empty(t, r.Stores())
+	got := r.Stores()
+	require.NotNil(t, got)
+	require.Len(t, got, 0)
 }
 
 func TestNewRootCmd_NewFlags(t *testing.T) {

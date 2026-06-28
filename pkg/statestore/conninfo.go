@@ -11,7 +11,7 @@ import (
 func ConnInfo(c Component) string {
 	switch c.Type {
 	case "state.redis":
-		return c.Metadata["redisHost"]
+		return strings.TrimSpace(c.Metadata["redisHost"])
 	case "state.sqlite":
 		// connectionString for sqlite is a local file path (or ":memory:"),
 		// which contains no secret.
@@ -39,6 +39,7 @@ func pgConnInfo(cs string) string {
 			return ""
 		}
 		// u.Host is host[:port] and excludes userinfo; u.Path is "/dbname".
+		// SECURITY: u.Host is host[:port] only — Go's net/url keeps userinfo (user:password) in u.User, which we never read. Do not replace this with manual string building that could reintroduce credentials.
 		db := strings.TrimPrefix(u.Path, "/")
 		if u.Host != "" && db != "" {
 			return u.Host + "/" + db
