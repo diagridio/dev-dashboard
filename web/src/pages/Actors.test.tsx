@@ -20,17 +20,20 @@ function renderAt(entry = '/actors') {
     ],
     { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
   )
-  return { router, ...render(
-    <QueryProvider client={client}>
-      <RefreshProvider>
-        <RouterProvider router={router} future={{ v7_startTransition: true }} />
-      </RefreshProvider>
-    </QueryProvider>,
-  )}
+  return {
+    router,
+    ...render(
+      <QueryProvider client={client}>
+        <RefreshProvider>
+          <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        </RefreshProvider>
+      </QueryProvider>,
+    ),
+  }
 }
 
 describe('Actors', () => {
-  it('renders a row with actor type, count, and app link', async () => {
+  it('renders a row with actor type, count, app link, and connected placement', async () => {
     server.use(
       http.get('/api/actors', () =>
         HttpResponse.json([
@@ -43,13 +46,25 @@ describe('Actors', () => {
     expect(link).toHaveAttribute('href', '/apps/order')
     expect(screen.getByText('OrderActor')).toBeInTheDocument()
     expect(screen.getByText('3')).toBeInTheDocument()
-    expect(screen.getByText('localhost:50005')).toBeInTheDocument()
+    // Placement shown as a "connected" health pill, not the raw address
+    expect(screen.getByText(/connected/i)).toBeInTheDocument()
+  })
+
+  it('tags internal actor types with an internal badge', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([
+          { appId: 'order', type: 'dapr.internal.default.order.workflow', count: 5 },
+        ]),
+      ),
+    )
+    renderAt()
+    await screen.findByText(/dapr\.internal/i)
+    expect(screen.getByText(/^internal$/i)).toBeInTheDocument()
   })
 
   it('shows friendly empty state when no actors are registered', async () => {
-    server.use(
-      http.get('/api/actors', () => HttpResponse.json([])),
-    )
+    server.use(http.get('/api/actors', () => HttpResponse.json([])))
     renderAt()
     await waitFor(() =>
       expect(screen.getByText(/no actors registered/i)).toBeInTheDocument(),
@@ -59,9 +74,7 @@ describe('Actors', () => {
   it('shows filter affordance when ?appId= is set and clears it on click', async () => {
     server.use(
       http.get('/api/actors', () =>
-        HttpResponse.json([
-          { appId: 'order', type: 'OrderActor', count: 1 },
-        ]),
+        HttpResponse.json([{ appId: 'order', type: 'OrderActor', count: 1 }]),
       ),
     )
     const { router } = renderAt('/actors?appId=order')
@@ -71,7 +84,7 @@ describe('Actors', () => {
     await waitFor(() => expect(router.state.location.search).toBe(''))
   })
 
-  it('shows filter badge during loading when ?appId= is set', async () => {
+  it('shows filter affordance during loading when ?appId= is set', async () => {
     server.use(
       http.get('/api/actors', async () => {
         await delay(200)
@@ -79,10 +92,8 @@ describe('Actors', () => {
       }),
     )
     renderAt('/actors?appId=order')
-    // Badge should be present immediately (during loading)
     expect(screen.getByText(/filtered to order/i)).toBeInTheDocument()
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
-    // Wait for data to settle
     await screen.findByText('OrderActor')
   })
 })

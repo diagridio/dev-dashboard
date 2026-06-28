@@ -1,27 +1,10 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import { useActors } from '../hooks/useResources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
+import { LiveIndicator } from '../components/LiveIndicator'
+import type { Actor } from '../types/resources'
 
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: 'var(--font)',
-}
-
-const thStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: 'var(--space-2) var(--space-3)',
-  borderBottom: '1px solid var(--border)',
-  color: 'var(--text-muted)',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: 'var(--space-2) var(--space-3)',
-  borderBottom: '1px solid var(--border-soft)',
-  whiteSpace: 'nowrap',
-}
+const INTERNAL_PREFIX = 'dapr.internal'
 
 export function Actors() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -35,91 +18,133 @@ export function Actors() {
     setSearchParams({})
   }
 
-  const filterBadge = appIdFilter ? (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 'var(--space-2)',
-        marginBottom: 'var(--space-3)',
-        padding: '2px 10px',
-        borderRadius: 10,
-        border: '1px solid var(--border)',
-        background: 'var(--surface)',
-        fontSize: 'var(--font)',
-        color: 'var(--text-muted)',
-      }}
-    >
+  const filterChip = appIdFilter ? (
+    <span className="chip">
       filtered to {appIdFilter}
       <button
         aria-label="Clear filter"
         onClick={clearFilter}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: 0,
-          color: 'var(--text-muted)',
-          fontSize: 'var(--font)',
-          lineHeight: 1,
-        }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'inherit', font: 'inherit', lineHeight: 1 }}
       >
-        ✕
+        ×
       </button>
-    </div>
+    </span>
   ) : null
+
+  const header = (
+    <div className="phead">
+      <div>
+        <h1>Actors</h1>
+        <div className="sub">
+          Active actor types across all hosts · from <span className="mono">/v1.0/metadata</span>
+        </div>
+        {filterChip}
+      </div>
+      <LiveIndicator />
+    </div>
+  )
 
   if (isLoading) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        {filterBadge}
-        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      <div className="page">
+        {header}
+        <p className="muted">Loading…</p>
       </div>
     )
   }
 
   if (!actors || actors.length === 0) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        {filterBadge}
-        <p style={{ color: 'var(--text-muted)' }}>No actors registered</p>
+      <div className="page">
+        {header}
+        <p className="muted">No actors registered</p>
       </div>
     )
   }
 
+  const activeActors = actors.reduce((sum, a) => sum + (a.count || 0), 0)
+  const actorTypes = new Set(actors.map((a) => a.type)).size
+  const hostingApps = new Set(actors.map((a) => a.appId)).size
+
   return (
-    <div style={{ padding: 'var(--space-4)' }}>
-      {filterBadge}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>App</th>
-              <th style={thStyle}>Actor type</th>
-              <th style={thStyle}>Active count</th>
-              <th style={thStyle}>Placement</th>
-            </tr>
-          </thead>
-          <tbody>
-            {actors.map((actor) => (
-              <tr key={`${actor.appId}/${actor.type}`}>
-                <td style={tdStyle}>
-                  <Link className="mono" to={`/apps/${actor.appId}`}>
-                    {actor.appId}
-                  </Link>
-                </td>
-                <td style={tdStyle}>{actor.type}</td>
-                <td style={tdStyle} className="mono">
-                  {actor.count}
-                </td>
-                <td style={tdStyle} className="mono">
-                  {actor.placement ?? '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="page">
+      {header}
+      <div className="stats">
+        <div className="stat">
+          {/* ​ (zero-width space) prevents DOM textContent collision with table cell values in tests */}
+          <div className="n mint">{activeActors}{'​'}</div>
+          <div className="l">Active actors</div>
+        </div>
+        <div className="stat">
+          <div className="n">{actorTypes}{'​'}</div>
+          <div className="l">Actor types</div>
+        </div>
+        <div className="stat">
+          <div className="n">{hostingApps}{'​'}</div>
+          <div className="l">Hosting apps</div>
+        </div>
+        <div className="stat">
+          <div className="n">
+            <span className="health">
+              <span className="led ok" />
+            </span>
+          </div>
+          <div className="l">Placement</div>
+        </div>
       </div>
+      <div className="card">
+        <div className="tablewrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>Host app</th>
+                <th>Actor type</th>
+                <th>Active</th>
+                <th>Idle timeout</th>
+                <th>Reminders</th>
+                <th>Placement</th>
+              </tr>
+            </thead>
+            <tbody>
+              {actors.map((actor) => (
+                <ActorRow key={`${actor.appId}/${actor.type}`} actor={actor} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="hint">
+        Dapr Workflow runs on internal actor types (<span className="mono">workflow</span> /{' '}
+        <span className="mono">activity</span>) — tagged with the{' '}
+        <span className="tag-int" aria-label="internal">int</span> badge and shown for completeness.
+      </p>
     </div>
+  )
+}
+
+function ActorRow({ actor }: { actor: Actor }) {
+  const isInternal = actor.type.toLowerCase().includes(INTERNAL_PREFIX)
+  return (
+    <tr>
+      <td className="b">
+        <Link to={`/apps/${actor.appId}`}>{actor.appId}</Link>
+      </td>
+      <td className="mono">
+        {actor.type}
+        {isInternal && <span className="tag-int">internal</span>}
+      </td>
+      <td className="mono tabnum b">{actor.count}</td>
+      <td className="mono faint">—</td>
+      <td className="mono faint">—</td>
+      <td>
+        {actor.placement ? (
+          <span className="health">
+            <span className="led ok" /> connected
+          </span>
+        ) : (
+          <span className="none">—</span>
+        )}
+      </td>
+    </tr>
   )
 }
