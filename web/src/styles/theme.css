@@ -92,6 +92,8 @@ body {
 .sblink .col .sub { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
 .sbfoot { padding: 10px 14px; border-top: 1px solid var(--line-soft); }
 .sbfoot .pw { font-family: var(--mono); font-size: 9.5px; color: var(--faint); line-height: 1.4; white-space: nowrap; }
+.pw a { color: inherit; text-decoration: none; }
+.pw a:hover { text-decoration: underline; }
 .app.collapsed .sbfoot { display: none; }
 
 /* Bell + collapsed vertical label */
