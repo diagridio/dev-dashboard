@@ -108,8 +108,7 @@ export function Workflows() {
   })
 
   // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows)
-  const rawItems: WorkflowSummary[] = data?.items ?? []
-  const items = useMemo(() => dedupeWorkflows(rawItems), [rawItems])
+  const items = useMemo<WorkflowSummary[]>(() => dedupeWorkflows(data?.items ?? []), [data?.items])
 
   // Track loaded count for pager display — accumulate actual items per page.
   // On page 0, loadedCount equals items.length; on subsequent pages we add to it.
