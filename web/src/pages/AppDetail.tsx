@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
 import type { AppDetail as AppDetailType, HealthStatus } from '../types/api'
 import { copyText } from '../lib/clipboard'
+import { useToast } from '../lib/toast'
 
 // ---------- helpers ----------
 
@@ -28,38 +28,15 @@ function runtimeSwatch(runtime: string): string {
   return 'var(--faint)'
 }
 
-// ---------- tiny toast ----------
-
-function useToast() {
-  const [msg, setMsg] = useState<string | null>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const show = useCallback((text: string) => {
-    setMsg(text)
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setMsg(null), 1400)
-  }, [])
-  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
-  return { msg, show }
-}
-
-function Toast({ msg }: { msg: string | null }) {
-  return (
-    <div className={`toast${msg ? ' show' : ''}`} aria-live="polite">
-      <span className="d" />
-      <span className="tx">{msg ?? ''}</span>
-    </div>
-  )
-}
-
 // ---------- content ----------
 
 function AppDetailContent({ app }: { app: AppDetailType }) {
   const navigate = useNavigate()
-  const { msg, show } = useToast()
+  const { toast, toastNode } = useToast()
 
   const copyPath = (path: string) => {
     copyText(path)
-    show('Path copied')
+    toast.show('Path copied')
   }
 
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
@@ -170,56 +147,74 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         </div>
         <div className="kv">
           <div className="kk">Resources</div>
-          <div className="vv mono">
-            {app.resourcePaths && app.resourcePaths.length > 0 ? (
-              app.resourcePaths.map((p, i) => (
-                <span
+          {app.resourcePaths && app.resourcePaths.length === 1 ? (
+            <div
+              className="vv mono"
+              data-cy="copy-path"
+              title="Click to copy"
+              onClick={() => copyPath(app.resourcePaths![0])}
+            >
+              {app.resourcePaths[0]}
+            </div>
+          ) : app.resourcePaths && app.resourcePaths.length > 1 ? (
+            <div className="vv mono" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+              {app.resourcePaths.map((p, i) => (
+                <div
                   key={i}
                   data-cy="copy-path"
                   title="Click to copy"
-                  style={{ display: 'block' }}
+                  style={{ cursor: 'copy', width: '100%' }}
                   onClick={() => copyPath(p)}
                 >
                   {p}
-                </span>
-              ))
-            ) : (
-              <span className="faint">—</span>
-            )}
-          </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="vv mono"><span className="faint">—</span></div>
+          )}
 
           <div className="kk">Config</div>
-          <div className="vv mono">
-            {app.configPath ? (
-              <span data-cy="copy-path" title="Click to copy" onClick={() => copyPath(app.configPath)}>
-                {app.configPath}
-              </span>
-            ) : (
-              <span className="faint">—</span>
-            )}
-          </div>
+          {app.configPath ? (
+            <div
+              className="vv mono"
+              data-cy="copy-path"
+              title="Click to copy"
+              onClick={() => copyPath(app.configPath)}
+            >
+              {app.configPath}
+            </div>
+          ) : (
+            <div className="vv mono"><span className="faint">—</span></div>
+          )}
 
           <div className="kk">App log</div>
-          <div className="vv mono">
-            {app.appLogPath ? (
-              <span data-cy="copy-path" title="Click to copy" onClick={() => copyPath(app.appLogPath)}>
-                {app.appLogPath}
-              </span>
-            ) : (
-              <span className="faint">—</span>
-            )}
-          </div>
+          {app.appLogPath ? (
+            <div
+              className="vv mono"
+              data-cy="copy-path"
+              title="Click to copy"
+              onClick={() => copyPath(app.appLogPath)}
+            >
+              {app.appLogPath}
+            </div>
+          ) : (
+            <div className="vv mono"><span className="faint">—</span></div>
+          )}
 
           <div className="kk">daprd log</div>
-          <div className="vv mono">
-            {app.daprdLogPath ? (
-              <span data-cy="copy-path" title="Click to copy" onClick={() => copyPath(app.daprdLogPath)}>
-                {app.daprdLogPath}
-              </span>
-            ) : (
-              <span className="faint">—</span>
-            )}
-          </div>
+          {app.daprdLogPath ? (
+            <div
+              className="vv mono"
+              data-cy="copy-path"
+              title="Click to copy"
+              onClick={() => copyPath(app.daprdLogPath)}
+            >
+              {app.daprdLogPath}
+            </div>
+          ) : (
+            <div className="vv mono"><span className="faint">—</span></div>
+          )}
         </div>
       </div>
 
@@ -259,7 +254,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         </div>
       </div>
 
-      <Toast msg={msg} />
+      {toastNode}
     </div>
   )
 }
@@ -279,7 +274,7 @@ export function AppDetail() {
   if (isError || !app) {
     return (
       <div className="page">
-        <p style={{ color: 'var(--fail-fg)' }}>App not found or failed to load.</p>
+        <p className="err">App not found or failed to load.</p>
       </div>
     )
   }
