@@ -1,0 +1,18 @@
+{
+  "appId": "order",
+  "instanceId": "inst-1",
+  "name": "OrderWorkflow",
+  "status": "Running",
+  "createdAt": "2026-01-01T13:00:00+01:00",
+  "input": "{\"id\":1}",
+  "replayCount": 0,
+  "history": [
+    {
+      "sequenceId": 0,
+      "timestamp": "2026-01-01T13:00:00+01:00",
+      "type": "ExecutionStarted",
+      "name": "OrderWorkflow",
+      "input": "{\"id\":1}"
+    }
+  ]
+}
