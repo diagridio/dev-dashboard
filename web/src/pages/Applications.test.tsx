@@ -85,4 +85,11 @@ describe('Applications', () => {
     renderAt()
     await waitFor(() => expect(screen.getByText(/no dapr apps/i)).toBeInTheDocument())
   })
+
+  it('App ID link uses the table text color (celllink class)', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json(sampleApps)))
+    renderAt()
+    // The App ID link must use the table text color (class celllink), not a default/visited link color.
+    expect(await screen.findByRole('link', { name: 'order' })).toHaveClass('celllink')
+  })
 })

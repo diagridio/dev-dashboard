@@ -461,6 +461,7 @@ export function Workflows() {
                       <td className="wfname">{wf.name}</td>
                       <td className="iid">
                         <Link
+                          className="celllink"
                           to={`/workflows/${wf.appId}/${wf.instanceId}`}
                           onClick={(e) => e.stopPropagation()}
                         >

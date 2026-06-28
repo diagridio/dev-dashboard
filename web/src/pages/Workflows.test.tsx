@@ -239,4 +239,18 @@ describe('Workflows', () => {
     const nextBtn = screen.getByRole('button', { name: 'Next →' })
     expect(nextBtn).toBeDisabled()
   })
+
+  it('Instance ID link uses the table text color (celllink class)', async () => {
+    server.use(
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [
+            { appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' },
+          ],
+        }),
+      ),
+    )
+    renderAt()
+    expect(await screen.findByRole('link', { name: 'abc' })).toHaveClass('celllink')
+  })
 })

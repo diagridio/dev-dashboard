@@ -135,7 +135,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
         </span>
       </td>
       <td className="b">
-        <Link to={`/apps/${app.appId}`} onClick={(e) => e.stopPropagation()}>
+        <Link className="celllink" to={`/apps/${app.appId}`} onClick={(e) => e.stopPropagation()}>
           {app.appId}
         </Link>
       </td>
