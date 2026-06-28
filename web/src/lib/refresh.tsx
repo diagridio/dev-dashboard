@@ -24,7 +24,7 @@ function readPaused(): boolean {
   return localStorage.getItem(REFRESH_PAUSED_KEY) === 'true'
 }
 
-const RefreshContext = createContext<RefreshCtx | null>(null)
+export const RefreshContext = createContext<RefreshCtx | null>(null)
 
 export function RefreshProvider({ children }: { children: ReactNode }) {
   const [intervalMs, setIntervalMs] = useState<number>(readIntervalMs)
