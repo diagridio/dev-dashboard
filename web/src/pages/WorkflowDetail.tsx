@@ -4,7 +4,11 @@ import { useWorkflow } from '../hooks/useWorkflows'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
+import { RefreshControl } from '../components/RefreshControl'
 import { elapsed } from '../lib/wallclock'
+import { highlightJson } from '../lib/json-highlight'
+import { useToast } from '../lib/toast'
+import { useRefreshInterval } from '../lib/refresh'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
 
@@ -16,150 +20,6 @@ const TERMINAL_STATUSES: WorkflowStatus[] = ['Completed', 'Failed', 'Terminated'
 
 function isTerminal(status: WorkflowStatus): boolean {
   return TERMINAL_STATUSES.includes(status)
-}
-
-// ---------------------------------------------------------------------------
-// Shared styles (mirror AppDetail.tsx)
-// ---------------------------------------------------------------------------
-
-const sectionStyle: React.CSSProperties = {
-  marginBottom: 'var(--space-6)',
-}
-
-const sectionHeadingStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.05em',
-  color: 'var(--text-muted)',
-  marginBottom: 'var(--space-3)',
-  paddingBottom: 'var(--space-2)',
-  borderBottom: '1px solid var(--border)',
-}
-
-const rowStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 'var(--space-3)',
-  padding: 'var(--space-2) 0',
-  borderBottom: '1px solid var(--border-soft)',
-}
-
-const labelStyle: React.CSSProperties = {
-  color: 'var(--text-muted)',
-  minWidth: 140,
-  flexShrink: 0,
-}
-
-const valueStyle: React.CSSProperties = {
-  color: 'var(--text)',
-}
-
-function Field({ label, value, mono = false }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return (
-    <div style={rowStyle}>
-      <span style={labelStyle}>{label}</span>
-      <span style={valueStyle} className={mono ? 'mono' : undefined}>
-        {value ?? '—'}
-      </span>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Copyable value field
-// ---------------------------------------------------------------------------
-
-function CopyableValue({ value }: { value: string }) {
-  return (
-    <span
-      className="mono"
-      title="Click to copy"
-      style={{ cursor: 'copy', wordBreak: 'break-all' }}
-      onClick={() => copyText(value)}
-    >
-      {value}
-    </span>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// History event row (expandable input/output)
-// ---------------------------------------------------------------------------
-
-function HistoryRow({
-  event,
-  expanded,
-  onToggle,
-}: {
-  event: WorkflowHistoryEvent
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const hasDetails = !!(event.input || event.output)
-
-  return (
-    <div
-      style={{
-        borderBottom: '1px solid var(--border-soft)',
-        padding: 'var(--space-2) 0',
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          gap: 'var(--space-3)',
-          alignItems: 'center',
-          cursor: hasDetails ? 'pointer' : 'default',
-        }}
-        onClick={hasDetails ? onToggle : undefined}
-      >
-        <span style={{ color: 'var(--text-muted)', minWidth: 32, fontSize: 12 }}>
-          {event.sequenceId}
-        </span>
-        <span style={{ color: 'var(--text)', fontWeight: 500, minWidth: 160 }}>
-          {event.type}
-        </span>
-        <span style={{ color: 'var(--text-muted)', flex: 1 }}>
-          {event.name ?? ''}
-        </span>
-        <span style={{ color: 'var(--text-faint)', fontSize: 12 }}>
-          {event.timestamp ? new Date(event.timestamp).toLocaleString() : '—'}
-        </span>
-        {hasDetails && (
-          <span
-            aria-hidden="true"
-            style={{
-              color: 'var(--text-faint)',
-              fontSize: 12,
-              userSelect: 'none',
-            }}
-          >
-            {expanded ? '▲' : '▼'}
-          </span>
-        )}
-      </div>
-      {expanded && hasDetails && (
-        <div style={{ paddingLeft: 'var(--space-6)', paddingTop: 'var(--space-2)' }}>
-          {event.input && (
-            <div style={{ marginBottom: 'var(--space-2)' }}>
-              <span style={{ color: 'var(--text-muted)', fontSize: 12, marginRight: 'var(--space-2)' }}>
-                input
-              </span>
-              <CopyableValue value={event.input} />
-            </div>
-          )}
-          {event.output && (
-            <div>
-              <span style={{ color: 'var(--text-muted)', fontSize: 12, marginRight: 'var(--space-2)' }}>
-                output
-              </span>
-              <CopyableValue value={event.output} />
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -177,10 +37,6 @@ function useWallClock(
   useEffect(() => {
     if (terminal) return
     if (!createdAt) return
-
-    // Check prefers-reduced-motion; we still update the numeric value but skip
-    // any animation (CSS animations are suppressed by the media query in CSS).
-    // The interval still runs so the number stays live.
     const id = setInterval(() => setTick((n) => n + 1), 1000)
     return () => clearInterval(id)
   }, [terminal, createdAt])
@@ -188,13 +44,125 @@ function useWallClock(
   if (!createdAt) return ''
 
   if (terminal) {
-    // Freeze at total duration (use lastUpdatedAt as end time if available)
     return elapsed(createdAt, lastUpdatedAt ?? null)
   }
 
-  // Live: update every tick
   void tick // ensure re-render
   return elapsed(createdAt, null, Date.now())
+}
+
+// ---------------------------------------------------------------------------
+// Last-updated "N ago" string
+// ---------------------------------------------------------------------------
+
+function useLastRefreshed(): string {
+  const [refreshedAt, setRefreshedAt] = useState<number>(() => Date.now())
+  const [, setTick] = useState(0)
+  const { paused } = useRefreshInterval()
+
+  useEffect(() => {
+    if (!paused) {
+      setRefreshedAt(Date.now())
+    }
+  }, [paused])
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 5000)
+    return () => clearInterval(id)
+  }, [])
+
+  const secsAgo = Math.floor((Date.now() - refreshedAt) / 1000)
+  if (secsAgo < 10) return 'updated just now'
+  if (secsAgo < 60) return `updated ${secsAgo}s ago`
+  const minsAgo = Math.floor(secsAgo / 60)
+  return `updated ${minsAgo}m ago`
+}
+
+// ---------------------------------------------------------------------------
+// Event type → node class mapping
+// ---------------------------------------------------------------------------
+
+function nodeClass(eventType: string): string {
+  if (eventType === 'ExecutionStarted') return 'n-start'
+  if (eventType === 'TaskScheduled') return 'n-sched'
+  if (eventType === 'TaskCompleted') return 'n-done'
+  if (eventType.endsWith('Failed') && !eventType.startsWith('Execution')) return 'n-fail'
+  if (eventType.includes('Timer')) return 'n-timer'
+  if (eventType === 'ExecutionCompleted') return 'n-end'
+  if (eventType === 'ExecutionFailed' || eventType === 'ExecutionTerminated') return 'n-endfail'
+  return 'n-start'
+}
+
+// ---------------------------------------------------------------------------
+// Relative time from createdAt
+// ---------------------------------------------------------------------------
+
+function relativeTime(eventTs: string | undefined, createdAt: string | undefined): string {
+  if (!eventTs || !createdAt) return ''
+  const delta = Date.parse(eventTs) - Date.parse(createdAt)
+  if (isNaN(delta)) return ''
+  const secs = delta / 1000
+  return `+${secs.toFixed(3)}s`
+}
+
+// ---------------------------------------------------------------------------
+// History event row rendered as details/summary
+// ---------------------------------------------------------------------------
+
+function EventRow({
+  event,
+  createdAt,
+  isNewest,
+}: {
+  event: WorkflowHistoryEvent
+  createdAt: string | undefined
+  isNewest: boolean
+}) {
+  const relTime = relativeTime(event.timestamp, createdAt)
+  const absTime = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : ''
+  const nCls = nodeClass(event.type)
+
+  const evTag = `#${event.sequenceId}`
+
+  const hasDetails = !!(event.input || event.output)
+
+  return (
+    <div className={`ev${isNewest ? ' reveal' : ''}`}>
+      <div className="t">
+        {relTime}
+        <span className="abs">{absTime}</span>
+      </div>
+      <div className="rail">
+        <span className={`node ${nCls}`} />
+      </div>
+      <div className="c">
+        <details className="evd">
+          <summary>
+            <span className="caret">▸</span>
+            <span className="evtype">{event.type}</span>
+            {event.name && <span className="evname">{event.name}</span>}
+            <span className="evtag">{evTag}</span>
+          </summary>
+          {hasDetails && (
+            <div className="evbody">
+              {event.input && (
+                <div>
+                  <div className="lbl">Input</div>
+                  <pre>{highlightJson(event.input)}</pre>
+                </div>
+              )}
+              {event.output && (
+                <div>
+                  <div className="lbl">Output</div>
+                  <pre>{highlightJson(event.output)}</pre>
+                </div>
+              )}
+            </div>
+          )}
+        </details>
+      </div>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -209,11 +177,11 @@ export function WorkflowDetail() {
   const navigate = useNavigate()
   const { mutate: removeWorkflows } = useRemoveWorkflows()
 
-  // Expanded history rows keyed by sequenceId
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set())
-
-  // Task-18: confirm-remove dialog open state
+  // Confirm-remove dialog state: open + which mode (force vs purge)
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
+  const [removeForce, setRemoveForce] = useState(false)
+
+  const { toast, toastNode } = useToast()
 
   const wallclock = useWallClock(
     execution?.createdAt,
@@ -221,29 +189,32 @@ export function WorkflowDetail() {
     execution?.status ?? 'Pending',
   )
 
+  const lastRefreshed = useLastRefreshed()
+
   if (isLoading) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      <div className="page">
+        <p className="muted">Loading…</p>
       </div>
     )
   }
 
   if (isError || !execution) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--bad)' }}>Workflow not found or failed to load.</p>
+      <div className="page">
+        <p className="err">Workflow not found or failed to load.</p>
       </div>
     )
   }
 
-  function toggleRow(sequenceId: number) {
-    setExpandedRows((prev) => {
-      const next = new Set(prev)
-      if (next.has(sequenceId)) next.delete(sequenceId)
-      else next.add(sequenceId)
-      return next
-    })
+  function openPurge() {
+    setRemoveForce(false)
+    setRemoveDialogOpen(true)
+  }
+
+  function openForceDelete() {
+    setRemoveForce(true)
+    setRemoveDialogOpen(true)
   }
 
   function onConfirmRemove(force: boolean) {
@@ -262,161 +233,287 @@ export function WorkflowDetail() {
   }
 
   const history = execution.history ?? []
+  const terminal = isTerminal(execution.status)
+
+  // Short instance ID for breadcrumb (first 8 chars + ellipsis + last 4)
+  const id = execution.instanceId
+  const shortId =
+    id.length > 14
+      ? `${id.slice(0, 8)}…${id.slice(-4)}`
+      : id
+
+  // Metagrid helpers
+  const fmt = (ts: string | undefined) =>
+    ts ? new Date(ts).toLocaleTimeString() : undefined
+
+  const duration =
+    execution.createdAt && execution.lastUpdatedAt && terminal
+      ? elapsed(execution.createdAt, execution.lastUpdatedAt)
+      : execution.createdAt
+      ? elapsed(execution.createdAt, null, Date.now())
+      : undefined
+
+  const lastEvent = history.length > 0 ? history[history.length - 1] : undefined
+  const lastEventLabel = lastEvent
+    ? `${lastEvent.type}${lastEvent.name ? ` · ${lastEvent.name}` : ''} · #${lastEvent.sequenceId}`
+    : undefined
+
+  const hasOutput = !!execution.output
+  const isRunning = !terminal
 
   return (
-    <div style={{ padding: 'var(--space-4)' }}>
-      {/* ----------------------------------------------------------------- */}
-      {/* Header                                                             */}
-      {/* ----------------------------------------------------------------- */}
-      <div style={{ marginBottom: 'var(--space-6)' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            marginBottom: 'var(--space-2)',
-            flexWrap: 'wrap',
-          }}
-        >
-          <h1
-            className="mono"
-            title="Click to copy"
-            style={{ margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--text)', cursor: 'copy' }}
-            onClick={() => copyText(execution.instanceId)}
-          >
-            {execution.instanceId}
-          </h1>
+    <div className="page">
+      {/* ------------------------------------------------------------------ */}
+      {/* Breadcrumbs                                                          */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="crumbs">
+        <Link to="/workflows">Workflows</Link>
+        <span className="sep">/</span>
+        <span className="muted">{execution.appId}</span>
+        <span className="sep">/</span>
+        <span className="cur">{shortId}</span>
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Page header                                                          */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="dhead">
+        <div className="dtitle">
           <StatusPill status={execution.status} />
+          <h1>{execution.name}</h1>
           {wallclock && (
             <span
-              className="mono"
+              className={`clock${terminal ? ' stopped' : ''}`}
+              title="Wall-clock since the workflow was scheduled"
               aria-label="elapsed time"
-              style={{ fontSize: 13, color: 'var(--text-muted)' }}
             >
+              <span className="lbl2">{terminal ? 'total' : 'elapsed'}</span>
+              {' '}
               {wallclock}
             </span>
           )}
         </div>
-        <div
-          style={{
-            display: 'flex',
-            gap: 'var(--space-4)',
-            alignItems: 'center',
-            fontSize: 14,
-            color: 'var(--text-muted)',
-          }}
-        >
-          <span>{execution.name}</span>
-          <Link to={`/apps/${execution.appId}`} style={{ color: 'var(--accent)' }}>
-            {execution.appId}
-          </Link>
+        <div className="dactions">
+          <button className="btn ghost" onClick={() => navigate(-1)}>
+            ← Back
+          </button>
+          <button
+            className="btn ghost"
+            onClick={openPurge}
+            disabled={!terminal}
+            title={terminal ? undefined : 'Available once the workflow reaches a terminal state'}
+            data-cy="wf-purge"
+          >
+            Purge via Dapr API
+          </button>
+          <button
+            className="btn danger"
+            onClick={openForceDelete}
+            data-cy="wf-remove"
+          >
+            Force delete…
+          </button>
         </div>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Summary section                                                    */}
-      {/* ----------------------------------------------------------------- */}
-      <div style={sectionStyle}>
-        <div style={sectionHeadingStyle}>Summary</div>
-        <Field
-          label="Created"
-          value={execution.createdAt ? new Date(execution.createdAt).toLocaleString() : '—'}
-        />
-        <Field
-          label="Last updated"
-          value={execution.lastUpdatedAt ? new Date(execution.lastUpdatedAt).toLocaleString() : '—'}
-        />
-        <Field label="Replay count" value={String(execution.replayCount)} mono />
-        {execution.failureDetails && (
-          <Field
-            label="Failure"
-            value={
-              execution.failureDetails.errorType
-                ? `${execution.failureDetails.errorType}: ${execution.failureDetails.message ?? ''}`
-                : execution.failureDetails.message ?? '—'
-            }
-          />
-        )}
+      {/* ------------------------------------------------------------------ */}
+      {/* Refresh bar                                                          */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="refreshbar">
+        <RefreshControl />
+        <span className="sp" />
+        <span className="mono faint">{lastRefreshed}</span>
       </div>
 
-      {/* ----------------------------------------------------------------- */}
-      {/* Payload section (only shown when present)                          */}
-      {/* ----------------------------------------------------------------- */}
-      {(execution.input || execution.output || execution.customStatus) && (
-        <div style={sectionStyle}>
-          <div style={sectionHeadingStyle}>Payload</div>
-          {execution.input && (
-            <Field
-              label="Input"
-              value={<CopyableValue value={execution.input} />}
-            />
+      {/* ------------------------------------------------------------------ */}
+      {/* Meta grid                                                            */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="metagrid">
+        <div className="m span2">
+          <div className="k">Instance ID</div>
+          <div className="v mono">
+            {execution.instanceId}{' '}
+            <button
+              className="copybtn"
+              onClick={() => {
+                copyText(execution.instanceId)
+                toast.show('Instance ID copied')
+              }}
+            >
+              ⧉ Copy
+            </button>
+          </div>
+        </div>
+        <div className="m span2">
+          <div className="k">App ID</div>
+          <div className="v">{execution.appId}</div>
+        </div>
+        <div className="m">
+          <div className="k">Created</div>
+          <div className="v mono">
+            {fmt(execution.createdAt) ?? <span className="faint">—</span>}
+          </div>
+        </div>
+        <div className="m">
+          <div className="k">Ended</div>
+          <div className="v mono">
+            {terminal && execution.lastUpdatedAt
+              ? fmt(execution.lastUpdatedAt)
+              : <span className="faint">—</span>}
+          </div>
+        </div>
+        <div className="m">
+          <div className="k">Duration</div>
+          <div className="v mono">
+            {duration ?? <span className="faint">—</span>}
+          </div>
+        </div>
+        <div className="m">
+          <div className="k">Last updated</div>
+          <div className="v mono">
+            {fmt(execution.lastUpdatedAt) ?? <span className="faint">—</span>}
+          </div>
+        </div>
+        <div className="m">
+          <div className="k">Replays</div>
+          <div className="v mono">{execution.replayCount}</div>
+        </div>
+        <div className="m">
+          <div className="k">Events</div>
+          <div className="v mono">{history.length}</div>
+        </div>
+        <div className="m span2">
+          <div className="k">Last event</div>
+          <div className="v mono">
+            {lastEventLabel ?? <span className="faint">awaiting first event…</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Input / Output panels                                                */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="io">
+        {/* Input */}
+        <div className="panel">
+          <div className="ph">
+            <span className="tagdot" style={{ background: 'var(--accent2)' }} />
+            {' '}Input{' '}
+            <button
+              className="copybtn"
+              onClick={() => {
+                copyText(execution.input ?? '')
+                toast.show('Input copied')
+              }}
+            >
+              ⧉ Copy
+            </button>
+          </div>
+          {execution.input ? (
+            <pre className="json">{highlightJson(execution.input)}</pre>
+          ) : (
+            <span className="faint">—</span>
           )}
-          {execution.output && (
-            <Field
-              label="Output"
-              value={<CopyableValue value={execution.output} />}
-            />
+        </div>
+
+        {/* Output */}
+        <div className="panel">
+          <div className="ph">
+            <span className="tagdot" style={{ background: 'var(--fail-fg)' }} />
+            {' '}Output{' '}
+            <button
+              className="copybtn"
+              onClick={() => {
+                copyText(execution.output ?? '')
+                toast.show('Output copied')
+              }}
+            >
+              ⧉ Copy
+            </button>
+          </div>
+          {isRunning && !hasOutput ? (
+            <div className="pendingout">
+              <span
+                className="beat"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: 'var(--run-fg)',
+                  display: 'inline-block',
+                }}
+              />
+              {' '}workflow running — no output yet
+            </div>
+          ) : (
+            execution.output
+              ? <pre className="json">{highlightJson(execution.output)}</pre>
+              : <span className="faint">—</span>
           )}
-          {execution.customStatus && (
-            <Field
-              label="Custom status"
-              value={<CopyableValue value={execution.customStatus} />}
-            />
-          )}
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Custom status panel (only when set)                                  */}
+      {/* ------------------------------------------------------------------ */}
+      {execution.customStatus && (
+        <div className="panel" id="d-custom" style={{ marginBottom: 22 }}>
+          <div className="ph">
+            <span className="tagdot" style={{ background: 'var(--susp-fg)' }} />
+            {' '}Custom status{' '}
+            <span className="faint" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
+              — shown only when the workflow sets it via <span className="mono">ctx.SetCustomStatus()</span>
+            </span>
+            <button
+              className="copybtn"
+              onClick={() => {
+                copyText(execution.customStatus ?? '')
+                toast.show('Custom status copied')
+              }}
+            >
+              ⧉ Copy
+            </button>
+          </div>
+          <pre className="json">{highlightJson(execution.customStatus)}</pre>
         </div>
       )}
 
-      {/* ----------------------------------------------------------------- */}
-      {/* History timeline                                                   */}
-      {/* Note: v1 renders the list directly. Virtualization for very long   */}
-      {/* histories is deferred to Plan-5 (performance follow-up).           */}
-      {/* ----------------------------------------------------------------- */}
-      <div style={sectionStyle}>
-        <div
-          style={{
-            ...sectionHeadingStyle,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <span>History ({history.length})</span>
-          <button
-            data-cy="wf-remove"
-            onClick={() => setRemoveDialogOpen(true)}
-            style={{
-              padding: '2px 10px',
-              borderRadius: 4,
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--bad)',
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: 500,
-            }}
-          >
-            Remove
-          </button>
-        </div>
-        {history.length === 0 ? (
-          <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>No history events.</p>
-        ) : (
-          history.map((event) => (
-            <HistoryRow
+      {/* ------------------------------------------------------------------ */}
+      {/* Event history timeline                                               */}
+      {/* ------------------------------------------------------------------ */}
+      <h2 className="sech">
+        Event history{' '}
+        <span className="meta">
+          {terminal ? `${history.length} events` : 'live — populating as the run progresses'}
+        </span>
+      </h2>
+
+      {history.length === 0 ? (
+        <p className="hint">No history events.</p>
+      ) : (
+        <div className="timeline">
+          {history.map((event, idx) => (
+            <EventRow
               key={event.sequenceId}
               event={event}
-              expanded={expandedRows.has(event.sequenceId)}
-              onToggle={() => toggleRow(event.sequenceId)}
+              createdAt={execution.createdAt}
+              isNewest={idx === history.length - 1}
             />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
+
+      <p className="hint">Back to the list to see the overview, filters, and bulk purge.</p>
+
       <ConfirmRemoveDialog
         open={removeDialogOpen}
         targets={[{ appId: appId ?? '', instanceId: instanceId ?? '', status: execution.status }]}
         onConfirm={onConfirmRemove}
         onCancel={() => setRemoveDialogOpen(false)}
+        initialForce={removeForce}
       />
+
+      {toastNode}
     </div>
   )
 }
