@@ -1,23 +1,2 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dev Dashboard</title>
-    <script>
-      (function () {
-        try {
-          var t = localStorage.getItem('devdash.theme');
-          var d = localStorage.getItem('devdash.density');
-          document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light');
-          document.documentElement.setAttribute('data-density', d === 'comfortable' ? 'comfortable' : 'compact');
-        } catch (e) {}
-      })();
-    </script>
-    <script type="module" crossorigin src="/assets/index-CNpO5Y4f.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index--TyPnKGR.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
-</html>
+<!doctype html><meta charset="utf-8"><title>Dev Dashboard</title>
+<body>Build the web app with <code>make web</code>, then rebuild the binary.</body>
