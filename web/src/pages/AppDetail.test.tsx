@@ -12,7 +12,7 @@ function renderDetail() {
   const router = createMemoryRouter(
     [
       { path: '/apps/:appId', element: <AppDetail /> },
-      { path: '/resources/:kind/:name', element: <div>Resource detail</div> },
+      { path: '/components/:name', element: <div>Component detail</div> },
     ],
     { initialEntries: ['/apps/order'], future: { v7_relativeSplatPath: true } },
   )
@@ -120,10 +120,10 @@ describe('AppDetail', () => {
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
 
-    // Component chip should be a link to /resources/component/statestore
+    // Component chip should be a link to /components/statestore
     const chip = screen.getByRole('link', { name: /statestore/ })
     expect(chip).toBeInTheDocument()
-    expect(chip).toHaveAttribute('href', '/resources/component/statestore')
+    expect(chip).toHaveAttribute('href', '/components/statestore')
 
     // Enabled features should render
     expect(screen.getByText('StateStore')).toBeInTheDocument()

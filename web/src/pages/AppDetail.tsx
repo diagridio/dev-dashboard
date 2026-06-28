@@ -243,7 +243,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               <Link
                 key={c.name}
                 className="chip k link"
-                to={`/resources/component/${c.name}`}
+                to={`/components/${c.name}`}
               >
                 {c.name} <span className="muted">{c.type}</span>
               </Link>

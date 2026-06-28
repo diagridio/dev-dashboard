@@ -1,137 +1,137 @@
-import { Link } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useResources } from '../hooks/useResources'
 import type { ResourceKind } from '../types/resources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: 'var(--font)',
-}
-
-const thStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: 'var(--space-2) var(--space-3)',
-  borderBottom: '1px solid var(--border)',
-  color: 'var(--text-muted)',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: 'var(--space-2) var(--space-3)',
-  borderBottom: '1px solid var(--border-soft)',
-  whiteSpace: 'nowrap',
-}
-
-const chipStyle: React.CSSProperties = {
-  display: 'inline-block',
-  marginRight: 'var(--space-1)',
-  padding: '1px 8px',
-  borderRadius: 10,
-  border: '1px solid var(--border)',
-  background: 'var(--surface)',
-  fontSize: 'calc(var(--font) - 1px)',
-  color: 'var(--text-muted)',
-  textDecoration: 'none',
-}
-
-const LABELS: Record<ResourceKind, { title: string; empty: string }> = {
-  component: { title: 'Components', empty: 'No components' },
-  configuration: { title: 'Configurations', empty: 'No configurations' },
-}
+import { ResourceDetail } from './ResourceDetail'
 
 interface ResourceListProps {
   kind: ResourceKind
 }
 
+const LABELS: Record<
+  ResourceKind,
+  {
+    title: string
+    sub: React.ReactNode
+  }
+> = {
+  component: {
+    title: 'Components',
+    sub: (
+      <>
+        Resource files from <span className="mono">~/.dapr/resources</span> and live{' '}
+        <span className="mono">--resources-path</span> args
+      </>
+    ),
+  },
+  configuration: {
+    title: 'Configurations',
+    sub: (
+      <>
+        Dapr <span className="mono">Configuration</span> resources from{' '}
+        <span className="mono">~/.dapr/config.yaml</span> and{' '}
+        <span className="mono">--config</span> args
+      </>
+    ),
+  },
+}
+
 export function ResourceList({ kind }: ResourceListProps) {
   const { data: resources, isLoading } = useResources(kind)
-  const { title, empty } = LABELS[kind]
+  const { name: selectedName } = useParams<{ name?: string }>()
+  const navigate = useNavigate()
+  const { title, sub } = LABELS[kind]
+  const kindPath = kind === 'component' ? 'components' : 'configurations'
+
+  // Determine effective selected name (from URL or first item)
+  const effectiveName =
+    selectedName ?? (resources && resources.length > 0 ? resources[0].name : undefined)
 
   useDocumentTitle(title)
 
   if (isLoading) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      <div className="page">
+        <div className="phead">
+          <div>
+            <h1>{title}</h1>
+            <div className="sub">{sub}</div>
+          </div>
+        </div>
+        <p className="muted">Loading…</p>
       </div>
     )
   }
 
+  // Empty state
   if (!resources || resources.length === 0) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--text-muted)' }}>
-          {empty}
-        </p>
+      <div className="page">
+        <div className="phead">
+          <div>
+            <h1>{title}</h1>
+            <div className="sub">{sub}</div>
+          </div>
+        </div>
+        <div className="md">
+          <div className="card complist" />
+          <div className="card">
+            <p className="hint" style={{ padding: '14px' }}>
+              No {title.toLowerCase()} found.
+            </p>
+          </div>
+        </div>
       </div>
     )
+  }
+
+  const handleSelect = (name: string) => {
+    navigate(`/${kindPath}/${name}`)
   }
 
   return (
-    <div style={{ padding: 'var(--space-4)' }}>
-      <div style={{ overflowX: 'auto' }}>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Name</th>
-              {kind === 'component' ? (
-                <>
-                  <th style={thStyle}>Type</th>
-                  <th style={thStyle}>Version</th>
-                  <th style={thStyle}>Loaded by</th>
-                </>
-              ) : (
-                <th style={thStyle}>Path</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {resources.map((resource) => (
-              <tr key={resource.name}>
-                <td style={tdStyle}>
-                  <Link
-                    className="mono"
-                    to={`/resources/${kind}/${resource.name}`}
-                  >
-                    {resource.name}
-                  </Link>
-                </td>
-                {kind === 'component' ? (
-                  <>
-                    <td style={tdStyle} className="mono">
-                      {resource.type ?? '—'}
-                    </td>
-                    <td style={tdStyle} className="mono">
-                      {resource.version ?? '—'}
-                    </td>
-                    <td style={tdStyle}>
-                      {resource.loadedBy && resource.loadedBy.length > 0 ? (
-                        resource.loadedBy.map((appId) => (
-                          <Link
-                            key={appId}
-                            to={`/apps/${appId}`}
-                            className="mono"
-                            style={chipStyle}
-                          >
-                            {appId}
-                          </Link>
-                        ))
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </>
-                ) : (
-                  <td style={tdStyle} className="mono">
-                    {resource.path}
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="page">
+      <div className="phead">
+        <div>
+          <h1>{title}</h1>
+          <div className="sub">{sub}</div>
+        </div>
+      </div>
+      <div className="md">
+        <div className="card complist">
+          {resources.map((resource) => {
+            const isSelected = resource.name === effectiveName
+            const ct =
+              kind === 'component'
+                ? [resource.type, resource.version].filter(Boolean).join(' · ')
+                : resource.type ?? ''
+            return (
+              <div
+                key={resource.name}
+                className={`ci${isSelected ? ' sel' : ''}`}
+                onClick={() => handleSelect(resource.name)}
+                role="button"
+                aria-selected={isSelected}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') handleSelect(resource.name)
+                }}
+              >
+                <span className="cn">{resource.name}</span>
+                {ct && <span className="ct">{ct}</span>}
+              </div>
+            )
+          })}
+        </div>
+        {effectiveName ? (
+          <ResourceDetail kind={kind} name={effectiveName} />
+        ) : (
+          <div className="card">
+            <p className="hint" style={{ padding: '14px' }}>
+              Select an item to view details.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )

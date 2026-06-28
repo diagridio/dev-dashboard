@@ -12,21 +12,25 @@ const STATESTORE_FIXTURE = {
   name: 'statestore',
   kind: 'component',
   type: 'state.redis',
+  version: 'v1',
   path: '/components/statestore.yaml',
   loadedBy: ['order'],
   raw: 'apiVersion: dapr.io/v1alpha1\nkind: Component\nspec:\n  type: state.redis\n',
 }
 
-function renderResourceDetail(entry = '/resources/component/statestore') {
+function renderResourceDetail(kind: 'component' | 'configuration' = 'component', name = 'statestore') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: 0, staleTime: 0 } },
   })
   const router = createMemoryRouter(
     [
-      { path: '/resources/:kind/:name', element: <ResourceDetail /> },
+      {
+        path: '/components/:name',
+        element: <ResourceDetail kind={kind} name={name} />,
+      },
       { path: '/apps/:appId', element: <div data-testid="app-detail">app detail</div> },
     ],
-    { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
+    { initialEntries: [`/components/${name}`], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
@@ -38,7 +42,7 @@ function renderResourceDetail(entry = '/resources/component/statestore') {
 }
 
 describe('ResourceDetail', () => {
-  it('renders name header, YAML body and loadedBy app link', async () => {
+  it('renders YAML body and loadedBy app link', async () => {
     server.use(
       http.get('/api/resources/component/statestore', () =>
         HttpResponse.json(STATESTORE_FIXTURE),
@@ -46,10 +50,7 @@ describe('ResourceDetail', () => {
     )
     renderResourceDetail()
 
-    // name in header
-    await screen.findByText('statestore')
-
-    // YAML body contains the type string (may appear in header + YAML viewer)
+    // meta header shows type + loaded by label, and YAML body also contains state.redis
     await waitFor(() =>
       expect(screen.getAllByText(/state\.redis/).length).toBeGreaterThan(0),
     )
@@ -66,8 +67,9 @@ describe('ResourceDetail', () => {
       ),
     )
     renderResourceDetail()
-    await screen.findByText('statestore')
-    expect(screen.getByText(/not currently loaded/i)).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByText(/not currently loaded/i)).toBeInTheDocument(),
+    )
   })
 
   it('shows not-found message on 404', async () => {
