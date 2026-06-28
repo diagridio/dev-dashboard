@@ -1,4 +1,4 @@
-# dev-dashboard
+# Diagrid Dev Dashboard
 
 A local-first, single-binary CLI that gives Dapr developers a live, dense, minimal-chrome
 view of everything Dapr running on their machine.
@@ -18,9 +18,6 @@ Design goals:
 - **Read-only, except for workflow purge** — it never starts or stops your apps in v1.
 - **Degrade gracefully** — keep working when a sidecar or state store is unavailable.
 - **Minimal, high-density UI** with light and dark themes, optimized for desktop widths.
-
-It is distributed as a standalone CLI today, but is architected so its functionality can
-later be folded into the Diagrid CLI (Go).
 
 ## Use cases
 
@@ -91,8 +88,6 @@ Download the archive for your platform from the [GitHub Releases](https://github
 ```sh
 dev-dashboard --version
 ```
-
-> Homebrew / Scoop / winget packaging is planned but not part of v1.
 
 **Run:**
 
