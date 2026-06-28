@@ -10,6 +10,7 @@ import { highlightJson } from '../lib/json-highlight'
 import { useToast } from '../lib/toast'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
+import { sortHistoryForDisplay } from '../lib/eventOrder'
 
 // ---------------------------------------------------------------------------
 // Status helpers
@@ -229,6 +230,7 @@ export function WorkflowDetail() {
   }
 
   const history = execution.history ?? []
+  const orderedHistory = sortHistoryForDisplay(history)
   const terminal = isTerminal(execution.status)
 
   // Short instance ID for breadcrumb (first 8 chars + ellipsis + last 4)
@@ -488,12 +490,12 @@ export function WorkflowDetail() {
         <p className="hint">No history events.</p>
       ) : (
         <div className="timeline">
-          {history.map((event, idx) => (
+          {orderedHistory.map((event, idx) => (
             <EventRow
-              key={event.sequenceId}
+              key={idx}
               event={event}
               createdAt={execution.createdAt}
-              isNewest={idx === history.length - 1}
+              isNewest={idx === orderedHistory.length - 1}
             />
           ))}
         </div>
