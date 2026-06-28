@@ -1,70 +1,64 @@
-import { useState, useEffect, useRef } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useState, useEffect, useRef, useMemo } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflows, useStateStores } from '../hooks/useWorkflows'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
+import { RefreshControl } from '../components/RefreshControl'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import type { WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
-const ALL_STATUSES: WorkflowStatus[] = ['Pending', 'Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
+const ALL_STATUSES: WorkflowStatus[] = ['Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
 
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: 'var(--font)',
-}
-
-const thStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: 'var(--space-2) var(--space-3)',
-  borderBottom: '1px solid var(--border)',
-  color: 'var(--text-muted)',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: 'var(--space-2) var(--space-3)',
-  borderBottom: '1px solid var(--border-soft)',
-  whiteSpace: 'nowrap',
-}
-
-function formatAge(createdAt?: string): string {
-  if (!createdAt) return '—'
-  const diffMs = Date.now() - new Date(createdAt).getTime()
-  const diffSec = Math.floor(diffMs / 1000)
-  if (diffSec < 60) return `${diffSec}s`
-  const diffMin = Math.floor(diffSec / 60)
-  if (diffMin < 60) return `${diffMin}m`
-  const diffHr = Math.floor(diffMin / 60)
-  if (diffHr < 24) return `${diffHr}h`
-  const diffDay = Math.floor(diffHr / 24)
-  return `${diffDay}d`
-}
-
+/** Format a UTC ISO string as a short local time HH:MM:SS */
 function formatCreated(createdAt?: string): string {
   if (!createdAt) return '—'
   const d = new Date(createdAt)
-  return d.toLocaleString()
+  return d.toLocaleTimeString()
 }
 
+/** Compute a human-readable duration between two dates (or from createdAt to now if no end). */
+function formatDuration(createdAt?: string, endAt?: string): string {
+  if (!createdAt) return '—'
+  const start = new Date(createdAt).getTime()
+  const end = endAt ? new Date(endAt).getTime() : Date.now()
+  const ms = end - start
+  if (ms < 0) return '—'
+  const sec = Math.floor(ms / 1000)
+  if (sec < 60) return `${sec}s`
+  const min = Math.floor(sec / 60)
+  const remSec = sec % 60
+  if (min < 60) return remSec > 0 ? `${min}m ${remSec}s` : `${min}m`
+  const hr = Math.floor(min / 60)
+  const remMin = min % 60
+  return remMin > 0 ? `${hr}h ${remMin}m` : `${hr}h`
+}
+
+/** Terminal statuses — no live duration needed */
+const TERMINAL_STATUSES: WorkflowStatus[] = ['Completed', 'Failed', 'Terminated']
+
 export function Workflows() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   // Initialize filter state from URL on mount
-  const urlStatus = searchParams.get('status')
+  const urlStatus = searchParams.get('status') ?? ''
   const urlSearch = searchParams.get('search') ?? ''
   const urlPage = searchParams.get('page') ?? undefined
   const urlStore = searchParams.get('store') ?? ''
+  const urlApp = searchParams.get('app') ?? ''
 
-  const [selectedStatuses, setSelectedStatuses] = useState<WorkflowStatus[]>(
-    urlStatus ? (urlStatus.split(',') as WorkflowStatus[]) : [],
+  // Single-status filter (one of ALL_STATUSES or '' for All)
+  const [activeStatus, setActiveStatus] = useState<WorkflowStatus | ''>(
+    urlStatus as WorkflowStatus | '',
   )
+  const [selectedApp, setSelectedApp] = useState<string>(urlApp)
   const [searchInput, setSearchInput] = useState(urlSearch)
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch)
   const [page, setPage] = useState<string | undefined>(urlPage)
+  const [pageIndex, setPageIndex] = useState(0)
+  const [loadedCount, setLoadedCount] = useState(0)
 
-  // Task-18: dialog open state + removal hook
+  // Dialog open state + removal hook
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [removeStatus, setRemoveStatus] = useState<{ ok: number; failed: number } | null>(null)
@@ -72,9 +66,13 @@ export function Workflows() {
 
   // State store picker
   const { data: storeList } = useStateStores()
-  // Effective store: URL ?store= value if set; otherwise use the active store name for display (but don't write to URL)
   const activeStoreName = storeList?.find((s) => s.active)?.name ?? ''
   const selectedStore = urlStore || activeStoreName
+  const activeStore = storeList?.find((s) => s.name === selectedStore)
+  // Derive store type short label (e.g. "redis" from "state.redis")
+  const storeTypeLabel = activeStore
+    ? (activeStore.type.split('.').pop() ?? activeStore.type)
+    : (activeStoreName ? activeStoreName : 'unknown')
 
   // Debounce search input ~250ms
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -91,31 +89,58 @@ export function Workflows() {
   // Mirror filter state to URL
   useEffect(() => {
     const params: Record<string, string> = {}
-    if (selectedStatuses.length > 0) params.status = selectedStatuses.join(',')
+    if (activeStatus) params.status = activeStatus
     if (debouncedSearch) params.search = debouncedSearch
     if (page) params.page = page
     if (urlStore) params.store = urlStore
+    if (selectedApp) params.app = selectedApp
     setSearchParams(params, { replace: true })
-  }, [selectedStatuses, debouncedSearch, page, urlStore, setSearchParams])
+  }, [activeStatus, debouncedSearch, page, urlStore, selectedApp, setSearchParams])
 
   const { data, isLoading, isError, error } = useWorkflows({
-    status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
+    status: activeStatus ? [activeStatus] : undefined,
     search: debouncedSearch || undefined,
     page,
     store: selectedStore || undefined,
+    appId: selectedApp || undefined,
   })
 
-  // Null-safe guard: the API may return {"items": null} for empty results
+  // Null-safe guard
   const items: WorkflowSummary[] = data?.items ?? []
 
-  function toggleStatus(status: WorkflowStatus) {
-    setSelectedStatuses((prev) =>
-      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
-    )
+  // Track loaded count for pager display
+  useEffect(() => {
+    if (items.length > 0) {
+      setLoadedCount((prev) => Math.max(prev, (pageIndex) * 20 + items.length))
+    }
+  }, [items.length, pageIndex])
+
+  // Collect unique app IDs from all loaded items for the app filter dropdown
+  const appIds = useMemo(() => {
+    const seen = new Set<string>()
+    items.forEach((w) => seen.add(w.appId))
+    return Array.from(seen).sort()
+  }, [items])
+
+  // Status counts from current items (for segment badge numbers)
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    items.forEach((w) => {
+      counts[w.status] = (counts[w.status] ?? 0) + 1
+    })
+    return counts
+  }, [items])
+  const totalCount = items.length
+
+  function setStatus(s: WorkflowStatus | '') {
+    setActiveStatus(s)
     setPage(undefined)
+    setPageIndex(0)
+    setLoadedCount(0)
   }
 
-  function toggleRow(key: string) {
+  function toggleRow(key: string, e: React.MouseEvent) {
+    e.stopPropagation()
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
@@ -124,7 +149,8 @@ export function Workflows() {
     })
   }
 
-  function toggleAll() {
+  function toggleAll(e: React.MouseEvent) {
+    e.stopPropagation()
     if (selected.size === items.length && items.length > 0) {
       setSelected(new Set())
     } else {
@@ -132,7 +158,12 @@ export function Workflows() {
     }
   }
 
-  function onBulkRemove() {
+  function onBulkPurge() {
+    setRemoveStatus(null)
+    setConfirmDialogOpen(true)
+  }
+
+  function onBulkForceDelete() {
     setRemoveStatus(null)
     setConfirmDialogOpen(true)
   }
@@ -166,23 +197,17 @@ export function Workflows() {
     return { appId, instanceId, status: item?.status }
   })
 
-  // --- States ---
+  const allSelected = selected.size === items.length && items.length > 0
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
-      </div>
-    )
-  }
+  // --- Error states ---
 
   if (isError) {
     const errStr = String(error)
     if (errStr.includes('503')) {
       return (
-        <div style={{ padding: 'var(--space-4)' }}>
-          <p style={{ color: 'var(--bad)', fontWeight: 600 }}>No state store detected</p>
-          <p style={{ color: 'var(--text-muted)', marginTop: 'var(--space-2)' }}>
+        <div className="page">
+          <p style={{ color: 'var(--fail-fg)', fontWeight: 600 }}>No state store detected</p>
+          <p style={{ color: 'var(--muted)', marginTop: 8 }}>
             Dapr requires a state store to persist workflow state. Configure one with the{' '}
             <span className="mono">--statestore</span> flag or add a state store component.
           </p>
@@ -190,227 +215,264 @@ export function Workflows() {
       )
     }
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        <p style={{ color: 'var(--bad)' }}>Error loading workflows: {errStr}</p>
+      <div className="page">
+        <p style={{ color: 'var(--fail-fg)' }}>Error loading workflows: {errStr}</p>
       </div>
     )
   }
-
-  // --- Toolbar ---
-
-  const toolbar = (
-    <div
-      style={{
-        display: 'flex',
-        gap: 'var(--space-3)',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        marginBottom: 'var(--space-3)',
-      }}
-    >
-      <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--font)', color: 'var(--text-muted)' }}>
-        Store:
-        <select
-          data-cy="store-select"
-          value={selectedStore}
-          onChange={(e) => {
-            const next = e.target.value
-            const params: Record<string, string> = {}
-            if (selectedStatuses.length > 0) params.status = selectedStatuses.join(',')
-            if (debouncedSearch) params.search = debouncedSearch
-            if (page) params.page = page
-            if (next) params.store = next
-            setSearchParams(params, { replace: true })
-            setPage(undefined)
-          }}
-          style={{
-            padding: 'var(--space-2) var(--space-3)',
-            border: '1px solid var(--border)',
-            borderRadius: 4,
-            background: 'var(--surface)',
-            color: 'var(--text)',
-            fontSize: 'var(--font)',
-          }}
-        >
-          {storeList?.map((s) => (
-            <option key={s.name} value={s.name}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <input
-        type="search"
-        placeholder="Search workflows…"
-        value={searchInput}
-        onChange={(e) => {
-          setSearchInput(e.target.value)
-          setPage(undefined)
-        }}
-        style={{
-          padding: 'var(--space-2) var(--space-3)',
-          border: '1px solid var(--border)',
-          borderRadius: 4,
-          background: 'var(--surface)',
-          color: 'var(--text)',
-          fontSize: 'var(--font)',
-          minWidth: 200,
-        }}
-      />
-      <div style={{ display: 'flex', gap: 'var(--space-1)', flexWrap: 'wrap' }}>
-        {ALL_STATUSES.map((s) => (
-          <button
-            key={s}
-            onClick={() => toggleStatus(s)}
-            style={{
-              padding: '2px 8px',
-              borderRadius: 10,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              border: '1px solid var(--border)',
-              background: selectedStatuses.includes(s) ? 'var(--accent)' : 'var(--surface)',
-              color: selectedStatuses.includes(s) ? 'var(--accent-fg)' : 'var(--text-muted)',
-            }}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-      <button
-        data-cy="bulk-remove"
-        disabled={selected.size === 0}
-        onClick={onBulkRemove}
-        style={{
-          marginLeft: 'auto',
-          padding: 'var(--space-2) var(--space-3)',
-          borderRadius: 4,
-          border: '1px solid var(--border)',
-          background: selected.size > 0 ? 'var(--bad)' : 'var(--surface)',
-          color: selected.size > 0 ? '#fff' : 'var(--text-faint)',
-          cursor: selected.size > 0 ? 'pointer' : 'default',
-          fontSize: 'var(--font)',
-          fontWeight: 500,
-        }}
-      >
-        Remove selected ({selected.size})
-      </button>
-    </div>
-  )
-
-  if (items.length === 0) {
-    return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        {toolbar}
-        <p style={{ color: 'var(--text-muted)' }}>No workflows found</p>
-        <ConfirmRemoveDialog
-          open={confirmDialogOpen}
-          targets={dialogTargets}
-          onConfirm={onConfirmRemove}
-          onCancel={() => setConfirmDialogOpen(false)}
-        />
-      </div>
-    )
-  }
-
-  const allSelected = selected.size === items.length && items.length > 0
 
   return (
-    <div style={{ padding: 'var(--space-4)' }}>
+    <div className="page">
+      {/* Page header */}
+      <div className="phead">
+        <div>
+          <h1>Workflow executions</h1>
+          <div className="sub">
+            {appIds.length > 0
+              ? `Across ${appIds.length} app${appIds.length !== 1 ? 's' : ''} · newest first`
+              : 'Newest first'}
+          </div>
+        </div>
+        <div className="ctrlset">
+          <span className="chip">
+            <span className="led" />
+            statestore <b>{storeTypeLabel}</b>
+          </span>
+          <RefreshControl />
+        </div>
+      </div>
+
+      {/* Remove status banner */}
       {removeStatus && (
         <div
           style={{
-            marginBottom: 'var(--space-3)',
-            padding: 'var(--space-2) var(--space-3)',
-            borderRadius: 4,
-            border: '1px solid var(--border)',
+            marginBottom: 12,
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: '1px solid var(--line)',
             background: 'var(--surface)',
-            color: removeStatus.failed > 0 ? 'var(--bad)' : 'var(--good)',
-            fontSize: 'var(--font)',
+            color: removeStatus.failed > 0 ? 'var(--fail-fg)' : 'var(--accent2)',
+            fontSize: 13,
           }}
         >
           Removed {removeStatus.ok} workflow{removeStatus.ok !== 1 ? 's' : ''}
           {removeStatus.failed > 0 ? `, ${removeStatus.failed} failed` : ''}.{' '}
           <button
             onClick={() => setRemoveStatus(null)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', fontSize: 'inherit', textDecoration: 'underline', padding: 0 }}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'inherit',
+              fontSize: 'inherit',
+              textDecoration: 'underline',
+              padding: 0,
+            }}
           >
             Dismiss
           </button>
         </div>
       )}
-      {toolbar}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleAll}
-                  aria-label="Select all"
-                />
-              </th>
-              <th style={thStyle}>Status</th>
-              <th style={thStyle}>Instance ID</th>
-              <th style={thStyle}>Name</th>
-              <th style={thStyle}>App</th>
-              <th style={thStyle}>Created</th>
-              <th style={thStyle}>Age</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((wf) => {
-              const rowKey = `${wf.appId}/${wf.instanceId}`
-              return (
-                <tr key={rowKey}>
-                  <td style={tdStyle}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(rowKey)}
-                      onChange={() => toggleRow(rowKey)}
-                      aria-label={`Select ${wf.instanceId}`}
-                    />
-                  </td>
-                  <td style={tdStyle}>
-                    <StatusPill status={wf.status} />
-                  </td>
-                  <td style={tdStyle}>
-                    <Link className="mono" to={`/workflows/${wf.appId}/${wf.instanceId}`}>
-                      {wf.instanceId}
-                    </Link>
-                  </td>
-                  <td style={tdStyle}>{wf.name}</td>
-                  <td style={tdStyle} className="mono">
-                    {wf.appId}
-                  </td>
-                  <td style={tdStyle}>{formatCreated(wf.createdAt)}</td>
-                  <td style={tdStyle}>{formatAge(wf.createdAt)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      {data?.nextToken && (
-        <div style={{ marginTop: 'var(--space-3)' }}>
+
+      {/* Filters */}
+      <div className="filters">
+        <div className="segs" role="group" aria-label="Status filter">
           <button
-            onClick={() => setPage(data.nextToken)}
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              borderRadius: 4,
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              fontSize: 'var(--font)',
-            }}
+            aria-pressed={activeStatus === ''}
+            onClick={() => setStatus('')}
           >
-            Load more
+            All <span className="n">{totalCount}</span>
           </button>
+          {ALL_STATUSES.map((s) => (
+            <button
+              key={s}
+              aria-pressed={activeStatus === s}
+              onClick={() => setStatus(s)}
+            >
+              {s} <span className="n">{statusCounts[s] ?? 0}</span>
+            </button>
+          ))}
         </div>
-      )}
+
+        {/* App filter */}
+        <select
+          className="select"
+          data-cy="store-select"
+          aria-label="Filter by app"
+          value={selectedApp}
+          onChange={(e) => {
+            setSelectedApp(e.target.value)
+            setPage(undefined)
+            setPageIndex(0)
+            setLoadedCount(0)
+          }}
+        >
+          <option value="">All apps</option>
+          {appIds.map((id) => (
+            <option key={id} value={id}>
+              {id}
+            </option>
+          ))}
+        </select>
+
+        {/* Search */}
+        <label className="search">
+          🔍
+          <input
+            placeholder="Search workflow name or instance id…"
+            aria-label="Search"
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value)
+              setPage(undefined)
+              setPageIndex(0)
+              setLoadedCount(0)
+            }}
+          />
+        </label>
+      </div>
+
+      {/* Main card */}
+      <div className="card">
+        {/* Selection bar — shown only when rows selected */}
+        {selected.size > 0 && (
+          <div className="selbar">
+            <span
+              className="cbx on"
+              role="checkbox"
+              aria-checked={allSelected}
+              aria-label="Deselect all"
+              tabIndex={0}
+              onClick={toggleAll}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAll(e as unknown as React.MouseEvent) } }}
+            />
+            <span className="cnt">{selected.size} selected</span>
+            <span className="grow" />
+            <button
+              className="btn ghost"
+              title="Uses Dapr purge API for terminal-state workflows"
+              onClick={onBulkPurge}
+            >
+              Purge via Dapr API
+            </button>
+            <button
+              className="btn danger"
+              data-cy="bulk-remove"
+              title="Direct state-store deletion — for stuck/running or no sidecar"
+              onClick={onBulkForceDelete}
+            >
+              Force delete…
+            </button>
+          </div>
+        )}
+
+        {/* Table */}
+        <div className="tablewrap">
+          {isLoading ? (
+            <p style={{ padding: 20, color: 'var(--muted)' }}>Loading…</p>
+          ) : items.length === 0 ? (
+            <p style={{ padding: 20, color: 'var(--muted)' }}>No workflows found</p>
+          ) : (
+            <table className="wf">
+              <thead>
+                <tr>
+                  <th style={{ width: 34 }} />
+                  <th>Status</th>
+                  <th>Workflow</th>
+                  <th>Instance ID</th>
+                  <th>App</th>
+                  <th>Created</th>
+                  <th>Duration</th>
+                  <th>Last event</th>
+                  <th style={{ width: 34 }} />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((wf) => {
+                  const rowKey = `${wf.appId}/${wf.instanceId}`
+                  const isTerminal = TERMINAL_STATUSES.includes(wf.status)
+                  const duration = formatDuration(
+                    wf.createdAt,
+                    isTerminal ? wf.lastUpdatedAt : undefined,
+                  )
+                  const lastEventText = wf.lastUpdatedAt
+                    ? new Date(wf.lastUpdatedAt).toLocaleTimeString()
+                    : '—'
+                  const isFailed = wf.status === 'Failed'
+
+                  return (
+                    <tr
+                      key={rowKey}
+                      className={selected.has(rowKey) ? 'sel' : undefined}
+                      onClick={() => navigate(`/workflows/${wf.appId}/${wf.instanceId}`)}
+                    >
+                      <td>
+                        <span
+                          className={selected.has(rowKey) ? 'cbx on' : 'cbx'}
+                          role="checkbox"
+                          aria-checked={selected.has(rowKey)}
+                          aria-label={`Select ${wf.instanceId}`}
+                          tabIndex={0}
+                          onClick={(e) => toggleRow(rowKey, e)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault()
+                              toggleRow(rowKey, e as unknown as React.MouseEvent)
+                            }
+                          }}
+                        />
+                      </td>
+                      <td>
+                        <StatusPill status={wf.status} />
+                      </td>
+                      <td className="wfname">{wf.name}</td>
+                      <td className="iid">
+                        <Link
+                          to={`/workflows/${wf.appId}/${wf.instanceId}`}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {wf.instanceId}
+                        </Link>
+                      </td>
+                      <td>{wf.appId}</td>
+                      <td className="muted tabnum">{formatCreated(wf.createdAt)}</td>
+                      <td className="mono tabnum">{duration}</td>
+                      <td className={`muted mono${isFailed ? ' err' : ''}`}>{lastEventText}</td>
+                      <td className="kebab">⋯</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Pager */}
+        <div className="pager">
+          <span className="mono">
+            {items.length > 0
+              ? `${loadedCount - items.length + 1}–${loadedCount} loaded`
+              : 'No results'}
+          </span>
+          <div className="pgbtns">
+            <button disabled={pageIndex === 0} onClick={() => {/* prev not supported by API */}}>
+              ← Prev
+            </button>
+            <button
+              disabled={!data?.nextToken}
+              onClick={() => {
+                if (data?.nextToken) {
+                  setPage(data.nextToken)
+                  setPageIndex((i) => i + 1)
+                }
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
+
       <ConfirmRemoveDialog
         open={confirmDialogOpen}
         targets={dialogTargets}

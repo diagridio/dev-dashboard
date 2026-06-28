@@ -36,13 +36,12 @@ export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel }: Prop
     }
   }, [open])
 
-  // Escape key handler
+  // Escape key handler + focus trap
   useEffect(() => {
     if (!open) return
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onCancel()
       if (e.key === 'Tab') {
-        // Focus trap
         const dialog = dialogRef.current
         if (!dialog) return
         const focusable = dialog.querySelectorAll<HTMLElement>(
@@ -78,46 +77,49 @@ export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel }: Prop
   if (isMixed) {
     mechanismSummary = mechanisms.map((m) => `${counts[m]} will be ${m.toLowerCase()}`).join(', ')
   } else {
-    mechanismSummary = targets.length === 1
-      ? `This workflow will be ${mechanisms[0]?.toLowerCase() ?? ''}`
-      : `All ${targets.length} will be ${mechanisms[0]?.toLowerCase() ?? ''}`
+    mechanismSummary =
+      targets.length === 1
+        ? `This workflow will be ${mechanisms[0]?.toLowerCase() ?? ''}`
+        : `All ${targets.length} will be ${mechanisms[0]?.toLowerCase() ?? ''}`
   }
 
   return (
     <div
       role="none"
       style={{
-        position: 'fixed', inset: 0,
+        position: 'fixed',
+        inset: 0,
         background: 'rgba(0,0,0,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         zIndex: 1000,
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onCancel() }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onCancel()
+      }}
     >
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-remove-title"
-        style={{
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 8,
-          padding: 'var(--space-5)',
-          maxWidth: 420,
-          width: '100%',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--space-4)',
-        }}
+        className="card"
+        style={{ maxWidth: 420, width: '100%', padding: 28, display: 'flex', flexDirection: 'column', gap: 18 }}
       >
-        <h2 id="confirm-remove-title" style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>
+        <h2 id="confirm-remove-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
           Remove {targets.length} workflow{targets.length !== 1 ? 's' : ''}?
         </h2>
-        <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>
-          {mechanismSummary}.
-        </p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 14, color: 'var(--text)', cursor: 'pointer' }}>
+        <p style={{ margin: 0, color: 'var(--muted)', fontSize: 14 }}>{mechanismSummary}.</p>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 14,
+            cursor: 'pointer',
+          }}
+        >
           <input
             type="checkbox"
             data-cy="confirm-force"
@@ -126,35 +128,14 @@ export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel }: Prop
           />
           Force delete (bypass sidecar)
         </label>
-        <div style={{ display: 'flex', gap: 'var(--space-3)', justifyContent: 'flex-end' }}>
-          <button
-            ref={cancelRef}
-            onClick={onCancel}
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              borderRadius: 4,
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              cursor: 'pointer',
-              fontSize: 'var(--font)',
-            }}
-          >
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button ref={cancelRef} className="btn ghost" onClick={onCancel}>
             Cancel
           </button>
           <button
             data-cy="confirm-remove"
+            className="btn danger"
             onClick={() => onConfirm(force)}
-            style={{
-              padding: 'var(--space-2) var(--space-4)',
-              borderRadius: 4,
-              border: '1px solid var(--bad)',
-              background: 'var(--bad)',
-              color: '#fff',
-              cursor: 'pointer',
-              fontSize: 'var(--font)',
-              fontWeight: 600,
-            }}
           >
             Remove
           </button>

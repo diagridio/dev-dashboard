@@ -43,7 +43,7 @@ function renderAt(entry = '/workflows', retries = 0) {
 }
 
 describe('Workflows', () => {
-  it('renders a workflow row linking to detail', async () => {
+  it('renders a workflow row with a link to detail on the instance ID', async () => {
     server.use(
       http.get('/api/workflows', () =>
         HttpResponse.json({
@@ -89,52 +89,124 @@ describe('Workflows', () => {
     await waitFor(() => expect(screen.getByText(/no workflows/i)).toBeInTheDocument())
   })
 
-  it('renders store-select with both store options', async () => {
+  it('shows the active store name in the statestore chip', async () => {
     server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
     renderAt()
-    // Wait for stores to load (select appears once statestores resolves)
-    await waitFor(() => expect(document.querySelector('[data-cy="store-select"]')).not.toBeNull())
-    const select = document.querySelector('[data-cy="store-select"]') as HTMLSelectElement
-    const options = select.querySelectorAll('option')
-    expect(options).toHaveLength(2)
-    expect(options[0]).toHaveValue('redis')
-    expect(options[1]).toHaveValue('postgres')
+    // The chip shows the store type label derived from the active store
+    await waitFor(() => {
+      const chip = document.querySelector('.chip')
+      expect(chip).not.toBeNull()
+      expect(chip?.textContent).toMatch(/statestore/)
+    })
   })
 
-  it('selecting a non-active store updates URL and passes store param to /api/workflows', async () => {
-    let capturedStoreParam: string | null = null
+  it('status filter segments render All + all status options', async () => {
+    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
+    renderAt()
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Status filter' })).toBeInTheDocument())
+    const group = screen.getByRole('group', { name: 'Status filter' })
+    const buttons = group.querySelectorAll('button')
+    // All + Running + Completed + Failed + Terminated + Suspended = 6
+    expect(buttons).toHaveLength(6)
+    // "All" is pressed by default
+    expect(buttons[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('clicking a status filter segment sets aria-pressed and filters the API call', async () => {
+    let capturedStatus: string | null = null
     server.use(
       http.get('/api/workflows', ({ request }) => {
         const url = new URL(request.url)
-        capturedStoreParam = url.searchParams.get('store')
+        capturedStatus = url.searchParams.get('status')
         return HttpResponse.json({ items: [] })
       }),
     )
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: 0, staleTime: 0 } },
-    })
-    const router = createMemoryRouter(
-      [
-        { path: '/workflows', element: <Workflows /> },
-        { path: '/workflows/:appId/:instanceId', element: <div>detail</div> },
-      ],
-      { initialEntries: ['/workflows'], future: { v7_relativeSplatPath: true } },
+    renderAt()
+    await waitFor(() => expect(screen.getByRole('group', { name: 'Status filter' })).toBeInTheDocument())
+    const group = screen.getByRole('group', { name: 'Status filter' })
+    const runningBtn = Array.from(group.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Running'),
+    )!
+    await userEvent.click(runningBtn)
+    await waitFor(() => expect(capturedStatus).toBe('Running'))
+    expect(runningBtn).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('selects rows and shows selbar with correct count', async () => {
+    server.use(
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [
+            { appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' },
+            { appId: 'ship', instanceId: 'xyz', name: 'ShipWorkflow', status: 'Completed', createdAt: '2026-06-26T09:00:00Z' },
+          ],
+        }),
+      ),
     )
-    render(
-      <QueryProvider client={client}>
-        <RefreshProvider>
-          <RouterProvider router={router} future={{ v7_startTransition: true }} />
-        </RefreshProvider>
-      </QueryProvider>,
+    renderAt()
+    // Wait for rows to appear
+    await screen.findByRole('link', { name: 'abc' })
+    // Find the first row checkbox (cbx span) and click it
+    const checkboxes = document.querySelectorAll('.cbx:not(.on)')
+    await userEvent.click(checkboxes[0])
+    // selbar should appear with "1 selected"
+    await waitFor(() => expect(screen.getByText('1 selected')).toBeInTheDocument())
+    expect(screen.getByText(/Purge via Dapr API/)).toBeInTheDocument()
+    expect(screen.getByText(/Force delete/)).toBeInTheDocument()
+  })
+
+  it('opens confirm dialog when Force delete is clicked', async () => {
+    server.use(
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [
+            { appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' },
+          ],
+        }),
+      ),
     )
-    // Wait for store-select to appear with stores loaded
-    await waitFor(() => expect(document.querySelector('[data-cy="store-select"]')).not.toBeNull())
-    const select = document.querySelector('[data-cy="store-select"]') as HTMLSelectElement
-    // Change to the non-active store
-    await userEvent.selectOptions(select, 'postgres')
-    // Assert URL search params updated
-    await waitFor(() => expect(router.state.location.search).toContain('store=postgres'))
-    // Assert workflow query fired with store param
-    await waitFor(() => expect(capturedStoreParam).toBe('postgres'))
+    renderAt()
+    await screen.findByRole('link', { name: 'abc' })
+    const checkboxes = document.querySelectorAll('.cbx:not(.on)')
+    await userEvent.click(checkboxes[0])
+    await waitFor(() => expect(screen.getByText(/Force delete/i)).toBeInTheDocument())
+    await userEvent.click(document.querySelector('[data-cy="bulk-remove"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    expect(screen.getByText(/remove 1 workflow/i)).toBeInTheDocument()
+  })
+
+  it('renders pager with disabled Prev and Next enabled when nextToken exists', async () => {
+    server.use(
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [
+            { appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' },
+          ],
+          nextToken: 'tok123',
+        }),
+      ),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'abc' })
+    const prevBtn = screen.getByRole('button', { name: '← Prev' })
+    const nextBtn = screen.getByRole('button', { name: 'Next →' })
+    expect(prevBtn).toBeDisabled()
+    expect(nextBtn).not.toBeDisabled()
+  })
+
+  it('renders pager with both Prev and Next disabled when no nextToken', async () => {
+    server.use(
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [
+            { appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' },
+          ],
+        }),
+      ),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'abc' })
+    const nextBtn = screen.getByRole('button', { name: 'Next →' })
+    expect(nextBtn).toBeDisabled()
   })
 })
