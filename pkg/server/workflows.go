@@ -22,12 +22,13 @@ type StoreRegistry interface {
 	Stores() []StoreInfo
 }
 
-// StoreInfo describes a single detected state store.
+// StoreInfo describes the active detected state store.
 type StoreInfo struct {
-	Name   string `json:"name"`
-	Type   string `json:"type"`
-	Path   string `json:"path"`
-	Active bool   `json:"active"`
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	Path       string `json:"path"`
+	Active     bool   `json:"active"`
+	Connection string `json:"connection"` // secrets-free host/db summary for display
 }
 
 // TargetResolver resolves an (appID, instanceID) pair into a RemoveTarget.

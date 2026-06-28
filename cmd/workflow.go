@@ -50,18 +50,21 @@ func (r *storeRegistry) active() *statestore.Component {
 	return &r.comps[r.activeIndex]
 }
 
-// Stores satisfies server.StoreRegistry and maps each component to a StoreInfo.
+// Stores satisfies server.StoreRegistry. It returns ONLY the active state store
+// (the one used by Dapr Workflow), or an empty slice when no store is detected.
+// The connection summary is secrets-free (see statestore.ConnInfo).
 func (r *storeRegistry) Stores() []server.StoreInfo {
-	out := make([]server.StoreInfo, len(r.comps))
-	for i, c := range r.comps {
-		out[i] = server.StoreInfo{
-			Name:   c.Name,
-			Type:   c.Type,
-			Path:   c.Path,
-			Active: i == r.activeIndex,
-		}
+	active := r.active()
+	if active == nil {
+		return []server.StoreInfo{}
 	}
-	return out
+	return []server.StoreInfo{{
+		Name:       active.Name,
+		Type:       active.Type,
+		Path:       active.Path,
+		Active:     true,
+		Connection: statestore.ConnInfo(*active),
+	}}
 }
 
 // targetResolver resolves an (appID, instanceID) pair into a workflow.RemoveTarget

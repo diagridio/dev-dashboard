@@ -89,15 +89,9 @@ func TestTargetResolver(t *testing.T) {
 	})
 }
 
-func TestStoreRegistry_Empty(t *testing.T) {
-	r := newStoreRegistry(nil)
-	require.Nil(t, r.active())
-	require.Empty(t, r.Stores())
-}
-
-func TestStoreRegistry_FirstIsActive(t *testing.T) {
+func TestStoreRegistry_StoresReturnsActiveOnly_FirstFallback(t *testing.T) {
 	comps := []statestore.Component{
-		{Name: "redis", Type: "state.redis", Path: "/a/redis.yaml", Metadata: map[string]string{}},
+		{Name: "redis", Type: "state.redis", Path: "/a/redis.yaml", Metadata: map[string]string{"redisHost": "localhost:6379"}},
 		{Name: "sqlite", Type: "state.sqlite", Path: "/a/sqlite.yaml", Metadata: map[string]string{}},
 	}
 	r := newStoreRegistry(comps)
@@ -107,15 +101,19 @@ func TestStoreRegistry_FirstIsActive(t *testing.T) {
 	require.Equal(t, "redis", act.Name)
 
 	infos := r.Stores()
-	require.Len(t, infos, 2)
-	require.True(t, infos[0].Active, "first should be active")
-	require.False(t, infos[1].Active)
+	require.Len(t, infos, 1, "only the active store is returned")
+	require.Equal(t, "redis", infos[0].Name)
+	require.True(t, infos[0].Active)
+	require.Equal(t, "localhost:6379", infos[0].Connection)
 }
 
-func TestStoreRegistry_ActorStateStoreWins(t *testing.T) {
+func TestStoreRegistry_StoresReturnsActiveOnly_ActorStateStoreWins(t *testing.T) {
 	comps := []statestore.Component{
-		{Name: "redis", Type: "state.redis", Path: "/a/redis.yaml", Metadata: map[string]string{}},
-		{Name: "pg", Type: "state.postgresql", Path: "/a/pg.yaml", Metadata: map[string]string{"actorStateStore": "true"}},
+		{Name: "redis", Type: "state.redis", Path: "/a/redis.yaml", Metadata: map[string]string{"redisHost": "localhost:6379"}},
+		{Name: "pg", Type: "state.postgresql", Path: "/a/pg.yaml", Metadata: map[string]string{
+			"actorStateStore":  "true",
+			"connectionString": "host=localhost port=5432 dbname=orders password=x",
+		}},
 	}
 	r := newStoreRegistry(comps)
 
@@ -124,14 +122,15 @@ func TestStoreRegistry_ActorStateStoreWins(t *testing.T) {
 	require.Equal(t, "pg", act.Name)
 
 	infos := r.Stores()
-	require.Len(t, infos, 2)
-	require.False(t, infos[0].Active)
-	require.True(t, infos[1].Active, "actorStateStore=true component should be active")
+	require.Len(t, infos, 1, "only the active (actorStateStore) store is returned")
+	require.Equal(t, "pg", infos[0].Name)
+	require.True(t, infos[0].Active)
+	require.Equal(t, "localhost:5432/orders", infos[0].Connection)
 }
 
 func TestStoreRegistry_StoreInfoMapping(t *testing.T) {
 	comps := []statestore.Component{
-		{Name: "mystore", Type: "state.sqlite", Path: "/path/to/sqlite.yaml", Metadata: map[string]string{}},
+		{Name: "mystore", Type: "state.sqlite", Path: "/path/to/sqlite.yaml", Metadata: map[string]string{"connectionString": "data.db"}},
 	}
 	r := newStoreRegistry(comps)
 
@@ -140,7 +139,14 @@ func TestStoreRegistry_StoreInfoMapping(t *testing.T) {
 	require.Equal(t, "mystore", infos[0].Name)
 	require.Equal(t, "state.sqlite", infos[0].Type)
 	require.Equal(t, "/path/to/sqlite.yaml", infos[0].Path)
+	require.Equal(t, "data.db", infos[0].Connection)
 	require.True(t, infos[0].Active)
+}
+
+func TestStoreRegistry_StoresEmptyWhenNoComponents(t *testing.T) {
+	r := newStoreRegistry(nil)
+	require.Nil(t, r.active())
+	require.Empty(t, r.Stores())
 }
 
 func TestNewRootCmd_NewFlags(t *testing.T) {
