@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflow } from '../hooks/useWorkflows'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { RefreshControl } from '../components/RefreshControl'
-import { elapsed } from '../lib/wallclock'
+import { elapsed, elapsedTenths } from '../lib/wallclock'
 import { highlightJson } from '../lib/json-highlight'
 import { useToast } from '../lib/toast'
-import { useRefreshInterval } from '../lib/refresh'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
 
@@ -44,34 +43,31 @@ function useWallClock(
   if (!createdAt) return ''
 
   if (terminal) {
-    return elapsed(createdAt, lastUpdatedAt ?? null)
+    return elapsedTenths(createdAt, lastUpdatedAt ?? null)
   }
 
   void tick // ensure re-render
-  return elapsed(createdAt, null, Date.now())
+  return elapsedTenths(createdAt, null, Date.now())
 }
 
 // ---------------------------------------------------------------------------
-// Last-updated "N ago" string
+// Last-updated "N ago" string — driven by actual query fetch time
 // ---------------------------------------------------------------------------
 
-function useLastRefreshed(): string {
-  const [refreshedAt, setRefreshedAt] = useState<number>(() => Date.now())
+function useLastRefreshed(dataUpdatedAt: number): string {
   const [, setTick] = useState(0)
-  const { paused } = useRefreshInterval()
-
-  useEffect(() => {
-    if (!paused) {
-      setRefreshedAt(Date.now())
-    }
-  }, [paused])
+  // Keep a ref to ensure we always re-render when dataUpdatedAt changes
+  const prevRef = useRef(dataUpdatedAt)
+  if (prevRef.current !== dataUpdatedAt) {
+    prevRef.current = dataUpdatedAt
+  }
 
   useEffect(() => {
     const id = setInterval(() => setTick((n) => n + 1), 5000)
     return () => clearInterval(id)
   }, [])
 
-  const secsAgo = Math.floor((Date.now() - refreshedAt) / 1000)
+  const secsAgo = Math.floor((Date.now() - dataUpdatedAt) / 1000)
   if (secsAgo < 10) return 'updated just now'
   if (secsAgo < 60) return `updated ${secsAgo}s ago`
   const minsAgo = Math.floor(secsAgo / 60)
@@ -148,13 +144,13 @@ function EventRow({
               {event.input && (
                 <div>
                   <div className="lbl">Input</div>
-                  <pre>{highlightJson(event.input)}</pre>
+                  <pre className="json">{highlightJson(event.input)}</pre>
                 </div>
               )}
               {event.output && (
                 <div>
                   <div className="lbl">Output</div>
-                  <pre>{highlightJson(event.output)}</pre>
+                  <pre className="json">{highlightJson(event.output)}</pre>
                 </div>
               )}
             </div>
@@ -173,7 +169,7 @@ export function WorkflowDetail() {
   const { appId, instanceId } = useParams<{ appId: string; instanceId: string }>()
   const [searchParams] = useSearchParams()
   const store = searchParams.get('store') ?? undefined
-  const { data: execution, isLoading, isError } = useWorkflow(appId ?? '', instanceId ?? '', store)
+  const { data: execution, isLoading, isError, dataUpdatedAt } = useWorkflow(appId ?? '', instanceId ?? '', store)
   const navigate = useNavigate()
   const { mutate: removeWorkflows } = useRemoveWorkflows()
 
@@ -189,7 +185,7 @@ export function WorkflowDetail() {
     execution?.status ?? 'Pending',
   )
 
-  const lastRefreshed = useLastRefreshed()
+  const lastRefreshed = useLastRefreshed(dataUpdatedAt)
 
   if (isLoading) {
     return (

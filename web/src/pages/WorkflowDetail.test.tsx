@@ -104,6 +104,29 @@ describe('WorkflowDetail', () => {
     expect(clock.className).toContain('stopped')
   })
 
+  it('clock renders in M:SS.t format (tenths of a second, no zero-padded minutes)', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'MyWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-26T10:00:00.000Z',
+          lastUpdatedAt: '2026-06-26T10:00:30.500Z',
+          replayCount: 0,
+          history: [],
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('COMPLETED')).toBeInTheDocument())
+    const clock = screen.getByLabelText('elapsed time')
+    // Should render "0:30.5" — M:SS.t format
+    expect(clock.textContent).toMatch(/\d+:\d{2}\.\d/)
+    expect(clock.textContent).toContain('0:30.5')
+  })
+
   // -------------------------------------------------------------------------
   // Metagrid fields
   // -------------------------------------------------------------------------
@@ -265,12 +288,13 @@ describe('WorkflowDetail', () => {
     expect(summaries[0].querySelector('.evtype')!.textContent).toBe('ExecutionStarted')
     expect(summaries[0].querySelector('.evname')!.textContent).toBe('MyWorkflow')
 
-    // evbody payload is rendered with pre + highlighted JSON
+    // evbody payload is rendered with pre.json + highlighted JSON
     const evBody = detailEls[0].querySelector('.evbody')
     expect(evBody).not.toBeNull()
-    // Pre inside evbody has JSON token classes
+    // Pre inside evbody must have class "json" so CSS color rules apply
     const bodyPre = evBody!.querySelector('pre')
     expect(bodyPre).not.toBeNull()
+    expect(bodyPre).toHaveClass('json')
     expect(bodyPre!.querySelector('.k')).not.toBeNull()
   })
 
