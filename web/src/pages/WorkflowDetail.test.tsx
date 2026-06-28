@@ -575,6 +575,42 @@ describe('WorkflowDetail', () => {
     expect(types[0]).toBe('ExecutionStarted')
     expect(types[types.length - 1]).toBe('ExecutionCompleted')
   })
+
+  // -------------------------------------------------------------------------
+  // Metagrid "Last event" cell: reflects the sorted terminal event and uses
+  // the "Event ID N" label (omitting the -1 sentinel), consistent with the
+  // timeline — not the raw last array item formatted as "#N".
+  // -------------------------------------------------------------------------
+  it('Last event cell shows the sorted terminal event with an "Event ID" label (not #N)', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-28T10:00:00.000Z',
+          lastUpdatedAt: '2026-06-28T10:00:01.000Z',
+          replayCount: 0,
+          output: '"ok"',
+          // ExecutionCompleted is the logical terminal event, but the raw
+          // history ends with an OrchestratorStarted (seq -1) episode marker.
+          history: [
+            { sequenceId: 0, type: 'ExecutionStarted', name: 'OrderWorkflow', input: '{}', timestamp: '2026-06-28T10:00:00.000Z' },
+            { sequenceId: 2, type: 'ExecutionCompleted', output: '"ok"', timestamp: '2026-06-28T10:00:01.000Z' },
+            { sequenceId: -1, type: 'OrchestratorStarted', timestamp: '2026-06-28T10:00:01.005Z' },
+          ],
+        }),
+      ),
+    )
+    renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+    // Sorted display pins ExecutionCompleted last; label uses "Event ID 2".
+    expect(screen.getByText('ExecutionCompleted · Event ID 2')).toBeInTheDocument()
+    // Not the raw last array item (OrchestratorStarted / #-1) nor old #N format.
+    expect(screen.queryByText(/#-1/)).toBeNull()
+    expect(screen.queryByText(/OrchestratorStarted · /)).toBeNull()
+  })
 })
 
 // ---------------------------------------------------------------------------

@@ -254,9 +254,12 @@ export function WorkflowDetail() {
       ? elapsed(execution.createdAt, null, Date.now())
       : undefined
 
-  const lastEvent = history.length > 0 ? history[history.length - 1] : undefined
+  const lastEvent =
+    orderedHistory.length > 0 ? orderedHistory[orderedHistory.length - 1] : undefined
   const lastEventLabel = lastEvent
-    ? `${lastEvent.type}${lastEvent.name ? ` · ${lastEvent.name}` : ''} · #${lastEvent.sequenceId}`
+    ? `${lastEvent.type}${lastEvent.name ? ` · ${lastEvent.name}` : ''}${
+        lastEvent.sequenceId >= 0 ? ` · Event ID ${lastEvent.sequenceId}` : ''
+      }`
     : undefined
 
   const hasOutput = !!execution.output
