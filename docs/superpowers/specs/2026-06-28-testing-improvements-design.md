@@ -145,7 +145,7 @@ handling, `srv.Start`/`Shutdown`). The extraction must preserve current behavior
    (so no real process scan / sidecar is needed), and an injected `HomeDir` temp dir.
 2. Call `assembleOptions`, build the router with `server.NewRouter`, serve via `httptest.NewServer`.
 3. Drive the real HTTP surface and assert:
-   - `GET /healthz` → 200
+   - `GET /api/health` → 200
    - `GET /api/version` → expected version JSON
    - `GET /api/apps` → reflects the fake app
    - `GET /api/workflows?store=…` → returns the seeded workflow through the real
