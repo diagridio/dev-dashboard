@@ -243,13 +243,6 @@ export function WorkflowDetail() {
   const orderedHistory = sortHistoryForDisplay(history)
   const terminal = isTerminal(execution.status)
 
-  // Short instance ID for breadcrumb (first 8 chars + ellipsis + last 4)
-  const id = execution.instanceId
-  const shortId =
-    id.length > 14
-      ? `${id.slice(0, 8)}…${id.slice(-4)}`
-      : id
-
   // Metagrid helpers
   const fmt = (ts: string | undefined) =>
     ts ? new Date(ts).toLocaleTimeString() : undefined
@@ -279,7 +272,7 @@ export function WorkflowDetail() {
         <span className="sep">/</span>
         <span className="muted">{execution.appId}</span>
         <span className="sep">/</span>
-        <span className="cur">{shortId}</span>
+        <span className="cur">{execution.instanceId}</span>
       </div>
 
       {/* ------------------------------------------------------------------ */}

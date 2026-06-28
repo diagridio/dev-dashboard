@@ -529,6 +529,52 @@ describe('WorkflowDetail', () => {
     await userEvent.click(document.querySelector('[data-cy="wf-remove"]') as HTMLElement)
     expect(document.querySelector('[data-cy="confirm-remove"]')).not.toBeNull()
   })
+
+  // -------------------------------------------------------------------------
+  // Task 5: Full Instance ID in breadcrumb (no ellipsis truncation)
+  // -------------------------------------------------------------------------
+  const FULL_ID = 'eec84589-11a4-4b01-831c-dce363fae52d'
+
+  function seedFullId() {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: FULL_ID,
+          name: 'OrderWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-28T10:00:00.000Z',
+          lastUpdatedAt: '2026-06-28T10:00:01.000Z',
+          replayCount: 0,
+          output: '"ok"',
+          history: [
+            { sequenceId: -1, type: 'OrchestratorStarted', timestamp: '2026-06-28T10:00:00.027Z' },
+            { sequenceId: 0, type: 'ExecutionStarted', name: 'OrderWorkflow', input: '{}', timestamp: '2026-06-28T10:00:00.000Z' },
+            { sequenceId: 1, type: 'TaskScheduled', name: 'Charge', timestamp: '2026-06-28T10:00:00.100Z' },
+            { sequenceId: 2, type: 'ExecutionCompleted', output: '"ok"', timestamp: '2026-06-28T10:00:01.000Z' },
+          ],
+        }),
+      ),
+    )
+  }
+
+  it('renders the full Instance ID in the breadcrumb (no ellipsis)', async () => {
+    seedFullId()
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+    const cur = container.querySelector('.crumbs .cur') as HTMLElement
+    expect(cur.textContent).toBe(FULL_ID)
+    expect(cur.textContent).not.toContain('…')
+  })
+
+  it('orders the event timeline ExecutionStarted-first, ExecutionCompleted-last', async () => {
+    seedFullId()
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+    const types = Array.from(container.querySelectorAll('.timeline .evtype')).map((n) => n.textContent)
+    expect(types[0]).toBe('ExecutionStarted')
+    expect(types[types.length - 1]).toBe('ExecutionCompleted')
+  })
 })
 
 // ---------------------------------------------------------------------------
