@@ -9,6 +9,7 @@ import { QueryProvider, makeQueryClient } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { WorkflowDetail, EventRow } from './WorkflowDetail'
 import type { WorkflowHistoryEvent } from '../types/workflow'
+import type { ToastHandle } from '../lib/toast'
 
 function renderDetail(client?: QueryClient) {
   // Always use a fresh client to avoid cross-test cache pollution
@@ -619,8 +620,10 @@ describe('WorkflowDetail', () => {
 
 const createdAt = '2026-06-28T10:00:00.000Z'
 
+const stubToast: ToastHandle = { show: () => {} }
+
 function row(event: WorkflowHistoryEvent) {
-  return render(<EventRow event={event} createdAt={createdAt} isNewest={false} />)
+  return render(<EventRow event={event} createdAt={createdAt} isNewest={false} toast={stubToast} />)
 }
 
 describe('EventRow', () => {
