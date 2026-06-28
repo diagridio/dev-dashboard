@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { getTheme } from '../lib/prefs'
 
 const MIN_WIDTH = 1024
 
@@ -18,6 +19,8 @@ export function SmallScreenGuard({ children }: { children: ReactNode }) {
 
   return (
     <div
+      className="app"
+      data-theme={getTheme()}
       data-cy="small-screen-overlay"
       role="alertdialog"
       aria-label="Screen too small"
@@ -28,7 +31,7 @@ export function SmallScreenGuard({ children }: { children: ReactNode }) {
     >
       <div style={{ maxWidth: 360 }}>
         <h2>The dashboard is designed for a wider screen</h2>
-        <p style={{ color: 'var(--text-muted)' }}>Please widen the window to continue.</p>
+        <p style={{ color: 'var(--muted)' }}>Please widen the window to continue.</p>
       </div>
     </div>
   )
