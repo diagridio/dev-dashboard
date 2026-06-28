@@ -106,7 +106,7 @@ function relativeTime(eventTs: string | undefined, createdAt: string | undefined
 // History event row rendered as details/summary
 // ---------------------------------------------------------------------------
 
-function EventRow({
+export function EventRow({
   event,
   createdAt,
   isNewest,
@@ -119,7 +119,9 @@ function EventRow({
   const absTime = event.timestamp ? new Date(event.timestamp).toLocaleTimeString() : ''
   const nCls = nodeClass(event.type)
 
-  const evTag = `#${event.sequenceId}`
+  // sequenceId -1 is durabletask's sentinel for OrchestratorStarted (replay) events —
+  // not a user-facing event index, so it gets no Event ID tag.
+  const eventIdTag = event.sequenceId >= 0 ? `Event ID ${event.sequenceId}` : null
 
   const hasDetails = !!(event.input || event.output)
 
@@ -133,14 +135,14 @@ function EventRow({
         <span className={`node ${nCls}`} />
       </div>
       <div className="c">
-        <details className="evd">
-          <summary>
-            <span className="caret">▸</span>
-            <span className="evtype">{event.type}</span>
-            {event.name && <span className="evname">{event.name}</span>}
-            <span className="evtag">{evTag}</span>
-          </summary>
-          {hasDetails && (
+        {hasDetails ? (
+          <details className="evd">
+            <summary>
+              <span className="caret">▸</span>
+              <span className="evtype">{event.type}</span>
+              {event.name && <span className="evname">{event.name}</span>}
+              {eventIdTag && <span className="evtag">{eventIdTag}</span>}
+            </summary>
             <div className="evbody">
               {event.input && (
                 <div>
@@ -155,8 +157,16 @@ function EventRow({
                 </div>
               )}
             </div>
-          )}
-        </details>
+          </details>
+        ) : (
+          <div className="evd evstatic">
+            <div className="evstatic-head">
+              <span className="evtype">{event.type}</span>
+              {event.name && <span className="evname">{event.name}</span>}
+              {eventIdTag && <span className="evtag">{eventIdTag}</span>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
