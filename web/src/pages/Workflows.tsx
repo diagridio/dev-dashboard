@@ -5,6 +5,7 @@ import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { RefreshControl } from '../components/RefreshControl'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
+import { dedupeWorkflows } from '../lib/dedupeWorkflows'
 import type { WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
 const ALL_STATUSES: WorkflowStatus[] = ['Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
@@ -106,8 +107,9 @@ export function Workflows() {
     appId: selectedApp || undefined,
   })
 
-  // Null-safe guard
-  const items: WorkflowSummary[] = data?.items ?? []
+  // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows)
+  const rawItems: WorkflowSummary[] = data?.items ?? []
+  const items = useMemo(() => dedupeWorkflows(rawItems), [rawItems])
 
   // Track loaded count for pager display — accumulate actual items per page.
   // On page 0, loadedCount equals items.length; on subsequent pages we add to it.
