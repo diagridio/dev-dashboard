@@ -661,4 +661,19 @@ describe('EventRow', () => {
     expect(screen.getByText('Event ID 0')).toBeInTheDocument()
     expect(container.querySelector('details')).not.toBeNull()
   })
+
+  it('renders the offset and a localized date-time in the timestamp column', () => {
+    const ts = '2026-06-28T10:00:05.600Z'
+    const { container } = row({
+      type: 'ExecutionCompleted',
+      sequenceId: 2,
+      timestamp: ts,
+      output: '"ok"',
+    })
+    expect(container.querySelector('.t .off')?.textContent).toBe('+5.60s')
+    const d = new Date(ts)
+    expect(container.querySelector('.t .dt')?.textContent).toBe(
+      `${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`,
+    )
+  })
 })
