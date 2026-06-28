@@ -32,9 +32,9 @@ export function App() {
           hasNew={hasNew}
           onHasNewChange={setHasNew}
         />
-        <div className="body">
+        <main className="body">
           <Outlet />
-        </div>
+        </main>
       </div>
     </SmallScreenGuard>
   )

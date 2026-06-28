@@ -48,6 +48,8 @@ describe('AppDetail', () => {
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     expect(screen.getByText('3500')).toBeInTheDocument()
+    // Breadcrumb must point at the Applications index route ('/'), not a non-existent '/apps'
+    expect(screen.getByRole('link', { name: 'Applications' })).toHaveAttribute('href', '/')
   })
 
   it('renders copy-path affordance on non-empty path values', async () => {

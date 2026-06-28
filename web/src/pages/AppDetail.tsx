@@ -45,7 +45,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
     <div className="page">
       {/* Breadcrumbs */}
       <div className="crumbs">
-        <Link to="/apps">Applications</Link>
+        <Link to="/">Applications</Link>
         <span className="sep">/</span>
         <span className="cur">{app.appId}</span>
       </div>
@@ -63,7 +63,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           </span>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="tbtn" onClick={() => navigate('/apps')}>← Back</button>
+          <button className="tbtn" onClick={() => navigate('/')}>← Back</button>
           <Link className="tbtn" to={`/logs?app=${app.appId}&source=daprd`}>View logs</Link>
         </div>
       </div>
