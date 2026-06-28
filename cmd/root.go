@@ -49,6 +49,7 @@ func NewRootCmd() *cobra.Command {
 	c.Flags().StringVar(&stateStore, "statestore", "", "path to a state-store component YAML (overrides auto-detect)")
 	c.Flags().StringVar(&namespace, "namespace", "default", "Dapr namespace for workflow keys")
 	c.Flags().BoolVar(&verbose, "verbose", false, "enable diagnostic logging to stderr")
+	c.AddCommand(newUpdateCmd())
 	return c
 }
 

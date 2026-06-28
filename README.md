@@ -117,6 +117,27 @@ No additional setup is needed: the dashboard discovers running Dapr apps the sam
 `dapr list` does, so anything started with `dapr run` / `dapr run -f` shows up within one
 refresh cycle.
 
+### Updating
+
+Update the binary in place from GitHub Releases:
+
+```sh
+# Update to the latest release (no-op if already current)
+dev-dashboard update
+
+# Install a specific version (can downgrade or reinstall)
+dev-dashboard update 1.2.0
+```
+
+`update` downloads the release archive for your platform, verifies its SHA256
+against the release `checksums.txt`, and atomically replaces the running binary.
+Restart any running dashboard to use the new version.
+
+> Installs managed by a package manager (Homebrew/Scoop/winget, when available)
+> should be updated through that package manager instead. If `update` reports a
+> permission error, the binary lives in a location your user can't write — re-run
+> the install one-liner, or move the binary somewhere writable.
+
 ### Mounting under a sub-path
 
 The SPA bakes its asset base URL at build time from the `DASH_BASE_PATH` environment
