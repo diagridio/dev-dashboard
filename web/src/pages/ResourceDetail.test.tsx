@@ -18,19 +18,28 @@ const STATESTORE_FIXTURE = {
   raw: 'apiVersion: dapr.io/v1alpha1\nkind: Component\nspec:\n  type: state.redis\n',
 }
 
+const APPCONFIG_FIXTURE = {
+  name: 'appconfig',
+  kind: 'configuration',
+  path: '/configurations/appconfig.yaml',
+  loadedBy: ['order-processing'],
+  raw: 'apiVersion: dapr.io/v1alpha1\nkind: Configuration\n',
+}
+
 function renderResourceDetail(kind: 'component' | 'configuration' = 'component', name = 'statestore') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: 0, staleTime: 0 } },
   })
+  const base = kind === 'component' ? 'components' : 'configurations'
   const router = createMemoryRouter(
     [
       {
-        path: '/components/:name',
+        path: `/${base}/:name`,
         element: <ResourceDetail kind={kind} name={name} />,
       },
       { path: '/apps/:appId', element: <div data-testid="app-detail">app detail</div> },
     ],
-    { initialEntries: [`/components/${name}`], future: { v7_relativeSplatPath: true } },
+    { initialEntries: [`/${base}/${name}`], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
@@ -82,5 +91,19 @@ describe('ResourceDetail', () => {
     await waitFor(() =>
       expect(screen.getByText(/not found/i)).toBeInTheDocument(),
     )
+  })
+
+  it('renders Configuration right-pane header with "Configuration · used by" meta', async () => {
+    server.use(
+      http.get('/api/resources/configuration/appconfig', () =>
+        HttpResponse.json(APPCONFIG_FIXTURE),
+      ),
+    )
+    renderResourceDetail('configuration', 'appconfig')
+    await waitFor(() =>
+      expect(screen.getByText(/Configuration · used by/)).toBeInTheDocument(),
+    )
+    const appLink = screen.getByRole('link', { name: 'order-processing' })
+    expect(appLink).toHaveAttribute('href', '/apps/order-processing')
   })
 })

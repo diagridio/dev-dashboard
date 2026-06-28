@@ -51,13 +51,14 @@ function renderComponents(entry = '/components') {
     initialEntries: [entry],
     future: { v7_relativeSplatPath: true },
   })
-  return render(
+  const renderResult = render(
     <QueryProvider client={client}>
       <RefreshProvider>
         <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )
+  return { ...renderResult, router }
 }
 
 function renderConfigurations(entry = '/configurations') {
@@ -201,7 +202,7 @@ describe('ResourceList kind=component', () => {
         HttpResponse.json({ ...PUBSUB, raw: 'kind: Component\n' }),
       ),
     )
-    renderComponents()
+    const { router } = renderComponents()
     await screen.findByText('pubsub')
     const pubsubItem = screen.getByText('pubsub').closest('.ci')!
     fireEvent.click(pubsubItem)
@@ -210,6 +211,8 @@ describe('ResourceList kind=component', () => {
       const sel = document.querySelector('.ci.sel')
       expect(sel?.textContent).toMatch(/pubsub/)
     })
+    // and the router pathname must reflect the navigation
+    expect(router.state.location.pathname).toBe('/components/pubsub')
   })
 })
 

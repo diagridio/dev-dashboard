@@ -3,7 +3,6 @@ import { useResource } from '../hooks/useResources'
 import { highlightYaml } from '../lib/yaml-highlight'
 import { copyText } from '../lib/clipboard'
 import { useToast } from '../lib/toast'
-import { useDocumentTitle } from '../lib/useDocumentTitle'
 import type { ResourceKind } from '../types/resources'
 
 export interface ResourceDetailProps {
@@ -19,8 +18,6 @@ export interface ResourceDetailProps {
 export function ResourceDetail({ kind, name }: ResourceDetailProps) {
   const { data: detail, isLoading, isError } = useResource(kind, name)
   const { toast, toastNode } = useToast()
-
-  useDocumentTitle(name)
 
   if (isLoading) {
     return (
