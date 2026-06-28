@@ -1,39 +1,8 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import { useSubscriptions } from '../hooks/useResources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'collapse',
-  fontSize: 'var(--font)',
-}
-
-const thStyle: React.CSSProperties = {
-  textAlign: 'left',
-  padding: 'var(--space-2) var(--space-3)',
-  borderBottom: '1px solid var(--border)',
-  color: 'var(--text-muted)',
-  fontWeight: 500,
-  whiteSpace: 'nowrap',
-}
-
-const tdStyle: React.CSSProperties = {
-  padding: 'var(--space-2) var(--space-3)',
-  borderBottom: '1px solid var(--border-soft)',
-  whiteSpace: 'nowrap',
-}
-
-const rulesBadgeStyle: React.CSSProperties = {
-  display: 'inline-block',
-  marginLeft: 'var(--space-2)',
-  padding: '1px 6px',
-  borderRadius: 8,
-  border: '1px solid var(--border)',
-  background: 'var(--surface)',
-  fontSize: 'calc(var(--font) - 1px)',
-  color: 'var(--text-muted)',
-  verticalAlign: 'middle',
-}
+import { LiveIndicator } from '../components/LiveIndicator'
+import type { Subscription } from '../types/resources'
 
 export function Subscriptions() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -47,112 +16,112 @@ export function Subscriptions() {
     setSearchParams({})
   }
 
-  const filterBadge = appIdFilter ? (
-    <div
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 'var(--space-2)',
-        marginBottom: 'var(--space-3)',
-        padding: '2px 10px',
-        borderRadius: 10,
-        border: '1px solid var(--border)',
-        background: 'var(--surface)',
-        fontSize: 'var(--font)',
-        color: 'var(--text-muted)',
-      }}
-    >
+  const filterChip = appIdFilter ? (
+    <span className="chip">
       filtered to {appIdFilter}
       <button
         aria-label="Clear filter"
         onClick={clearFilter}
-        style={{
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: 0,
-          color: 'var(--text-muted)',
-          fontSize: 'var(--font)',
-          lineHeight: 1,
-        }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'inherit', font: 'inherit', lineHeight: 1 }}
       >
-        ✕
+        ×
       </button>
-    </div>
+    </span>
   ) : null
+
+  const header = (
+    <div className="phead">
+      <div>
+        <h1>Subscriptions</h1>
+        <div className="sub">
+          Pub/Sub subscriptions across all running apps · from <span className="mono">/v1.0/metadata</span>
+        </div>
+        {filterChip}
+      </div>
+      <LiveIndicator />
+    </div>
+  )
 
   if (isLoading) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        {filterBadge}
-        <p style={{ color: 'var(--text-muted)' }}>Loading…</p>
+      <div className="page">
+        {header}
+        <p className="muted">Loading…</p>
       </div>
     )
   }
 
   if (!subscriptions || subscriptions.length === 0) {
     return (
-      <div style={{ padding: 'var(--space-4)' }}>
-        {filterBadge}
-        <p style={{ color: 'var(--text-muted)' }}>No subscriptions</p>
+      <div className="page">
+        {header}
+        <p className="muted">No subscriptions</p>
       </div>
     )
   }
 
   return (
-    <div style={{ padding: 'var(--space-4)' }}>
-      {filterBadge}
-      <div style={{ overflowX: 'auto' }}>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>App</th>
-              <th style={thStyle}>Pub/Sub</th>
-              <th style={thStyle}>Topic</th>
-              <th style={thStyle}>Route(s)</th>
-              <th style={thStyle}>Dead-letter</th>
-              <th style={thStyle}>Type</th>
-            </tr>
-          </thead>
-          <tbody>
-            {subscriptions.map((sub) => {
-              const rules = sub.rules ?? []
-              const firstPath = rules[0]?.path
-              const hasMultipleRules = rules.length > 1
-
-              return (
-                <tr key={`${sub.appId}/${sub.pubsubName}/${sub.topic}`}>
-                  <td style={tdStyle}>
-                    <Link className="mono" to={`/apps/${sub.appId}`}>
-                      {sub.appId}
-                    </Link>
-                  </td>
-                  <td style={tdStyle} className="mono">
-                    {sub.pubsubName}
-                  </td>
-                  <td style={tdStyle} className="mono">
-                    {sub.topic}
-                  </td>
-                  <td style={tdStyle} className="mono">
-                    {firstPath ?? '—'}
-                    {hasMultipleRules && (
-                      <span style={rulesBadgeStyle}>
-                        {rules.length} rules
-                      </span>
-                    )}
-                  </td>
-                  <td style={tdStyle} className="mono">
-                    {sub.deadLetterTopic ?? '—'}
-                  </td>
-                  <td style={tdStyle}>
-                    {sub.type ?? '—'}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+    <div className="page">
+      {header}
+      <div className="card">
+        <div className="tablewrap">
+          <table className="t">
+            <thead>
+              <tr>
+                <th>App</th>
+                <th>Pub/Sub</th>
+                <th>Topic</th>
+                <th>Route(s)</th>
+                <th>Dead-letter topic</th>
+                <th>Scopes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subscriptions.map((sub) => (
+                <SubscriptionRow key={`${sub.appId}/${sub.pubsubName}/${sub.topic}`} sub={sub} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+      <p className="hint">
+        Topics with routing rules show a <span className="rulebadge">rules</span> badge — open a row in the real app to inspect match expressions.
+      </p>
     </div>
+  )
+}
+
+function SubscriptionRow({ sub }: { sub: Subscription & { scopes?: string[] } }) {
+  const rules = sub.rules ?? []
+  const firstPath = rules[0]?.path
+  const hasMultipleRules = rules.length > 1
+  const scopes = sub.scopes ?? []
+
+  return (
+    <tr>
+      <td className="b">
+        <Link to={`/apps/${sub.appId}`}>{sub.appId}</Link>
+      </td>
+      <td className="mono">{sub.pubsubName}</td>
+      <td className="mono">{sub.topic}</td>
+      <td>
+        {firstPath ? <span className="route">{firstPath}</span> : <span className="none">—</span>}
+        {hasMultipleRules && <span className="rulebadge">{rules.length} rules</span>}
+      </td>
+      <td>
+        {sub.deadLetterTopic ? (
+          <span className="dlq">{sub.deadLetterTopic}</span>
+        ) : (
+          <span className="none">—</span>
+        )}
+      </td>
+      <td>
+        {scopes.length > 0 ? (
+          scopes.map((s) => <span key={s} className="appref">{s}</span>)
+        ) : (
+          <span className="none">—</span>
+        )}
+      </td>
+    </tr>
   )
 }

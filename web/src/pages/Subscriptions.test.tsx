@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse, delay } from 'msw'
@@ -30,7 +30,7 @@ function renderAt(entry = '/subscriptions') {
 }
 
 describe('Subscriptions', () => {
-  it('renders a row with topic and app-id link', async () => {
+  it('renders a row with topic, pub/sub, route, and app-id link', async () => {
     server.use(
       http.get('/api/subscriptions', () =>
         HttpResponse.json([
@@ -47,10 +47,12 @@ describe('Subscriptions', () => {
     renderAt()
     const link = await screen.findByRole('link', { name: 'order' })
     expect(link).toHaveAttribute('href', '/apps/order')
-    expect(screen.getByText('orders')).toBeInTheDocument()
-    expect(screen.getByText('pubsub')).toBeInTheDocument()
-    expect(screen.getByText('/orders')).toBeInTheDocument()
-    expect(screen.getByText('programmatic')).toBeInTheDocument()
+    const row = within(link.closest('tr') as HTMLElement)
+    expect(row.getByText('orders')).toBeInTheDocument()
+    expect(row.getByText('pubsub')).toBeInTheDocument()
+    expect(row.getByText('/orders')).toBeInTheDocument()
+    // Scopes absent → em-dash(s) rendered as .none (dead-letter + scopes both show —)
+    expect(row.getAllByText('—').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows a rules badge when subscription has more than one rule', async () => {
@@ -72,6 +74,49 @@ describe('Subscriptions', () => {
     renderAt()
     await screen.findByRole('link', { name: 'order' })
     expect(screen.getByText(/2 rules/i)).toBeInTheDocument()
+  })
+
+  it('renders dead-letter topic when present', async () => {
+    server.use(
+      http.get('/api/subscriptions', () =>
+        HttpResponse.json([
+          {
+            appId: 'order',
+            pubsubName: 'pubsub',
+            topic: 'orders',
+            rules: [{ match: '', path: '/orders' }],
+            deadLetterTopic: 'orders-dlq',
+          },
+        ]),
+      ),
+    )
+    renderAt()
+    const link = await screen.findByRole('link', { name: 'order' })
+    const row = within(link.closest('tr') as HTMLElement)
+    expect(row.getByText('orders-dlq')).toBeInTheDocument()
+  })
+
+  it('renders scope chips when scopes are present', async () => {
+    server.use(
+      http.get('/api/subscriptions', () =>
+        HttpResponse.json([
+          {
+            appId: 'billing',
+            pubsubName: 'pubsub',
+            topic: 'payments',
+            rules: [{ match: '', path: '/payments' }],
+            scopes: ['billing'],
+          },
+        ]),
+      ),
+    )
+    renderAt()
+    const link = await screen.findByRole('link', { name: 'billing' })
+    const rowEl = link.closest('tr') as HTMLElement
+    // Scope chip is a .appref span; the app link also contains "billing" — query by class
+    const scopeChip = rowEl.querySelector('.appref')
+    expect(scopeChip).toBeInTheDocument()
+    expect(scopeChip?.textContent).toBe('billing')
   })
 
   it('shows friendly empty state when no subscriptions exist', async () => {
