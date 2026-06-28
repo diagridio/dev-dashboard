@@ -20,21 +20,22 @@ interface Props {
   targets: Target[]
   onConfirm: (force: boolean) => void
   onCancel: () => void
+  initialForce?: boolean
 }
 
-export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel }: Props) {
-  const [force, setForce] = useState(false)
+export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel, initialForce = false }: Props) {
+  const [force, setForce] = useState(initialForce)
   const cancelRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
 
   // Reset force when dialog opens/closes
   useEffect(() => {
     if (open) {
-      setForce(false)
+      setForce(initialForce)
       // Autofocus cancel on next tick
       setTimeout(() => cancelRef.current?.focus(), 0)
     }
-  }, [open])
+  }, [open, initialForce])
 
   // Escape key handler + focus trap
   useEffect(() => {

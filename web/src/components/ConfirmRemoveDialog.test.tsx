@@ -12,4 +12,24 @@ describe('ConfirmRemoveDialog', () => {
     await userEvent.click(document.querySelector('[data-cy="confirm-remove"]') as HTMLElement)
     expect(onConfirm).toHaveBeenCalledWith(true)
   })
+
+  it('pre-checks force checkbox when initialForce=true', async () => {
+    const onConfirm = vi.fn()
+    render(<ConfirmRemoveDialog open targets={[{ appId: 'o', instanceId: 'a', status: 'Running' }]} onConfirm={onConfirm} onCancel={() => {}} initialForce={true} />)
+    const checkbox = document.querySelector('[data-cy="confirm-force"]') as HTMLInputElement
+    expect(checkbox.checked).toBe(true)
+    // Confirm immediately (without toggling) should pass force=true
+    await userEvent.click(document.querySelector('[data-cy="confirm-remove"]') as HTMLElement)
+    expect(onConfirm).toHaveBeenCalledWith(true)
+  })
+
+  it('does not pre-check force checkbox when initialForce=false (default)', async () => {
+    const onConfirm = vi.fn()
+    render(<ConfirmRemoveDialog open targets={[{ appId: 'o', instanceId: 'a', status: 'Running' }]} onConfirm={onConfirm} onCancel={() => {}} initialForce={false} />)
+    const checkbox = document.querySelector('[data-cy="confirm-force"]') as HTMLInputElement
+    expect(checkbox.checked).toBe(false)
+    // Confirm without toggling should pass force=false
+    await userEvent.click(document.querySelector('[data-cy="confirm-remove"]') as HTMLElement)
+    expect(onConfirm).toHaveBeenCalledWith(false)
+  })
 })

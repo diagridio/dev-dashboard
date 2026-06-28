@@ -60,6 +60,7 @@ export function Workflows() {
 
   // Dialog open state + removal hook
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const [dialogInitialForce, setDialogInitialForce] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [removeStatus, setRemoveStatus] = useState<{ ok: number; failed: number } | null>(null)
   const { mutate: removeWorkflows } = useRemoveWorkflows()
@@ -108,10 +109,17 @@ export function Workflows() {
   // Null-safe guard
   const items: WorkflowSummary[] = data?.items ?? []
 
-  // Track loaded count for pager display
+  // Track loaded count for pager display — accumulate actual items per page.
+  // On page 0, loadedCount equals items.length; on subsequent pages we add to it.
+  const prevPageRef = useRef<number>(-1)
   useEffect(() => {
-    if (items.length > 0) {
-      setLoadedCount((prev) => Math.max(prev, (pageIndex) * 20 + items.length))
+    if (items.length === 0) return
+    if (pageIndex === 0) {
+      prevPageRef.current = 0
+      setLoadedCount(items.length)
+    } else if (pageIndex !== prevPageRef.current) {
+      prevPageRef.current = pageIndex
+      setLoadedCount((prev) => prev + items.length)
     }
   }, [items.length, pageIndex])
 
@@ -160,11 +168,13 @@ export function Workflows() {
 
   function onBulkPurge() {
     setRemoveStatus(null)
+    setDialogInitialForce(false)
     setConfirmDialogOpen(true)
   }
 
   function onBulkForceDelete() {
     setRemoveStatus(null)
+    setDialogInitialForce(true)
     setConfirmDialogOpen(true)
   }
 
@@ -236,7 +246,30 @@ export function Workflows() {
         <div className="ctrlset">
           <span className="chip">
             <span className="led" />
-            statestore <b>{storeTypeLabel}</b>
+            statestore{' '}
+            {storeList && storeList.length > 1 ? (
+              <select
+                aria-label="Switch state store"
+                value={selectedStore}
+                style={{ background: 'none', border: 'none', font: 'inherit', fontWeight: 700, cursor: 'pointer', padding: 0, color: 'inherit' }}
+                onChange={(e) => {
+                  const params: Record<string, string> = {}
+                  if (activeStatus) params.status = activeStatus
+                  if (debouncedSearch) params.search = debouncedSearch
+                  params.store = e.target.value
+                  if (selectedApp) params.app = selectedApp
+                  setSearchParams(params, { replace: true })
+                }}
+              >
+                {storeList.map((s) => (
+                  <option key={s.name} value={s.name}>
+                    {s.type.split('.').pop() ?? s.type}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <b>{storeTypeLabel}</b>
+            )}
           </span>
           <RefreshControl />
         </div>
@@ -297,7 +330,7 @@ export function Workflows() {
         {/* App filter */}
         <select
           className="select"
-          data-cy="store-select"
+          data-cy="app-select"
           aria-label="Filter by app"
           value={selectedApp}
           onChange={(e) => {
@@ -473,11 +506,14 @@ export function Workflows() {
         </div>
       </div>
 
+      <p className="hint">Tip — click any row to open its execution detail. Toggle ◐ Theme to preview light/dark.</p>
+
       <ConfirmRemoveDialog
         open={confirmDialogOpen}
         targets={dialogTargets}
         onConfirm={onConfirmRemove}
         onCancel={() => setConfirmDialogOpen(false)}
+        initialForce={dialogInitialForce}
       />
     </div>
   )

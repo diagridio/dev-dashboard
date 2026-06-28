@@ -89,14 +89,44 @@ describe('Workflows', () => {
     await waitFor(() => expect(screen.getByText(/no workflows/i)).toBeInTheDocument())
   })
 
-  it('shows the active store name in the statestore chip', async () => {
+  it('shows the active store type label in the statestore chip', async () => {
     server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
     renderAt()
-    // The chip shows the store type label derived from the active store
+    // The chip shows the store type label derived from active store type ("state.redis" → "redis")
     await waitFor(() => {
       const chip = document.querySelector('.chip')
       expect(chip).not.toBeNull()
       expect(chip?.textContent).toMatch(/statestore/)
+      // active store is type "state.redis" so the label should be "redis"
+      expect(chip?.textContent).toMatch(/redis/)
+    })
+  })
+
+  it('renders a store select inside the chip when multiple stores exist', async () => {
+    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
+    renderAt()
+    // twoStores has 2 entries → chip should contain a <select>
+    await waitFor(() => {
+      const chip = document.querySelector('.chip')
+      expect(chip).not.toBeNull()
+      const storeSelect = chip?.querySelector('select[aria-label="Switch state store"]')
+      expect(storeSelect).not.toBeNull()
+    })
+  })
+
+  it('switching the store select updates ?store= in the URL', async () => {
+    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
+    renderAt()
+    await waitFor(() => {
+      const chip = document.querySelector('.chip')
+      const storeSelect = chip?.querySelector('select[aria-label="Switch state store"]')
+      expect(storeSelect).not.toBeNull()
+    })
+    const storeSelect = document.querySelector('select[aria-label="Switch state store"]') as HTMLSelectElement
+    await userEvent.selectOptions(storeSelect, 'postgres')
+    // After switching, the select value should reflect the new store
+    await waitFor(() => {
+      expect(storeSelect.value).toBe('postgres')
     })
   })
 
