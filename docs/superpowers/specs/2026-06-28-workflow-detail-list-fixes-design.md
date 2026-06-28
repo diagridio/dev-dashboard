@@ -45,10 +45,21 @@ Investigation findings that shaped the design:
 - Change the tag from bare `#${sequenceId}` to a labeled form: `Event ID ${sequenceId}`.
 - **Omit the tag entirely when `sequenceId === -1`** (the durabletask sentinel for `OrchestratorStarted`), so `Event ID -1` is never shown. Real events show `Event ID 0`, `Event ID 1`, etc.
 
-### 5. Event ordering / timing — no code change
-- Timing and ordering are both correct as implemented: real per-event timestamps, displayed in durabletask's canonical stored (episode) order.
-- The `+0.027s`-before-`0.000s` appearance is `OrchestratorStarted` being an episode-boundary marker stored ahead of the `ExecutionStarted` it precedes. Events remain in stored order — no re-sort.
-- Items 3 and 4 already de-emphasize the `OrchestratorStarted` row (static, no tag). This section is documented so the behavior is not re-investigated as a bug later.
+### 5. Event ordering — sort for display so ExecutionStarted is first and the terminal event is last
+**File:** `web/src/pages/WorkflowDetail.tsx` (where `const history = execution.history ?? []`)
+
+Timing is correct as implemented (real per-event timestamps). The reported problem is purely ordering: `OrchestratorStarted` is an episode-boundary marker stored ahead of the `ExecutionStarted` it precedes, so the first row can read `+0.027s` while the second reads `0.000s`. The Event History should instead read top-to-bottom as a clean run: start at `ExecutionStarted`, end at the terminal event.
+
+**Reliable ordering rule** (presentational only — the backend `history` array stays canonical):
+
+- **Stable sort by `timestamp` ascending.** This is reliable because `ExecutionStarted`'s timestamp equals `createdAt` (the minimum) and the terminal `Execution*` event has the maximum timestamp; a stable sort preserves durabletask's canonical stored order for any events sharing the same timestamp. It also fixes the `+0.027s`-before-`0.000s` anomaly (the first `OrchestratorStarted` moves after `ExecutionStarted`).
+- **Explicit bookend guarantee** (robustness against clock skew / timestamp ties at the extremes): pin `ExecutionStarted` to the front and the terminal `Execution*` event (`ExecutionCompleted`, `ExecutionFailed`, or `ExecutionTerminated`) to the back. Everything else keeps the stable-by-timestamp order between them.
+- Still-running workflows have no terminal event, so only `ExecutionStarted` is pinned.
+- Events with a missing/unparseable timestamp keep their relative stored position (treated as equal under the stable sort).
+
+The sort happens at display time in `WorkflowDetail.tsx`. The relative-time computation (`event.timestamp − createdAt`) and the `isNewest` reveal (`idx === history.length - 1`) are position-independent and continue to work; after sorting, the last element is the latest/terminal event, which is the correct target for the reveal animation.
+
+Items 3 and 4 still de-emphasize the `OrchestratorStarted` rows (static, no Event ID tag) wherever they fall in the sorted list.
 
 ### 6. De-duplicate workflows by Instance ID
 **Backend** — `pkg/workflow/service.go` (`List`, ~48–95):
@@ -62,9 +73,10 @@ Investigation findings that shaped the design:
 
 - Backend: unit test in `pkg/workflow` covering `List` dedup — same `(appId, instanceId)` present across pages/iterations yields a single item; pagination token handling per app.
 - Frontend: verify breadcrumb renders a full instance ID without truncation; event rows are vertically centered; `OrchestratorStarted` rows are static (non-expandable) and show no Event ID tag; real events show `Event ID N`; the list shows each instance once.
+- Frontend: verify the sorted Event History starts with `ExecutionStarted` and ends with the terminal `Execution*` event (or, for a running workflow, starts with `ExecutionStarted` with no terminal event pinned); the `OrchestratorStarted`/`ExecutionStarted` rows are no longer inverted by timestamp.
 
 ## Out of Scope
 
-- Re-sorting events by timestamp.
+- Changing the backend canonical `history` order (the sort is presentational only, in `WorkflowDetail.tsx`).
 - Any change to how replay count is computed/displayed (already shown separately).
 - Unrelated refactoring of the list/detail pages.
