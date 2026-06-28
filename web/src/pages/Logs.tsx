@@ -5,18 +5,33 @@ import { useLogStream } from '../hooks/useLogStream'
 import type { LogLine, LogLevel } from '../types/logs'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 
-// Level → CSS color token
-function levelColor(level?: LogLevel): string {
-  switch (level) {
-    case 'error': return 'var(--bad)'
-    case 'warn':  return 'var(--warn)'
-    case 'info':  return 'var(--text)'
-    case 'debug': return 'var(--text-faint)'
-    default:      return 'var(--text)'
-  }
+// LogSource is wider than the hook's 'daprd' | 'app'; 'both' maps to 'daprd' at the stream level.
+type LogSource = 'both' | 'daprd' | 'app'
+
+function hookSource(s: LogSource): 'daprd' | 'app' {
+  return s === 'app' ? 'app' : 'daprd'
 }
 
-/** Highlight all occurrences of `query` in `text` using an accent-colored span. */
+/** Extract a timestamp token from a log line, returning an empty string if none found. */
+function extractTime(text: string): string {
+  // ISO-like: 2006-01-02T15:04:05
+  const iso = text.match(/\d{4}-\d{2}-\d{2}T(\d{2}:\d{2}:\d{2}(?:\.\d+)?)/)
+  if (iso) return iso[1]
+  // HH:MM:SS.mmm standalone
+  const hms = text.match(/\b(\d{2}:\d{2}:\d{2}(?:\.\d+)?)\b/)
+  if (hms) return hms[1]
+  return ''
+}
+
+/** Extract the source (daprd / app) from a log line if tagged, else return stream source. */
+function extractSrc(text: string, streamSrc: 'daprd' | 'app'): 'daprd' | 'app' {
+  // logfmt: app_id=... or source=daprd/app
+  if (/\bsource=daprd\b/.test(text)) return 'daprd'
+  if (/\bsource=app\b/.test(text)) return 'app'
+  return streamSrc
+}
+
+/** Highlight all occurrences of `query` in `text`. */
 function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query) return <>{text}</>
   const parts = text.split(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'))
@@ -24,10 +39,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <span
-            key={i}
-            style={{ background: 'var(--accent)', color: 'var(--text)', borderRadius: 2, padding: '0 1px' }}
-          >
+          <span key={i} className="hl">
             {part}
           </span>
         ) : (
@@ -38,33 +50,42 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   )
 }
 
-function LogLineRow({ line, search }: { line: LogLine; search: string }) {
+const ALL_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
+
+interface LogRowProps {
+  line: LogLine
+  search: string
+  streamSrc: 'daprd' | 'app'
+}
+
+function LogRow({ line, search, streamSrc }: LogRowProps) {
+  const level = line.level ?? 'info'
+  const isError = level === 'error'
+  const time = extractTime(line.text)
+  const src = extractSrc(line.text, streamSrc)
+
   return (
-    <div
-      className="mono"
-      style={{
-        color: levelColor(line.level),
-        fontSize: 12,
-        lineHeight: '1.5',
-        padding: '0 4px',
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-all',
-      }}
-    >
-      <HighlightedText text={line.text} query={search} />
+    <div className={`logrow${isError ? ' error' : ''}`}>
+      <span className="ltime">{time}</span>
+      <span className={`lvl ${level}`}>{level}</span>
+      <span className={`lsrc ${src}`}>{src}</span>
+      <span className="lmsg">
+        <HighlightedText text={line.text} query={search} />
+      </span>
     </div>
   )
 }
 
-interface LogViewerProps {
+interface LogViewerCoreProps {
   appId: string
-  source: 'daprd' | 'app'
+  source: LogSource
 }
 
-function LogViewer({ appId, source }: LogViewerProps) {
-  const { lines } = useLogStream(appId, source)
+function LogViewerCore({ appId, source }: LogViewerCoreProps) {
+  const { lines } = useLogStream(appId, hookSource(source))
   const [search, setSearch] = useState('')
   const [following, setFollowing] = useState(true)
+  const [activeLevels, setActiveLevels] = useState<Set<LogLevel>>(new Set(ALL_LEVELS))
   const scrollRef = useRef<HTMLDivElement>(null)
   const linesLen = lines.length
 
@@ -73,7 +94,6 @@ function LogViewer({ appId, source }: LogViewerProps) {
     if (!following) return
     const el = scrollRef.current
     if (!el) return
-    // jsdom has no real layout; guard against NaN/0 scrollHeight
     if (el.scrollHeight > 0) {
       el.scrollTop = el.scrollHeight
     }
@@ -82,7 +102,6 @@ function LogViewer({ appId, source }: LogViewerProps) {
   function handleScroll() {
     const el = scrollRef.current
     if (!el) return
-    // jsdom has no real layout; scrollHeight may be 0
     if (el.scrollHeight === 0) return
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40
     if (nearBottom && !following) {
@@ -100,206 +119,107 @@ function LogViewer({ appId, source }: LogViewerProps) {
     }
   }
 
-  const filtered = search
-    ? lines.filter(l => l.text.toLowerCase().includes(search.toLowerCase()))
-    : lines
+  function toggleLevel(level: LogLevel) {
+    setActiveLevels(prev => {
+      const next = new Set(prev)
+      if (next.has(level)) {
+        next.delete(level)
+      } else {
+        next.add(level)
+      }
+      return next
+    })
+  }
+
+  const filtered = lines.filter(l => {
+    const level = l.level ?? 'info'
+    if (!activeLevels.has(level)) return false
+    if (search && !l.text.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
+  const matchCount = search
+    ? lines.filter(l => l.text.toLowerCase().includes(search.toLowerCase())).length
+    : 0
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 'var(--space-2)' }}>
+    <>
       {/* Toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 'var(--space-3)',
-          alignItems: 'center',
-          padding: '0 var(--space-2)',
-          flexShrink: 0,
-        }}
-      >
-        <input
-          data-cy="log-search"
-          type="search"
-          placeholder="Search…"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{
-            padding: '4px 8px',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 4,
-            color: 'var(--text)',
-            fontSize: 13,
-            minWidth: 180,
-          }}
-        />
-        <label
-          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)', fontSize: 13, color: 'var(--text-faint)' }}
-        >
+      <div className="logbar">
+        <div className="lvchips" role="group" aria-label="Levels">
+          {ALL_LEVELS.map(level => (
+            <button
+              key={level}
+              className="lvchip"
+              aria-pressed={activeLevels.has(level)}
+              onClick={() => toggleLevel(level)}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
+
+        <label className="search">
+          🔍
           <input
-            data-cy="log-follow"
-            type="checkbox"
-            checked={following}
-            onChange={e => setFollowing(e.target.checked)}
+            data-cy="log-search"
+            type="search"
+            placeholder="Search…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            aria-label="Filter logs"
           />
-          Follow
         </label>
-        {!following && (
-          <button
-            data-cy="log-jump"
-            onClick={jumpToLatest}
-            style={{
-              padding: '3px 10px',
-              background: 'var(--accent)',
-              border: 'none',
-              borderRadius: 4,
-              color: 'var(--text)',
-              fontSize: 12,
-              cursor: 'pointer',
-            }}
-          >
-            Jump to latest
-          </button>
-        )}
+
+        <button
+          data-cy="log-follow"
+          className={`followbtn${following ? ' on' : ''}`}
+          onClick={following ? undefined : jumpToLatest}
+          aria-pressed={following}
+        >
+          {following && <span className="d" />}
+          {following ? 'Following' : 'Follow'}
+        </button>
       </div>
 
       {/* Log pane */}
-      <div
-        ref={scrollRef}
-        onScroll={handleScroll}
-        style={{
-          flex: 1,
-          overflow: 'auto',
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 4,
-          padding: 'var(--space-2)',
-        }}
-      >
-        {filtered.map(line => (
-          <LogLineRow key={line.seq} line={line} search={search} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-interface AppPickerProps {
-  appIds: string[]
-  selectedApp: string
-  source: 'daprd' | 'app'
-  onAppChange: (app: string) => void
-  onSourceChange: (source: 'daprd' | 'app') => void
-}
-
-function AppPicker({ appIds, selectedApp, source, onAppChange, onSourceChange }: AppPickerProps) {
-  return (
-    <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexShrink: 0 }}>
-      <select
-        data-cy="log-app"
-        value={selectedApp}
-        onChange={e => onAppChange(e.target.value)}
-        style={{
-          padding: '4px 8px',
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 4,
-          color: 'var(--text)',
-          fontSize: 13,
-        }}
-      >
-        <option value="">— select app —</option>
-        {appIds.map(id => (
-          <option key={id} value={id}>
-            {id}
-          </option>
-        ))}
-      </select>
-
-      <select
-        data-cy="log-source"
-        value={source}
-        onChange={e => onSourceChange(e.target.value as 'daprd' | 'app')}
-        style={{
-          padding: '4px 8px',
-          background: 'var(--surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 4,
-          color: 'var(--text)',
-          fontSize: 13,
-        }}
-      >
-        <option value="daprd">daprd</option>
-        <option value="app">app</option>
-      </select>
-    </div>
-  )
-}
-
-/** Inner component rendered when we have a valid appId; reads app detail. */
-function LogsWithApp({
-  appId,
-  source,
-  appIds,
-  onAppChange,
-  onSourceChange,
-}: {
-  appId: string
-  source: 'daprd' | 'app'
-  appIds: string[]
-  onAppChange: (app: string) => void
-  onSourceChange: (source: 'daprd' | 'app') => void
-}) {
-  const { data: app, isLoading } = useApp(appId)
-
-  const logPath = app ? (source === 'daprd' ? app.daprdLogPath : app.appLogPath) : undefined
-  const hasPath = !!logPath
-
-  if (isLoading) {
-    return (
-      <div style={{ padding: 'var(--space-4)', color: 'var(--text-faint)' }}>
-        Loading…
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
-      <AppPicker
-        appIds={appIds}
-        selectedApp={appId}
-        source={source}
-        onAppChange={onAppChange}
-        onSourceChange={onSourceChange}
-      />
-
-      {app && !hasPath ? (
+      <div className="card" style={{ padding: 0 }}>
         <div
-          style={{
-            padding: 'var(--space-4)',
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 4,
-            color: 'var(--text-faint)',
-            fontSize: 13,
-          }}
+          className="logwin"
+          ref={scrollRef}
+          onScroll={handleScroll}
         >
-          No log file — this app was started with <code className="mono">dapr run</code> without{' '}
-          <code className="mono">-f</code>
+          {filtered.map(line => (
+            <LogRow
+              key={line.seq}
+              line={line}
+              search={search}
+              streamSrc={hookSource(source)}
+            />
+          ))}
         </div>
-      ) : app && hasPath ? (
-        <LogViewer appId={appId} source={source} />
-      ) : null}
-    </div>
+        <div className="logfoot">
+          <span
+            className="beat"
+            style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--done-fg)', display: 'inline-block' }}
+          />
+          {filtered.length} lines
+          {search && matchCount > 0 && ` · highlighting "${search}"`}
+        </div>
+      </div>
+    </>
   )
 }
 
 export function Logs() {
   const [searchParams, setSearchParams] = useSearchParams()
   const appId = searchParams.get('app') ?? ''
-  const source = (searchParams.get('source') ?? 'daprd') as 'daprd' | 'app'
+  const source = (searchParams.get('source') ?? 'both') as LogSource
 
   const { data: apps } = useApps()
   const appIds = (apps ?? []).map(a => a.appId)
+
+  const { data: app, isLoading } = useApp(appId)
 
   function onAppChange(id: string) {
     setSearchParams(prev => {
@@ -310,7 +230,7 @@ export function Logs() {
     })
   }
 
-  function onSourceChange(s: 'daprd' | 'app') {
+  function onSourceChange(s: LogSource) {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       next.set('source', s)
@@ -318,32 +238,85 @@ export function Logs() {
     })
   }
 
-  useDocumentTitle(appId ? `Logs — ${appId} (${source})` : 'Logs — Dapr Dev Dashboard')
+  useDocumentTitle(appId ? `Logs — ${appId}` : 'Logs — Dapr Dev Dashboard')
 
-  if (!appId) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: 'var(--space-3)', padding: 'var(--space-4)' }}>
-        <AppPicker
-          appIds={appIds}
-          selectedApp=""
-          source={source}
-          onAppChange={onAppChange}
-          onSourceChange={onSourceChange}
-        />
-        <div style={{ color: 'var(--text-faint)', fontSize: 13 }}>
-          Select an app to view logs.
-        </div>
-      </div>
-    )
-  }
+  const hasPath = app
+    ? source === 'app'
+      ? !!app.appLogPath
+      : !!app.daprdLogPath
+    : false
 
   return (
-    <LogsWithApp
-      appId={appId}
-      source={source}
-      appIds={appIds}
-      onAppChange={onAppChange}
-      onSourceChange={onSourceChange}
-    />
+    <div className="page">
+      <div className="phead">
+        <div>
+          <h1>Logs</h1>
+          {appId && (
+            <div className="sub">
+              Tailing <span className="mono b">{appId}</span> · daprd + application
+            </div>
+          )}
+        </div>
+        <div className="live">
+          <span className="beat" />
+          live tail (SSE)
+        </div>
+      </div>
+
+      {/* Logbar — always visible for app/source selection */}
+      <div className="logbar">
+        <select
+          className="select"
+          data-cy="log-app"
+          value={appId}
+          onChange={e => onAppChange(e.target.value)}
+          aria-label="App"
+        >
+          <option value="">— select app —</option>
+          {appIds.map(id => (
+            <option key={id} value={id}>
+              {id}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className="select"
+          data-cy="log-source"
+          value={source}
+          onChange={e => onSourceChange(e.target.value as LogSource)}
+          aria-label="Source"
+        >
+          <option value="both">daprd + app</option>
+          <option value="daprd">daprd only</option>
+          <option value="app">app only</option>
+        </select>
+      </div>
+
+      {/* Content area */}
+      {!appId && (
+        <p className="muted">Select an app to view logs.</p>
+      )}
+
+      {appId && isLoading && (
+        <p className="muted">Loading…</p>
+      )}
+
+      {appId && !isLoading && app && !hasPath && (
+        <div className="card">
+          No log file — this app was started with <code className="mono">dapr run</code> without{' '}
+          <code className="mono">-f</code>
+        </div>
+      )}
+
+      {appId && !isLoading && app && hasPath && (
+        <LogViewerCore appId={appId} source={source} />
+      )}
+
+      <p className="hint">
+        Logs are read from the run-template log files (<span className="mono">~/.dapr/logs/…</span>
+        ). Level chips &amp; search filter live; search matches are highlighted.
+      </p>
+    </div>
   )
 }
