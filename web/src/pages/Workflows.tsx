@@ -45,7 +45,6 @@ export function Workflows() {
   const urlStatus = searchParams.get('status') ?? ''
   const urlSearch = searchParams.get('search') ?? ''
   const urlPage = searchParams.get('page') ?? undefined
-  const urlStore = searchParams.get('store') ?? ''
   const urlApp = searchParams.get('app') ?? ''
 
   // Single-status filter (one of ALL_STATUSES or '' for All)
@@ -66,15 +65,17 @@ export function Workflows() {
   const [removeStatus, setRemoveStatus] = useState<{ ok: number; failed: number } | null>(null)
   const { mutate: removeWorkflows } = useRemoveWorkflows()
 
-  // State store picker
+  // Active state store (the one Dapr Workflow uses). The API returns only this
+  // store, so there is no switching — we render it as a label.
   const { data: storeList } = useStateStores()
-  const activeStoreName = storeList?.find((s) => s.active)?.name ?? ''
-  const selectedStore = urlStore || activeStoreName
-  const activeStore = storeList?.find((s) => s.name === selectedStore)
-  // Derive store type short label (e.g. "redis" from "state.redis")
-  const storeTypeLabel = activeStore
+  const activeStore = storeList?.find((s) => s.active) ?? storeList?.[0]
+  // Label: short type + secrets-free connection, e.g. "redis · localhost:6379".
+  const storeTypeShort = activeStore
     ? (activeStore.type.split('.').pop() ?? activeStore.type)
-    : (activeStoreName ? activeStoreName : 'unknown')
+    : ''
+  const storeLabel = activeStore
+    ? (activeStore.connection ? `${storeTypeShort} · ${activeStore.connection}` : storeTypeShort)
+    : 'unknown'
 
   // Debounce search input ~250ms
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -94,16 +95,14 @@ export function Workflows() {
     if (activeStatus) params.status = activeStatus
     if (debouncedSearch) params.search = debouncedSearch
     if (page) params.page = page
-    if (urlStore) params.store = urlStore
     if (selectedApp) params.app = selectedApp
     setSearchParams(params, { replace: true })
-  }, [activeStatus, debouncedSearch, page, urlStore, selectedApp, setSearchParams])
+  }, [activeStatus, debouncedSearch, page, selectedApp, setSearchParams])
 
   const { data, isLoading, isError, error } = useWorkflows({
     status: activeStatus ? [activeStatus] : undefined,
     search: debouncedSearch || undefined,
     page,
-    store: selectedStore || undefined,
     appId: selectedApp || undefined,
   })
 
@@ -185,7 +184,7 @@ export function Workflows() {
       return { appId, instanceId }
     })
     removeWorkflows(
-      { ids, force, store: selectedStore || undefined },
+      { ids, force },
       {
         onSuccess: (results) => {
           const ok = results.filter((r) => r.ok).length
@@ -248,29 +247,7 @@ export function Workflows() {
           <span className="chip">
             <span className="led" />
             statestore{' '}
-            {storeList && storeList.length > 1 ? (
-              <select
-                aria-label="Switch state store"
-                value={selectedStore}
-                style={{ background: 'none', border: 'none', font: 'inherit', fontWeight: 700, cursor: 'pointer', padding: 0, color: 'inherit' }}
-                onChange={(e) => {
-                  const params: Record<string, string> = {}
-                  if (activeStatus) params.status = activeStatus
-                  if (debouncedSearch) params.search = debouncedSearch
-                  params.store = e.target.value
-                  if (selectedApp) params.app = selectedApp
-                  setSearchParams(params, { replace: true })
-                }}
-              >
-                {storeList.map((s) => (
-                  <option key={s.name} value={s.name}>
-                    {s.type.split('.').pop() ?? s.type}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <b>{storeTypeLabel}</b>
-            )}
+            <b>{storeLabel}</b>
           </span>
           <RefreshControl />
         </div>

@@ -9,15 +9,14 @@ import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { Workflows } from './Workflows'
 
-const twoStores = [
-  { name: 'redis', type: 'state.redis', path: '/components/redis.yaml', active: true },
-  { name: 'postgres', type: 'state.postgresql', path: '/components/pg.yaml', active: false },
+const activeStoreOnly = [
+  { name: 'redis', type: 'state.redis', path: '/components/redis.yaml', active: true, connection: 'localhost:6379' },
 ]
 
 // Register statestores handler for all tests in this file
 beforeEach(() => {
   server.use(
-    http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+    http.get('/api/statestores', () => HttpResponse.json(activeStoreOnly)),
   )
 })
 
@@ -89,44 +88,34 @@ describe('Workflows', () => {
     await waitFor(() => expect(screen.getByText(/no workflows/i)).toBeInTheDocument())
   })
 
-  it('shows the active store type label in the statestore chip', async () => {
+  it('shows the active store type and connection as a label in the statestore chip', async () => {
     server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
     renderAt()
-    // The chip shows the store type label derived from active store type ("state.redis" → "redis")
     await waitFor(() => {
       const chip = document.querySelector('.chip')
       expect(chip).not.toBeNull()
       expect(chip?.textContent).toMatch(/statestore/)
-      // active store is type "state.redis" so the label should be "redis"
-      expect(chip?.textContent).toMatch(/redis/)
+      // "state.redis" → "redis", plus the secrets-free connection summary
+      expect(chip?.textContent).toMatch(/redis · localhost:6379/)
     })
   })
 
-  it('renders a store select inside the chip when multiple stores exist', async () => {
+  it('renders the statestore as a label, not a select', async () => {
     server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
     renderAt()
-    // twoStores has 2 entries → chip should contain a <select>
     await waitFor(() => {
       const chip = document.querySelector('.chip')
       expect(chip).not.toBeNull()
-      const storeSelect = chip?.querySelector('select[aria-label="Switch state store"]')
-      expect(storeSelect).not.toBeNull()
     })
+    expect(document.querySelector('select[aria-label="Switch state store"]')).toBeNull()
   })
 
-  it('switching the store select updates ?store= in the URL', async () => {
+  it('keeps the colored status dot in the statestore chip', async () => {
     server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
     renderAt()
     await waitFor(() => {
       const chip = document.querySelector('.chip')
-      const storeSelect = chip?.querySelector('select[aria-label="Switch state store"]')
-      expect(storeSelect).not.toBeNull()
-    })
-    const storeSelect = document.querySelector('select[aria-label="Switch state store"]') as HTMLSelectElement
-    await userEvent.selectOptions(storeSelect, 'postgres')
-    // After switching, the select value should reflect the new store
-    await waitFor(() => {
-      expect(storeSelect.value).toBe('postgres')
+      expect(chip?.querySelector('.led')).not.toBeNull()
     })
   })
 
