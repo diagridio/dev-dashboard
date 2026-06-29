@@ -62,13 +62,17 @@ func postJSON(t *testing.T, h http.Handler, path, body string) (*http.Response, 
 }
 
 type fakeWF struct {
-	list workflow.ListResult
-	one  workflow.Execution
-	err  error
+	list  workflow.ListResult
+	stats workflow.StatsResult
+	one   workflow.Execution
+	err   error
 }
 
 func (f fakeWF) List(context.Context, workflow.ListQuery) (workflow.ListResult, error) {
 	return f.list, f.err
+}
+func (f fakeWF) Stats(context.Context, workflow.ListQuery) (workflow.StatsResult, error) {
+	return f.stats, f.err
 }
 func (f fakeWF) Get(_ context.Context, appID, id string) (workflow.Execution, error) {
 	if f.err != nil {

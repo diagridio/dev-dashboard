@@ -74,3 +74,8 @@ type ListResult struct {
 	Items     []ExecutionSummary `json:"items"`
 	NextToken string             `json:"nextToken,omitempty"`
 }
+
+type StatsResult struct {
+	Counts map[Status]int `json:"counts"`
+	Total  int            `json:"total"`
+}
