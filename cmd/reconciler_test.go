@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
@@ -129,4 +130,38 @@ func TestReconciler_RetainsConnectionWhenNewOpenFails(t *testing.T) {
 	rc.reconcile(apps2, appsFingerprint(apps2))
 	require.Equal(t, "store-a", rc.Stores()[0].Name, "must retain previous store when new open fails")
 	require.EqualValues(t, 0, closes.Load(), "old working connection must not be closed on failed swap")
+}
+
+func TestReconcilingApps_ListTriggersReconcileOnChange(t *testing.T) {
+	dir := t.TempDir()
+	apps := []discovery.Instance{{AppID: "order", ResourcePaths: []string{dir}}}
+	inner := fakeApps{insts: apps}
+	rc := newReconciler(inner, "default", "", "", &http.Client{})
+	dec := reconcilingApps{inner: inner, rc: rc}
+
+	got, err := dec.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+
+	// Reconcile runs in the background; wait for the fingerprint to settle.
+	require.Eventually(t, func() bool {
+		return rc.fingerprint() == appsFingerprint(apps)
+	}, time.Second, 5*time.Millisecond)
+	require.Contains(t, rc.Paths(), dir)
+}
+
+func TestReconciler_CloseClosesActiveConnection(t *testing.T) {
+	dir := t.TempDir()
+	compYAML(t, dir, "store-a", "state.redis")
+	var closes atomic.Int32
+	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
+	rc.open = func(context.Context, statestore.Component) (statestore.Store, error) {
+		return countingStore{closes: &closes}, nil
+	}
+	apps := []discovery.Instance{{AppID: "a", ResourcePaths: []string{dir},
+		Components: []discovery.Component{{Name: "store-a", Type: "state.redis"}}}}
+	rc.reconcile(apps, appsFingerprint(apps))
+
+	require.NoError(t, rc.Close())
+	require.EqualValues(t, 1, closes.Load())
 }

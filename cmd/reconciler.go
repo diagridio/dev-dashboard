@@ -186,3 +186,56 @@ func (rc *reconciler) fingerprint() string {
 	defer rc.mu.RUnlock()
 	return rc.fp
 }
+
+// maybeReconcile schedules a background reconcile when the apps fingerprint has
+// changed and no reconcile is already in flight (single-flight). It never blocks
+// the caller and never opens connections on the caller's goroutine.
+func (rc *reconciler) maybeReconcile(apps []discovery.Instance) {
+	fp := appsFingerprint(apps)
+	if fp == rc.fingerprint() {
+		return
+	}
+	if !rc.reconciling.CompareAndSwap(false, true) {
+		return // a reconcile is already running; the next poll will catch up
+	}
+	go func() {
+		defer rc.reconciling.Store(false)
+		rc.reconcile(apps, fp)
+	}()
+}
+
+// Close closes whatever connection is currently open and prevents further swaps.
+func (rc *reconciler) Close() error {
+	rc.mu.Lock()
+	rc.closed = true
+	old := rc.closers
+	rc.closers = nil
+	rc.mu.Unlock()
+	var err error
+	for _, c := range old {
+		if e := c(); e != nil {
+			err = e
+		}
+	}
+	return err
+}
+
+// reconcilingApps decorates a discovery.Service so every List fires a
+// fingerprint-gated, single-flight reconcile. Get is a pass-through; the
+// frontend polls List, which is sufficient to drive reconciliation.
+type reconcilingApps struct {
+	inner discovery.Service
+	rc    *reconciler
+}
+
+func (d reconcilingApps) List(ctx context.Context) ([]discovery.Instance, error) {
+	apps, err := d.inner.List(ctx)
+	if err == nil {
+		d.rc.maybeReconcile(apps)
+	}
+	return apps, err
+}
+
+func (d reconcilingApps) Get(ctx context.Context, appID string) (discovery.Instance, error) {
+	return d.inner.Get(ctx, appID)
+}
