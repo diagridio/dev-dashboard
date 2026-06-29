@@ -52,11 +52,13 @@ type rawResource struct {
 }
 
 type service struct {
-	paths []string
+	paths func() []string
 }
 
-// New returns a Service that scans the given paths for Dapr resource YAMLs.
-func New(paths []string) Service {
+// New returns a Service that scans the paths returned by the provider for Dapr
+// resource YAMLs. The provider is called on every List/Get so callers can change
+// the scan locations at runtime.
+func New(paths func() []string) Service {
 	return &service{paths: paths}
 }
 
@@ -78,7 +80,7 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 	var out []Resource
 	seen := map[string]bool{}
 
-	for _, p := range s.paths {
+	for _, p := range s.paths() {
 		_ = filepath.Walk(p, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() {
 				return nil

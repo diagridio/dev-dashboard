@@ -20,7 +20,7 @@ func TestResourcesListAndGet(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "statestore.yaml"), []byte(compYAML), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "appconfig.yaml"), []byte(cfgYAML), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "orders-sub.yaml"), []byte(subYAML), 0o600))
-	svc := New([]string{dir})
+	svc := New(func() []string { return []string{dir} })
 
 	comps, err := svc.List(context.Background(), KindComponent)
 	require.NoError(t, err)
