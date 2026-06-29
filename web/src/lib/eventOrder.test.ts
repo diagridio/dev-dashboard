@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sortHistoryForDisplay } from './eventOrder'
+import { sortHistoryForDisplay, orderHistoryForDisplay } from './eventOrder'
 import type { WorkflowHistoryEvent } from '../types/workflow'
 
 function ev(type: string, sequenceId: number, ms: number): WorkflowHistoryEvent {
@@ -48,5 +48,33 @@ describe('sortHistoryForDisplay', () => {
     const out = sortHistoryForDisplay(input).map((e) => e.type)
     expect(out[0]).toBe('ExecutionStarted')
     expect(out).toEqual(['ExecutionStarted', 'OrchestratorStarted', 'TaskScheduled'])
+  })
+})
+
+describe('orderHistoryForDisplay', () => {
+  const input = [
+    ev('ExecutionStarted', 0, 0),
+    ev('TaskScheduled', 1, 100),
+    ev('TaskCompleted', 2, 200),
+    ev('ExecutionCompleted', 3, 300),
+  ]
+
+  it("'asc' matches sortHistoryForDisplay exactly", () => {
+    expect(orderHistoryForDisplay(input, 'asc')).toEqual(sortHistoryForDisplay(input))
+  })
+
+  it("'desc' is the full reverse of the ascending order", () => {
+    const asc = sortHistoryForDisplay(input)
+    const desc = orderHistoryForDisplay(input, 'desc')
+    expect(desc.map((e) => e.type)).toEqual([...asc].reverse().map((e) => e.type))
+    // full flip: terminal event on top, ExecutionStarted at the bottom
+    expect(desc[0].type).toBe('ExecutionCompleted')
+    expect(desc[desc.length - 1].type).toBe('ExecutionStarted')
+  })
+
+  it('does not mutate the input array', () => {
+    const copy = [...input]
+    orderHistoryForDisplay(input, 'desc')
+    expect(input).toEqual(copy)
   })
 })

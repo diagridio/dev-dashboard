@@ -32,3 +32,19 @@ export function sortHistoryForDisplay(history: WorkflowHistoryEvent[]): Workflow
     })
     .map((x) => x.event)
 }
+
+export type HistoryOrder = 'asc' | 'desc'
+
+/**
+ * Order history for display in the requested direction. `'asc'` returns the
+ * canonical chronological order from sortHistoryForDisplay(); `'desc'` returns
+ * a full reverse of it (terminal event on top, ExecutionStarted at the bottom).
+ * Returns a new array; the input is not mutated.
+ */
+export function orderHistoryForDisplay(
+  history: WorkflowHistoryEvent[],
+  order: HistoryOrder,
+): WorkflowHistoryEvent[] {
+  const ascending = sortHistoryForDisplay(history)
+  return order === 'desc' ? [...ascending].reverse() : ascending
+}
