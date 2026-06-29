@@ -5,7 +5,6 @@ import { useApps } from '../hooks/useApps'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
-import { RefreshControl } from '../components/RefreshControl'
 import { elapsed, elapsedTenths, formatOffset, formatDateTime } from '../lib/wallclock'
 import { highlightJson } from '../lib/json-highlight'
 import { useToast, type ToastHandle } from '../lib/toast'
@@ -409,7 +408,6 @@ export function WorkflowDetail() {
       {/* Refresh bar                                                          */}
       {/* ------------------------------------------------------------------ */}
       <div className="refreshbar">
-        <RefreshControl />
         <span className="sp" />
         <span className="mono faint">{lastRefreshed}</span>
       </div>

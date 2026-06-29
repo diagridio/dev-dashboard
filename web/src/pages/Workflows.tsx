@@ -4,7 +4,6 @@ import { useWorkflows, useWorkflowStats, useStateStores } from '../hooks/useWork
 import { useApps } from '../hooks/useApps'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
-import { RefreshControl } from '../components/RefreshControl'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { dedupeWorkflows } from '../lib/dedupeWorkflows'
 import type { WorkflowStatus, WorkflowSummary } from '../types/workflow'
@@ -288,7 +287,6 @@ export function Workflows() {
               statestore <b>unknown</b>
             </span>
           )}
-          <RefreshControl />
         </div>
       </div>
 
