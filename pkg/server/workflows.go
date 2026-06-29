@@ -78,6 +78,24 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 		writeJSON(w, http.StatusOK, res)
 	})
 
+	r.Get("/stats", func(w http.ResponseWriter, req *http.Request) {
+		svc, _, _, ok := backend.ServiceFor(req.URL.Query().Get("store"))
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "unknown state store"})
+			return
+		}
+		res, err := svc.Stats(req.Context(), parseListQuery(req))
+		if errors.Is(err, workflow.ErrNoStore) {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no state store detected"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
+
 	r.Get("/{appId}/{instanceId}", func(w http.ResponseWriter, req *http.Request) {
 		svc, _, _, ok := backend.ServiceFor(req.URL.Query().Get("store"))
 		if !ok {

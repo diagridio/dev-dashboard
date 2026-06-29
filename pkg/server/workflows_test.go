@@ -173,6 +173,25 @@ func TestWorkflowActiveStore(t *testing.T) {
 	require.Contains(t, body, `"instanceId":"i1"`)
 }
 
+func TestWorkflowsStats(t *testing.T) {
+	svc := fakeWF{stats: workflow.StatsResult{
+		Counts: map[workflow.Status]int{workflow.StatusRunning: 2, workflow.StatusCompleted: 1},
+		Total:  3,
+	}}
+	h := workflowsRouter(newFakeBackend(svc), nil)
+	res, body := get(t, h, "/stats?appId=order")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, `"total":3`)
+	require.Contains(t, body, `"Running":2`)
+	require.Contains(t, body, `"Completed":1`)
+}
+
+func TestWorkflowsStatsUnknownStore(t *testing.T) {
+	h := workflowsRouter(newFakeBackend(fakeWF{}), nil)
+	res, _ := get(t, h, "/stats?store=unknown")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+}
+
 func TestStateStoresEndpoint(t *testing.T) {
 	stores := fakeStoreRegistry{stores: []StoreInfo{
 		{Name: "statestore", Type: "state.redis", Active: true, Connection: "localhost:6379"},
