@@ -355,7 +355,7 @@ pre.json { margin: 0; padding: 13px; font-family: var(--mono); font-size: 12px; 
 .n-timer { background: var(--pend-fg); }
 .n-end { background: var(--ok-bright); }
 .n-endfail { background: var(--fail-fg); }
-.ev .c { padding: 8px 0 14px 4px; min-width: 0; }
+.ev .c { padding: 8px 0 0 4px; min-width: 0; }
 details.evd { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
 details.evd > summary { list-style: none; cursor: pointer; min-height: var(--ev-head); box-sizing: border-box; padding: 0 12px; display: flex; align-items: center; gap: 10px; }
 details.evd > summary::-webkit-details-marker { display: none; }
