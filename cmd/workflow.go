@@ -190,7 +190,6 @@ func newStoreBackend(
 	namespace string,
 	client *http.Client,
 	apps discovery.Service,
-	appIDs func(context.Context) ([]string, error),
 	open storeOpener,
 ) (*storeBackend, []func() error) {
 	b := &storeBackend{
@@ -216,7 +215,7 @@ func newStoreBackend(
 			log.Warn("state store init failed, skipping", "name", active.Name, "err", err)
 		} else {
 			closers = append(closers, st.Close)
-			svc := workflow.New(st, namespace, appIDs)
+			svc := workflow.New(st, namespace)
 			rem := workflow.NewRemover(client, st, namespace)
 			res := newTargetResolver(apps, svc)
 			b.services[active.Name] = storeEntry{svc: svc, rem: rem, targets: res}
@@ -228,7 +227,7 @@ func newStoreBackend(
 	// Build the degraded entry (nil store) used when no stores are configured.
 	// This is the no-store safety net: ServiceFor("") returns it so callers get
 	// a working (but limited) service even when no state stores are detected.
-	degradedSvc := workflow.New(nil, namespace, appIDs)
+	degradedSvc := workflow.New(nil, namespace)
 	degradedRem := workflow.NewRemover(client, nil, namespace)
 	degradedRes := newTargetResolver(apps, degradedSvc)
 	b.degraded = storeEntry{svc: degradedSvc, rem: degradedRem, targets: degradedRes}

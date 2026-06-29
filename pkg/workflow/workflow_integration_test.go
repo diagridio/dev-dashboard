@@ -64,9 +64,7 @@ func TestWorkflowListGetSQLite(t *testing.T) {
 	require.NoError(t, statestore.SeedForTest(context.Background(), store, prefix+statestore.SuffixMetadata, []byte("{}")))
 	require.NoError(t, statestore.SeedForTest(context.Background(), store, prefix+statestore.HistoryPrefix+"000000", b))
 
-	svc := workflow.New(store, "default", func(context.Context) ([]string, error) {
-		return []string{"order"}, nil
-	})
+	svc := workflow.New(store, "default")
 
 	// List should return exactly one instance with StatusRunning.
 	res, err := svc.List(context.Background(), workflow.ListQuery{})

@@ -36,60 +36,61 @@ type Service interface {
 type service struct {
 	store     statestore.Store
 	namespace string
-	appIDs    func(context.Context) ([]string, error)
 }
 
-func New(store statestore.Store, namespace string, appIDs func(context.Context) ([]string, error)) Service {
+func New(store statestore.Store, namespace string) Service {
 	if namespace == "" {
 		namespace = "default"
 	}
-	return &service{store: store, namespace: namespace, appIDs: appIDs}
+	return &service{store: store, namespace: namespace}
+}
+
+// metaKeys returns instance-metadata keys: scoped to one app when appID != "",
+// otherwise across every app-id in the namespace.
+func (s *service) metaKeys(ctx context.Context, appID, token string, pageSize int) ([]string, string, error) {
+	pattern := statestore.AllInstanceMetaPattern(s.namespace)
+	if appID != "" {
+		pattern = statestore.InstanceMetaPattern(s.namespace, appID)
+	}
+	return s.store.Keys(ctx, pattern, token, pageSize)
 }
 
 func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	if s.store == nil {
 		return ListResult{}, ErrNoStore
 	}
-	apps, err := s.appIDs(ctx)
-	if err != nil {
-		return ListResult{}, err
-	}
-	if q.AppID != "" {
-		apps = []string{q.AppID}
-	}
 	pageSize := q.PageSize
 	if pageSize <= 0 {
 		pageSize = defaultPageSize
 	}
 
+	metaKeys, next, err := s.metaKeys(ctx, q.AppID, q.PageToken, pageSize)
+	if err != nil {
+		return ListResult{}, err
+	}
+
 	var items []ExecutionSummary
 	seen := make(map[string]struct{})
-	var next string
-	for _, appID := range apps {
-		keys, tok, err := s.store.Keys(ctx, statestore.InstanceMetaPattern(s.namespace, appID), q.PageToken, pageSize)
+	for _, k := range metaKeys {
+		appID, ok := statestore.ParseAppID(k)
+		if !ok {
+			continue
+		}
+		id, ok := statestore.ParseInstanceID(k)
+		if !ok {
+			continue
+		}
+		dedupKey := appID + "/" + id
+		if _, dup := seen[dedupKey]; dup {
+			continue
+		}
+		seen[dedupKey] = struct{}{}
+		ex, err := s.load(ctx, appID, id)
 		if err != nil {
-			return ListResult{}, err
+			continue
 		}
-		if tok != "" {
-			next = tok
-		}
-		for _, k := range keys {
-			id, ok := statestore.ParseInstanceID(k)
-			if !ok {
-				continue
-			}
-			dedupKey := appID + "/" + id
-			if _, dup := seen[dedupKey]; dup {
-				continue
-			}
-			seen[dedupKey] = struct{}{}
-			ex, err := s.load(ctx, appID, id)
-			if err != nil {
-				continue
-			}
-			if matches(ex.ExecutionSummary, q) {
-				items = append(items, ex.ExecutionSummary)
-			}
+		if matches(ex.ExecutionSummary, q) {
+			items = append(items, ex.ExecutionSummary)
 		}
 	}
 	sort.SliceStable(items, func(a, b int) bool {
@@ -101,49 +102,43 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	return ListResult{Items: items, NextToken: next}, nil
 }
 
-// Stats scans all instances across the relevant apps, honoring AppID and
+// Stats scans all instances across the relevant app-ids, honoring AppID and
 // Search but ignoring Status and paging, and tallies a count per status.
 func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 	if s.store == nil {
 		return StatsResult{}, ErrNoStore
 	}
-	apps, err := s.appIDs(ctx)
-	if err != nil {
-		return StatsResult{}, err
-	}
-	if q.AppID != "" {
-		apps = []string{q.AppID}
-	}
-	// Reuse matches() for search only — never filter counts by status.
 	searchQ := ListQuery{Search: q.Search}
 	res := StatsResult{Counts: map[Status]int{}}
 	seen := make(map[string]struct{})
-	for _, appID := range apps {
-		// pageSize 0 = all keys (same convention load() relies on).
-		keys, _, err := s.store.Keys(ctx, statestore.InstanceMetaPattern(s.namespace, appID), "", 0)
+
+	metaKeys, _, err := s.metaKeys(ctx, q.AppID, "", 0)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	for _, k := range metaKeys {
+		appID, ok := statestore.ParseAppID(k)
+		if !ok {
+			continue
+		}
+		id, ok := statestore.ParseInstanceID(k)
+		if !ok {
+			continue
+		}
+		dedupKey := appID + "/" + id
+		if _, dup := seen[dedupKey]; dup {
+			continue
+		}
+		seen[dedupKey] = struct{}{}
+		ex, err := s.load(ctx, appID, id)
 		if err != nil {
-			return StatsResult{}, err
+			continue
 		}
-		for _, k := range keys {
-			id, ok := statestore.ParseInstanceID(k)
-			if !ok {
-				continue
-			}
-			dedupKey := appID + "/" + id
-			if _, dup := seen[dedupKey]; dup {
-				continue
-			}
-			seen[dedupKey] = struct{}{}
-			ex, err := s.load(ctx, appID, id)
-			if err != nil {
-				continue
-			}
-			if !matches(ex.ExecutionSummary, searchQ) {
-				continue
-			}
-			res.Counts[ex.Status]++
-			res.Total++
+		if !matches(ex.ExecutionSummary, searchQ) {
+			continue
 		}
+		res.Counts[ex.Status]++
+		res.Total++
 	}
 	return res, nil
 }

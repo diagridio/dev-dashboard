@@ -4,6 +4,7 @@ package workflow
 
 import (
 	"context"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -22,18 +23,14 @@ type fakeStore struct{ kv map[string][]byte }
 func newFakeStore() *fakeStore { return &fakeStore{kv: map[string][]byte{}} }
 
 func (f *fakeStore) Keys(_ context.Context, pattern, _ string, _ int) ([]string, string, error) {
-	like := strings.TrimSuffix(pattern, "%") // crude prefix match good enough for tests
-	var prefix, suffix string
-	if i := strings.Index(pattern, "%"); i >= 0 {
-		prefix = pattern[:i]
-		suffix = pattern[i+1:]
-	} else {
-		prefix = pattern
+	parts := strings.Split(pattern, "%")
+	for i, p := range parts {
+		parts[i] = regexp.QuoteMeta(p)
 	}
-	_ = like
+	re := regexp.MustCompile("^" + strings.Join(parts, ".*") + "$")
 	var out []string
 	for k := range f.kv {
-		if strings.HasPrefix(k, prefix) && strings.HasSuffix(k, suffix) {
+		if re.MatchString(k) {
 			out = append(out, k)
 		}
 	}
@@ -91,7 +88,7 @@ func TestServiceListAndFilter(t *testing.T) {
 	seedWorkflow(t, f, "default", "order", "inst-a", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
 	seedWorkflow(t, f, "default", "order", "inst-b", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
 
-	svc := New(f, "default", func(context.Context) ([]string, error) { return []string{"order"}, nil })
+	svc := New(f, "default")
 
 	res, err := svc.List(context.Background(), ListQuery{})
 	require.NoError(t, err)
@@ -111,7 +108,7 @@ func TestServiceListAndFilter(t *testing.T) {
 }
 
 func TestServiceListNoStore(t *testing.T) {
-	svc := New(nil, "default", func(context.Context) ([]string, error) { return []string{"order"}, nil })
+	svc := New(nil, "default")
 	_, err := svc.List(context.Background(), ListQuery{})
 	require.ErrorIs(t, err, ErrNoStore)
 }
@@ -127,7 +124,7 @@ func TestServiceGetDetail(t *testing.T) {
 	seedWorkflow(t, f, "default", "order", "inst-c", "OrderWorkflow",
 		[]*protos.HistoryEvent{startedEvent("OrderWorkflow"), completed})
 
-	svc := New(f, "default", func(context.Context) ([]string, error) { return []string{"order"}, nil })
+	svc := New(f, "default")
 	ex, err := svc.Get(context.Background(), "order", "inst-c")
 	require.NoError(t, err)
 	require.Equal(t, StatusCompleted, ex.Status)
@@ -154,7 +151,7 @@ func TestServiceStats(t *testing.T) {
 	seedWorkflow(t, f, "default", "order", "inst-c", "OrderWorkflow",
 		[]*protos.HistoryEvent{startedEvent("OrderWorkflow"), completed})
 
-	svc := New(f, "default", func(context.Context) ([]string, error) { return []string{"order"}, nil })
+	svc := New(f, "default")
 
 	// A status filter must NOT affect counts: every status is still tallied.
 	res, err := svc.Stats(context.Background(), ListQuery{Status: []Status{StatusCompleted}})
@@ -172,27 +169,36 @@ func TestServiceStats(t *testing.T) {
 }
 
 func TestServiceStatsNoStore(t *testing.T) {
-	svc := New(nil, "default", func(context.Context) ([]string, error) { return []string{"order"}, nil })
+	svc := New(nil, "default")
 	_, err := svc.Stats(context.Background(), ListQuery{})
 	require.ErrorIs(t, err, ErrNoStore)
 }
 
-func TestServiceListDedupesByInstanceID(t *testing.T) {
+func TestServiceListEnumeratesAllAppIDsFromStore(t *testing.T) {
 	f := newFakeStore()
-	seedWorkflow(t, f, "default", "order", "inst-a", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
-	seedWorkflow(t, f, "default", "order", "inst-b", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
+	seedWorkflow(t, f, "default", "order", "i1", "OrderWorkflow", nil)
+	seedWorkflow(t, f, "default", "pr-digest", "i2", "AgentRunWorkflow", nil)
+	svc := New(f, "default")
 
-	// App discovery returns "order" twice — without dedup the loop appends each instance twice.
-	svc := New(f, "default", func(context.Context) ([]string, error) { return []string{"order", "order"}, nil })
-
+	// No app filter: both app-ids' instances appear, even though neither was
+	// supplied by a running-apps list.
 	res, err := svc.List(context.Background(), ListQuery{})
 	require.NoError(t, err)
-	require.Len(t, res.Items, 2, "each instance must appear exactly once")
-
-	seen := map[string]bool{}
+	got := map[string]bool{}
 	for _, it := range res.Items {
-		key := it.AppID + "/" + it.InstanceID
-		require.False(t, seen[key], "duplicate item: %s", key)
-		seen[key] = true
+		got[it.AppID] = true
 	}
+	require.True(t, got["order"], "order instance must be listed")
+	require.True(t, got["pr-digest"], "pr-digest instance must be listed")
+
+	// Scoped to one app: only that app's instances.
+	scoped, err := svc.List(context.Background(), ListQuery{AppID: "pr-digest"})
+	require.NoError(t, err)
+	require.Len(t, scoped.Items, 1)
+	require.Equal(t, "pr-digest", scoped.Items[0].AppID)
+
+	// Stats across all app-ids counts both.
+	stats, err := svc.Stats(context.Background(), ListQuery{})
+	require.NoError(t, err)
+	require.Equal(t, 2, stats.Total)
 }

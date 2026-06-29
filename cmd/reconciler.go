@@ -62,19 +62,6 @@ func newReconciler(apps discovery.Service, namespace, homeDir, stateStorePath st
 	}
 }
 
-// appIDs lists current app IDs; used by the workflow service for key scoping.
-func (rc *reconciler) appIDs(ctx context.Context) ([]string, error) {
-	apps, err := rc.apps.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ids := make([]string, 0, len(apps))
-	for _, a := range apps {
-		ids = append(ids, a.AppID)
-	}
-	return ids, nil
-}
-
 // identity returns a secrets-free key for connection-change detection.
 func identity(c *statestore.Component) string {
 	if c == nil {
@@ -114,7 +101,7 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	// Active store changed: build a fresh backend (opens the new connection).
 	octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
-	newBackend, newClosers := newStoreBackend(octx, detected, loaded, rc.namespace, rc.client, rc.apps, rc.appIDs, rc.open)
+	newBackend, newClosers := newStoreBackend(octx, detected, loaded, rc.namespace, rc.client, rc.apps, rc.open)
 	openFailed := newReg.active() != nil && newBackend.activeName == ""
 
 	if openFailed && curHasConn {

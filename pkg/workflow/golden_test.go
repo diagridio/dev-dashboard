@@ -58,9 +58,7 @@ func TestWorkflowDecodeGolden(t *testing.T) {
 	require.NoError(t, statestore.SeedForTest(context.Background(), store, prefix+statestore.SuffixMetadata, []byte("{}")))
 	require.NoError(t, statestore.SeedForTest(context.Background(), store, prefix+statestore.HistoryPrefix+"000000", b))
 
-	svc := workflow.New(store, "default", func(context.Context) ([]string, error) {
-		return []string{"order"}, nil
-	})
+	svc := workflow.New(store, "default")
 	ex, err := svc.Get(context.Background(), "order", "inst-1")
 	require.NoError(t, err)
 

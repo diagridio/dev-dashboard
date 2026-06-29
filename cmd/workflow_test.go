@@ -216,8 +216,7 @@ func TestStoreBackend_NoStoresUnknownExplicit(t *testing.T) {
 
 func TestNewStoreBackend_LogsNoStoreDetected(t *testing.T) {
 	buf := withCapturedLogs(t)
-	appIDs := func(context.Context) ([]string, error) { return nil, nil }
-	_, closers := newStoreBackend(context.Background(), nil, nil, "default", &http.Client{}, nil, appIDs, statestore.New)
+	_, closers := newStoreBackend(context.Background(), nil, nil, "default", &http.Client{}, nil, statestore.New)
 	for _, c := range closers {
 		_ = c()
 	}
@@ -270,7 +269,6 @@ func TestStoreRegistry_AppLoadedNonActorPreferredOverUnloadedActor(t *testing.T)
 
 func TestNewStoreBackend_RegistersOnlyActiveStore(t *testing.T) {
 	_ = withCapturedLogs(t)
-	appIDs := func(context.Context) ([]string, error) { return nil, nil }
 
 	dir := t.TempDir()
 	comps := []statestore.Component{
@@ -289,7 +287,7 @@ func TestNewStoreBackend_RegistersOnlyActiveStore(t *testing.T) {
 		},
 	}
 
-	b, closers := newStoreBackend(context.Background(), comps, nil, "default", &http.Client{}, nil, appIDs, statestore.New)
+	b, closers := newStoreBackend(context.Background(), comps, nil, "default", &http.Client{}, nil, statestore.New)
 	defer func() {
 		for _, c := range closers {
 			_ = c()
