@@ -47,3 +47,25 @@ func TestAppRuntime(t *testing.T) {
 		require.Equal(t, "unknown", got)
 	})
 }
+
+func TestAppRuntime_AspireDcpProxyIsDotnet(t *testing.T) {
+	dcp := "/Users/me/.nuget/packages/aspire.hosting.orchestration.osx-arm64/13.3.5/tools/dcp run-controllers --kubeconfig /var/folders/x/y"
+	// daprd reports no app command; app port listener is the Aspire DCP proxy.
+	got := appRuntime("", 5467, fakeResolver{cmd: dcp, ok: true})
+	require.Equal(t, "dotnet", got)
+}
+
+func TestAppRuntime_GenericFallbackStillWinsBeforeAspire(t *testing.T) {
+	// A real go app listening directly on its app port must still resolve to "go",
+	// never reaching the Aspire branch.
+	got := appRuntime("", 5467, fakeResolver{cmd: "go run ./cmd/app", ok: true})
+	require.Equal(t, "go", got)
+}
+
+func TestIsAspireProxy(t *testing.T) {
+	require.True(t, isAspireProxy("/x/.nuget/packages/aspire.hosting.orchestration.osx-arm64/13.3.5/tools/dcp run-controllers --kubeconfig /v"))
+	require.True(t, isAspireProxy("/some/path/dcp run-controllers --kubeconfig /v"))
+	require.False(t, isAspireProxy("dotnet run"))
+	require.False(t, isAspireProxy("/usr/local/bin/dcp version")) // dcp without run-controllers
+	require.False(t, isAspireProxy(""))
+}
