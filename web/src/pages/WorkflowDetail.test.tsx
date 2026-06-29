@@ -57,6 +57,51 @@ describe('WorkflowDetail', () => {
   })
 
   // -------------------------------------------------------------------------
+  // App ID deeplink + breadcrumbs
+  // -------------------------------------------------------------------------
+  it('App ID in the metagrid links to the app detail page', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Running',
+          createdAt: '2026-06-26T10:00:00Z',
+          replayCount: 0,
+          history: [],
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('RUNNING')).toBeInTheDocument())
+    const link = screen.getByRole('link', { name: 'order' })
+    expect(link).toHaveAttribute('href', '/apps/order')
+  })
+
+  it('breadcrumbs do not contain the appId segment', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Running',
+          createdAt: '2026-06-26T10:00:00Z',
+          replayCount: 0,
+          history: [],
+        }),
+      ),
+    )
+    const { container } = renderDetail()
+    await waitFor(() => expect(screen.getByText('RUNNING')).toBeInTheDocument())
+    const crumbs = container.querySelector('.crumbs') as HTMLElement
+    // appId 'order' must not appear as a crumb (instanceId 'abc' is the only cur segment)
+    expect(crumbs.textContent).not.toContain('order')
+    expect((crumbs.querySelector('.cur') as HTMLElement).textContent).toBe('abc')
+  })
+
+  // -------------------------------------------------------------------------
   // StatusPill + elapsed clock
   // -------------------------------------------------------------------------
   it('shows StatusPill with RUNNING and elapsed clock for a running workflow', async () => {

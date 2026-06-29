@@ -295,8 +295,6 @@ export function WorkflowDetail() {
       <div className="crumbs">
         <Link to="/workflows">Workflows</Link>
         <span className="sep">/</span>
-        <span className="muted">{execution.appId}</span>
-        <span className="sep">/</span>
         <span className="cur">{execution.instanceId}</span>
       </div>
 
@@ -372,7 +370,11 @@ export function WorkflowDetail() {
         </div>
         <div className="m span2">
           <div className="k">App ID</div>
-          <div className="v">{execution.appId}</div>
+          <div className="v">
+            <Link className="celllink" to={`/apps/${execution.appId}`}>
+              {execution.appId}
+            </Link>
+          </div>
         </div>
         <div className="m">
           <div className="k">Created</div>
