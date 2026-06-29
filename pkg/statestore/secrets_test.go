@@ -113,6 +113,18 @@ func TestResolveSecrets_LocalEnv(t *testing.T) {
 	require.Equal(t, "envpw", md["redisPassword"])
 }
 
+func TestResolveSecrets_LocalEnv_KeyFallback(t *testing.T) {
+	t.Setenv("REDIS_PW", "envpw")
+	stores := []SecretStore{{Name: "env-secrets", Type: "secretstores.local.env"}}
+	c := Component{
+		SecretRefs:  map[string]SecretRef{"redisPassword": {Name: "REDIS_PW", Key: ""}},
+		SecretStore: "env-secrets",
+	}
+	md, unresolved := ResolveSecrets(c, stores)
+	require.Empty(t, unresolved)
+	require.Equal(t, "envpw", md["redisPassword"])
+}
+
 func TestResolveSecrets_Unresolvable(t *testing.T) {
 	// No matching secret store at all.
 	c := Component{
