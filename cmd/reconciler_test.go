@@ -150,6 +150,77 @@ func TestReconcilingApps_ListTriggersReconcileOnChange(t *testing.T) {
 	require.Contains(t, rc.Paths(), dir)
 }
 
+func TestReconciler_StopToNoneClosesOldConnection(t *testing.T) {
+	dir := t.TempDir()
+	compYAML(t, dir, "store-a", "state.redis")
+
+	var closes atomic.Int32
+	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
+	rc.open = func(context.Context, statestore.Component) (statestore.Store, error) {
+		return countingStore{closes: &closes}, nil
+	}
+
+	// First reconcile: one app with a redis store in dir.
+	apps1 := []discovery.Instance{{
+		AppID:         "order",
+		ResourcePaths: []string{dir},
+		Components:    []discovery.Component{{Name: "store-a", Type: "state.redis"}},
+	}}
+	rc.reconcile(apps1, appsFingerprint(apps1))
+	require.Len(t, rc.Stores(), 1, "store must be registered after first reconcile")
+	require.EqualValues(t, 0, closes.Load(), "connection must still be open")
+
+	// Second reconcile: no apps, no paths → statestore.Detect finds nothing →
+	// newID == "" → active store changes → old connection closed.
+	empty := []discovery.Instance{}
+	rc.reconcile(empty, appsFingerprint(empty))
+
+	require.Len(t, rc.Stores(), 0, "stores must be empty after all apps stopped")
+	require.EqualValues(t, 1, closes.Load(), "old connection must be closed exactly once")
+
+	// Degraded mode: ServiceFor("") must return ok=true with a non-nil service.
+	svc, _, _, ok := rc.ServiceFor("")
+	require.True(t, ok, "degraded ServiceFor must return ok=true")
+	require.NotNil(t, svc, "degraded service must be non-nil")
+}
+
+func TestReconciler_SingleFlightRunsOneReconcile(t *testing.T) {
+	dir := t.TempDir()
+	compYAML(t, dir, "store-sf", "state.redis")
+
+	var opens atomic.Int32
+	var closes atomic.Int32
+	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
+	rc.open = func(context.Context, statestore.Component) (statestore.Store, error) {
+		opens.Add(1)
+		// Sleep briefly to widen the window for concurrent reconciles to race.
+		time.Sleep(5 * time.Millisecond)
+		return countingStore{closes: &closes}, nil
+	}
+
+	apps := []discovery.Instance{{
+		AppID:         "order",
+		ResourcePaths: []string{dir},
+		Components:    []discovery.Component{{Name: "store-sf", Type: "state.redis"}},
+	}}
+	want := appsFingerprint(apps)
+
+	// Fire many concurrent maybeReconcile calls with the same changed fingerprint.
+	for i := 0; i < 50; i++ {
+		rc.maybeReconcile(apps)
+	}
+
+	// Wait for reconcile to settle.
+	require.Eventually(t, func() bool {
+		return rc.fingerprint() == want
+	}, 2*time.Second, 10*time.Millisecond, "fingerprint must settle to expected value")
+
+	// Exactly one open must have occurred; subsequent maybeReconcile calls
+	// were skipped by the CAS guard or the fingerprint early-return.
+	require.EqualValues(t, 1, opens.Load(), "single-flight must allow exactly one store open")
+	require.Contains(t, rc.Paths(), dir)
+}
+
 func TestReconciler_CloseClosesActiveConnection(t *testing.T) {
 	dir := t.TempDir()
 	compYAML(t, dir, "store-a", "state.redis")

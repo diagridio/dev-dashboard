@@ -52,9 +52,11 @@ func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string) (res
 }
 
 // appsFingerprint hashes the apps-derived inputs that the reconciler depends on:
-// the set of app IDs, the union of resource paths + config-file dirs, and the
-// set of loaded state-store component names. Order-independent: same content
-// yields the same fingerprint regardless of app ordering.
+// the set of app IDs, the list (multiset, no dedup) of resource paths +
+// config-file dirs, and the set of loaded state-store component names.
+// Deduplication of paths happens downstream in statestore.Detect.
+// Order-independent: same content yields the same fingerprint regardless of
+// app ordering.
 func appsFingerprint(apps []discovery.Instance) string {
 	var ids, paths, stores []string
 	for _, a := range apps {

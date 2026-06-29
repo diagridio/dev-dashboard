@@ -43,6 +43,9 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	rc.reconcile(apps, appsFingerprint(apps))
 
 	// The decorator fires a fingerprint-gated reconcile on every /api/apps poll.
+	// Because decorated is shared as Options.Apps across all routers, any
+	// caller of apps.List — /api/apps, /api/actors, /api/subscriptions,
+	// /api/resources — drives the fingerprint-gated reconcile, not only /api/apps.
 	decorated := reconcilingApps{inner: appsSvc, rc: rc}
 
 	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
