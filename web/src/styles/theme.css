@@ -382,6 +382,11 @@ details[open] .caret { transform: rotate(90deg); }
 .err { color: var(--fail-fg); }
 .ev.reveal { animation: fadein .28s ease; }
 @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.ev.target-pulse { animation: targetpulse 1.5s ease; }
+@keyframes targetpulse {
+  0% { background: color-mix(in srgb, var(--accent2) 22%, transparent); }
+  100% { background: transparent; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

@@ -235,6 +235,27 @@ export function WorkflowDetail() {
     setHistoryOrder(order)
   }, [order])
 
+  // Scroll to and pulse the row referenced by the URL hash (e.g. #event-2),
+  // both on mount and whenever the hash changes via an in-page anchor click.
+  useEffect(() => {
+    function jumpToHash() {
+      const id = window.location.hash.slice(1)
+      if (!id) return
+      const el = document.getElementById(id)
+      if (!el) return
+      try {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } catch {
+        // jsdom / unsupported environments: scrolling is non-essential
+      }
+      el.classList.add('target-pulse')
+      window.setTimeout(() => el.classList.remove('target-pulse'), 1500)
+    }
+    jumpToHash()
+    window.addEventListener('hashchange', jumpToHash)
+    return () => window.removeEventListener('hashchange', jumpToHash)
+  }, [execution])
+
   const { toast, toastNode } = useToast()
 
   const wallclock = useWallClock(
@@ -313,6 +334,10 @@ export function WorkflowDetail() {
         lastEvent.sequenceId >= 0 ? ` · Event ID ${lastEvent.sequenceId}` : ''
       }`
     : undefined
+  const lastEventAnchor =
+    lastEvent !== undefined
+      ? eventAnchorId(lastEvent, canonicalIndex.get(lastEvent) ?? orderedHistory.length - 1)
+      : undefined
 
   const hasOutput = !!execution.output
   const isRunning = !terminal
@@ -443,7 +468,13 @@ export function WorkflowDetail() {
         <div className="m span2">
           <div className="k">Last event</div>
           <div className="v mono">
-            {lastEventLabel ?? <span className="faint">awaiting first event…</span>}
+            {lastEventLabel && lastEventAnchor ? (
+              <a className="celllink" href={`#${lastEventAnchor}`}>
+                {lastEventLabel}
+              </a>
+            ) : (
+              <span className="faint">awaiting first event…</span>
+            )}
           </div>
         </div>
       </div>

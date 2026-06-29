@@ -668,6 +668,14 @@ describe('WorkflowDetail', () => {
     expect(screen.queryByText(/#-1/)).toBeNull()
     expect(screen.queryByText(/OrchestratorStarted · /)).toBeNull()
   })
+
+  it('Last event cell links to the newest event row anchor', async () => {
+    seedFullId() // newest event is ExecutionCompleted, sequenceId 2
+    renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+    const link = screen.getByRole('link', { name: /ExecutionCompleted · Event ID 2/ })
+    expect(link).toHaveAttribute('href', '#event-2')
+  })
 })
 
 // ---------------------------------------------------------------------------
