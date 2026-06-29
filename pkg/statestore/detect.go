@@ -17,10 +17,17 @@ type rawComponent struct {
 		Type     string `json:"type"`
 		Version  string `json:"version"`
 		Metadata []struct {
-			Name  string `json:"name"`
-			Value string `json:"value"`
+			Name         string `json:"name"`
+			Value        string `json:"value"`
+			SecretKeyRef struct {
+				Name string `json:"name"`
+				Key  string `json:"key"`
+			} `json:"secretKeyRef"`
 		} `json:"metadata"`
 	} `json:"spec"`
+	Auth struct {
+		SecretStore string `json:"secretStore"`
+	} `json:"auth"`
 }
 
 // Detect finds state-store components under the given files or directories.
@@ -48,7 +55,15 @@ func Detect(paths []string) ([]Component, error) {
 				return nil
 			}
 			md := make(map[string]string, len(rc.Spec.Metadata))
+			var refs map[string]SecretRef
 			for _, m := range rc.Spec.Metadata {
+				if m.SecretKeyRef.Name != "" {
+					if refs == nil {
+						refs = make(map[string]SecretRef)
+					}
+					refs[m.Name] = SecretRef{Name: m.SecretKeyRef.Name, Key: m.SecretKeyRef.Key}
+					continue
+				}
 				md[m.Name] = m.Value
 			}
 			absPath, err := filepath.Abs(path)
@@ -61,7 +76,7 @@ func Detect(paths []string) ([]Component, error) {
 			seen[absPath] = true
 			out = append(out, Component{
 				Name: rc.Metadata.Name, Type: rc.Spec.Type, Version: rc.Spec.Version,
-				Metadata: md, Path: absPath,
+				Metadata: md, SecretRefs: refs, SecretStore: rc.Auth.SecretStore, Path: absPath,
 			})
 			return nil
 		})

@@ -18,13 +18,21 @@ import (
 // three supported backends (state.redis, state.sqlite, state.postgresql/postgres).
 var ErrUnsupported = errors.New("unsupported state store type")
 
+// SecretRef is a Dapr secretKeyRef: the secret name and the key within it.
+type SecretRef struct {
+	Name string // secretKeyRef.name (the secret's name)
+	Key  string // secretKeyRef.key (the key within that secret)
+}
+
 // Component is the parsed subset of a Dapr state-store component YAML we need.
 type Component struct {
-	Name     string            // metadata.name
-	Type     string            // spec.type, e.g. "state.redis"
-	Version  string            // spec.version
-	Metadata map[string]string // spec.metadata name->value
-	Path     string            // source file path (for display / disambiguation)
+	Name        string               // metadata.name
+	Type        string               // spec.type, e.g. "state.redis"
+	Version     string               // spec.version
+	Metadata    map[string]string    // spec.metadata name->value (inline only)
+	SecretRefs  map[string]SecretRef // spec.metadata name->secretKeyRef (no inline value)
+	SecretStore string               // auth.secretStore
+	Path        string               // source file path (for display / disambiguation)
 }
 
 // Store is the read + write + delete surface the workflow service needs.
