@@ -447,9 +447,9 @@ export function Workflows() {
                         </Link>
                       </td>
                       <td>{wf.appId}</td>
-                      <td className="muted tabnum">{formatCreated(wf.createdAt)}</td>
+                      <td className="muted mono tabnum">{formatCreated(wf.createdAt)}</td>
                       <td className="mono tabnum">{duration}</td>
-                      <td className={`muted mono${isFailed ? ' err' : ''}`}>{lastEventText}</td>
+                      <td className={`muted mono tabnum${isFailed ? ' err' : ''}`}>{lastEventText}</td>
                       <td className="kebab">⋯</td>
                     </tr>
                   )

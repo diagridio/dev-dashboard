@@ -18,7 +18,8 @@ agree again.
    for dense key/value headers.
 4. **Never hardcode a color.** Use a `var(--…)` token so both themes work.
 5. Labels (column heads, section titles, key names) are **mono, uppercase,
-   letter-spaced, `var(--muted)`**. Numbers use `.tabnum`.
+   letter-spaced, `var(--muted)`**. Any number/time/duration/GUID value is **mono**
+   — in table cells use **`td.mono.tabnum`**.
 6. Handle loading / empty / error states explicitly (see the pattern below).
 
 ---
@@ -119,12 +120,22 @@ background: color-mix(in srgb, var(--accent2) 10%, var(--surface));
 ## 3. Typography conventions
 
 - **Body / values:** `--sans`, ~13px, `--text`.
-- **Code, IDs, ports, timestamps, metrics:** `--mono`. Add `.mono` to opt in.
+- **Monospace data values — numbers, times, durations, GUIDs/IDs, ports, metrics:**
+  always `--mono`. Add `.mono` to opt in. This is a hard rule: any field whose value
+  is a number, a timestamp/time, a duration, or a GUID/ID renders in the mono stack.
+  - **In table cells, use `td.mono.tabnum`** — `.tabnum`
+    (`font-variant-numeric: tabular-nums`) on top of `.mono` so columns align.
+    Combine with color/weight helpers as needed (e.g. `muted mono tabnum` for a
+    secondary timestamp, `mono tabnum faint` for an em-dash placeholder in a numeric
+    column).
+  - **Outside tables** (`.kv .vv`, `.metagrid .v`, stat tiles) just add `.mono`;
+    `.tabnum` is only required for aligned table columns.
+  - **Stat tiles** (`.stat .n`) are mono by default — the rule is baked into the
+    class, so you get it for free. The caption (`.stat .l`) stays a mono label.
 - **Labels** (column headers, section titles, key names, stat captions): the
   signature look — `--mono`, ~10–11.5px, `text-transform: uppercase`,
   `letter-spacing: .08–.15em`, color `--muted`. Don't restyle these per-page; reuse
   `.sec-title`, `.sech`, `table th`, `.kv .kk`, `.metagrid .k`, `.stat .l`.
-- **Numbers:** add `.tabnum` (`font-variant-numeric: tabular-nums`) so columns align.
 - **Page titles:** `font-weight: 680`, slight negative tracking (handled by `.phead h1`).
 - **Bold emphasis:** `.b` (= `font-weight: 600`).
 
@@ -217,8 +228,9 @@ Reusable React components — prefer these over re-implementing.
 - `.panel` — like a card, with a `.ph` header row (`> .ph`); body is usually `.kv`,
   `.compchips`, or a `<pre>`. Use `.ph .ic` for the little square glyph,
   `.ph .tagdot` for a colored dot, `.ph .copybtn` auto-right-aligns.
-- `.stats` / `.stat` — auto-fit grid of summary tiles. `.stat .n` (big number,
-  add `.mint` for accent), `.stat .l` (caption label).
+- `.stats` / `.stat` — auto-fit grid of summary tiles. `.stat .n` (big number —
+  **mono** + tabular-nums by default; add `.mint` for accent), `.stat .l` (caption
+  label).
 - `.metagrid` — dense 4-col key/value header grid (`.m` cell, `.m.span2` to span,
   `.k` label, `.v` value, `.v.mono`). Used on detail headers.
 - `.kv` — 2-col key/value list inside a panel (`.kk` key, `.vv` value, `.vv.mono`).
@@ -322,7 +334,8 @@ already provides (e.g. re-specifying the whole `.ph` rule inline as
 - [ ] Root is `.page`; header is `.phead` or `.crumbs`.
 - [ ] Loading, empty, and error states are handled.
 - [ ] No hardcoded colors — everything is `var(--…)`.
-- [ ] Labels are mono/uppercase/muted via existing classes; numbers use `.tabnum`.
+- [ ] Labels are mono/uppercase/muted via existing classes; every number/time/
+      duration/GUID value is mono, and table cells use `td.mono.tabnum`.
 - [ ] Used `StatusPill` / `LiveIndicator` / `RefreshControl` / toast where relevant.
 - [ ] Wide tables wrapped in `.tablewrap`; grids collapse on narrow screens.
 - [ ] Checked it in **both** light and dark themes.

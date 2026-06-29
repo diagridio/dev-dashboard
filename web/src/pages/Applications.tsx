@@ -150,7 +150,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       {num(app.grpcPort)}
       {num(app.daprdPid)}
       {num(app.appPid)}
-      <td className="muted tabnum">{app.age}</td>
+      <td className="muted mono tabnum">{app.age}</td>
       <td className="mono muted">{app.runTemplate || '—'}</td>
       <td className="kebab">⋯</td>
     </tr>

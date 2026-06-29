@@ -133,8 +133,8 @@ function ActorRow({ actor }: { actor: Actor }) {
         {isInternal && <span className="tag-int">internal</span>}
       </td>
       <td className="mono tabnum b">{actor.count}</td>
-      <td className="mono faint">—</td>
-      <td className="mono faint">—</td>
+      <td className="mono tabnum faint">—</td>
+      <td className="mono tabnum faint">—</td>
       <td>
         {actor.placement ? (
           <span className="health">
