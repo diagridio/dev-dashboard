@@ -149,6 +149,7 @@ body {
 .sec-title { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 22px 0 10px; }
 .sech { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 6px; display: flex; align-items: center; gap: 10px; }
 .sech .meta { color: var(--faint); letter-spacing: 0; text-transform: none; font-size: 11.5px; }
+.sech .ordbtn { margin-left: auto; }
 
 /* ---- Primitives ---- */
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; box-shadow: var(--shadow); overflow: hidden; }

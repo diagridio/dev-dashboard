@@ -10,7 +10,8 @@ import { highlightJson } from '../lib/json-highlight'
 import { useToast, type ToastHandle } from '../lib/toast'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
-import { sortHistoryForDisplay } from '../lib/eventOrder'
+import { sortHistoryForDisplay, orderHistoryForDisplay, type HistoryOrder } from '../lib/eventOrder'
+import { getHistoryOrder, setHistoryOrder } from '../lib/prefs'
 
 // ---------------------------------------------------------------------------
 // Status helpers
@@ -201,6 +202,12 @@ export function WorkflowDetail() {
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
   const [removeForce, setRemoveForce] = useState(false)
 
+  const [order, setOrder] = useState<HistoryOrder>(() => getHistoryOrder())
+
+  useEffect(() => {
+    setHistoryOrder(order)
+  }, [order])
+
   const { toast, toastNode } = useToast()
 
   const wallclock = useWallClock(
@@ -253,7 +260,10 @@ export function WorkflowDetail() {
   }
 
   const history = execution.history ?? []
-  const orderedHistory = sortHistoryForDisplay(history)
+  const orderedHistory = sortHistoryForDisplay(history) // canonical ascending — used for derived data
+  const displayHistory = orderHistoryForDisplay(history, order) // what the timeline renders
+  const newestEvent =
+    orderedHistory.length > 0 ? orderedHistory[orderedHistory.length - 1] : undefined
   const terminal = isTerminal(execution.status)
 
   // Metagrid helpers
@@ -502,18 +512,29 @@ export function WorkflowDetail() {
         <span className="meta">
           {terminal ? `${history.length} events` : 'live — populating as the run progresses'}
         </span>
+        {history.length > 0 && (
+          <button
+            className="tbtn ordbtn"
+            data-cy="history-order"
+            aria-label={order === 'asc' ? 'Show newest first' : 'Show oldest first'}
+            aria-pressed={order === 'desc'}
+            onClick={() => setOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+          >
+            {order === 'asc' ? 'Oldest first' : 'Newest first'}
+          </button>
+        )}
       </h2>
 
       {history.length === 0 ? (
         <p className="hint">No history events.</p>
       ) : (
         <div className="timeline">
-          {orderedHistory.map((event, idx) => (
+          {displayHistory.map((event, idx) => (
             <EventRow
               key={idx}
               event={event}
               createdAt={execution.createdAt}
-              isNewest={idx === orderedHistory.length - 1}
+              isNewest={event === newestEvent}
               toast={toast}
             />
           ))}
