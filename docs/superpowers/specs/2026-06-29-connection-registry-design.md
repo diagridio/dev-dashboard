@@ -80,11 +80,20 @@ connections:
 ```
 
 **Identity / dedup:**
-- `auto` entries are keyed by **normalized absolute path** (`filepath.Clean` of the
+- `auto` entries are deduped by **normalized absolute path** (`filepath.Clean` of the
   abs path; compared case-insensitively on Windows). Path-keying (not name-keying)
   keeps two different projects that both name their store `statestore` as distinct
   entries — required for viewing an old project's workflows after switching.
-- `manual` entries are keyed by their user-given `name`.
+- `manual` entries are deduped by their user-given `name`.
+
+**Stable id (addressing):** because two distinct entries may share a `name`, every
+entry carries a stable, URL-safe `id` and the API/selection/CRUD address stores by
+`id`, never by `name` — so same-name cross-project stores are independently
+selectable and manageable. The id is deterministic (stable across restarts): for
+`auto`, `id = hex(sha256(normalizedPath))[:12]`; for `manual`, `id = hex(sha256("manual:" + name))[:12]`.
+Re-discovery of the same path yields the same id (so upsert dedups). `name` remains
+the human-facing label (shown in the UI alongside the connection summary to
+disambiguate visually); `id` is the key everywhere in code and the API.
 
 **Auto-persist:** on each reconcile, every detected store is upserted as an `auto`
 entry keyed by its normalized path (re-discovery does not duplicate; the entry's
@@ -117,14 +126,15 @@ idle/LRU eviction is a noted future option, out of scope for 2b).
 
 ### 3. Backend integration (`ServiceFor` + reconciler)
 
-`ServiceFor(name)`:
-- `name == ""` → the active store (elected by the reconciler, pre-warmed in the
+`ServiceFor(id)` (the `?store=` value and `ServiceFor` argument are now the entry
+**id**, not the name):
+- `id == ""` → the active store (elected by the reconciler, pre-warmed in the
   pool). Default view, unchanged.
-- `name` matches a registry entry → build its `statestore.Component` (auto: read
+- `id` matches a registry entry → build its `statestore.Component` (auto: read
   the YAML at `path` + `DetectSecretStores` + `ResolveSecrets`; manual: inline
-  `metadata`) → `connpool.openOrGet` → return its entry. A connect failure returns
-  an error the API surfaces (unreachable).
-- unknown `name` → `ok=false` → API "unknown store" (today's behavior).
+  `metadata`) → `connpool.openOrGet` → return its entry. A connect failure surfaces
+  a graceful error (the degraded entry → 503), not a 404.
+- unknown `id` → `ok=false` → API "unknown store".
 
 The reconciler holds the `registry` and `connpool`; its `Stores()` and
 `ServiceFor` delegate to them. Each reconcile: auto-persist discovered stores →
@@ -133,22 +143,22 @@ registry; pre-warm active store → pool. `Close()` closes the pool.
 ## API surface
 
 - `GET /api/statestores` → all registry entries (auto ∪ manual, deduped) as
-  `StoreInfo`, with a new `source` field (`auto`|`manual`); `active` marks the
-  elected active store; `connection` stays the secrets-free `ConnInfo`. The list
-  opens **no** DB connections — for an `auto` entry it reads+resolves its YAML to
-  compute `connection` (a file read, no connect); a missing YAML yields an empty
-  `connection` (unreachable), not an error.
-- `POST /api/statestores` → add a manual connection `{name, type, metadata}`;
-  validates `type` ∈ {`state.redis`, `state.sqlite`, `state.postgresql`} and
-  required fields; writes the registry.
-- `PUT /api/statestores/{name}` → edit a manual connection.
-- `DELETE /api/statestores/{name}` → remove any entry; close+evict its pooled
+  `StoreInfo`, each with its stable `id` and a new `source` field (`auto`|`manual`);
+  `active` marks the elected active store; `connection` stays the secrets-free
+  `ConnInfo`. The list opens **no** DB connections — for an `auto` entry it
+  reads+resolves its YAML to compute `connection` (a file read, no connect); a
+  missing YAML yields an empty `connection` (unreachable), not an error.
+- `POST /api/statestores` → add a manual connection `{name, type, metadata}`
+  (the backend assigns the id); validates `type` ∈ {`state.redis`,
+  `state.sqlite`, `state.postgresql`} and required fields; writes the registry.
+- `PUT /api/statestores/{id}` → edit a manual connection by id.
+- `DELETE /api/statestores/{id}` → remove any entry by id; close+evict its pooled
   connection if open.
-- `GET /api/workflows?store=<name>` (and stats / detail / remove, already
-  `store`-aware) route through `ServiceFor(name)` → the lazy pool.
+- `GET /api/workflows?store=<id>` (and stats / detail / remove, already
+  `store`-aware) route through `ServiceFor(id)` → the lazy pool.
 
 `server.StoreRegistry` is extended from `Stores() []StoreInfo` to also carry the
-add/update/delete mutators; `StoreInfo` gains `Source string`.
+add/update/delete mutators; `StoreInfo` gains `ID string` and `Source string`.
 
 ## Error handling
 
@@ -172,17 +182,20 @@ add/update/delete mutators; `StoreInfo` gains `Source string`.
 
 - `registry` units: load/save round-trip **including a backslash Windows-style
   path** (asserts marshaler escaping); auto-persist upsert dedups by normalized
-  path; manual add/edit/delete; deleting an auto entry; malformed file → empty.
+  path; **two auto stores with the same `name` but different paths get distinct
+  `id`s and both persist**; stable id across reload; manual add/edit/delete by id;
+  deleting an auto entry by id; malformed file → empty.
 - `connpool` units (fake opener counting opens): `openOrGet` caches (opens once);
   per-identity single-flight; `Close` closes all; switching the active store
   **retains** the old connection (close count stays 0).
-- backend `ServiceFor`: active (`""`) vs named-auto vs named-manual vs unknown.
+- backend `ServiceFor`: active (`""`) vs auto-by-id vs manual-by-id vs unknown id;
+  **two same-name entries resolve independently by their distinct ids.**
 - integration (SQLite, no external services): a running app provides store A
   (`auto`); a pre-seeded registry file has a manual SQLite store B seeded with a
-  workflow instance. `GET /api/statestores` lists both with correct `source` and
-  `active`; `GET /api/workflows?store=B` returns B's instance through the lazy
-  pool while A remains the active default; `GET /api/workflows` (no store) returns
-  A's view.
+  workflow instance. `GET /api/statestores` lists both with correct `id`, `source`,
+  and `active`; `GET /api/workflows?store=<B's id>` returns B's instance through the
+  lazy pool while A remains the active default; `GET /api/workflows` (no store)
+  returns A's view.
 
 ## Out of scope (→ Spec 2c)
 
