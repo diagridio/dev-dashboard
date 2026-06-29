@@ -613,6 +613,17 @@ describe('WorkflowDetail', () => {
     expect(cur.textContent).not.toContain('…')
   })
 
+  it('event rows carry stable sequenceId-based ids (and replay fallback)', async () => {
+    seedFullId() // history: seq -1 OrchestratorStarted, 0 ExecutionStarted, 1 TaskScheduled, 2 ExecutionCompleted
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+    expect(container.querySelector('#event-0')).not.toBeNull()
+    expect(container.querySelector('#event-1')).not.toBeNull()
+    expect(container.querySelector('#event-2')).not.toBeNull()
+    // The OrchestratorStarted sentinel (seq -1) uses the canonical-index fallback.
+    expect(container.querySelector('[id^="event-replay-"]')).not.toBeNull()
+  })
+
   it('orders the event timeline ExecutionStarted-first, ExecutionCompleted-last', async () => {
     seedFullId()
     const { container } = renderDetail()
@@ -668,7 +679,9 @@ const createdAt = '2026-06-28T10:00:00.000Z'
 const stubToast: ToastHandle = { show: () => {} }
 
 function row(event: WorkflowHistoryEvent) {
-  return render(<EventRow event={event} createdAt={createdAt} isNewest={false} toast={stubToast} />)
+  return render(
+    <EventRow event={event} createdAt={createdAt} isNewest={false} toast={stubToast} anchorId="event-test" />,
+  )
 }
 
 describe('EventRow', () => {
@@ -697,6 +710,20 @@ describe('EventRow', () => {
     // without introducing a real caret.
     expect(container.querySelector('.caretspace')).not.toBeNull()
     expect(container.querySelector('.caret')).toBeNull()
+  })
+
+  it('sets the row id from anchorId and shows a copy-link button', () => {
+    const { container } = render(
+      <EventRow
+        event={{ type: 'ExecutionCompleted', sequenceId: 2, timestamp: '2026-06-28T10:00:01.000Z', output: '"ok"' }}
+        createdAt={createdAt}
+        isNewest={false}
+        toast={stubToast}
+        anchorId="event-2"
+      />,
+    )
+    expect(container.querySelector('#event-2')).not.toBeNull()
+    expect(container.querySelector('.evanchor')).not.toBeNull()
   })
 
   it('shows "Event ID 0" for ExecutionStarted with input (expandable)', () => {

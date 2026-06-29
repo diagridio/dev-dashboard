@@ -10,7 +10,7 @@ import { highlightJson } from '../lib/json-highlight'
 import { useToast, type ToastHandle } from '../lib/toast'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
-import { sortHistoryForDisplay, orderHistoryForDisplay, type HistoryOrder } from '../lib/eventOrder'
+import { sortHistoryForDisplay, orderHistoryForDisplay, eventAnchorId, type HistoryOrder } from '../lib/eventOrder'
 import { getHistoryOrder, setHistoryOrder } from '../lib/prefs'
 
 // ---------------------------------------------------------------------------
@@ -100,11 +100,13 @@ export function EventRow({
   createdAt,
   isNewest,
   toast,
+  anchorId,
 }: {
   event: WorkflowHistoryEvent
   createdAt: string | undefined
   isNewest: boolean
   toast: ToastHandle
+  anchorId: string
 }) {
   const offset = formatOffset(createdAt, event.timestamp)
   const dateTime = formatDateTime(event.timestamp) ?? ''
@@ -116,8 +118,14 @@ export function EventRow({
 
   const hasDetails = !!(event.input || event.output)
 
+  const copyAnchorLink = () => {
+    const { origin, pathname } = window.location
+    copyText(`${origin}${pathname}#${anchorId}`)
+    toast.show('Link copied')
+  }
+
   return (
-    <div className={`ev${isNewest ? ' reveal' : ''}`}>
+    <div id={anchorId} className={`ev${isNewest ? ' reveal' : ''}`}>
       <div className="t">
         <span className="off">{offset}</span>
         <span className="dt">{dateTime}</span>
@@ -133,6 +141,17 @@ export function EventRow({
               <span className="evtype">{event.type}</span>
               {event.name && <span className="evname">{event.name}</span>}
               {eventIdTag && <span className="evtag">{eventIdTag}</span>}
+              <button
+                className="evanchor"
+                aria-label="Copy link to this event"
+                title="Copy link to this event"
+                onClick={(e) => {
+                  e.preventDefault() // don't toggle the <details>
+                  copyAnchorLink()
+                }}
+              >
+                #
+              </button>
             </summary>
             <div className="evbody">
               {event.input && (
@@ -178,6 +197,14 @@ export function EventRow({
               <span className="evtype">{event.type}</span>
               {event.name && <span className="evname">{event.name}</span>}
               {eventIdTag && <span className="evtag">{eventIdTag}</span>}
+              <button
+                className="evanchor"
+                aria-label="Copy link to this event"
+                title="Copy link to this event"
+                onClick={copyAnchorLink}
+              >
+                #
+              </button>
             </div>
           </div>
         )}
@@ -262,6 +289,9 @@ export function WorkflowDetail() {
   const history = execution.history ?? []
   const orderedHistory = sortHistoryForDisplay(history) // canonical ascending — used for derived data
   const displayHistory = orderHistoryForDisplay(history, order) // what the timeline renders
+  // Reference→canonical-index map so each row resolves the same id regardless of display order.
+  const canonicalIndex = new Map<WorkflowHistoryEvent, number>()
+  orderedHistory.forEach((e, i) => canonicalIndex.set(e, i))
   const newestEvent =
     orderedHistory.length > 0 ? orderedHistory[orderedHistory.length - 1] : undefined
   const terminal = isTerminal(execution.status)
@@ -538,6 +568,7 @@ export function WorkflowDetail() {
               createdAt={execution.createdAt}
               isNewest={event === newestEvent}
               toast={toast}
+              anchorId={eventAnchorId(event, canonicalIndex.get(event) ?? idx)}
             />
           ))}
         </div>
