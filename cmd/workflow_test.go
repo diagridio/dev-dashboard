@@ -56,6 +56,10 @@ func (f fakeWorkflowSvc) Get(_ context.Context, _, _ string) (workflow.Execution
 	return f.ex, f.err
 }
 
+func (f fakeWorkflowSvc) Stats(_ context.Context, _ workflow.ListQuery) (workflow.StatsResult, error) {
+	return workflow.StatsResult{}, nil
+}
+
 func TestTargetResolver(t *testing.T) {
 	ctx := context.Background()
 
