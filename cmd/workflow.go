@@ -25,20 +25,51 @@ type storeRegistry struct {
 	activeIndex int // -1 means no active component
 }
 
-// newStoreRegistry builds a storeRegistry from a slice of detected components.
-// The active component is the one with actorStateStore=="true" in its Metadata,
-// or the first component if none has that flag, or none if the slice is empty.
-func newStoreRegistry(comps []statestore.Component) *storeRegistry {
+// newStoreRegistry builds a storeRegistry from detected components and the set of
+// state-store component names that running apps have actually loaded.
+//
+// Active-store election precedence:
+//  1. app-loaded AND actorStateStore=="true"
+//  2. app-loaded (any)
+//  3. actorStateStore=="true"
+//  4. first component
+//  5. none (empty slice)
+//
+// Preferring app-loaded stores stops the global ~/.dapr default (also flagged
+// actorStateStore) from shadowing the store an externally-launched app (e.g. one
+// started by .NET Aspire) actually loaded.
+func newStoreRegistry(comps []statestore.Component, loaded map[string]bool) *storeRegistry {
 	r := &storeRegistry{comps: comps, activeIndex: -1}
+	if len(comps) == 0 {
+		return r
+	}
+
+	isLoaded := func(c statestore.Component) bool { return loaded != nil && loaded[c.Name] }
+	isActor := func(c statestore.Component) bool { return c.Metadata["actorStateStore"] == "true" }
+
+	// 1. app-loaded AND actorStateStore.
 	for i, c := range comps {
-		if c.Metadata["actorStateStore"] == "true" {
+		if isLoaded(c) && isActor(c) {
 			r.activeIndex = i
 			return r
 		}
 	}
-	if len(comps) > 0 {
-		r.activeIndex = 0
+	// 2. app-loaded (any).
+	for i, c := range comps {
+		if isLoaded(c) {
+			r.activeIndex = i
+			return r
+		}
 	}
+	// 3. actorStateStore.
+	for i, c := range comps {
+		if isActor(c) {
+			r.activeIndex = i
+			return r
+		}
+	}
+	// 4. first component.
+	r.activeIndex = 0
 	return r
 }
 
@@ -151,6 +182,7 @@ func (b *storeBackend) ServiceFor(name string) (workflow.Service, server.Workflo
 func newStoreBackend(
 	ctx context.Context,
 	comps []statestore.Component,
+	loaded map[string]bool,
 	namespace string,
 	client *http.Client,
 	apps discovery.Service,
@@ -167,7 +199,7 @@ func newStoreBackend(
 		log.Warn("no state store detected")
 	}
 
-	registry := newStoreRegistry(comps)
+	registry := newStoreRegistry(comps, loaded)
 	active := registry.active()
 
 	// Only the active state store (the one Dapr Workflow uses) is initialised
