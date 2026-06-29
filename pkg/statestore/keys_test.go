@@ -29,3 +29,24 @@ func TestParseInstanceID(t *testing.T) {
 	_, ok = ParseInstanceID("a||b||||metadata")
 	require.False(t, ok)
 }
+
+func TestAllInstanceMetaPattern(t *testing.T) {
+	require.Equal(t,
+		"%||dapr.internal.default.%.workflow||%||metadata",
+		AllInstanceMetaPattern("default"))
+	require.Equal(t,
+		"%||dapr.internal.prod.%.workflow||%||metadata",
+		AllInstanceMetaPattern("prod"))
+}
+
+func TestParseAppID(t *testing.T) {
+	id, ok := ParseAppID("pr-digest||dapr.internal.default.pr-digest.workflow||abc-123||metadata")
+	require.True(t, ok)
+	require.Equal(t, "pr-digest", id)
+
+	_, ok = ParseAppID("too||few")
+	require.False(t, ok)
+
+	_, ok = ParseAppID("||dapr.internal.default..workflow||x||metadata")
+	require.False(t, ok) // empty app-id segment
+}

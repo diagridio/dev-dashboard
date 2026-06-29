@@ -38,3 +38,23 @@ func ParseInstanceID(key string) (string, bool) {
 	}
 	return parts[2], true
 }
+
+// AllInstanceMetaPattern is a KeysLike LIKE pattern matching every instance's
+// metadata key across ALL app-ids in the namespace ("%" matches both the
+// leading app-id segment and the app-id inside the actor type).
+func AllInstanceMetaPattern(namespace string) string {
+	return "%" + KeyDelimiter +
+		"dapr.internal." + namespace + "." + "%" + ".workflow" + KeyDelimiter +
+		"%" + KeyDelimiter + SuffixMetadata
+}
+
+// ParseAppID returns the app-id segment (segment[0]) of a "||"-joined workflow
+// key. Returns ok=false for a malformed key (fewer than three segments or an
+// empty app-id segment).
+func ParseAppID(key string) (string, bool) {
+	parts := strings.Split(key, KeyDelimiter)
+	if len(parts) < 3 || parts[0] == "" {
+		return "", false
+	}
+	return parts[0], true
+}
