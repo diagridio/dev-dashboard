@@ -119,11 +119,28 @@ type appProcResolver interface {
 This is a general improvement: it benefits any externally-managed app whose daprd has no app
 command, not only Aspire.
 
+### Aspire/DCP addendum (added after live verification)
+
+Live verification revealed that under .NET Aspire the app port does **not** point at the app
+process. Aspire fronts every app with the **DCP** (Developer Control Plane) reverse proxy, so the
+listener on the daprd `--app-port` is the `dcp` process
+(`aspire.hosting.orchestration.../dcp run-controllers`), not the app — and the real app binary is
+a self-contained executable under a `netX.Y/` path whose command carries no `dotnet` token. The
+generic app-port fallback therefore resolves to the proxy and yields `"unknown"` for Aspire.
+
+Decision (relaxes the original "no Aspire-specific branches" non-goal for this one case): after
+the generic `InferRuntime(listenerCommand)` fallback, if the listener command is the Aspire DCP
+proxy, label the runtime `"dotnet"` (the DCP orchestrator and AppHost are .NET-hosted). The
+generic fallback still runs first, so a plain commandless `dapr run` app that listens directly on
+its app port is unaffected. gopsutil's `net.Connections` was confirmed to work for same-user
+processes on macOS without elevation, so the privilege risk below did not materialise.
+
 ### Implementation risk to verify during build
 
 Resolving a listener-by-port on macOS may require elevated privileges depending on the facility
 used. Confirm the chosen approach works for same-user processes without elevation during
 implementation; if it does not, fall back gracefully to `"unknown"` (no worse than today).
+(Resolved: gopsutil works without elevation on the verification host.)
 
 ## Testing (TDD)
 
