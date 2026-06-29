@@ -83,7 +83,10 @@ func identity(c *statestore.Component) string {
 	return c.Name + "|" + c.Type + "|" + statestore.ConnInfo(*c)
 }
 
-// reconcile re-derives state from apps and swaps it in. fp is the precomputed
+// reconcile is NOT safe for concurrent use: callers MUST ensure only one
+// reconcile runs at a time (the reconcilingApps decorator's single-flight
+// guard and the synchronous boot seed are the only callers).
+// It re-derives state from apps and swaps it in. fp is the precomputed
 // fingerprint for apps. The DB connection is reopened only when the active
 // store's identity changes; if reopening fails while a working connection
 // exists, the previous connection is retained (registry unchanged) and only the

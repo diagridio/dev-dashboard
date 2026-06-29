@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -31,8 +32,7 @@ func (f fakeApps) Get(_ context.Context, id string) (discovery.Instance, error) 
 
 // countingStore wraps no real backend; it only tracks Close calls.
 type countingStore struct {
-	closes *int32
-	mu     *sync.Mutex
+	closes *atomic.Int32
 }
 
 func (s countingStore) Keys(context.Context, string, string, int) ([]string, string, error) {
@@ -45,9 +45,7 @@ func (s countingStore) BulkGet(context.Context, []string) (map[string][]byte, er
 func (s countingStore) Delete(context.Context, string) error      { return nil }
 func (s countingStore) Set(context.Context, string, []byte) error { return nil }
 func (s countingStore) Close() error {
-	s.mu.Lock()
-	*s.closes++
-	s.mu.Unlock()
+	s.closes.Add(1)
 	return nil
 }
 
@@ -76,15 +74,15 @@ func TestReconciler_ActiveStoreSwapsAndClosesOldExactlyOnce(t *testing.T) {
 	compYAML(t, dirA, "store-a", "state.redis")
 	compYAML(t, dirB, "store-b", "state.redis")
 
-	var closes int32
-	var mu sync.Mutex
+	var closes atomic.Int32
 	opened := map[string]int{}
+	var openedMu sync.Mutex
 	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
 	rc.open = func(_ context.Context, c statestore.Component) (statestore.Store, error) {
-		mu.Lock()
+		openedMu.Lock()
 		opened[c.Name]++
-		mu.Unlock()
-		return countingStore{closes: &closes, mu: &mu}, nil
+		openedMu.Unlock()
+		return countingStore{closes: &closes}, nil
 	}
 
 	// First app loads store-a from dirA.
@@ -93,14 +91,14 @@ func TestReconciler_ActiveStoreSwapsAndClosesOldExactlyOnce(t *testing.T) {
 	rc.reconcile(apps1, appsFingerprint(apps1))
 	require.Len(t, rc.Stores(), 1)
 	require.Equal(t, "store-a", rc.Stores()[0].Name)
-	require.EqualValues(t, 0, closes)
+	require.EqualValues(t, 0, closes.Load())
 
 	// Second app loads store-b from dirB: active store changes -> old closed once.
 	apps2 := []discovery.Instance{{AppID: "b", ResourcePaths: []string{dirB},
 		Components: []discovery.Component{{Name: "store-b", Type: "state.redis"}}}}
 	rc.reconcile(apps2, appsFingerprint(apps2))
 	require.Equal(t, "store-b", rc.Stores()[0].Name)
-	require.EqualValues(t, 1, closes, "old connection must be closed exactly once")
+	require.EqualValues(t, 1, closes.Load(), "old connection must be closed exactly once")
 	require.Equal(t, 1, opened["store-b"])
 }
 
@@ -109,15 +107,14 @@ func TestReconciler_RetainsConnectionWhenNewOpenFails(t *testing.T) {
 	compYAML(t, dirA, "store-a", "state.redis")
 	compYAML(t, dirB, "store-b", "state.redis")
 
-	var closes int32
-	var mu sync.Mutex
+	var closes atomic.Int32
 	failNext := false
 	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
 	rc.open = func(_ context.Context, c statestore.Component) (statestore.Store, error) {
 		if failNext {
 			return nil, errors.New("connection refused")
 		}
-		return countingStore{closes: &closes, mu: &mu}, nil
+		return countingStore{closes: &closes}, nil
 	}
 
 	apps1 := []discovery.Instance{{AppID: "a", ResourcePaths: []string{dirA},
@@ -131,5 +128,5 @@ func TestReconciler_RetainsConnectionWhenNewOpenFails(t *testing.T) {
 		Components: []discovery.Component{{Name: "store-b", Type: "state.redis"}}}}
 	rc.reconcile(apps2, appsFingerprint(apps2))
 	require.Equal(t, "store-a", rc.Stores()[0].Name, "must retain previous store when new open fails")
-	require.EqualValues(t, 0, closes, "old working connection must not be closed on failed swap")
+	require.EqualValues(t, 0, closes.Load(), "old working connection must not be closed on failed swap")
 }
