@@ -340,7 +340,7 @@ pre.json { margin: 0; padding: 13px; font-family: var(--mono); font-size: 12px; 
 .json .b { color: var(--dapr); }
 .pendingout { padding: 13px; font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 9px; }
 .timeline { position: relative; padding: 6px 0; }
-.ev { display: grid; grid-template-columns: 170px 26px 1fr; gap: 0; align-items: start; --ev-head: 40px; --ev-head-top: 8px; }
+.ev { display: grid; grid-template-columns: max-content 26px 1fr; gap: 0; align-items: start; --ev-head: 40px; --ev-head-top: 8px; }
 .ev .t { font-family: var(--mono); font-size: 11px; color: var(--muted); padding-top: var(--ev-head-top); padding-right: 12px; min-height: var(--ev-head); box-sizing: content-box; display: flex; flex-direction: column; align-items: stretch; justify-content: center; white-space: nowrap; }
 .ev .t .off { text-align: left; }
 .ev .t .dt { text-align: left; color: var(--muted); font-size: 10px; margin-top: 2px; }
