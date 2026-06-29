@@ -29,6 +29,7 @@ type ListQuery struct {
 
 type Service interface {
 	List(ctx context.Context, q ListQuery) (ListResult, error)
+	Stats(ctx context.Context, q ListQuery) (StatsResult, error)
 	Get(ctx context.Context, appID, instanceID string) (Execution, error)
 }
 
@@ -98,6 +99,53 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 		items = items[:pageSize]
 	}
 	return ListResult{Items: items, NextToken: next}, nil
+}
+
+// Stats scans all instances across the relevant apps, honoring AppID and
+// Search but ignoring Status and paging, and tallies a count per status.
+func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
+	if s.store == nil {
+		return StatsResult{}, ErrNoStore
+	}
+	apps, err := s.appIDs(ctx)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	if q.AppID != "" {
+		apps = []string{q.AppID}
+	}
+	// Reuse matches() for search only — never filter counts by status.
+	searchQ := ListQuery{Search: q.Search}
+	res := StatsResult{Counts: map[Status]int{}}
+	seen := make(map[string]struct{})
+	for _, appID := range apps {
+		// pageSize 0 = all keys (same convention load() relies on).
+		keys, _, err := s.store.Keys(ctx, statestore.InstanceMetaPattern(s.namespace, appID), "", 0)
+		if err != nil {
+			return StatsResult{}, err
+		}
+		for _, k := range keys {
+			id, ok := statestore.ParseInstanceID(k)
+			if !ok {
+				continue
+			}
+			dedupKey := appID + "/" + id
+			if _, dup := seen[dedupKey]; dup {
+				continue
+			}
+			seen[dedupKey] = struct{}{}
+			ex, err := s.load(ctx, appID, id)
+			if err != nil {
+				continue
+			}
+			if !matches(ex.ExecutionSummary, searchQ) {
+				continue
+			}
+			res.Counts[ex.Status]++
+			res.Total++
+		}
+	}
+	return res, nil
 }
 
 func (s *service) Get(ctx context.Context, appID, instanceID string) (Execution, error) {

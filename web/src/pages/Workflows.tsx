@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useWorkflows, useStateStores } from '../hooks/useWorkflows'
+import { useWorkflows, useWorkflowStats, useStateStores } from '../hooks/useWorkflows'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { RefreshControl } from '../components/RefreshControl'
@@ -106,6 +106,11 @@ export function Workflows() {
     appId: selectedApp || undefined,
   })
 
+  const { data: stats } = useWorkflowStats({
+    appId: selectedApp || undefined,
+    search: debouncedSearch || undefined,
+  })
+
   // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows)
   const items = useMemo<WorkflowSummary[]>(() => dedupeWorkflows(data?.items ?? []), [data?.items])
 
@@ -129,16 +134,6 @@ export function Workflows() {
     items.forEach((w) => seen.add(w.appId))
     return Array.from(seen).sort()
   }, [items])
-
-  // Status counts from current items (for segment badge numbers)
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = {}
-    items.forEach((w) => {
-      counts[w.status] = (counts[w.status] ?? 0) + 1
-    })
-    return counts
-  }, [items])
-  const totalCount = items.length
 
   function setStatus(s: WorkflowStatus | '') {
     setActiveStatus(s)
@@ -244,11 +239,17 @@ export function Workflows() {
           </div>
         </div>
         <div className="ctrlset">
-          <span className="chip">
-            <span className="led" />
-            statestore{' '}
-            <b>{storeLabel}</b>
-          </span>
+          {activeStore ? (
+            <Link className="chip link" to={`/components/${activeStore.name}`}>
+              <span className="led" />
+              statestore <b>{storeLabel}</b>
+            </Link>
+          ) : (
+            <span className="chip">
+              <span className="led" />
+              statestore <b>unknown</b>
+            </span>
+          )}
           <RefreshControl />
         </div>
       </div>
@@ -292,7 +293,7 @@ export function Workflows() {
             aria-pressed={activeStatus === ''}
             onClick={() => setStatus('')}
           >
-            All <span className="n">{totalCount}</span>
+            All <span className="n">{stats?.total ?? 0}</span>
           </button>
           {ALL_STATUSES.map((s) => (
             <button
@@ -300,7 +301,7 @@ export function Workflows() {
               aria-pressed={activeStatus === s}
               onClick={() => setStatus(s)}
             >
-              {s} <span className="n">{statusCounts[s] ?? 0}</span>
+              {s} <span className="n">{stats?.counts[s] ?? 0}</span>
             </button>
           ))}
         </div>
@@ -387,7 +388,22 @@ export function Workflows() {
             <table className="wf">
               <thead>
                 <tr>
-                  <th style={{ width: 34 }} />
+                  <th style={{ width: 34 }}>
+                    <span
+                      className={allSelected ? 'cbx on' : 'cbx'}
+                      role="checkbox"
+                      aria-checked={allSelected}
+                      aria-label="Select all"
+                      tabIndex={0}
+                      onClick={toggleAll}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleAll(e as unknown as React.MouseEvent)
+                        }
+                      }}
+                    />
+                  </th>
                   <th>Status</th>
                   <th>Workflow</th>
                   <th>Instance ID</th>

@@ -139,6 +139,44 @@ func TestServiceGetDetail(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
+func TestServiceStats(t *testing.T) {
+	f := newFakeStore()
+	// two Running (started only)
+	seedWorkflow(t, f, "default", "order", "inst-a", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
+	seedWorkflow(t, f, "default", "order", "inst-b", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
+	// one Completed
+	completed := &protos.HistoryEvent{EventId: 1, Timestamp: timestamppb.Now(), EventType: &protos.HistoryEvent_ExecutionCompleted{
+		ExecutionCompleted: &protos.ExecutionCompletedEvent{
+			WorkflowStatus: protos.OrchestrationStatus_ORCHESTRATION_STATUS_COMPLETED,
+			Result:         &wrapperspb.StringValue{Value: `"ok"`},
+		},
+	}}
+	seedWorkflow(t, f, "default", "order", "inst-c", "OrderWorkflow",
+		[]*protos.HistoryEvent{startedEvent("OrderWorkflow"), completed})
+
+	svc := New(f, "default", func(context.Context) ([]string, error) { return []string{"order"}, nil })
+
+	// A status filter must NOT affect counts: every status is still tallied.
+	res, err := svc.Stats(context.Background(), ListQuery{Status: []Status{StatusCompleted}})
+	require.NoError(t, err)
+	require.Equal(t, 2, res.Counts[StatusRunning])
+	require.Equal(t, 1, res.Counts[StatusCompleted])
+	require.Equal(t, 3, res.Total)
+
+	// Search narrows the tally (honored), still ignoring status.
+	res, err = svc.Stats(context.Background(), ListQuery{Search: "inst-c"})
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Total)
+	require.Equal(t, 1, res.Counts[StatusCompleted])
+	require.Equal(t, 0, res.Counts[StatusRunning])
+}
+
+func TestServiceStatsNoStore(t *testing.T) {
+	svc := New(nil, "default", func(context.Context) ([]string, error) { return []string{"order"}, nil })
+	_, err := svc.Stats(context.Background(), ListQuery{})
+	require.ErrorIs(t, err, ErrNoStore)
+}
+
 func TestServiceListDedupesByInstanceID(t *testing.T) {
 	f := newFakeStore()
 	seedWorkflow(t, f, "default", "order", "inst-a", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})

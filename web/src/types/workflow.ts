@@ -32,6 +32,11 @@ export interface WorkflowListResult {
   nextToken?: string
 }
 
+export interface WorkflowStats {
+  counts: Partial<Record<WorkflowStatus, number>>
+  total: number
+}
+
 export interface StateStore {
   name: string
   type: string

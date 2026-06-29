@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchJSON } from '../lib/api'
 import { useRefreshInterval, refetchMs } from '../lib/refresh'
-import type { WorkflowExecution, WorkflowListResult, StateStore, WorkflowStatus } from '../types/workflow'
+import type { WorkflowExecution, WorkflowListResult, WorkflowStats, StateStore, WorkflowStatus } from '../types/workflow'
 
 interface WorkflowsParams {
   appId?: string
@@ -30,6 +30,20 @@ export function useWorkflows(params: WorkflowsParams) {
   return useQuery<WorkflowListResult>({
     queryKey: ['workflows', qs],
     queryFn: () => fetchJSON<WorkflowListResult>(`/workflows${qs}`),
+    refetchInterval: refetchMs(ctx),
+  })
+}
+
+export function useWorkflowStats(params: { appId?: string; search?: string; store?: string }) {
+  const ctx = useRefreshInterval()
+  const sp = new URLSearchParams()
+  if (params.appId) sp.set('appId', params.appId)
+  if (params.search) sp.set('search', params.search)
+  if (params.store) sp.set('store', params.store)
+  const qs = sp.toString() ? `?${sp.toString()}` : ''
+  return useQuery<WorkflowStats>({
+    queryKey: ['workflow-stats', qs],
+    queryFn: () => fetchJSON<WorkflowStats>(`/workflows/stats${qs}`),
     refetchInterval: refetchMs(ctx),
   })
 }
