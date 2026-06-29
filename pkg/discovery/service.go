@@ -37,11 +37,14 @@ type Service interface {
 }
 
 type service struct {
-	scan   Scanner
-	client *http.Client
+	scan    Scanner
+	client  *http.Client
+	appProc appProcResolver
 }
 
-func New(scan Scanner, client *http.Client) Service { return &service{scan: scan, client: client} }
+func New(scan Scanner, client *http.Client) Service {
+	return &service{scan: scan, client: client, appProc: gopsutilResolver{}}
+}
 
 const enrichWorkers = 8
 
@@ -111,8 +114,8 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	}
 	if md.AppCommand != "" {
 		in.Command = md.AppCommand
-		in.Runtime = InferRuntime(md.AppCommand)
 	}
+	in.Runtime = appRuntime(in.Command, in.AppPort, s.appProc)
 	if md.AppLogPath != "" {
 		in.AppLogPath = md.AppLogPath
 	}

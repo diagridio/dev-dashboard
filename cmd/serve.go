@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -32,6 +33,23 @@ type serveDeps struct {
 func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Options, []func() error) {
 	appsSvc := deps.Apps
 
+	// Fetch running apps once (best-effort), reused for store-path scanning, the
+	// resources loader, and the app-loaded component-name set.
+	var apps []discovery.Instance
+	if got, err := appsSvc.List(ctx); err == nil {
+		apps = got
+	}
+
+	// loaded = state-store component names that at least one running app loaded.
+	loaded := make(map[string]bool)
+	for _, a := range apps {
+		for _, c := range a.Components {
+			if strings.HasPrefix(c.Type, "state.") {
+				loaded[c.Name] = true
+			}
+		}
+	}
+
 	// Resolve resource paths to scan for state-store components.
 	var scanPaths []string
 	if deps.StateStorePath != "" {
@@ -40,26 +58,22 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		if deps.HomeDir != "" {
 			scanPaths = append(scanPaths, filepath.Join(deps.HomeDir, ".dapr", "components"))
 		}
-		if apps, err := appsSvc.List(ctx); err == nil {
-			for _, a := range apps {
-				scanPaths = append(scanPaths, a.ResourcePaths...)
-			}
+		for _, a := range apps {
+			scanPaths = append(scanPaths, a.ResourcePaths...)
 		}
 	}
 	detected, _ := statestore.Detect(scanPaths)
-	registry := newStoreRegistry(detected)
+	registry := newStoreRegistry(detected, loaded)
 
 	// Resolve resource paths for the resources loader.
 	var resPaths []string
 	if deps.HomeDir != "" {
 		resPaths = append(resPaths, filepath.Join(deps.HomeDir, ".dapr", "components"), filepath.Join(deps.HomeDir, ".dapr"))
 	}
-	if apps, err := appsSvc.List(ctx); err == nil {
-		for _, a := range apps {
-			resPaths = append(resPaths, a.ResourcePaths...)
-			if a.ConfigPath != "" {
-				resPaths = append(resPaths, filepath.Dir(a.ConfigPath))
-			}
+	for _, a := range apps {
+		resPaths = append(resPaths, a.ResourcePaths...)
+		if a.ConfigPath != "" {
+			resPaths = append(resPaths, filepath.Dir(a.ConfigPath))
 		}
 	}
 	resSvc := resources.New(resPaths)
@@ -76,7 +90,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		return ids, nil
 	}
 
-	backend, closers := newStoreBackend(ctx, detected, deps.Namespace, deps.HTTPClient, appsSvc, appIDs)
+	backend, closers := newStoreBackend(ctx, detected, loaded, deps.Namespace, deps.HTTPClient, appsSvc, appIDs)
 	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
 
 	return server.Options{

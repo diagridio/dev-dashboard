@@ -95,7 +95,7 @@ func TestStoreRegistry_StoresReturnsActiveOnly_FirstFallback(t *testing.T) {
 		{Name: "redis", Type: "state.redis", Path: "/a/redis.yaml", Metadata: map[string]string{"redisHost": "localhost:6379"}},
 		{Name: "sqlite", Type: "state.sqlite", Path: "/a/sqlite.yaml", Metadata: map[string]string{}},
 	}
-	r := newStoreRegistry(comps)
+	r := newStoreRegistry(comps, nil)
 
 	act := r.active()
 	require.NotNil(t, act)
@@ -116,7 +116,7 @@ func TestStoreRegistry_StoresReturnsActiveOnly_ActorStateStoreWins(t *testing.T)
 			"connectionString": "host=localhost port=5432 dbname=orders password=x",
 		}},
 	}
-	r := newStoreRegistry(comps)
+	r := newStoreRegistry(comps, nil)
 
 	act := r.active()
 	require.NotNil(t, act)
@@ -133,7 +133,7 @@ func TestStoreRegistry_StoreInfoMapping(t *testing.T) {
 	comps := []statestore.Component{
 		{Name: "mystore", Type: "state.sqlite", Path: "/path/to/sqlite.yaml", Metadata: map[string]string{"connectionString": "data.db"}},
 	}
-	r := newStoreRegistry(comps)
+	r := newStoreRegistry(comps, nil)
 
 	infos := r.Stores()
 	require.Len(t, infos, 1)
@@ -145,7 +145,7 @@ func TestStoreRegistry_StoreInfoMapping(t *testing.T) {
 }
 
 func TestStoreRegistry_StoresEmptyWhenNoComponents(t *testing.T) {
-	r := newStoreRegistry(nil)
+	r := newStoreRegistry(nil, nil)
 	require.Nil(t, r.active())
 	got := r.Stores()
 	require.NotNil(t, got)
@@ -213,13 +213,55 @@ func TestStoreBackend_NoStoresUnknownExplicit(t *testing.T) {
 func TestNewStoreBackend_LogsNoStoreDetected(t *testing.T) {
 	buf := withCapturedLogs(t)
 	appIDs := func(context.Context) ([]string, error) { return nil, nil }
-	_, closers := newStoreBackend(context.Background(), nil, "default", &http.Client{}, nil, appIDs)
+	_, closers := newStoreBackend(context.Background(), nil, nil, "default", &http.Client{}, nil, appIDs)
 	for _, c := range closers {
 		_ = c()
 	}
 	if !strings.Contains(buf.String(), "no state store detected") {
 		t.Fatalf("expected 'no state store detected' WARN, got %q", buf.String())
 	}
+}
+
+func TestStoreRegistry_AppLoadedStoreWinsOverDefault(t *testing.T) {
+	// Both have actorStateStore=true; default ~/.dapr store is scanned first.
+	comps := []statestore.Component{
+		{Name: "statestore", Type: "state.redis", Path: "/home/.dapr/components/statestore.yaml",
+			Metadata: map[string]string{"actorStateStore": "true", "redisHost": "localhost:6379"}},
+		{Name: "workflow-store", Type: "state.redis", Path: "/app/Resources/statestore.yaml",
+			Metadata: map[string]string{"actorStateStore": "true", "redisHost": "localhost:16379"}},
+	}
+	loaded := map[string]bool{"workflow-store": true} // only the app-loaded one
+
+	r := newStoreRegistry(comps, loaded)
+
+	act := r.active()
+	require.NotNil(t, act)
+	require.Equal(t, "workflow-store", act.Name, "app-loaded store must win over the unloaded ~/.dapr default")
+}
+
+func TestStoreRegistry_FallsBackWhenNoneLoaded(t *testing.T) {
+	comps := []statestore.Component{
+		{Name: "redis", Type: "state.redis", Path: "/a/redis.yaml", Metadata: map[string]string{"redisHost": "localhost:6379"}},
+		{Name: "pg", Type: "state.postgresql", Path: "/a/pg.yaml", Metadata: map[string]string{"actorStateStore": "true"}},
+	}
+	r := newStoreRegistry(comps, nil) // no apps loaded anything
+
+	act := r.active()
+	require.NotNil(t, act)
+	require.Equal(t, "pg", act.Name, "with nothing loaded, actorStateStore wins (current fallback)")
+}
+
+func TestStoreRegistry_AppLoadedNonActorPreferredOverUnloadedActor(t *testing.T) {
+	comps := []statestore.Component{
+		{Name: "default", Type: "state.redis", Path: "/home/.dapr/components/statestore.yaml",
+			Metadata: map[string]string{"actorStateStore": "true"}},
+		{Name: "appstore", Type: "state.redis", Path: "/app/Resources/store.yaml",
+			Metadata: map[string]string{}}, // app-loaded but not flagged actorStateStore
+	}
+	loaded := map[string]bool{"appstore": true}
+
+	r := newStoreRegistry(comps, loaded)
+	require.Equal(t, "appstore", r.active().Name, "an app-loaded store beats an unloaded default even without the actor flag")
 }
 
 func TestNewStoreBackend_RegistersOnlyActiveStore(t *testing.T) {
@@ -243,7 +285,7 @@ func TestNewStoreBackend_RegistersOnlyActiveStore(t *testing.T) {
 		},
 	}
 
-	b, closers := newStoreBackend(context.Background(), comps, "default", &http.Client{}, nil, appIDs)
+	b, closers := newStoreBackend(context.Background(), comps, nil, "default", &http.Client{}, nil, appIDs)
 	defer func() {
 		for _, c := range closers {
 			_ = c()
