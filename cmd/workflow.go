@@ -17,6 +17,10 @@ var _ server.StoreRegistry = (*storeRegistry)(nil)
 var _ server.TargetResolver = (*targetResolver)(nil)
 var _ server.WorkflowBackend = (*storeBackend)(nil)
 
+// storeOpener opens a state store from a component spec. Production uses
+// statestore.New; tests inject a fake to assert connection lifecycle.
+type storeOpener func(context.Context, statestore.Component) (statestore.Store, error)
+
 // storeRegistry wraps a slice of detected state-store components and exposes the
 // server.StoreRegistry interface. The active component is computed once at
 // construction time.
@@ -187,6 +191,7 @@ func newStoreBackend(
 	client *http.Client,
 	apps discovery.Service,
 	appIDs func(context.Context) ([]string, error),
+	open storeOpener,
 ) (*storeBackend, []func() error) {
 	b := &storeBackend{
 		services: make(map[string]storeEntry),
@@ -205,7 +210,7 @@ func newStoreBackend(
 	// Only the active state store (the one Dapr Workflow uses) is initialised
 	// and served. Non-active components are detected but never connected.
 	if active != nil {
-		st, err := statestore.New(ctx, *active)
+		st, err := open(ctx, *active)
 		if err != nil {
 			fmt.Printf("warning: state store %q init failed: %v (skipping)\n", active.Name, err)
 			log.Warn("state store init failed, skipping", "name", active.Name, "err", err)

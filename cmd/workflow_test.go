@@ -217,7 +217,7 @@ func TestStoreBackend_NoStoresUnknownExplicit(t *testing.T) {
 func TestNewStoreBackend_LogsNoStoreDetected(t *testing.T) {
 	buf := withCapturedLogs(t)
 	appIDs := func(context.Context) ([]string, error) { return nil, nil }
-	_, closers := newStoreBackend(context.Background(), nil, nil, "default", &http.Client{}, nil, appIDs)
+	_, closers := newStoreBackend(context.Background(), nil, nil, "default", &http.Client{}, nil, appIDs, statestore.New)
 	for _, c := range closers {
 		_ = c()
 	}
@@ -289,7 +289,7 @@ func TestNewStoreBackend_RegistersOnlyActiveStore(t *testing.T) {
 		},
 	}
 
-	b, closers := newStoreBackend(context.Background(), comps, nil, "default", &http.Client{}, nil, appIDs)
+	b, closers := newStoreBackend(context.Background(), comps, nil, "default", &http.Client{}, nil, appIDs, statestore.New)
 	defer func() {
 		for _, c := range closers {
 			_ = c()
