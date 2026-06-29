@@ -239,11 +239,17 @@ export function Workflows() {
           </div>
         </div>
         <div className="ctrlset">
-          <span className="chip">
-            <span className="led" />
-            statestore{' '}
-            <b>{storeLabel}</b>
-          </span>
+          {activeStore ? (
+            <Link className="chip link" to={`/components/${activeStore.name}`}>
+              <span className="led" />
+              statestore <b>{storeLabel}</b>
+            </Link>
+          ) : (
+            <span className="chip">
+              <span className="led" />
+              statestore <b>unknown</b>
+            </span>
+          )}
           <RefreshControl />
         </div>
       </div>

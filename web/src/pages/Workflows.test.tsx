@@ -256,6 +256,23 @@ function renderPage(initialEntry = '/workflows?status=Failed') {
   )
 }
 
+describe('Workflows page — statestore chip', () => {
+  it('renders the statestore chip as a link to its component', async () => {
+    server.use(
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+      http.get('/api/statestores', () =>
+        HttpResponse.json([
+          { name: 'statestore', type: 'state.redis', path: '/x', active: true, connection: 'localhost:6379' },
+        ]),
+      ),
+    )
+    renderPage('/workflows')
+    const chip = await screen.findByRole('link', { name: /statestore/ })
+    expect(chip).toHaveAttribute('href', '/components/statestore')
+  })
+})
+
 describe('Workflows page — status counts', () => {
   it('shows per-status counts from /stats even when a status filter is active', async () => {
     server.use(
