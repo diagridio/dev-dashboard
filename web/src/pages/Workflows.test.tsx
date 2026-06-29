@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider, MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
@@ -241,5 +241,37 @@ describe('Workflows', () => {
     )
     renderAt()
     expect(await screen.findByRole('link', { name: 'abc' })).toHaveClass('celllink')
+  })
+})
+
+function renderPage(initialEntry = '/workflows?status=Failed') {
+  return render(
+    <QueryProvider>
+      <RefreshProvider>
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <Workflows />
+        </MemoryRouter>
+      </RefreshProvider>
+    </QueryProvider>,
+  )
+}
+
+describe('Workflows page — status counts', () => {
+  it('shows per-status counts from /stats even when a status filter is active', async () => {
+    server.use(
+      http.get('/api/workflows', () =>
+        HttpResponse.json({ items: [{ appId: 'order', instanceId: 'f1', name: 'W', status: 'Failed' }] }),
+      ),
+      http.get('/api/workflows/stats', () =>
+        HttpResponse.json({ counts: { Running: 5, Completed: 9, Failed: 1 }, total: 15 }),
+      ),
+      http.get('/api/statestores', () => HttpResponse.json([])),
+    )
+    renderPage('/workflows?status=Failed')
+    // "Completed" badge stays populated (9) even though the active filter is Failed.
+    const completedBtn = await screen.findByRole('button', { name: /Completed/ })
+    await waitFor(() => expect(completedBtn).toHaveTextContent('9'))
+    const allBtn = screen.getByRole('button', { name: /^All/ })
+    expect(allBtn).toHaveTextContent('15')
   })
 })
