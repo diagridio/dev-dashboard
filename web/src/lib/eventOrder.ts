@@ -50,10 +50,17 @@ export function orderHistoryForDisplay(
 }
 
 /**
- * Stable, display-order-independent DOM id for an event row.
- * Real events use their unique sequenceId; replay sentinels (sequenceId -1)
- * fall back to their index in the canonical ascending order.
+ * Stable, display-order-independent, collision-free DOM id for an event row.
+ *
+ * Deliberately based on the event's position in the canonical ascending order
+ * (`sortHistoryForDisplay`) rather than its sequenceId. durabletask's EventId
+ * (surfaced as sequenceId) is NOT a unique per-row identifier: ExecutionStarted,
+ * ExecutionCompleted and replay events are all -1, and the per-episode action
+ * counter restarts, so a TaskScheduled and the terminal ExecutionCompleted can
+ * both carry sequenceId 0. Using it for ids produces duplicate anchors and the
+ * browser jumps to the first match. The canonical index is unique and does not
+ * change when the asc/desc display toggle flips.
  */
-export function eventAnchorId(event: WorkflowHistoryEvent, canonicalIndex: number): string {
-  return event.sequenceId >= 0 ? `event-${event.sequenceId}` : `event-replay-${canonicalIndex}`
+export function eventAnchorId(canonicalIndex: number): string {
+  return `event-${canonicalIndex}`
 }

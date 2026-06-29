@@ -80,12 +80,9 @@ describe('orderHistoryForDisplay', () => {
 })
 
 describe('eventAnchorId', () => {
-  it('uses the sequenceId for real events (>= 0)', () => {
-    expect(eventAnchorId(ev('ExecutionStarted', 0, 0), 5)).toBe('event-0')
-    expect(eventAnchorId(ev('TaskScheduled', 7, 100), 5)).toBe('event-7')
-  })
-
-  it('falls back to the canonical index for replay sentinels (-1)', () => {
-    expect(eventAnchorId(ev('OrchestratorStarted', -1, 27), 3)).toBe('event-replay-3')
+  it('builds a unique id from the canonical index (not the reusable sequenceId)', () => {
+    expect(eventAnchorId(0)).toBe('event-0')
+    expect(eventAnchorId(3)).toBe('event-3')
+    expect(eventAnchorId(42)).toBe('event-42')
   })
 })

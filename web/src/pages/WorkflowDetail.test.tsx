@@ -613,15 +613,15 @@ describe('WorkflowDetail', () => {
     expect(cur.textContent).not.toContain('…')
   })
 
-  it('event rows carry stable sequenceId-based ids (and replay fallback)', async () => {
-    seedFullId() // history: seq -1 OrchestratorStarted, 0 ExecutionStarted, 1 TaskScheduled, 2 ExecutionCompleted
+  it('event rows carry unique canonical-index ids (one per history row)', async () => {
+    seedFullId() // 4 history rows
     const { container } = renderDetail()
     await screen.findByRole('heading', { name: 'OrderWorkflow' })
-    expect(container.querySelector('#event-0')).not.toBeNull()
-    expect(container.querySelector('#event-1')).not.toBeNull()
-    expect(container.querySelector('#event-2')).not.toBeNull()
-    // The OrchestratorStarted sentinel (seq -1) uses the canonical-index fallback.
-    expect(container.querySelector('[id^="event-replay-"]')).not.toBeNull()
+    const ids = Array.from(container.querySelectorAll('.timeline .ev')).map((el) => el.id)
+    expect(ids).toHaveLength(4)
+    // Every row has an id and they are all unique (no collisions).
+    expect(ids.every((id) => /^event-\d+$/.test(id))).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
   it('orders the event timeline ExecutionStarted-first, ExecutionCompleted-last', async () => {
@@ -670,11 +670,55 @@ describe('WorkflowDetail', () => {
   })
 
   it('Last event cell links to the newest event row anchor', async () => {
-    seedFullId() // newest event is ExecutionCompleted, sequenceId 2
-    renderDetail()
+    seedFullId() // newest event is ExecutionCompleted
+    const { container } = renderDetail()
     await screen.findByRole('heading', { name: 'OrderWorkflow' })
-    const link = screen.getByRole('link', { name: /ExecutionCompleted · Event ID 2/ })
-    expect(link).toHaveAttribute('href', '#event-2')
+    const link = container.querySelector('.metagrid a.celllink[href^="#event-"]') as HTMLAnchorElement
+    expect(link).not.toBeNull()
+    // The link must resolve to a single, unique row that is the ExecutionCompleted event.
+    const targetId = link.getAttribute('href')!.slice(1)
+    const matches = container.querySelectorAll(`[id="${targetId}"]`)
+    expect(matches.length).toBe(1)
+    expect(matches[0].querySelector('.evtype')?.textContent).toBe('ExecutionCompleted')
+  })
+
+  // Regression: durabletask reuses EventId (sequenceId) across rows — ExecutionStarted/
+  // ExecutionCompleted are -1, and the per-episode action counter restarts, so a
+  // TaskScheduled and the terminal ExecutionCompleted can BOTH carry sequenceId 0.
+  // The Last-event anchor must still target the unique ExecutionCompleted row, not the
+  // first colliding element.
+  it('Last event link targets a unique row even when sequenceIds collide', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-28T10:00:00.000Z',
+          lastUpdatedAt: '2026-06-28T10:00:01.000Z',
+          replayCount: 0,
+          output: '"ok"',
+          history: [
+            { sequenceId: -1, type: 'OrchestratorStarted', timestamp: '2026-06-28T10:00:00.027Z' },
+            { sequenceId: -1, type: 'ExecutionStarted', name: 'OrderWorkflow', input: '{}', timestamp: '2026-06-28T10:00:00.000Z' },
+            { sequenceId: 0, type: 'TaskScheduled', name: 'Charge', timestamp: '2026-06-28T10:00:00.100Z' },
+            { sequenceId: -1, type: 'TaskCompleted', output: '1', timestamp: '2026-06-28T10:00:00.500Z' },
+            { sequenceId: 0, type: 'ExecutionCompleted', output: '"ok"', timestamp: '2026-06-28T10:00:01.000Z' },
+          ],
+        }),
+      ),
+    )
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+    const link = container.querySelector('.metagrid a.celllink[href^="#event-"]') as HTMLAnchorElement
+    expect(link).not.toBeNull()
+    const targetId = link.getAttribute('href')!.slice(1)
+    // Anchor id must be unique across all rows...
+    expect(container.querySelectorAll(`[id="${targetId}"]`).length).toBe(1)
+    // ...and must point at the ExecutionCompleted row, not the colliding TaskScheduled.
+    const target = container.querySelector(`[id="${targetId}"]`)!
+    expect(target.querySelector('.evtype')?.textContent).toBe('ExecutionCompleted')
   })
 })
 

@@ -336,7 +336,7 @@ export function WorkflowDetail() {
     : undefined
   const lastEventAnchor =
     lastEvent !== undefined
-      ? eventAnchorId(lastEvent, canonicalIndex.get(lastEvent) ?? orderedHistory.length - 1)
+      ? eventAnchorId(canonicalIndex.get(lastEvent) ?? orderedHistory.length - 1)
       : undefined
 
   const hasOutput = !!execution.output
@@ -599,7 +599,7 @@ export function WorkflowDetail() {
               createdAt={execution.createdAt}
               isNewest={event === newestEvent}
               toast={toast}
-              anchorId={eventAnchorId(event, canonicalIndex.get(event) ?? idx)}
+              anchorId={eventAnchorId(canonicalIndex.get(event) ?? idx)}
             />
           ))}
         </div>
