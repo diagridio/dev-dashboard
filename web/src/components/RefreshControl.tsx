@@ -22,10 +22,12 @@ export function RefreshControl() {
   const off = intervalMs === 0
   const live = !paused && !off
 
-  const title = paused
-    ? 'Auto-refresh paused — click to resume'
-    : off
-      ? 'Auto-refresh off'
+  // `off` (interval 0 → nothing polls) is the more fundamental state, so it wins
+  // over `paused` in the title even when both are set.
+  const title = off
+    ? 'Auto-refresh off'
+    : paused
+      ? 'Auto-refresh paused — click to resume'
       : `Auto-refresh every ${intervalLabel} — click to pause`
 
   return (

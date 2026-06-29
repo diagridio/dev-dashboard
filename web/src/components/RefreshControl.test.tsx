@@ -69,4 +69,18 @@ describe('RefreshControl (compact)', () => {
     expect(btn.className).toContain('off')
     expect(btn).toHaveAttribute('title', 'Auto-refresh off')
   })
+
+  it('keeps the "Auto-refresh off" title when Off and paused are combined (off wins)', () => {
+    renderWithProvider()
+    // Select Off, then pause — the compound off+paused state.
+    fireEvent.change(screen.getByRole('combobox', { name: /refresh interval/i }), {
+      target: { value: '0' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /pause auto-refresh/i }))
+    // aria-label still reflects paused, but the title reports the effective "off" state.
+    const btn = screen.getByRole('button', { name: /resume auto-refresh/i })
+    expect(btn).toHaveAttribute('aria-pressed', 'true')
+    expect(btn.className).toContain('off')
+    expect(btn).toHaveAttribute('title', 'Auto-refresh off')
+  })
 })
