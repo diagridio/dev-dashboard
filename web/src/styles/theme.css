@@ -355,7 +355,7 @@ pre.json { margin: 0; padding: 13px; font-family: var(--mono); font-size: 12px; 
 .n-timer { background: var(--pend-fg); }
 .n-end { background: var(--ok-bright); }
 .n-endfail { background: var(--fail-fg); }
-.ev .c { padding: 8px 0 14px 4px; }
+.ev .c { padding: 8px 0 14px 4px; min-width: 0; }
 details.evd { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
 details.evd > summary { list-style: none; cursor: pointer; min-height: var(--ev-head); box-sizing: border-box; padding: 0 12px; display: flex; align-items: center; gap: 10px; }
 details.evd > summary::-webkit-details-marker { display: none; }
@@ -368,6 +368,7 @@ details.evd > summary::-webkit-details-marker { display: none; }
 details[open] .caret { transform: rotate(90deg); }
 .caretspace { visibility: hidden; }
 .evbody { border-top: 1px solid var(--line-soft); padding: 11px 12px; display: grid; gap: 10px; }
+.evbody > * { min-width: 0; }
 .evbody .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .evbody pre { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px 11px; max-height: 23.25em; overflow: auto; }
 .evbody .lblrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
