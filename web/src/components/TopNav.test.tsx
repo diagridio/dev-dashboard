@@ -62,6 +62,12 @@ describe('TopNav', () => {
     expect(screen.getByRole('button', { name: /toggle theme/i })).toBeInTheDocument()
   })
 
+  it('renders the compact refresh control', () => {
+    renderNav()
+    expect(screen.getByRole('combobox', { name: /refresh interval/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /pause auto-refresh/i })).toBeInTheDocument()
+  })
+
   it('does not render DensityToggle', () => {
     renderNav()
     expect(screen.queryByRole('button', { name: /toggle density/i })).not.toBeInTheDocument()

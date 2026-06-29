@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
+import { RefreshControl } from './RefreshControl'
 import type { Theme } from '../lib/prefs'
 
 export interface NavItem {
@@ -46,6 +47,7 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
       </nav>
 
       <div className="topright">
+        <RefreshControl />
         <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
       </div>
     </header>
