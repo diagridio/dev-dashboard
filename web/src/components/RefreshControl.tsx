@@ -9,11 +9,9 @@ const INTERVAL_OPTIONS = [
 ]
 
 /**
- * Page-level refresh control. Renders the mock's `.live` indicator, a `.tbtn`
- * pause/resume toggle, and a `.select` interval picker.
- *
- * Intended for use inside `.ctrlset` (e.g. Workflows overview) or `.refreshbar`
- * (e.g. Workflow detail). NOT placed in the top bar.
+ * Compact global refresh control for the top navigation bar. Renders a beating
+ * dot that doubles as a pause/resume button, plus an interval picker. Reads and
+ * writes the global RefreshContext, so it governs polling on every page.
  */
 export function RefreshControl() {
   const { intervalMs, paused, setInterval, setPaused } = useRefreshInterval()
@@ -21,25 +19,30 @@ export function RefreshControl() {
   const intervalLabel =
     INTERVAL_OPTIONS.find((o) => o.value === intervalMs)?.label ?? `${intervalMs / 1000}s`
 
-  return (
-    <>
-      <span className="live">
-        <span className="beat" />
-        {paused ? 'paused' : `refreshing every ${intervalLabel}`}
-      </span>
+  const off = intervalMs === 0
+  const live = !paused && !off
 
+  const title = paused
+    ? 'Auto-refresh paused — click to resume'
+    : off
+      ? 'Auto-refresh off'
+      : `Auto-refresh every ${intervalLabel} — click to pause`
+
+  return (
+    <div className="refresh-compact">
       <button
-        className="tbtn"
+        className={`beatbtn${live ? '' : ' off'}`}
         data-cy="refresh-pause"
         aria-label={paused ? 'Resume auto-refresh' : 'Pause auto-refresh'}
         aria-pressed={paused}
+        title={title}
         onClick={() => setPaused(!paused)}
       >
-        {paused ? '▶ Resume' : '⏸ Pause'}
+        <span className="beat" />
       </button>
 
       <select
-        className="select"
+        className="select compact"
         data-cy="refresh-interval"
         aria-label="Refresh interval"
         value={intervalMs}
@@ -51,6 +54,6 @@ export function RefreshControl() {
           </option>
         ))}
       </select>
-    </>
+    </div>
   )
 }

@@ -201,6 +201,13 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .stat .l { font-family: var(--mono); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
 .stat .n.mint { color: var(--accent2); }
 .select { font: inherit; font-size: 12.5px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; cursor: pointer; }
+.refresh-compact { display: inline-flex; align-items: center; gap: 7px; }
+.beatbtn { display: inline-flex; align-items: center; justify-content: center; padding: 5px; background: transparent; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.beatbtn:hover { border-color: var(--faint); }
+.beatbtn:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+.beatbtn .beat { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-bright); animation: beat 2.4s ease-out infinite; }
+.beatbtn.off .beat { background: var(--muted); animation: none; box-shadow: none; }
+.select.compact { padding: 4px 8px; font-size: 12px; border-radius: 8px; }
 .search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; color: var(--faint); font-size: 13px; min-width: 170px; flex: 1; }
 .search input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; }
 .btn { font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 7px 13px; cursor: pointer; border: 1px solid transparent; }

@@ -15,62 +15,58 @@ beforeEach(() => {
   localStorage.clear()
 })
 
-describe('RefreshControl', () => {
-  it('renders the .live indicator with .beat dot', () => {
+describe('RefreshControl (compact)', () => {
+  it('renders the .beatbtn pause control with a .beat dot', () => {
     const { container } = renderWithProvider()
-    const live = container.querySelector('.live')
-    expect(live).not.toBeNull()
-    expect(container.querySelector('.live .beat')).not.toBeNull()
+    const btn = container.querySelector('button.beatbtn')
+    expect(btn).not.toBeNull()
+    expect(container.querySelector('button.beatbtn .beat')).not.toBeNull()
+    expect(btn).toHaveAttribute('data-cy', 'refresh-pause')
   })
 
-  it('shows "refreshing every 3s" text by default', () => {
-    renderWithProvider()
-    expect(screen.getByText(/refreshing every 3s/i)).toBeInTheDocument()
-  })
-
-  it('renders pause button as .tbtn with ⏸ Pause label', () => {
-    renderWithProvider()
-    const btn = screen.getByRole('button', { name: /pause auto-refresh/i })
-    expect(btn).toBeInTheDocument()
-    expect(btn.className).toContain('tbtn')
-    expect(btn.textContent).toContain('⏸')
-    expect(btn.textContent).toContain('Pause')
-  })
-
-  it('renders the interval <select> with class "select"', () => {
+  it('renders the interval <select> with classes "select compact"', () => {
     const { container } = renderWithProvider()
-    const sel = container.querySelector('select.select')
+    const sel = container.querySelector('select.select.compact')
     expect(sel).not.toBeNull()
+    expect(sel).toHaveAttribute('data-cy', 'refresh-interval')
     expect(screen.getByRole('combobox', { name: /refresh interval/i })).toBeInTheDocument()
   })
 
-  it('toggles to Resume state when paused', () => {
-    renderWithProvider()
-    const btn = screen.getByRole('button', { name: /pause auto-refresh/i })
-    fireEvent.click(btn)
-    // After clicking, button should now say Resume
-    expect(screen.getByRole('button', { name: /resume auto-refresh/i })).toBeInTheDocument()
-    expect(screen.getByText(/paused/i)).toBeInTheDocument()
-  })
-
-  it('changes interval label in .live when a different interval is selected', () => {
-    renderWithProvider()
-    const sel = screen.getByRole('combobox', { name: /refresh interval/i })
-    fireEvent.change(sel, { target: { value: '5000' } })
-    expect(screen.getByText(/refreshing every 5s/i)).toBeInTheDocument()
-  })
-
-  it('has aria-pressed=false on the pause button when not paused', () => {
+  it('is live (not paused) by default: aria-pressed=false, pause label, title names interval', () => {
     renderWithProvider()
     const btn = screen.getByRole('button', { name: /pause auto-refresh/i })
     expect(btn).toHaveAttribute('aria-pressed', 'false')
+    expect(btn).toHaveAttribute('title', expect.stringContaining('every 3s'))
+    expect(btn.className).not.toContain('off')
   })
 
-  it('has aria-pressed=true on the pause button when paused', () => {
+  it('toggles to the resumed/paused state when clicked', () => {
     renderWithProvider()
-    const btn = screen.getByRole('button', { name: /pause auto-refresh/i })
-    fireEvent.click(btn)
+    fireEvent.click(screen.getByRole('button', { name: /pause auto-refresh/i }))
     const resumeBtn = screen.getByRole('button', { name: /resume auto-refresh/i })
     expect(resumeBtn).toHaveAttribute('aria-pressed', 'true')
+    expect(resumeBtn).toHaveAttribute('title', expect.stringContaining('paused'))
+    expect(resumeBtn.className).toContain('off')
+  })
+
+  it('updates the title interval when a different interval is selected', () => {
+    renderWithProvider()
+    fireEvent.change(screen.getByRole('combobox', { name: /refresh interval/i }), {
+      target: { value: '5000' },
+    })
+    expect(screen.getByRole('button', { name: /pause auto-refresh/i })).toHaveAttribute(
+      'title',
+      expect.stringContaining('every 5s'),
+    )
+  })
+
+  it('shows the off state and "Auto-refresh off" title when interval is Off', () => {
+    renderWithProvider()
+    fireEvent.change(screen.getByRole('combobox', { name: /refresh interval/i }), {
+      target: { value: '0' },
+    })
+    const btn = screen.getByRole('button', { name: /pause auto-refresh/i })
+    expect(btn.className).toContain('off')
+    expect(btn).toHaveAttribute('title', 'Auto-refresh off')
   })
 })
