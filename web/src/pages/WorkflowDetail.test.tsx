@@ -2,7 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider, makeQueryClient } from '../lib/query'
@@ -28,6 +28,14 @@ function renderDetail(client?: QueryClient) {
 }
 
 describe('WorkflowDetail', () => {
+  // Default: the workflow's app ("order") is currently running. Individual
+  // tests override /api/apps to exercise the not-running path.
+  beforeEach(() => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([{ appId: 'order', health: 'healthy' }])),
+    )
+  })
+
   // -------------------------------------------------------------------------
   // Basic rendering
   // -------------------------------------------------------------------------
@@ -77,6 +85,31 @@ describe('WorkflowDetail', () => {
     await waitFor(() => expect(screen.getByText('RUNNING')).toBeInTheDocument())
     const link = screen.getByRole('link', { name: 'order' })
     expect(link).toHaveAttribute('href', '/apps/order')
+  })
+
+  it('App ID is plain text with a "not running" chip when the app is not running', async () => {
+    server.use(
+      // No running apps — "order" is not running.
+      http.get('/api/apps', () => HttpResponse.json([])),
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-26T10:00:00Z',
+          replayCount: 0,
+          history: [],
+        }),
+      ),
+    )
+    renderDetail()
+    // The "not running" chip appears next to the App ID.
+    await waitFor(() => expect(screen.getByText('not running')).toBeInTheDocument())
+    // The App ID is NOT a link to the (non-existent) running app.
+    expect(screen.queryByRole('link', { name: 'order' })).not.toBeInTheDocument()
+    // The App ID value is still shown as text.
+    expect(screen.getByText('order')).toBeInTheDocument()
   })
 
   it('breadcrumbs do not contain the appId segment', async () => {

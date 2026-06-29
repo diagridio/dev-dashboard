@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflow } from '../hooks/useWorkflows'
+import { useApps } from '../hooks/useApps'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
@@ -225,6 +226,15 @@ export function WorkflowDetail() {
   const navigate = useNavigate()
   const { mutate: removeWorkflows } = useRemoveWorkflows()
 
+  // Running apps — the App ID links to its app page only when that app is
+  // currently running; otherwise the link would point at a non-existent app.
+  const { data: appsData } = useApps()
+  const appsLoaded = appsData !== undefined
+  const runningAppIds = useMemo(
+    () => new Set((appsData ?? []).map((a) => a.appId)),
+    [appsData],
+  )
+
   // Confirm-remove dialog state: open + which mode (force vs purge)
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
   const [removeForce, setRemoveForce] = useState(false)
@@ -426,9 +436,18 @@ export function WorkflowDetail() {
         <div className="m span2">
           <div className="k">App ID</div>
           <div className="v">
-            <Link className="celllink" to={`/apps/${execution.appId}`}>
-              {execution.appId}
-            </Link>
+            {appsLoaded && !runningAppIds.has(execution.appId) ? (
+              <>
+                {execution.appId}
+                <span className="typechip" style={{ marginLeft: '6px' }}>
+                  not running
+                </span>
+              </>
+            ) : (
+              <Link className="celllink" to={`/apps/${execution.appId}`}>
+                {execution.appId}
+              </Link>
+            )}
           </div>
         </div>
         <div className="m">
