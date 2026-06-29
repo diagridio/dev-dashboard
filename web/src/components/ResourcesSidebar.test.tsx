@@ -51,7 +51,7 @@ describe('ResourcesSidebar static links', () => {
     renderSidebar()
     // Accessible name includes "↗" from the .ext span; use regex
     const link = screen.getByRole('link', { name: /Dapr Docs/ })
-    expect(link).toHaveAttribute('href', 'https://docs.dapr.io')
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-dapr-docs')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
@@ -59,7 +59,7 @@ describe('ResourcesSidebar static links', () => {
   it('renders Diagrid Docs link with correct href and target', () => {
     renderSidebar()
     const link = screen.getByRole('link', { name: /Diagrid Docs/ })
-    expect(link).toHaveAttribute('href', 'https://docs.diagrid.io')
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-diagrid-docs')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
@@ -67,7 +67,7 @@ describe('ResourcesSidebar static links', () => {
   it('renders Diagrid Catalyst link with correct href and target', () => {
     renderSidebar()
     const link = screen.getByRole('link', { name: /Diagrid Catalyst/ })
-    expect(link).toHaveAttribute('href', 'https://www.diagrid.io/catalyst')
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-try-catalyst')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
@@ -75,28 +75,28 @@ describe('ResourcesSidebar static links', () => {
   it('renders Dapr Workflow Skills link', () => {
     renderSidebar()
     const link = screen.getByRole('link', { name: /Dapr Workflow Skills/ })
-    expect(link).toHaveAttribute('href', 'https://docs.diagrid.io/develop/workflows/dapr-skills/')
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-workflow-skill')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('renders Dapr Composer link', () => {
     renderSidebar()
     const link = screen.getByRole('link', { name: /Dapr Composer/ })
-    expect(link).toHaveAttribute('href', 'https://workflows.diagrid.io/')
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-workflow-composer')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('renders Dapr University link', () => {
     renderSidebar()
     const link = screen.getByRole('link', { name: /Dapr University/ })
-    expect(link).toHaveAttribute('href', 'https://www.diagrid.io/university')
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-dapr-university')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
   it('renders Diagrid Webinars link', () => {
     renderSidebar()
     const link = screen.getByRole('link', { name: /Diagrid Webinars/ })
-    expect(link).toHaveAttribute('href', 'https://www.diagrid.io/webinars')
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-webinars')
     expect(link).toHaveAttribute('target', '_blank')
   })
 

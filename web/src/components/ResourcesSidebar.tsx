@@ -40,27 +40,27 @@ const SECTIONS: Section[] = [
   {
     heading: 'Build',
     links: [
-      { label: 'Dapr Workflow Skills', href: 'https://docs.diagrid.io/develop/workflows/dapr-skills/' },
-      { label: 'Dapr Composer', href: 'https://workflows.diagrid.io/' },
+      { label: 'Dapr Workflow Skills', href: 'https://diagrid.ws/dev-dashboard-workflow-skill' },
+      { label: 'Dapr Composer', href: 'https://diagrid.ws/dev-dashboard-workflow-composer' },
     ],
   },
   {
     heading: 'Learn',
     links: [
-      { label: 'Dapr University', href: 'https://www.diagrid.io/university' },
-      { label: 'Diagrid Webinars', href: 'https://www.diagrid.io/webinars' },
+      { label: 'Dapr University', href: 'https://diagrid.ws/dev-dashboard-dapr-university' },
+      { label: 'Diagrid Webinars', href: 'https://diagrid.ws/dev-dashboard-webinars' },
     ],
   },
   {
     heading: 'Read',
     links: [
-      { label: 'Dapr Docs', href: 'https://docs.dapr.io' },
-      { label: 'Diagrid Docs', href: 'https://docs.diagrid.io' },
+      { label: 'Dapr Docs', href: 'https://diagrid.ws/dev-dashboard-dapr-docs' },
+      { label: 'Diagrid Docs', href: 'https://diagrid.ws/dev-dashboard-diagrid-docs' },
     ],
   },
   {
     heading: 'Run & Operate',
-    links: [{ label: 'Diagrid Catalyst', href: 'https://www.diagrid.io/catalyst' }],
+    links: [{ label: 'Diagrid Catalyst', href: 'https://diagrid.ws/dev-dashboard-try-catalyst' }],
   },
 ]
 
