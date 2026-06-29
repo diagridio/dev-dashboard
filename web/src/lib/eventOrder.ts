@@ -48,3 +48,12 @@ export function orderHistoryForDisplay(
   const ascending = sortHistoryForDisplay(history)
   return order === 'desc' ? [...ascending].reverse() : ascending
 }
+
+/**
+ * Stable, display-order-independent DOM id for an event row.
+ * Real events use their unique sequenceId; replay sentinels (sequenceId -1)
+ * fall back to their index in the canonical ascending order.
+ */
+export function eventAnchorId(event: WorkflowHistoryEvent, canonicalIndex: number): string {
+  return event.sequenceId >= 0 ? `event-${event.sequenceId}` : `event-replay-${canonicalIndex}`
+}

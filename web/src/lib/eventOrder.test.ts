@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { sortHistoryForDisplay, orderHistoryForDisplay } from './eventOrder'
+import { sortHistoryForDisplay, orderHistoryForDisplay, eventAnchorId } from './eventOrder'
 import type { WorkflowHistoryEvent } from '../types/workflow'
 
 function ev(type: string, sequenceId: number, ms: number): WorkflowHistoryEvent {
@@ -76,5 +76,16 @@ describe('orderHistoryForDisplay', () => {
     const copy = [...input]
     orderHistoryForDisplay(input, 'desc')
     expect(input).toEqual(copy)
+  })
+})
+
+describe('eventAnchorId', () => {
+  it('uses the sequenceId for real events (>= 0)', () => {
+    expect(eventAnchorId(ev('ExecutionStarted', 0, 0), 5)).toBe('event-0')
+    expect(eventAnchorId(ev('TaskScheduled', 7, 100), 5)).toBe('event-7')
+  })
+
+  it('falls back to the canonical index for replay sentinels (-1)', () => {
+    expect(eventAnchorId(ev('OrchestratorStarted', -1, 27), 3)).toBe('event-replay-3')
   })
 })
