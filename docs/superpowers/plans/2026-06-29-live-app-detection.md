@@ -10,6 +10,9 @@
 
 ## Global Constraints
 
+- **Build tags (critical):** Go test files in this repo are gated by build tags. Unit tests start with `//go:build unit`; the integration test starts with `//go:build integration`. **Every new `*_test.go` file in this plan MUST start with `//go:build unit` followed by a blank line, then `package ...`.** Without the tag the test is invisible to `go test -tags unit`.
+- **Test commands:** Unit tests run with `go test -tags unit ./...` (or `make test-go`, which adds `-race`). The integration test runs with `go test -tags integration ./cmd/...`. A bare `go test ./...` finds **no** tests in `cmd`/`pkg/resources` and must not be used as the verification command.
+- **Commit hygiene:** Commit ONLY the task's files via explicit `git add <paths>`; never `git commit -am`. Leave the pre-existing uncommitted artifacts `web/dist/index.html` and `web/package-lock.json` untouched — never stage or commit them.
 - Language: Go. Follow existing package layout; new code for the reconciler lives in package `cmd` (it depends on cmd-private types `storeRegistry`, `storeBackend`, `storeEntry`, `newStoreRegistry`, `newStoreBackend`, `newTargetResolver`).
 - Reuse existing functions; do not rewrite the active-store election (`newStoreRegistry`) or per-store wiring (`newStoreBackend`).
 - The `assembleOptions` signature stays `func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Options, []func() error)`.
@@ -48,7 +51,7 @@ to:
 
 - [ ] **Step 2: Run the test to verify it fails to compile**
 
-Run: `go test ./pkg/resources/ -run TestService -v`
+Run: `go test -tags unit ./pkg/resources/ -run TestService -v`
 Expected: FAIL — build error, `cannot use func literal (...) as []string value in argument to New`.
 
 - [ ] **Step 3: Change `New` and `scan` to use a provider**
@@ -76,7 +79,7 @@ Then in `scan`, change the loop header from `for _, p := range s.paths {` to:
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `go test ./pkg/resources/ -v`
+Run: `go test -tags unit ./pkg/resources/ -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -128,7 +131,7 @@ to:
 
 - [ ] **Step 2: Run the tests to verify they fail to compile**
 
-Run: `go test ./cmd/ -run TestNewStoreBackend -v`
+Run: `go test -tags unit ./cmd/ -run TestNewStoreBackend -v`
 Expected: FAIL — build error, too many arguments to `newStoreBackend`.
 
 - [ ] **Step 3: Add the `storeOpener` type and parameter**
@@ -164,7 +167,7 @@ Inside the body, change the open call (line ~208) from `st, err := statestore.Ne
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `go test ./cmd/ -run TestNewStoreBackend -v`
+Run: `go test -tags unit ./cmd/ -run TestNewStoreBackend -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -192,9 +195,11 @@ Extract the boot-time path/loaded-set derivation (currently inline in `cmd/serve
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `cmd/derive_test.go`:
+Create `cmd/derive_test.go` (note the mandatory `//go:build unit` tag):
 
 ```go
+//go:build unit
+
 package cmd
 
 import (
@@ -256,7 +261,7 @@ func TestAppsFingerprint_StableAndChangeSensitive(t *testing.T) {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `go test ./cmd/ -run 'TestDerivePaths|TestAppsFingerprint' -v`
+Run: `go test -tags unit ./cmd/ -run 'TestDerivePaths|TestAppsFingerprint' -v`
 Expected: FAIL — `undefined: derivePaths` / `undefined: appsFingerprint`.
 
 - [ ] **Step 3: Implement the helpers**
@@ -352,7 +357,7 @@ func appsFingerprint(apps []discovery.Instance) string {
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `go test ./cmd/ -run 'TestDerivePaths|TestAppsFingerprint' -v`
+Run: `go test -tags unit ./cmd/ -run 'TestDerivePaths|TestAppsFingerprint' -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -381,9 +386,11 @@ Create the reconciler: it holds the swappable derived state behind a `sync.RWMut
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `cmd/reconciler_test.go`:
+Create `cmd/reconciler_test.go` (note the mandatory `//go:build unit` tag):
 
 ```go
+//go:build unit
+
 package cmd
 
 import (
@@ -530,7 +537,7 @@ and at the top of the file add the import alias by using `os.WriteFile` directly
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `go test ./cmd/ -run TestReconciler -v`
+Run: `go test -tags unit ./cmd/ -run TestReconciler -v`
 Expected: FAIL — `undefined: newReconciler`.
 
 - [ ] **Step 3: Implement the reconciler core**
@@ -732,12 +739,12 @@ var _ = errors.New // keep errors import if unused after edits
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `go test ./cmd/ -run TestReconciler -v`
+Run: `go test -tags unit ./cmd/ -run TestReconciler -v`
 Expected: PASS. Fix the test-file import notes from Step 1 (`os.WriteFile`, drop the `writeFile` indirection, ensure `server` is imported) if the build complains.
 
 - [ ] **Step 5: Run the full cmd package to confirm nothing regressed**
 
-Run: `go test ./cmd/ -v`
+Run: `go test -tags unit ./cmd/ -v`
 Expected: PASS (existing `TestNewStoreBackend*`, `TestStoreRegistry*` still green).
 
 - [ ] **Step 6: Commit**
@@ -809,7 +816,7 @@ Add `"time"` to the test imports if not already present.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `go test ./cmd/ -run 'TestReconcilingApps|TestReconciler_Close' -v`
+Run: `go test -tags unit ./cmd/ -run 'TestReconcilingApps|TestReconciler_Close' -v`
 Expected: FAIL — `undefined: reconcilingApps` / `rc.Close undefined`.
 
 - [ ] **Step 3: Implement the decorator, maybeReconcile, and Close**
@@ -873,12 +880,12 @@ func (d reconcilingApps) Get(ctx context.Context, appID string) (discovery.Insta
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `go test ./cmd/ -run 'TestReconcilingApps|TestReconciler_Close' -v`
+Run: `go test -tags unit ./cmd/ -run 'TestReconcilingApps|TestReconciler_Close' -v`
 Expected: PASS.
 
 - [ ] **Step 5: Run the race detector on the package**
 
-Run: `go test ./cmd/ -race -run 'TestReconcil' -v`
+Run: `go test -tags unit -race ./cmd/ -run 'TestReconcil' -v`
 Expected: PASS, no data races reported.
 
 - [ ] **Step 6: Commit**
@@ -948,13 +955,13 @@ Expected: success. If `cmd/serve.go` reports an unused import, delete it; if it 
 
 - [ ] **Step 3: Run the integration test**
 
-Run: `go test ./cmd/ -run TestServe -v`
+Run: `go test -tags integration ./cmd/ -run TestServe -v`
 Expected: PASS — `/api/apps` shows `"order"`, and `/api/workflows` returns `"instanceId":"inst-1"` through the reconciler-built backend connected to the seeded SQLite store.
 
 - [ ] **Step 4: Run the full test suite with the race detector**
 
-Run: `go test ./... -race`
-Expected: PASS across all packages, no data races.
+Run: `go test -tags unit -race ./...` then `go test -tags integration -race ./cmd/...`
+Expected: PASS across all packages, no data races. (`make test-go` runs the unit suite with `-race`.)
 
 - [ ] **Step 5: Manual smoke test (live reconnect)**
 
