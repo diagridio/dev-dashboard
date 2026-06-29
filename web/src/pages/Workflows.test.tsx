@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -165,8 +165,8 @@ describe('Workflows', () => {
     renderAt()
     // Wait for rows to appear
     await screen.findByRole('link', { name: 'abc' })
-    // Find the first row checkbox (cbx span) and click it
-    const checkboxes = document.querySelectorAll('.cbx:not(.on)')
+    // Find the first row checkbox (cbx span in tbody) and click it
+    const checkboxes = document.querySelectorAll('tbody .cbx:not(.on)')
     await userEvent.click(checkboxes[0])
     // selbar should appear with "1 selected"
     await waitFor(() => expect(screen.getByText('1 selected')).toBeInTheDocument())
@@ -186,7 +186,7 @@ describe('Workflows', () => {
     )
     renderAt()
     await screen.findByRole('link', { name: 'abc' })
-    const checkboxes = document.querySelectorAll('.cbx:not(.on)')
+    const checkboxes = document.querySelectorAll('tbody .cbx:not(.on)')
     await userEvent.click(checkboxes[0])
     await waitFor(() => expect(screen.getByText(/Force delete/i)).toBeInTheDocument())
     await userEvent.click(document.querySelector('[data-cy="bulk-remove"]') as HTMLElement)
@@ -290,5 +290,28 @@ describe('Workflows page — status counts', () => {
     await waitFor(() => expect(completedBtn).toHaveTextContent('9'))
     const allBtn = screen.getByRole('button', { name: /^All/ })
     expect(allBtn).toHaveTextContent('15')
+  })
+})
+
+describe('Workflows page — select all', () => {
+  it('select-all header checkbox selects then clears all loaded rows', async () => {
+    server.use(
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [
+            { appId: 'order', instanceId: 'a', name: 'W', status: 'Running' },
+            { appId: 'order', instanceId: 'b', name: 'W', status: 'Running' },
+          ],
+        }),
+      ),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: { Running: 2 }, total: 2 })),
+      http.get('/api/statestores', () => HttpResponse.json([])),
+    )
+    renderPage('/workflows')
+    const selectAll = await screen.findByRole('checkbox', { name: /select all/i })
+    fireEvent.click(selectAll)
+    await waitFor(() => expect(screen.getByText('2 selected')).toBeInTheDocument())
+    fireEvent.click(selectAll)
+    await waitFor(() => expect(screen.queryByText('2 selected')).not.toBeInTheDocument())
   })
 })

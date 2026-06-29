@@ -388,7 +388,22 @@ export function Workflows() {
             <table className="wf">
               <thead>
                 <tr>
-                  <th style={{ width: 34 }} />
+                  <th style={{ width: 34 }}>
+                    <span
+                      className={allSelected ? 'cbx on' : 'cbx'}
+                      role="checkbox"
+                      aria-checked={allSelected}
+                      aria-label="Select all"
+                      tabIndex={0}
+                      onClick={toggleAll}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          toggleAll(e as unknown as React.MouseEvent)
+                        }
+                      }}
+                    />
+                  </th>
                   <th>Status</th>
                   <th>Workflow</th>
                   <th>Instance ID</th>
