@@ -263,6 +263,65 @@ describe('Workflows', () => {
     // Row for the stopped app-id shows the badge.
     expect(await screen.findAllByText('not running')).toHaveLength(1)
   })
+
+  it('defaults the dropdown to the active app-id when it has workflows', async () => {
+    server.use(
+      http.get('/api/statestores', () =>
+        HttpResponse.json([{ name: 'redis', type: 'state.redis', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
+      ),
+      http.get('/api/apps', () =>
+        HttpResponse.json([{ appId: 'order', health: 'healthy', components: [{ name: 'redis', type: 'state.redis' }] }]),
+      ),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [{ appId: 'order', instanceId: 'i1', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }],
+        }),
+      ),
+    )
+    renderAt()
+    const select = (await screen.findByTestId('app-select')) as HTMLSelectElement
+    await waitFor(() => expect(select.value).toBe('order'))
+  })
+
+  it('falls back to All apps when the active app has no workflows', async () => {
+    server.use(
+      http.get('/api/statestores', () =>
+        HttpResponse.json([{ name: 'redis', type: 'state.redis', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
+      ),
+      // Running app wf-app loaded the active store but has no workflows.
+      http.get('/api/apps', () =>
+        HttpResponse.json([{ appId: 'wf-app', health: 'healthy', components: [{ name: 'redis', type: 'state.redis' }] }]),
+      ),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [{ appId: 'pr-digest', instanceId: 'i1', name: 'AgentRunWorkflow', status: 'Completed', createdAt: '2026-06-29T10:00:00Z' }],
+        }),
+      ),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'i1' })
+    const select = (await screen.findByTestId('app-select')) as HTMLSelectElement
+    expect(select.value).toBe('') // All apps
+  })
+
+  it('a ?app= URL param overrides the computed default', async () => {
+    server.use(
+      http.get('/api/statestores', () =>
+        HttpResponse.json([{ name: 'redis', type: 'state.redis', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
+      ),
+      http.get('/api/apps', () =>
+        HttpResponse.json([{ appId: 'order', health: 'healthy', components: [{ name: 'redis', type: 'state.redis' }] }]),
+      ),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [{ appId: 'order', instanceId: 'i1', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }],
+        }),
+      ),
+    )
+    renderAt('/workflows?app=pr-digest')
+    const select = (await screen.findByTestId('app-select')) as HTMLSelectElement
+    await waitFor(() => expect(select.value).toBe('pr-digest'))
+  })
 })
 
 function renderPage(initialEntry = '/workflows?status=Failed') {

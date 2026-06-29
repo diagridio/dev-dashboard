@@ -86,6 +86,17 @@ export function Workflows() {
     ? (activeStore.connection ? `${storeTypeShort} · ${activeStore.connection}` : storeTypeShort)
     : 'unknown'
 
+  // Active app-id = the running app that loaded the active store. Used to default
+  // the dropdown to the most relevant workflows on first load.
+  const activeAppId = useMemo(() => {
+    if (!activeStore) return undefined
+    const matched = (appsData ?? [])
+      .filter((a) => a.components?.some((c) => c.name === activeStore.name))
+      .map((a) => a.appId)
+      .sort()
+    return matched[0]
+  }, [appsData, activeStore])
+
   // Debounce search input ~250ms
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
@@ -143,6 +154,24 @@ export function Workflows() {
     items.forEach((w) => seen.add(w.appId))
     return Array.from(seen).sort()
   }, [items])
+
+  // One-time default: prefer the active app-id when it has workflows, else leave
+  // "All apps". A ?app= URL param always wins. Never overrides a later manual change.
+  const defaultAppliedRef = useRef(false)
+  useEffect(() => {
+    if (defaultAppliedRef.current) return
+    if (urlApp !== '') {
+      defaultAppliedRef.current = true
+      return
+    }
+    // Wait until the initial "All apps" workflows result, the apps list, and the
+    // store list are all available before deciding.
+    if (isLoading || appsData === undefined || storeList === undefined) return
+    if (activeAppId && appIds.includes(activeAppId)) {
+      setSelectedApp(activeAppId)
+    }
+    defaultAppliedRef.current = true
+  }, [urlApp, isLoading, appsData, storeList, activeAppId, appIds])
 
   function setStatus(s: WorkflowStatus | '') {
     setActiveStatus(s)
@@ -319,6 +348,7 @@ export function Workflows() {
         <select
           className="select"
           data-cy="app-select"
+          data-testid="app-select"
           aria-label="Filter by app"
           value={selectedApp}
           onChange={(e) => {
@@ -329,6 +359,12 @@ export function Workflows() {
           }}
         >
           <option value="">All apps</option>
+          {selectedApp && !appIds.includes(selectedApp) && (
+            <option key={selectedApp} value={selectedApp}>
+              {selectedApp}
+              {appsLoaded && !runningAppIds.has(selectedApp) ? ' (not running)' : ''}
+            </option>
+          )}
           {appIds.map((id) => (
             <option key={id} value={id}>
               {id}

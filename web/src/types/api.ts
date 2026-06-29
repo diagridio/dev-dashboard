@@ -18,6 +18,7 @@ export interface AppSummary {
   age: string
   created: string
   runTemplate: string
+  components?: { name: string; type: string; version?: string }[]
 }
 
 /**
@@ -35,6 +36,5 @@ export interface AppDetail extends AppSummary {
   enabledFeatures?: string[]
   actors?: { type: string; count: number }[]
   subscriptions?: { pubsubName: string; topic: string; [key: string]: unknown }[]
-  components?: { name: string; type: string; version?: string }[]
   placement?: string
 }
