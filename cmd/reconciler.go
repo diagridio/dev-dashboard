@@ -82,6 +82,14 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	log := slog.Default().With("component", "reconciler")
 	resPaths, scanPaths, loaded := derivePaths(apps, rc.homeDir, rc.stateStorePath)
 	detected, _ := statestore.Detect(scanPaths)
+	secretStores, _ := statestore.DetectSecretStores(scanPaths)
+	for i := range detected {
+		resolved, unresolved := statestore.ResolveSecrets(detected[i], secretStores)
+		detected[i].Metadata = resolved
+		if len(unresolved) > 0 {
+			log.Warn("unresolved secretKeyRef metadata", "store", detected[i].Name, "keys", unresolved)
+		}
+	}
 	newReg := newStoreRegistry(detected, loaded)
 	newID := identity(newReg.active())
 
