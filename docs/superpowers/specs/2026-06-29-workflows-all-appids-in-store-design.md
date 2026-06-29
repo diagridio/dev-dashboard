@@ -24,6 +24,7 @@ List workflow instances for **every app-id that has workflow data in the current
 - **App-id source:** enumerate distinct app-ids directly from the connected store's workflow keys. The store is the source of truth for what workflows exist.
 - **Namespace:** keep the single configured namespace (`--namespace`, default `default`). Only the app-id becomes dynamic; namespace stays fixed in list/get/remove. This solves the `pr-digest` case (it is in `default`).
 - **Running cue:** add a small "not running" badge to rows (and a text suffix in the dropdown) for app-ids not currently running, cross-referenced against the running apps the UI already fetches.
+- **Default dropdown selection:** on initial load, default the dropdown to the **active app-id** when it has workflow data; otherwise fall back to "All apps". This surfaces the most relevant workflows first without ever showing an empty list by default.
 
 ## Background: workflow key layout
 
@@ -76,6 +77,19 @@ This is a net simplification, not a regression: a running app that has never run
 - **Dropdown** (`<option>`, ~lines 323-326): an `<option>` cannot hold a chip, so append a ` (not running)` text suffix to the label for non-running app-ids.
 - Flicker guard: only show the badge once `useApps()` has returned data; while it is loading, show no badge.
 
+**Default dropdown selection.** Determine the **active app-id** entirely client-side — no backend change:
+
+- Active store: from `useStateStores()`, the entry with `active: true` (its `name`).
+- Active app-id: the running app from `useApps()` whose loaded `components` include a component matching the active store's `name`. If more than one running app loaded it, pick the lexicographically-first deterministically (a dev edge case). If none, there is no active app-id.
+
+On initial load, set the dropdown's default `selectedApp` **once**:
+
+- If an app is specified in the URL (`?app=`), it wins — keep current behavior.
+- Else, once both the active-app determination and the initial "All apps" result are available: if the active app-id exists **and** appears among the stored app-ids (`appIds` derived from the returned rows), preselect it; otherwise default to "All apps".
+- Apply this default exactly once (guard with a ref/flag) so it never overrides a later manual dropdown change or re-applies on a background refetch.
+
+In the `pr-digest` case the active app-id is `wf-app` (loaded the active `workflow-store`) but it has no stored workflows, so the default falls back to "All apps" and the `pr-digest` instances are shown. When a running app does have workflows, its app-id is preselected so the user lands on the most relevant data.
+
 ## Error handling & performance
 
 - A single wildcard scan replaces the per-running-app loop. Leading-wildcard `LIKE` / `SCAN MATCH` works on all three KeysLiker backends; it is a full scan, but the previous per-app path was also a non-indexed match, so cost is net-neutral.
@@ -87,7 +101,10 @@ This is a net simplification, not a regression: a running app that has never run
 - `pkg/statestore/keys_test.go`: `AllInstanceMetaPattern` produces the exact expected pattern; `ParseAppID` returns segment[0] for a well-formed key and `ok=false` for malformed keys.
 - `pkg/workflow/service_test.go`: seed a fake `statestore.Store` with instances under **two** app-ids (e.g. `app-a`, `app-b`); `List` and `Stats` with `AppID==""` return both apps' instances; with `AppID=="app-a"` scope to one. Confirms enumeration and the discovery-coupling removal.
 - Constructor ripple: update every `workflow.New(...)` call site for the dropped `appIDs` parameter — `newStoreBackend`, the reconciler, the degraded entry, and `cmd`/integration tests. The existing integration test (`cmd/serve_integration_test.go`, `TestAssembleServerServesSeededWorkflow`) still passes: its single seeded instance is now found via store enumeration rather than the running-apps list.
-- `web/src/pages/Workflows.test.tsx`: with a mocked `useApps` that omits a row's app-id, that row renders the `not running` badge; a running app-id's row does not. Build tags / test conventions follow the repo norm (Go: `//go:build unit`, `go test -tags unit`; web: vitest).
+- `web/src/pages/Workflows.test.tsx`:
+  - Badge: with a mocked `useApps` that omits a row's app-id, that row renders the `not running` badge; a running app-id's row does not.
+  - Default selection: (a) active app-id has workflow data → dropdown defaults to it; (b) active app-id has no data (the `pr-digest` shape: running `wf-app`, data under `pr-digest`) → dropdown defaults to "All apps"; (c) a `?app=` URL param overrides the computed default.
+  - Build tags / test conventions follow the repo norm (Go: `//go:build unit`, `go test -tags unit`; web: vitest).
 
 ## Out of scope (→ Spec 2: "remember stores + connect on demand")
 
