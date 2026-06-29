@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflows, useWorkflowStats, useStateStores } from '../hooks/useWorkflows'
+import { useApps } from '../hooks/useApps'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { RefreshControl } from '../components/RefreshControl'
@@ -64,6 +65,14 @@ export function Workflows() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [removeStatus, setRemoveStatus] = useState<{ ok: number; failed: number } | null>(null)
   const { mutate: removeWorkflows } = useRemoveWorkflows()
+
+  // Running apps — used to flag workflow rows whose app-id is not currently running.
+  const { data: appsData } = useApps()
+  const appsLoaded = appsData !== undefined
+  const runningAppIds = useMemo(
+    () => new Set((appsData ?? []).map((a) => a.appId)),
+    [appsData],
+  )
 
   // Active state store (the one Dapr Workflow uses). The API returns only this
   // store, so there is no switching — we render it as a label.
@@ -323,6 +332,7 @@ export function Workflows() {
           {appIds.map((id) => (
             <option key={id} value={id}>
               {id}
+              {appsLoaded && !runningAppIds.has(id) ? ' (not running)' : ''}
             </option>
           ))}
         </select>
@@ -462,7 +472,14 @@ export function Workflows() {
                           {wf.instanceId}
                         </Link>
                       </td>
-                      <td>{wf.appId}</td>
+                      <td>
+                        {wf.appId}
+                        {appsLoaded && !runningAppIds.has(wf.appId) && (
+                          <span className="typechip" style={{ marginLeft: '6px' }}>
+                            not running
+                          </span>
+                        )}
+                      </td>
                       <td className="muted mono tabnum">{formatCreated(wf.createdAt)}</td>
                       <td className="mono tabnum">{duration}</td>
                       <td className={`muted mono tabnum${isFailed ? ' err' : ''}`}>{lastEventText}</td>

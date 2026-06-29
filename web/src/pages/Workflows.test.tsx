@@ -242,6 +242,27 @@ describe('Workflows', () => {
     renderAt()
     expect(await screen.findByRole('link', { name: 'abc' })).toHaveClass('celllink')
   })
+
+  it('marks app-ids that are not currently running', async () => {
+    server.use(
+      http.get('/api/apps', () =>
+        HttpResponse.json([{ appId: 'wf-app', health: 'healthy', components: [] }]),
+      ),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [
+            { appId: 'pr-digest', instanceId: 'i1', name: 'AgentRunWorkflow', status: 'Completed', createdAt: '2026-06-29T10:00:00Z' },
+            { appId: 'wf-app', instanceId: 'i2', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:01:00Z' },
+          ],
+        }),
+      ),
+    )
+    renderAt()
+    // Row for the running app: no badge.
+    await screen.findByRole('link', { name: 'i2' })
+    // Row for the stopped app-id shows the badge.
+    expect(await screen.findAllByText('not running')).toHaveLength(1)
+  })
 })
 
 function renderPage(initialEntry = '/workflows?status=Failed') {
