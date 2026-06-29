@@ -76,7 +76,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 			resPaths = append(resPaths, filepath.Dir(a.ConfigPath))
 		}
 	}
-	resSvc := resources.New(resPaths)
+	resSvc := resources.New(func() []string { return resPaths })
 
 	appIDs := func(ctx context.Context) ([]string, error) {
 		apps, err := appsSvc.List(ctx)
@@ -90,7 +90,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		return ids, nil
 	}
 
-	backend, closers := newStoreBackend(ctx, detected, loaded, deps.Namespace, deps.HTTPClient, appsSvc, appIDs)
+	backend, closers := newStoreBackend(ctx, detected, loaded, deps.Namespace, deps.HTTPClient, appsSvc, appIDs, statestore.New)
 	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
 
 	return server.Options{
