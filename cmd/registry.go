@@ -160,8 +160,9 @@ func (r *ConnRegistry) Add(e ConnEntry) error {
 }
 
 // Update replaces a manual entry matched by ID; errors if none exists. The id
-// is recomputed from the (possibly new) name so it stays deterministic.
-func (r *ConnRegistry) Update(e ConnEntry) error {
+// is recomputed from the (possibly new) name so it stays deterministic, and the
+// new id is returned so callers can re-address the renamed entry.
+func (r *ConnRegistry) Update(e ConnEntry) (string, error) {
 	e.Source = SourceManual
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -169,10 +170,13 @@ func (r *ConnRegistry) Update(e ConnEntry) error {
 		if r.entries[i].Source == SourceManual && r.entries[i].ID == e.ID {
 			e.ID = entryID(SourceManual, e.Name)
 			r.entries[i] = e
-			return r.save()
+			if err := r.save(); err != nil {
+				return "", err
+			}
+			return e.ID, nil
 		}
 	}
-	return os.ErrNotExist
+	return "", os.ErrNotExist
 }
 
 // Delete removes any entry (manual or auto) by ID. An absent id is a no-op.

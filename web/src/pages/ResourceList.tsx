@@ -3,6 +3,7 @@ import { useResources } from '../hooks/useResources'
 import type { ResourceKind } from '../types/resources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { ResourceDetail } from './ResourceDetail'
+import { StateStoreConnectionsPanel } from '../components/StateStoreConnectionsPanel'
 
 interface ResourceListProps {
   kind: ResourceKind
@@ -58,6 +59,7 @@ export function ResourceList({ kind }: ResourceListProps) {
             <div className="sub">{sub}</div>
           </div>
         </div>
+        {kind === 'component' && <StateStoreConnectionsPanel />}
         <p className="muted">Loading…</p>
       </div>
     )
@@ -73,6 +75,7 @@ export function ResourceList({ kind }: ResourceListProps) {
             <div className="sub">{sub}</div>
           </div>
         </div>
+        {kind === 'component' && <StateStoreConnectionsPanel />}
         <div className="md">
           <div className="card complist" />
           <div className="card">
@@ -97,6 +100,7 @@ export function ResourceList({ kind }: ResourceListProps) {
           <div className="sub">{sub}</div>
         </div>
       </div>
+      {kind === 'component' && <StateStoreConnectionsPanel />}
       <div className="md">
         <div className="card complist">
           {resources.map((resource) => {

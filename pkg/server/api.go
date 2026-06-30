@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/metadata"
 	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
 	"github.com/diagridio/dev-dashboard/pkg/version"
@@ -22,6 +23,7 @@ func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, 
 	r.Get("/version", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, v)
 	})
+	r.Get("/metadata/components", metadata.HandleGetComponents)
 	r.Route("/statestores", func(sr chi.Router) {
 		sr.Get("/", func(w http.ResponseWriter, _ *http.Request) {
 			if stores == nil {
@@ -65,11 +67,12 @@ func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, 
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 				return
 			}
-			if err := stores.UpdateStore(id, body.Name, body.Type, body.Metadata); err != nil {
+			newID, err := stores.UpdateStore(id, body.Name, body.Type, body.Metadata)
+			if err != nil {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 				return
 			}
-			writeJSON(w, http.StatusOK, map[string]string{"id": id})
+			writeJSON(w, http.StatusOK, map[string]string{"id": newID})
 		})
 		sr.Delete("/{id}", func(w http.ResponseWriter, req *http.Request) {
 			if stores == nil {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/logging"
+	"github.com/diagridio/dev-dashboard/pkg/metadata"
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/diagridio/dev-dashboard/web"
@@ -68,6 +69,10 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	if err != nil {
 		logger.Error("embedded UI failed to load", "err", err)
 		return fmt.Errorf("load embedded UI: %w", err)
+	}
+	if err := metadata.Init(); err != nil {
+		logger.Error("component metadata bundle failed to load", "err", err)
+		return fmt.Errorf("init component metadata: %w", err)
 	}
 	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	urlPath := ""

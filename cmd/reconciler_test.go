@@ -25,7 +25,7 @@ type countingStore struct {
 func (s countingStore) Keys(context.Context, string, string, int) ([]string, string, error) {
 	return nil, "", nil
 }
-func (s countingStore) Get(context.Context, string) ([]byte, error)            { return nil, nil }
+func (s countingStore) Get(context.Context, string) ([]byte, error) { return nil, nil }
 func (s countingStore) BulkGet(context.Context, []string) (map[string][]byte, error) {
 	return map[string][]byte{}, nil
 }
@@ -176,8 +176,10 @@ func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
 
 	pgID := byName["manualpg"].ID
 
-	// UpdateStore mutates the manual entry, addressed by id.
-	require.NoError(t, rc.UpdateStore(pgID, "manualpg", "state.postgresql", map[string]string{"connectionString": "host=h2 dbname=d2"}))
+	// UpdateStore mutates the manual entry, addressed by id, and returns the new id.
+	newID, err := rc.UpdateStore(pgID, "manualpg", "state.postgresql", map[string]string{"connectionString": "host=h2 dbname=d2"})
+	require.NoError(t, err)
+	require.Equal(t, pgID, newID) // same name → same id
 	for _, i := range rc.Stores() {
 		if i.ID == pgID {
 			require.Equal(t, "h2/d2", i.Connection)
@@ -269,4 +271,18 @@ func TestReconciler_ServiceForUnknownID(t *testing.T) {
 
 	_, _, _, ok := rc.ServiceFor("nosuchid")
 	require.False(t, ok, "unknown id -> ok=false")
+}
+
+func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
+	home := t.TempDir()
+	reg := LoadRegistry(home)
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	require.NoError(t, rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"}))
+	err := rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `a connection named "dup" already exists`)
 }

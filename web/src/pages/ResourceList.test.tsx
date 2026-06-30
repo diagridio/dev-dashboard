@@ -1,7 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
@@ -81,6 +81,19 @@ function renderConfigurations(entry = '/configurations') {
 // ---- Components ----
 
 describe('ResourceList kind=component', () => {
+  beforeEach(() => {
+    // The State store connections panel fetches this on every component render.
+    server.use(http.get('/api/statestores', () => HttpResponse.json([])))
+  })
+
+  it('shows the state store connections panel on components', async () => {
+    server.use(
+      http.get('/api/resources', () => HttpResponse.json([])),
+    )
+    renderComponents()
+    expect(await screen.findByText('State store connections')).toBeInTheDocument()
+  })
+
   it('renders component list items with name and type·version', async () => {
     server.use(
       http.get('/api/resources', ({ request }) => {
@@ -271,6 +284,14 @@ describe('ResourceList kind=configuration', () => {
     await waitFor(() =>
       expect(screen.getByText(/no configurations/i)).toBeInTheDocument(),
     )
+  })
+
+  it('does not show the connection panel on configurations', async () => {
+    server.use(http.get('/api/resources', () => HttpResponse.json([])))
+    renderConfigurations()
+    // Give the page a tick to settle, then assert the panel is absent.
+    await screen.findByRole('heading', { name: /configurations/i })
+    expect(screen.queryByText('State store connections')).not.toBeInTheDocument()
   })
 
   it('preselects a named item via deep-link /configurations/:name', async () => {

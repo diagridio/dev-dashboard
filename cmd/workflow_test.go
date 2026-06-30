@@ -224,4 +224,3 @@ func TestStoreRegistry_FallsBackToGlobalDefaultWhenNoAppStore(t *testing.T) {
 	require.NotNil(t, r.active())
 	require.Equal(t, "localhost:6379", r.active().Metadata["redisHost"])
 }
-
