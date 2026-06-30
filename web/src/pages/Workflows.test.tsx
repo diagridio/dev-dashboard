@@ -642,4 +642,26 @@ describe('Workflows page — store selector', () => {
     const link = await screen.findByRole('link', { name: 'abc' })
     expect(link).toHaveAttribute('href', '/workflows/order/abc?store=statestore-b')
   })
+
+  it('collapses duplicate-path stores (same name+type+connection) into one option, showing the active one', async () => {
+    const dupPaths = [
+      { id: 'redis-p1', name: 'redis', type: 'state.redis', source: 'auto', path: '/c/redis-a.yaml', active: false, connection: 'localhost:6379' },
+      { id: 'redis-p2', name: 'redis', type: 'state.redis', source: 'auto', path: '/c/redis-b.yaml', active: true, connection: 'localhost:6379' },
+    ]
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(dupPaths)),
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
+    renderAt()
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    // Only one option for the duplicated store.
+    await waitFor(() => expect(storeSelect.querySelectorAll('option')).toHaveLength(1))
+    // The active member (redis-p2) is the representative shown and selected.
+    const opt = storeSelect.querySelector('option') as HTMLOptionElement
+    expect(opt.value).toBe('redis-p2')
+    expect(opt.textContent).toMatch(/redis — redis · localhost:6379 \(active\)/)
+    await waitFor(() => expect(storeSelect.value).toBe('redis-p2'))
+  })
 })
