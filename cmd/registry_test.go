@@ -120,12 +120,14 @@ func TestRegistry_ManualAddEditDelete(t *testing.T) {
 	require.NotEmpty(t, pgID)
 
 	// Update an existing manual entry, matched by id.
-	require.NoError(t, r.Update(ConnEntry{ID: pgID, Name: "pg", Type: "state.postgresql", Source: SourceManual,
-		Metadata: map[string]string{"connectionString": "host=b"}}))
+	_, updateErr := r.Update(ConnEntry{ID: pgID, Name: "pg", Type: "state.postgresql", Source: SourceManual,
+		Metadata: map[string]string{"connectionString": "host=b"}})
+	require.NoError(t, updateErr)
 	require.Equal(t, "host=b", r.List()[0].Metadata["connectionString"])
 
 	// Update a missing manual entry (unknown id) errors.
-	require.Error(t, r.Update(ConnEntry{ID: "deadbeef0000", Name: "nope", Type: "state.redis", Source: SourceManual}))
+	_, updateMissingErr := r.Update(ConnEntry{ID: "deadbeef0000", Name: "nope", Type: "state.redis", Source: SourceManual})
+	require.Error(t, updateMissingErr)
 
 	// Delete works (by id) and persists.
 	require.NoError(t, r.Delete(pgID))
@@ -182,4 +184,15 @@ func TestRegistry_UpsertAutoNeverDuplicatesManualEmptyPath(t *testing.T) {
 	// auto upsert with an empty path must not add a spurious entry alongside the manual one
 	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "m", Type: "state.redis", Source: SourceAuto}))
 	require.Len(t, reg.List(), before, "empty-path auto upsert must not duplicate around a manual entry")
+}
+
+func TestUpdateReturnsNewID(t *testing.T) {
+	r := LoadRegistry(t.TempDir())
+	require.NoError(t, r.Add(ConnEntry{Name: "old", Type: "state.redis", Metadata: map[string]string{"redisHost": "h"}}))
+
+	oldID := entryID(SourceManual, "old")
+	newID, err := r.Update(ConnEntry{ID: oldID, Name: "renamed", Type: "state.redis", Metadata: map[string]string{"redisHost": "h"}})
+	require.NoError(t, err)
+	require.Equal(t, entryID(SourceManual, "renamed"), newID)
+	require.NotEqual(t, oldID, newID)
 }

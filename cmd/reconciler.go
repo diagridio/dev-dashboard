@@ -199,20 +199,21 @@ func (rc *reconciler) AddStore(name, typ string, metadata map[string]string) err
 }
 
 // UpdateStore satisfies server.StoreRegistry: edits the manual connection with
-// the given id and evicts its pooled connection so the next select reconnects
-// with new metadata. It evicts the OLD component (resolved before the update).
-func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]string) error {
+// the given id, evicts its pooled connection (resolved before the update) so the
+// next select reconnects with new metadata, and returns the recomputed id.
+func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]string) (string, error) {
 	if rc.registry == nil {
-		return nil
+		return id, nil
 	}
 	oldComp, hadOld := rc.componentFor(id)
-	if err := rc.registry.Update(ConnEntry{ID: id, Name: name, Type: typ, Source: SourceManual, Metadata: metadata}); err != nil {
-		return err
+	newID, err := rc.registry.Update(ConnEntry{ID: id, Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
+	if err != nil {
+		return "", err
 	}
 	if hadOld && rc.pool != nil {
 		rc.pool.evict(oldComp)
 	}
-	return nil
+	return newID, nil
 }
 
 // DeleteStore satisfies server.StoreRegistry: removes the entry with the given

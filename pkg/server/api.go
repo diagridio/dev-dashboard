@@ -67,11 +67,12 @@ func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, 
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 				return
 			}
-			if err := stores.UpdateStore(id, body.Name, body.Type, body.Metadata); err != nil {
+			newID, err := stores.UpdateStore(id, body.Name, body.Type, body.Metadata)
+			if err != nil {
 				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 				return
 			}
-			writeJSON(w, http.StatusOK, map[string]string{"id": id})
+			writeJSON(w, http.StatusOK, map[string]string{"id": newID})
 		})
 		sr.Delete("/{id}", func(w http.ResponseWriter, req *http.Request) {
 			if stores == nil {

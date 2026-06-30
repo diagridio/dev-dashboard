@@ -36,12 +36,13 @@ func (m *mutableStoreRegistry) AddStore(name, typ string, metadata map[string]st
 	return nil
 }
 
-func (m *mutableStoreRegistry) UpdateStore(id, name, typ string, metadata map[string]string) error {
+func (m *mutableStoreRegistry) UpdateStore(id, name, typ string, metadata map[string]string) (string, error) {
 	if m.updateErr != nil {
-		return m.updateErr
+		return "", m.updateErr
 	}
-	m.updated = append(m.updated, StoreInfo{ID: id, Name: name, Type: typ, Source: "manual"})
-	return nil
+	newID := "id-" + name // mirror the registry recomputing id from name
+	m.updated = append(m.updated, StoreInfo{ID: newID, Name: name, Type: typ, Source: "manual"})
+	return newID, nil
 }
 
 func (m *mutableStoreRegistry) DeleteStore(id string) error {
@@ -114,10 +115,10 @@ func TestStateStores_Delete(t *testing.T) {
 func TestStateStores_PutUpdates(t *testing.T) {
 	reg := &mutableStoreRegistry{}
 	h := newAPI(reg)
-	// The path param is the entry id; the body carries the new values.
 	req, body := putJSON(t, h, "/statestores/abc123def456",
 		`{"name":"pg","type":"state.postgresql","metadata":{"connectionString":"host=b"}}`)
 	require.Equal(t, http.StatusOK, req.StatusCode, body)
 	require.Len(t, reg.updated, 1)
-	require.Equal(t, "abc123def456", reg.updated[0].ID)
+	require.Equal(t, "id-pg", reg.updated[0].ID)
+	require.Contains(t, body, `"id":"id-pg"`)
 }

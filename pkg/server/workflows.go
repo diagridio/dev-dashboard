@@ -22,7 +22,7 @@ type WorkflowRemover interface {
 type StoreRegistry interface {
 	Stores() []StoreInfo
 	AddStore(name, typ string, metadata map[string]string) error
-	UpdateStore(id, name, typ string, metadata map[string]string) error
+	UpdateStore(id, name, typ string, metadata map[string]string) (string, error)
 	DeleteStore(id string) error
 }
 

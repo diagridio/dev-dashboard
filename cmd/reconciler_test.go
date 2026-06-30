@@ -176,8 +176,10 @@ func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
 
 	pgID := byName["manualpg"].ID
 
-	// UpdateStore mutates the manual entry, addressed by id.
-	require.NoError(t, rc.UpdateStore(pgID, "manualpg", "state.postgresql", map[string]string{"connectionString": "host=h2 dbname=d2"}))
+	// UpdateStore mutates the manual entry, addressed by id, and returns the new id.
+	newID, err := rc.UpdateStore(pgID, "manualpg", "state.postgresql", map[string]string{"connectionString": "host=h2 dbname=d2"})
+	require.NoError(t, err)
+	require.Equal(t, pgID, newID) // same name → same id
 	for _, i := range rc.Stores() {
 		if i.ID == pgID {
 			require.Equal(t, "h2/d2", i.Connection)
