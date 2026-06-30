@@ -212,6 +212,47 @@ describe('Workflows', () => {
     expect(nextBtn).not.toBeDisabled()
   })
 
+  it('Prev navigates back to the previous page after going Next', async () => {
+    server.use(
+      http.get('/api/workflows', ({ request }) => {
+        const url = new URL(request.url)
+        const page = url.searchParams.get('page')
+        if (page === 'tok1') {
+          // Second (last) page — no further nextToken.
+          return HttpResponse.json({
+            items: [
+              { appId: 'order', instanceId: 'def', name: 'OrderWorkflow', status: 'Completed', createdAt: '2026-06-26T11:00:00Z' },
+            ],
+          })
+        }
+        // First page.
+        return HttpResponse.json({
+          items: [
+            { appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' },
+          ],
+          nextToken: 'tok1',
+        })
+      }),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'abc' })
+    const prevBtn = screen.getByRole('button', { name: '← Prev' })
+    expect(prevBtn).toBeDisabled()
+
+    // Go to the next page.
+    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    await screen.findByRole('link', { name: 'def' })
+    expect(screen.queryByRole('link', { name: 'abc' })).toBeNull()
+    // Prev is now enabled on the second page.
+    expect(screen.getByRole('button', { name: '← Prev' })).not.toBeDisabled()
+
+    // Go back — the first page must reappear and Prev disable again.
+    await userEvent.click(screen.getByRole('button', { name: '← Prev' }))
+    await screen.findByRole('link', { name: 'abc' })
+    expect(screen.queryByRole('link', { name: 'def' })).toBeNull()
+    expect(screen.getByRole('button', { name: '← Prev' })).toBeDisabled()
+  })
+
   it('renders pager with both Prev and Next disabled when no nextToken', async () => {
     server.use(
       http.get('/api/workflows', () =>

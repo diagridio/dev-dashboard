@@ -57,8 +57,19 @@ export function Workflows() {
   const [searchInput, setSearchInput] = useState(urlSearch)
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch)
   const [page, setPage] = useState<string | undefined>(urlPage)
-  const [pageIndex, setPageIndex] = useState(0)
-  const [loadedCount, setLoadedCount] = useState(0)
+  // History of visited pages for backward navigation. The API only returns a
+  // forward nextToken, so to support Prev we stack the (token, offset) of each
+  // page we leave. Empty = on the first page.
+  const [history, setHistory] = useState<{ token: string | undefined; offset: number }[]>([])
+  // Number of items loaded before the current page — drives the "X–Y loaded" range.
+  const [pageOffset, setPageOffset] = useState(0)
+
+  // Reset paging to the first page (used whenever a filter/store changes).
+  function resetPaging() {
+    setPage(undefined)
+    setHistory([])
+    setPageOffset(0)
+  }
 
   // Dialog open state + removal hook
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
@@ -115,9 +126,7 @@ export function Workflows() {
     window.localStorage.setItem(STORE_KEY, id)
     // A different store has different apps — reset the app filter to "All apps".
     setSelectedApp('')
-    setPage(undefined)
-    setPageIndex(0)
-    setLoadedCount(0)
+    resetPaging()
   }
 
   // Build the detail-page path for a row, carrying the selected store id so the
@@ -179,20 +188,6 @@ export function Workflows() {
   // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows)
   const items = useMemo<WorkflowSummary[]>(() => dedupeWorkflows(data?.items ?? []), [data?.items])
 
-  // Track loaded count for pager display — accumulate actual items per page.
-  // On page 0, loadedCount equals items.length; on subsequent pages we add to it.
-  const prevPageRef = useRef<number>(-1)
-  useEffect(() => {
-    if (items.length === 0) return
-    if (pageIndex === 0) {
-      prevPageRef.current = 0
-      setLoadedCount(items.length)
-    } else if (pageIndex !== prevPageRef.current) {
-      prevPageRef.current = pageIndex
-      setLoadedCount((prev) => prev + items.length)
-    }
-  }, [items.length, pageIndex])
-
   // Collect unique app IDs from all loaded items for the app filter dropdown
   const appIds = useMemo(() => {
     const seen = new Set<string>()
@@ -220,9 +215,7 @@ export function Workflows() {
 
   function setStatus(s: WorkflowStatus | '') {
     setActiveStatus(s)
-    setPage(undefined)
-    setPageIndex(0)
-    setLoadedCount(0)
+    resetPaging()
   }
 
   function toggleRow(key: string, e: React.MouseEvent) {
@@ -436,9 +429,7 @@ export function Workflows() {
           value={selectedApp}
           onChange={(e) => {
             setSelectedApp(e.target.value)
-            setPage(undefined)
-            setPageIndex(0)
-            setLoadedCount(0)
+            resetPaging()
           }}
         >
           <option value="">All apps</option>
@@ -465,9 +456,7 @@ export function Workflows() {
             value={searchInput}
             onChange={(e) => {
               setSearchInput(e.target.value)
-              setPage(undefined)
-              setPageIndex(0)
-              setLoadedCount(0)
+              resetPaging()
             }}
           />
         </label>
@@ -615,20 +604,29 @@ export function Workflows() {
         <div className="pager">
           <span className="mono">
             {items.length > 0
-              ? `${loadedCount - items.length + 1}–${loadedCount} loaded`
+              ? `${pageOffset + 1}–${pageOffset + items.length} loaded`
               : 'No results'}
           </span>
           <div className="pgbtns">
-            <button disabled={pageIndex === 0} onClick={() => {/* prev not supported by API */}}>
+            <button
+              disabled={history.length === 0}
+              onClick={() => {
+                if (history.length === 0) return
+                const prev = history[history.length - 1]
+                setPage(prev.token)
+                setPageOffset(prev.offset)
+                setHistory((h) => h.slice(0, -1))
+              }}
+            >
               ← Prev
             </button>
             <button
               disabled={!data?.nextToken}
               onClick={() => {
-                if (data?.nextToken) {
-                  setPage(data.nextToken)
-                  setPageIndex((i) => i + 1)
-                }
+                if (!data?.nextToken) return
+                setHistory((h) => [...h, { token: page, offset: pageOffset }])
+                setPageOffset((o) => o + items.length)
+                setPage(data.nextToken)
               }}
             >
               Next →
