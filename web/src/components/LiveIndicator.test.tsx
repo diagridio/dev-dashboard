@@ -5,11 +5,11 @@ import { LiveIndicator } from './LiveIndicator'
 
 function wrap(intervalMs: number, paused: boolean) {
   return render(
-    <RefreshContext.Provider
+    <RefreshContext
       value={{ intervalMs, paused, setInterval: () => {}, setPaused: () => {} }}
     >
       <LiveIndicator />
-    </RefreshContext.Provider>,
+    </RefreshContext>,
   )
 }
 

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from 'react'
+import { createContext, use, useState, type ReactNode } from 'react'
 
 const REFRESH_MS_KEY = 'devdash.refreshMs'
 const REFRESH_PAUSED_KEY = 'devdash.refreshPaused'
@@ -41,14 +41,14 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <RefreshContext.Provider value={{ intervalMs, paused, setInterval, setPaused }}>
+    <RefreshContext value={{ intervalMs, paused, setInterval, setPaused }}>
       {children}
-    </RefreshContext.Provider>
+    </RefreshContext>
   )
 }
 
 export function useRefreshInterval(): RefreshCtx {
-  const ctx = useContext(RefreshContext)
+  const ctx = use(RefreshContext)
   if (!ctx) throw new Error('useRefreshInterval must be used within a RefreshProvider')
   return ctx
 }
