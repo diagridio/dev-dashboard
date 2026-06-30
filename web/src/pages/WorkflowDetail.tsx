@@ -199,17 +199,19 @@ export function EventRow({
             <div className="evstatic-head">
               <span className="caretspace" aria-hidden="true">▸</span>
               <span className="evtype">{event.type}</span>
-              {event.name && <span className="evname">{event.name}</span>}
-              {/* Child instance link. The event carries no appId, so we assume the
-                  parent's app (correct for same-app sub-orchestrations). */}
-              {event.type === 'SubOrchestrationCreated' && event.instanceId && (
-                <Link
-                  className="celllink"
-                  to={`/workflows/${appId}/${event.instanceId}${store ? `?store=${encodeURIComponent(store)}` : ''}`}
-                >
-                  {event.instanceId}
-                </Link>
-              )}
+              <div className="evnamecell">
+                {event.name && <span className="evname">{event.name}</span>}
+                {/* Child instance link. The event carries no appId, so we assume the
+                    parent's app (correct for same-app sub-orchestrations). */}
+                {event.type === 'SubOrchestrationCreated' && event.instanceId && (
+                  <Link
+                    className="evchildlink"
+                    to={`/workflows/${appId}/${event.instanceId}${store ? `?store=${encodeURIComponent(store)}` : ''}`}
+                  >
+                    {event.instanceId}
+                  </Link>
+                )}
+              </div>
               {eventIdTag && <span className="evtag">{eventIdTag}</span>}
               <button
                 className="evanchor"
