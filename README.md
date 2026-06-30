@@ -15,7 +15,9 @@ Design goals:
 - **Zero-config for the common case** — point it at your machine and it discovers running apps.
 - **Single self-contained binary** — no runtime dependencies (the React frontend is embedded
   via `go:embed`; there is no Node.js at runtime).
-- **Read-only, except for workflow purge** — it never starts or stops your apps in v1.
+- **Read-only over your apps** — it never starts or stops them. The only mutating actions are
+  workflow terminate/purge and managing your own saved state-store connections (persisted to a
+  local config file, see [Use cases](#use-cases)); it never edits app or component state.
 - **Degrade gracefully** — keep working when a sidecar or state store is unavailable.
 - **Minimal, high-density UI** with light and dark themes, optimized for desktop widths.
 
@@ -36,6 +38,10 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   subscriptions across all apps, each linkable back to the owning application.
 - **Read components & configurations** — read-only YAML viewers, enriched with which apps
   loaded each component.
+- **Manage state-store connections** — on the Components page, add / edit / remove the state
+  stores the dashboard reads workflows from. Auto-detected stores appear automatically; manual
+  connections are saved to `~/.dapr/dev-dashboard/connections.yaml` (mode `0600`). When more
+  than one store is known, a selector on the Workflows page lets you switch which one you browse.
 - **Tail logs** — per-app daprd + app logs streamed live (SSE) with level coloring, keyword
   highlight, and a follow toggle.
 
@@ -156,7 +162,7 @@ If the dashboard does not behave as expected, run it with `--verbose` to print d
 dev-dashboard --verbose
 ```
 
-Logs are grouped by `component=` (values: `server`, `discovery`, `statestore`, `workflow`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
+Logs are grouped by `component=` (values: `server`, `discovery`, `workflow`, `registry`, `reconciler`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
 
 ## Building from source
 
@@ -232,8 +238,10 @@ you just run both on the same machine.
 `~/.dapr/components` and from the live `--resources-path` of running apps, then uses the one
 marked `actorStateStore: "true"` (falling back to the first detected). Check:
 
-- If detection is ambiguous (several stores), point it explicitly:
-  `./bin/dev-dashboard --statestore ~/.dapr/components/statestore.yaml`.
+- If detection is ambiguous (several stores), either pick one with the store selector on the
+  Workflows page, or point it explicitly:
+  `./bin/dev-dashboard --statestore ~/.dapr/components/statestore.yaml`. You can also add a
+  store by hand via the connection manager on the Components page.
 - Workflow keys are namespaced; the dashboard defaults to `default`. For another namespace, pass
   `--namespace <ns>`.
 - Only **Redis / PostgreSQL / SQLite** state stores are supported.
@@ -371,6 +379,7 @@ sidecars and state store.
 │  pkg/discovery  standalone.List() + /v1.0/metadata    │
 │  pkg/workflow   list / history / purge                │
 │  pkg/statestore client (redis / postgres / sqlite)    │
+│  pkg/metadata   component metadata catalog            │
 │  pkg/resources  component + configuration YAML loader │
 │  pkg/logs       file tail → SSE                       │
 │  web/           React + Vite SPA → dist/ (embedded)   │
@@ -406,6 +415,12 @@ sidecars and state store.
   SQLite); a client is built from the auto-detected component YAML. Purge uses the official
   Dapr workflow API when reachable, with direct state-store key deletion as an explicit force
   fallback.
+- **Connections registry** — the state stores the dashboard can read from are tracked in a
+  registry: auto-detected component refs plus any connections added in the UI, persisted to
+  `~/.dapr/dev-dashboard/connections.yaml` (mode `0600`). The `pkg/metadata` catalog drives the
+  add/edit forms, the workflow backend connects to the selected store lazily (on demand), and
+  `secretKeyRef` metadata is resolved through local secret stores
+  (`secretstores.local.file` / `secretstores.local.env`).
 - **Resources** (components + configurations) are loaded from `~/.dapr` and live
   `--resources-path` directories read from daprd args.
 - **Logs** are tailed from `~/.dapr/logs/*` and the `appLogPath`/`daprdLogPath` reported in

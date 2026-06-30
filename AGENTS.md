@@ -16,11 +16,15 @@ runtime** — the frontend is compiled to `web/dist` and baked into the binary a
 
 ```
 main.go            thin entry point
-cmd/               cobra root + subcommands (serve, update, workflow); no domain logic
+cmd/               cobra root + subcommands (serve, update, workflow); no domain logic.
+                   Also hosts the connection registry / store-election layer (registry.go,
+                   reconciler.go, derive.go, connpool.go): the connections.yaml-backed store
+                   list, lazy per-store connection pool, and secretKeyRef resolution.
 pkg/               domain packages — each is isolated, none import cmd/
   discovery/       standalone.List() + /v1.0/metadata sidecar enrichment
   workflow/        list / history / terminate / purge
   statestore/      redis / postgres / sqlite client
+  metadata/        embedded component-metadata catalog (drives the add/edit connection forms)
   resources/       component + configuration YAML loader
   logs/            file tail → SSE
   server/          chi router + go:embed SPA mount (one file per domain)
@@ -128,8 +132,11 @@ via ldflags (`dev-dashboard --version`).
 - **Follow the UI style guide for frontend work.** New pages/components compose the existing
   class vocabulary and design tokens in `web/src/styles/theme.css` — don't hardcode colors or
   reinvent primitives. See [`web/STYLEGUIDE.md`](web/STYLEGUIDE.md).
-- **Read-only product surface:** the dashboard never starts/stops apps; the only mutating
-  operation is workflow terminate/purge. Don't add side-effecting behavior without explicit ask.
+- **Read-only product surface:** the dashboard never starts/stops apps and never edits app or
+  component state. The mutating operations are limited to workflow terminate/purge and managing
+  the user's own saved state-store connections (the `connections.yaml` registry under
+  `~/.dapr/dev-dashboard/`, written `0600`). Don't add other side-effecting behavior without an
+  explicit ask.
 - Commit/push only when asked; the project uses Conventional Commit prefixes (`feat:`, `refactor:`,
   `docs:`) — match the existing `git log` style.
 
