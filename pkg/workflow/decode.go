@@ -54,6 +54,15 @@ func DecodeExecution(appID, instanceID string, history []*protos.HistoryEvent, c
 		if e.GetOrchestratorStarted() != nil {
 			replays++
 		}
+		// A child workflow's own ExecutionStarted event carries its parent's
+		// instance id; its presence is what marks this instance as a child.
+		if es := e.GetExecutionStarted(); es != nil && ex.ParentInstanceID == "" {
+			if pi := es.GetParentInstance(); pi != nil {
+				if wi := pi.GetWorkflowInstance(); wi != nil {
+					ex.ParentInstanceID = wi.GetInstanceId()
+				}
+			}
+		}
 		ex.History = append(ex.History, decodeEvent(e))
 	}
 	if replays > 0 {
@@ -113,6 +122,9 @@ func decodeEvent(e *protos.HistoryEvent) HistoryEvent {
 		ev.Type = "OrchestratorCompleted"
 	case e.GetSubOrchestrationInstanceCreated() != nil:
 		ev.Type = "SubOrchestrationCreated"
+		s := e.GetSubOrchestrationInstanceCreated()
+		ev.Name = s.GetName()
+		ev.InstanceID = s.GetInstanceId()
 	default:
 		ev.Type = "Unknown"
 	}

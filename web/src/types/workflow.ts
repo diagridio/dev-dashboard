@@ -5,6 +5,7 @@ export interface WorkflowSummary {
   instanceId: string
   name: string
   status: WorkflowStatus
+  parentInstanceId?: string
   createdAt?: string
   lastUpdatedAt?: string
 }
@@ -14,6 +15,7 @@ export interface WorkflowHistoryEvent {
   timestamp: string
   type: string
   name?: string
+  instanceId?: string
   input?: string
   output?: string
 }

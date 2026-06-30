@@ -532,6 +532,44 @@ describe('Workflows page — store-resolve loading gate', () => {
   })
 })
 
+describe('Workflows page — child workflows toggle', () => {
+  it('shows a child badge for child workflow rows', async () => {
+    server.use(
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [
+            { appId: 'order', instanceId: 'child-1', name: 'ChildWorkflow', status: 'Running', parentInstanceId: 'parent-1' },
+          ],
+        }),
+      ),
+    )
+    renderAt()
+    expect(await screen.findByText('child')).toBeInTheDocument()
+  })
+
+  it('requests includeChildren=false when the toggle is unchecked', async () => {
+    const urls: string[] = []
+    const statsUrls: string[] = []
+    server.use(
+      http.get('/api/workflows', ({ request }) => {
+        urls.push(request.url)
+        return HttpResponse.json({ items: [] })
+      }),
+      http.get('/api/workflows/stats', ({ request }) => {
+        statsUrls.push(request.url)
+        return HttpResponse.json({ counts: {}, total: 0 })
+      }),
+    )
+    renderAt()
+    // wait for the initial list request (default: children shown)
+    await waitFor(() => expect(urls.length).toBeGreaterThan(0))
+    const toggle = screen.getByLabelText('Show child workflows')
+    await userEvent.click(toggle)
+    await waitFor(() => expect(urls.some((u) => u.includes('includeChildren=false'))).toBe(true))
+    await waitFor(() => expect(statsUrls.some((u) => u.includes('includeChildren=false'))).toBe(true))
+  })
+})
+
 describe('Workflows page — store selector', () => {
   const twoStores = [
     { id: 'statestore-a', name: 'statestore', type: 'state.redis', source: 'auto', path: '/a', active: true, connection: 'localhost:6379' },

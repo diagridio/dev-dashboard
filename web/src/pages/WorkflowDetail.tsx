@@ -101,12 +101,16 @@ export function EventRow({
   isNewest,
   toast,
   anchorId,
+  appId,
+  store,
 }: {
   event: WorkflowHistoryEvent
   createdAt: string | undefined
   isNewest: boolean
   toast: ToastHandle
   anchorId: string
+  appId: string
+  store?: string
 }) {
   const offset = formatOffset(createdAt, event.timestamp)
   const dateTime = formatDateTime(event.timestamp) ?? ''
@@ -196,6 +200,16 @@ export function EventRow({
               <span className="caretspace" aria-hidden="true">▸</span>
               <span className="evtype">{event.type}</span>
               {event.name && <span className="evname">{event.name}</span>}
+              {/* Child instance link. The event carries no appId, so we assume the
+                  parent's app (correct for same-app sub-orchestrations). */}
+              {event.type === 'SubOrchestrationCreated' && event.instanceId && (
+                <Link
+                  className="celllink"
+                  to={`/workflows/${appId}/${event.instanceId}${store ? `?store=${encodeURIComponent(store)}` : ''}`}
+                >
+                  {event.instanceId}
+                </Link>
+              )}
               {eventIdTag && <span className="evtag">{eventIdTag}</span>}
               <button
                 className="evanchor"
@@ -632,6 +646,8 @@ export function WorkflowDetail() {
               isNewest={event === newestEvent}
               toast={toast}
               anchorId={eventAnchorId(canonicalIndex.get(event) ?? idx)}
+              appId={appId ?? ''}
+              store={store}
             />
           ))}
         </div>

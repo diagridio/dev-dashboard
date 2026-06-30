@@ -206,6 +206,7 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .select.compact { padding: 4px 26px 4px 8px; font-size: 12px; border-radius: 8px; background-position: right 8px center; }
 .search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; color: var(--faint); font-size: 13px; min-width: 170px; flex: 1; }
 .search input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; }
+.childtoggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
 .btn { font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 7px 13px; cursor: pointer; border: 1px solid transparent; }
 .btn.primary { background: var(--accent2); color: #06231a; border-color: transparent; }
 .btn.ghost { background: transparent; color: var(--text); border-color: var(--line); }

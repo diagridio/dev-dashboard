@@ -47,17 +47,19 @@ type HistoryEvent struct {
 	Timestamp  time.Time `json:"timestamp"`
 	Type       string    `json:"type"`
 	Name       string    `json:"name,omitempty"`
+	InstanceID string    `json:"instanceId,omitempty"` // child instance id for SubOrchestrationCreated
 	Input      *string   `json:"input,omitempty"`
 	Output     *string   `json:"output,omitempty"`
 }
 
 type ExecutionSummary struct {
-	AppID         string     `json:"appId"`
-	InstanceID    string     `json:"instanceId"`
-	Name          string     `json:"name"`
-	Status        Status     `json:"status"`
-	CreatedAt     *time.Time `json:"createdAt,omitempty"`
-	LastUpdatedAt *time.Time `json:"lastUpdatedAt,omitempty"`
+	AppID            string     `json:"appId"`
+	InstanceID       string     `json:"instanceId"`
+	Name             string     `json:"name"`
+	Status           Status     `json:"status"`
+	ParentInstanceID string     `json:"parentInstanceId,omitempty"` // non-empty ⇒ this is a child workflow
+	CreatedAt        *time.Time `json:"createdAt,omitempty"`
+	LastUpdatedAt    *time.Time `json:"lastUpdatedAt,omitempty"`
 }
 
 type Execution struct {

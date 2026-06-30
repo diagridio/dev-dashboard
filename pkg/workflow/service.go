@@ -22,11 +22,12 @@ var (
 const defaultPageSize = 50
 
 type ListQuery struct {
-	AppID     string
-	Status    []Status
-	Search    string
-	PageSize  int
-	PageToken string
+	AppID           string
+	Status          []Status
+	Search          string
+	PageSize        int
+	PageToken       string
+	IncludeChildren bool
 }
 
 type Service interface {
@@ -148,7 +149,7 @@ func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 	if s.store == nil {
 		return StatsResult{}, ErrNoStore
 	}
-	searchQ := ListQuery{Search: q.Search}
+	searchQ := ListQuery{Search: q.Search, IncludeChildren: q.IncludeChildren}
 	res := StatsResult{Counts: map[Status]int{}}
 	seen := make(map[string]struct{})
 
@@ -264,6 +265,9 @@ func (s *service) load(ctx context.Context, appID, instanceID string) (Execution
 }
 
 func matches(s ExecutionSummary, q ListQuery) bool {
+	if !q.IncludeChildren && s.ParentInstanceID != "" {
+		return false
+	}
 	if len(q.Status) > 0 {
 		found := false
 		for _, st := range q.Status {

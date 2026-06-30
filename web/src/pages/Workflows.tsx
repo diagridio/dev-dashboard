@@ -58,6 +58,7 @@ export function Workflows() {
   const [searchInput, setSearchInput] = useState(urlSearch)
   const [debouncedSearch, setDebouncedSearch] = useState(urlSearch)
   const [page, setPage] = useState<string | undefined>(urlPage)
+  const [showChildren, setShowChildren] = useState(true)
   // History of visited pages for backward navigation. The API only returns a
   // forward nextToken, so to support Prev we stack the (token, offset) of each
   // page we leave. Empty = on the first page.
@@ -182,6 +183,7 @@ export function Workflows() {
     page,
     appId: selectedApp || undefined,
     store: selectedStore ?? undefined,
+    includeChildren: showChildren,
     enabled: selectedStore !== null,
   })
 
@@ -189,6 +191,7 @@ export function Workflows() {
     appId: selectedApp || undefined,
     search: debouncedSearch || undefined,
     store: selectedStore ?? undefined,
+    includeChildren: showChildren,
     enabled: selectedStore !== null,
   })
 
@@ -469,6 +472,20 @@ export function Workflows() {
             }}
           />
         </label>
+
+        {/* Show/hide child workflows */}
+        <label className="childtoggle">
+          <input
+            type="checkbox"
+            aria-label="Show child workflows"
+            checked={showChildren}
+            onChange={(e) => {
+              setShowChildren(e.target.checked)
+              resetPaging()
+            }}
+          />
+          Show child workflows
+        </label>
       </div>
 
       {/* Main card */}
@@ -569,7 +586,14 @@ export function Workflows() {
                       <td>
                         <StatusPill status={wf.status} />
                       </td>
-                      <td className="wfname">{wf.name}</td>
+                      <td className="wfname">
+                        {wf.name}
+                        {wf.parentInstanceId && (
+                          <span className="typechip" style={{ marginLeft: '6px' }}>
+                            child
+                          </span>
+                        )}
+                      </td>
                       <td className="iid">
                         <Link
                           className="celllink"

@@ -67,3 +67,34 @@ func TestDecodeExecutionCompleted(t *testing.T) {
 	require.NotNil(t, ex.Output)
 	require.Equal(t, `"done"`, *ex.Output)
 }
+
+func TestDecodeExecutionParentInstanceID(t *testing.T) {
+	now := timestamppb.Now()
+	history := []*protos.HistoryEvent{
+		{EventId: 0, Timestamp: now, EventType: &protos.HistoryEvent_ExecutionStarted{ExecutionStarted: &protos.ExecutionStartedEvent{
+			Name: "ChildWorkflow",
+			ParentInstance: &protos.ParentInstanceInfo{
+				WorkflowInstance: &protos.WorkflowInstance{InstanceId: "parent-inst-1"},
+			},
+		}}},
+	}
+	ex := DecodeExecution("order", "child-inst-1", history, "")
+	require.Equal(t, "parent-inst-1", ex.ParentInstanceID)
+}
+
+func TestDecodeSubOrchestrationCreated(t *testing.T) {
+	now := timestamppb.Now()
+	history := []*protos.HistoryEvent{
+		{EventId: 0, Timestamp: now, EventType: &protos.HistoryEvent_ExecutionStarted{ExecutionStarted: &protos.ExecutionStartedEvent{Name: "ParentWorkflow"}}},
+		{EventId: 1, Timestamp: now, EventType: &protos.HistoryEvent_ChildWorkflowInstanceCreated{ChildWorkflowInstanceCreated: &protos.ChildWorkflowInstanceCreatedEvent{
+			InstanceId: "child-inst-9",
+			Name:       "ChildWorkflow",
+		}}},
+	}
+	ex := DecodeExecution("order", "parent-inst-1", history, "")
+	require.Equal(t, "", ex.ParentInstanceID) // parent has no parent
+	require.Len(t, ex.History, 2)
+	require.Equal(t, "SubOrchestrationCreated", ex.History[1].Type)
+	require.Equal(t, "ChildWorkflow", ex.History[1].Name)
+	require.Equal(t, "child-inst-9", ex.History[1].InstanceID)
+}
