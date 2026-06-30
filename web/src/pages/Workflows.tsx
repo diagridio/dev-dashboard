@@ -476,15 +476,6 @@ export function Workflows() {
         {/* Selection bar — shown only when rows selected */}
         {selected.size > 0 && (
           <div className="selbar">
-            <span
-              className="cbx on"
-              role="checkbox"
-              aria-checked={allSelected}
-              aria-label="Deselect all"
-              tabIndex={0}
-              onClick={toggleAll}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAll(e as unknown as React.MouseEvent) } }}
-            />
             <span className="cnt">{selected.size} selected</span>
             <span className="grow" />
             <button
@@ -538,7 +529,6 @@ export function Workflows() {
                   <th>Created</th>
                   <th>Duration</th>
                   <th>Last event</th>
-                  <th style={{ width: 34 }} />
                 </tr>
               </thead>
               <tbody>
@@ -600,7 +590,6 @@ export function Workflows() {
                       <td className="muted mono tabnum">{formatCreated(wf.createdAt)}</td>
                       <td className="mono tabnum">{duration}</td>
                       <td className={`muted mono tabnum${isFailed ? ' err' : ''}`}>{lastEventText}</td>
-                      <td className="kebab">⋯</td>
                     </tr>
                   )
                 })}
