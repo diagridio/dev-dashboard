@@ -357,12 +357,12 @@ export function Workflows() {
               </select>
               {selectedStoreObj && (
                 <Link
-                  className="chip link"
+                  className="chip"
                   to={`/components/${selectedStoreObj.name}`}
                   aria-label={`Open the ${selectedStoreObj.name} component page`}
                   title={`Open the ${selectedStoreObj.name} component page`}
                 >
-                  ↗
+                  component
                 </Link>
               )}
             </>

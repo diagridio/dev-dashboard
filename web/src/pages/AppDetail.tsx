@@ -242,7 +242,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             app.components.map((c) => (
               <Link
                 key={c.name}
-                className="chip k link"
+                className="chip k"
                 to={`/components/${c.name}`}
               >
                 {c.name} <span className="muted">{c.type}</span>
