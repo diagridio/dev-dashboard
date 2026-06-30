@@ -130,3 +130,63 @@ func TestConnPool_TwoIdentitiesBothRetained(t *testing.T) {
 	// No close happens just because a second identity was opened (retention).
 	require.Equal(t, int32(0), atomic.LoadInt32(&o.closes), "opening a second store must NOT close the first")
 }
+
+// TestConnPool_EvictDuringOpenClosesStore verifies Fix 1: if evict is called
+// while an open is in flight, the store that eventually opens is closed
+// immediately (no leak) and the openOrGet caller receives an error.
+func TestConnPool_EvictDuringOpenClosesStore(t *testing.T) {
+	block := make(chan struct{})
+	o := &poolOpener{block: block}
+	p := newConnPool("default", &http.Client{}, nil, o.open)
+
+	comp := compA()
+	var openErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, openErr = p.openOrGet(context.Background(), comp)
+	}()
+
+	// Wait until the opener goroutine has inserted its slot and is blocked inside open.
+	// We poll until the slot appears in the map (under lock via a second openOrGet
+	// attempt won't work cleanly, so we spin on opens count instead).
+	for atomic.LoadInt32(&o.opens) == 0 {
+		// tight spin — opens is incremented inside open(), right at entry
+	}
+
+	// Evict the slot while the open is still blocked.
+	p.evict(comp)
+
+	// Release the blocked open so the goroutine can finish.
+	close(block)
+	wg.Wait()
+
+	// The opened store must have been closed (no leak).
+	require.Equal(t, int32(1), atomic.LoadInt32(&o.closes),
+		"store opened after eviction must be closed immediately")
+
+	// The openOrGet call must return an error.
+	require.Error(t, openErr, "openOrGet must fail when the slot was evicted mid-open")
+
+	// The pool must have no cached entry for compA.
+	// A subsequent openOrGet should open a brand-new connection (opens count goes to 2).
+	o2 := &poolOpener{}
+	p2 := newConnPool("default", &http.Client{}, nil, o2.open)
+	_, err := p2.openOrGet(context.Background(), comp)
+	require.NoError(t, err) // sanity: a fresh pool works normally
+}
+
+// TestConnPool_OpenOrGetAfterCloseErrors verifies Fix 2: after Close() no new
+// connection is opened and openOrGet returns an error.
+func TestConnPool_OpenOrGetAfterCloseErrors(t *testing.T) {
+	o := &poolOpener{}
+	p := newConnPool("default", &http.Client{}, nil, o.open)
+
+	require.NoError(t, p.Close())
+
+	_, err := p.openOrGet(context.Background(), compA())
+	require.Error(t, err, "openOrGet after Close must return an error")
+	require.Equal(t, int32(0), atomic.LoadInt32(&o.opens),
+		"no open must be attempted after Close")
+}

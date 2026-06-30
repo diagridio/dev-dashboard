@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sync"
 
@@ -55,6 +56,11 @@ func (p *connPool) openOrGet(ctx context.Context, c statestore.Component) (store
 	id := identity(&c)
 
 	p.mu.Lock()
+	// Fix 2: reject calls after Close so we never cache a store that will never be closed.
+	if p.closed {
+		p.mu.Unlock()
+		return storeEntry{}, errors.New("connpool closed")
+	}
 	if slot, ok := p.slots[id]; ok {
 		p.mu.Unlock()
 		<-slot.done
@@ -73,6 +79,25 @@ func (p *connPool) openOrGet(ctx context.Context, c statestore.Component) (store
 		slot.err = err
 		close(slot.done)
 		return storeEntry{}, err
+	}
+
+	// Fix 1: after the open (which runs outside the lock), verify the slot is
+	// still the current entry for this id AND the pool is still open. If it was
+	// evicted or the pool was closed while we were opening, close the freshly
+	// opened store immediately to avoid a connection leak.
+	p.mu.Lock()
+	current, stillPresent := p.slots[id]
+	evicted := p.closed || !stillPresent || current != slot
+	if evicted {
+		delete(p.slots, id) // no-op if already gone, harmless otherwise
+	}
+	p.mu.Unlock()
+
+	if evicted {
+		_ = st.Close()
+		slot.err = errors.New("connpool: store evicted or pool closed during open")
+		close(slot.done)
+		return storeEntry{}, slot.err
 	}
 
 	slot.store = st
