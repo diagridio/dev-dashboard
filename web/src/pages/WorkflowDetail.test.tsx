@@ -753,6 +753,28 @@ describe('WorkflowDetail', () => {
     const target = container.querySelector(`[id="${targetId}"]`)!
     expect(target.querySelector('.evtype')?.textContent).toBe('ExecutionCompleted')
   })
+
+  it('links a SubOrchestrationCreated event to the child workflow detail', async () => {
+    server.use(
+      http.get('/api/workflows/order/parent-1', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'parent-1',
+          name: 'ParentWorkflow',
+          status: 'Running',
+          createdAt: '2026-06-26T10:00:00Z',
+          replayCount: 0,
+          history: [
+            { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'ExecutionStarted', name: 'ParentWorkflow' },
+            { sequenceId: 1, timestamp: '2026-06-26T10:00:01Z', type: 'SubOrchestrationCreated', name: 'ChildWorkflow', instanceId: 'child-9' },
+          ],
+        }),
+      ),
+    )
+    renderDetail(undefined, '/workflows/order/parent-1')
+    const link = await screen.findByRole('link', { name: /child-9/ })
+    expect(link).toHaveAttribute('href', expect.stringContaining('/workflows/order/child-9'))
+  })
 })
 
 describe('WorkflowDetail — store threading', () => {
@@ -808,7 +830,7 @@ const stubToast: ToastHandle = { show: () => {} }
 
 function row(event: WorkflowHistoryEvent) {
   return render(
-    <EventRow event={event} createdAt={createdAt} isNewest={false} toast={stubToast} anchorId="event-test" />,
+    <EventRow event={event} createdAt={createdAt} isNewest={false} toast={stubToast} anchorId="event-test" appId="order" />,
   )
 }
 
@@ -848,6 +870,7 @@ describe('EventRow', () => {
         isNewest={false}
         toast={stubToast}
         anchorId="event-2"
+        appId="order"
       />,
     )
     expect(container.querySelector('#event-2')).not.toBeNull()

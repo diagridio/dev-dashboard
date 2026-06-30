@@ -15,6 +15,7 @@ export interface WorkflowHistoryEvent {
   timestamp: string
   type: string
   name?: string
+  instanceId?: string
   input?: string
   output?: string
 }
