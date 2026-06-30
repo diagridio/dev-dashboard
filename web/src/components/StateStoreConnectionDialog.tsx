@@ -5,18 +5,15 @@ import { useComponentCatalog } from '../hooks/useComponentCatalog'
 import { useStoreMutations } from '../hooks/useStoreMutations'
 import { SUPPORTED_STORE_TYPES, storeTypeLabel } from '../lib/storeTypes'
 import { useToast } from '../lib/toast'
-import type { StateStore } from '../types/workflow'
 
 interface Props {
   open: boolean
-  mode: 'add' | 'edit'
-  initial?: StateStore
   onClose: () => void
 }
 
-export function StateStoreConnectionDialog({ open, mode, initial, onClose }: Props) {
+export function StateStoreConnectionDialog({ open, onClose }: Props) {
   const { fieldsFor, isError } = useComponentCatalog()
-  const { addStore, updateStore } = useStoreMutations()
+  const { addStore } = useStoreMutations()
   const { toast, toastNode } = useToast()
 
   const [name, setName] = useState('')
@@ -29,13 +26,13 @@ export function StateStoreConnectionDialog({ open, mode, initial, onClose }: Pro
   // Reset form whenever the dialog opens.
   useEffect(() => {
     if (!open) return
-    setName(initial?.name ?? '')
-    setType(initial?.type ?? SUPPORTED_STORE_TYPES[0])
+    setName('')
+    setType(SUPPORTED_STORE_TYPES[0])
     setValues({})
     setOptional([])
     setActorStateStore(true)
     setError(null)
-  }, [open, initial])
+  }, [open])
 
   const allFields = fieldsFor(type)
   const required = useMemo(() => allFields.filter((f) => f.required), [allFields])
@@ -63,13 +60,8 @@ export function StateStoreConnectionDialog({ open, mode, initial, onClose }: Pro
     if (actorStateStore) metadata.actorStateStore = 'true'
 
     try {
-      if (mode === 'edit' && initial) {
-        await updateStore.mutateAsync({ id: initial.id, name: name.trim(), type, metadata })
-        toast.show(`Updated ${name.trim()}`)
-      } else {
-        await addStore.mutateAsync({ name: name.trim(), type, metadata })
-        toast.show(`Added ${name.trim()}`)
-      }
+      await addStore.mutateAsync({ name: name.trim(), type, metadata })
+      toast.show(`Added ${name.trim()}`)
       onClose()
     } catch (e) {
       setError((e as Error).message)
@@ -79,7 +71,7 @@ export function StateStoreConnectionDialog({ open, mode, initial, onClose }: Pro
   const optionalByName = (n: string) => allFields.find((f) => f.name === n)
 
   return (
-    <Modal open={open} title={mode === 'edit' ? 'Edit state store connection' : 'Add state store connection'} onClose={onClose}>
+    <Modal open={open} title="Add state store connection" onClose={onClose}>
       {toastNode}
       {isError && <p className="field-err">Couldn't load the component catalog; try reloading.</p>}
 
@@ -95,7 +87,6 @@ export function StateStoreConnectionDialog({ open, mode, initial, onClose }: Pro
           aria-label="Type"
           className="inp"
           value={type}
-          disabled={mode === 'edit'}
           onChange={(e) => {
             setType(e.target.value)
             setValues({})

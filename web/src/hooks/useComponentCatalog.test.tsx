@@ -18,6 +18,21 @@ const bundle = {
   ],
 }
 
+// Bundle that mirrors the real catalog: pg/sqlite have NO top-level connectionString
+// (it lives only in authenticationProfiles, which ComponentMetadataSchema omits).
+const bundleNoConnStr = {
+  schemaVersion: 'v1',
+  date: '2026-01-01',
+  components: [
+    { type: 'state', name: 'redis', version: 'v1', title: 'Redis', status: 'stable',
+      metadata: [{ name: 'redisHost', required: true, type: 'string' }] },
+    { type: 'state', name: 'postgresql', version: 'v1', title: 'PostgreSQL', status: 'stable',
+      metadata: [{ name: 'maxConns', required: false, type: 'number' }] },
+    { type: 'state', name: 'sqlite', version: 'v1', title: 'SQLite', status: 'stable',
+      metadata: [{ name: 'timeout', required: false, type: 'number' }] },
+  ],
+}
+
 function Probe() {
   const { schemas, fieldsFor, isLoading } = useComponentCatalog()
   if (isLoading) return <div>loading</div>
@@ -29,6 +44,27 @@ function Probe() {
   )
 }
 
+function SyntheticProbe() {
+  const { fieldsFor, isLoading } = useComponentCatalog()
+  if (isLoading) return <div>loading</div>
+  const pgFields = fieldsFor('state.postgresql')
+  const sqliteFields = fieldsFor('state.sqlite')
+  const redisFields = fieldsFor('state.redis')
+  const pgConnStr = pgFields.find((f) => f.name === 'connectionString')
+  const sqliteConnStr = sqliteFields.find((f) => f.name === 'connectionString')
+  return (
+    <div>
+      <span data-testid="pg-has-conn-str">{pgConnStr ? 'yes' : 'no'}</span>
+      <span data-testid="pg-required">{pgConnStr?.required ? 'yes' : 'no'}</span>
+      <span data-testid="pg-sensitive">{pgConnStr?.sensitive ? 'yes' : 'no'}</span>
+      <span data-testid="sqlite-has-conn-str">{sqliteConnStr ? 'yes' : 'no'}</span>
+      <span data-testid="sqlite-required">{sqliteConnStr?.required ? 'yes' : 'no'}</span>
+      <span data-testid="sqlite-sensitive">{sqliteConnStr?.sensitive ? 'yes' : 'no'}</span>
+      <span data-testid="redis-has-conn-str">{redisFields.some((f) => f.name === 'connectionString') ? 'yes' : 'no'}</span>
+    </div>
+  )
+}
+
 describe('useComponentCatalog', () => {
   it('keeps only supported state.* types and resolves fields', async () => {
     server.use(http.get('/api/metadata/components', () => HttpResponse.json(bundle)))
@@ -36,5 +72,20 @@ describe('useComponentCatalog', () => {
     // mongodb is filtered out (unsupported); pubsub.redis excluded (not state).
     await waitFor(() => expect(screen.getByTestId('types')).toHaveTextContent('state.redis,state.postgresql'))
     expect(screen.getByTestId('redis-fields')).toHaveTextContent('redisHost,redisPassword')
+  })
+
+  it('injects synthetic required connectionString for pg/sqlite but not redis', async () => {
+    server.use(http.get('/api/metadata/components', () => HttpResponse.json(bundleNoConnStr)))
+    render(<QueryProvider><SyntheticProbe /></QueryProvider>)
+    await waitFor(() => expect(screen.getByTestId('pg-has-conn-str')).toHaveTextContent('yes'))
+    // postgresql: required + sensitive
+    expect(screen.getByTestId('pg-required')).toHaveTextContent('yes')
+    expect(screen.getByTestId('pg-sensitive')).toHaveTextContent('yes')
+    // sqlite: required but NOT sensitive
+    expect(screen.getByTestId('sqlite-has-conn-str')).toHaveTextContent('yes')
+    expect(screen.getByTestId('sqlite-required')).toHaveTextContent('yes')
+    expect(screen.getByTestId('sqlite-sensitive')).toHaveTextContent('no')
+    // redis: no connectionString
+    expect(screen.getByTestId('redis-has-conn-str')).toHaveTextContent('no')
   })
 })

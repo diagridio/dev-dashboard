@@ -25,7 +25,7 @@ describe('StateStoreConnectionDialog', () => {
       return HttpResponse.json({ name: 'orders' }, { status: 201 })
     }))
 
-    setup(<StateStoreConnectionDialog open mode="add" onClose={() => {}} />)
+    setup(<StateStoreConnectionDialog open onClose={() => {}} />)
 
     // Wait for catalog → required field present.
     await waitFor(() => expect(screen.getByLabelText('redisHost')).toBeInTheDocument())

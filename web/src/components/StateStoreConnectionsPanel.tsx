@@ -10,14 +10,14 @@ export function StateStoreConnectionsPanel() {
   const { data: stores } = useStateStores()
   const { deleteStore } = useStoreMutations()
 
-  const [dialog, setDialog] = useState<{ mode: 'add' | 'edit'; initial?: StateStore } | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<StateStore | null>(null)
 
   return (
     <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <b style={{ fontSize: 13 }}>State store connections</b>
-        <button className="btn primary" onClick={() => setDialog({ mode: 'add' })}>+ Add connection</button>
+        <button className="btn primary" onClick={() => setAddOpen(true)}>+ Add connection</button>
       </div>
 
       {(stores ?? []).length === 0 && <p className="hint">No state store connections yet.</p>}
@@ -37,7 +37,6 @@ export function StateStoreConnectionsPanel() {
           </span>
           {s.source === 'manual' && (
             <span style={{ display: 'flex', gap: 6 }}>
-              <button className="btn ghost" aria-label={`edit ${s.name}`} onClick={() => setDialog({ mode: 'edit', initial: s })}>Edit</button>
               <button className="btn danger" aria-label={`delete ${s.name}`} onClick={() => setPendingDelete(s)}>Delete</button>
             </span>
           )}
@@ -45,15 +44,8 @@ export function StateStoreConnectionsPanel() {
       ))}
 
       {/* Mount the dialog only while open, so the component catalog isn't
-          fetched on every Components-page load — only when Add/Edit is used. */}
-      {dialog && (
-        <StateStoreConnectionDialog
-          open
-          mode={dialog.mode}
-          initial={dialog.initial}
-          onClose={() => setDialog(null)}
-        />
-      )}
+          fetched on every Components-page load — only when Add is used. */}
+      {addOpen && <StateStoreConnectionDialog open onClose={() => setAddOpen(false)} />}
 
       <Modal open={pendingDelete !== null} title="Delete connection?" onClose={() => setPendingDelete(null)}>
         <p style={{ margin: '0 0 8px', color: 'var(--muted)', fontSize: 14 }}>

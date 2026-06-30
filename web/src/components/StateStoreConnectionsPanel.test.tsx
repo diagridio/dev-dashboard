@@ -19,8 +19,8 @@ describe('StateStoreConnectionsPanel', () => {
     expect(screen.getByText('orders-pg')).toBeInTheDocument()
     // ACTIVE badge on the active auto store.
     expect(screen.getByText(/active/i)).toBeInTheDocument()
-    // Manual row has edit + delete; auto row does not.
-    expect(screen.getByRole('button', { name: /edit orders-pg/i })).toBeInTheDocument()
+    // Manual row has delete only (no edit); auto row has neither.
+    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /delete orders-pg/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /edit statestore/i })).not.toBeInTheDocument()
     // Add button present.
