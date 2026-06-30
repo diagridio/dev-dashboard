@@ -78,6 +78,10 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no state store detected"})
 			return
 		}
+		if errors.Is(err, workflow.ErrStoreUnreachable) {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
+			return
+		}
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
@@ -94,6 +98,10 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 		res, err := svc.Stats(req.Context(), parseListQuery(req))
 		if errors.Is(err, workflow.ErrNoStore) {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no state store detected"})
+			return
+		}
+		if errors.Is(err, workflow.ErrStoreUnreachable) {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 			return
 		}
 		if err != nil {
@@ -115,6 +123,8 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow not found"})
 		case errors.Is(err, workflow.ErrNoStore):
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no state store detected"})
+		case errors.Is(err, workflow.ErrStoreUnreachable):
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		case err != nil:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		default:

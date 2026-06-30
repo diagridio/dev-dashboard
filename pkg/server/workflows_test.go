@@ -241,3 +241,44 @@ func (f *fakeBackend) ServiceFor(store string) (workflow.Service, WorkflowRemove
 	}
 	return f.svc, f.rem, f.targets, true
 }
+
+func TestWorkflowsListUnreachableStore(t *testing.T) {
+	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379")
+	h := workflowsRouter(newFakeBackend(unreachable), nil)
+
+	res, body := get(t, h, "/")
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+	require.Contains(t, body, "could not connect to state store")
+	require.Contains(t, body, "statestore")
+	require.Contains(t, body, "localhost:16379")
+	// Must NOT be the generic no-store message.
+	require.NotContains(t, body, "no state store detected")
+}
+
+func TestWorkflowsStatsUnreachableStore(t *testing.T) {
+	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379")
+	h := workflowsRouter(newFakeBackend(unreachable), nil)
+
+	res, body := get(t, h, "/stats")
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+	require.Contains(t, body, "could not connect to state store")
+}
+
+func TestWorkflowDetailUnreachableStore(t *testing.T) {
+	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379")
+	h := workflowsRouter(newFakeBackend(unreachable), nil)
+
+	res, body := get(t, h, "/order/abc")
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+	require.Contains(t, body, "could not connect to state store")
+	require.NotContains(t, body, "no state store detected")
+}
+
+func TestWorkflowsNoStoreMessageUnchanged(t *testing.T) {
+	noStore := fakeWF{err: workflow.ErrNoStore}
+	h := workflowsRouter(newFakeBackend(noStore), nil)
+
+	res, body := get(t, h, "/")
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+	require.Contains(t, body, "no state store detected")
+}

@@ -3,6 +3,7 @@ package workflow
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -13,8 +14,9 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("workflow not found")
-	ErrNoStore  = errors.New("no state store configured")
+	ErrNotFound         = errors.New("workflow not found")
+	ErrNoStore          = errors.New("no state store configured")
+	ErrStoreUnreachable = errors.New("could not connect to state store")
 )
 
 const defaultPageSize = 50
@@ -43,6 +45,37 @@ func New(store statestore.Store, namespace string) Service {
 		namespace = "default"
 	}
 	return &service{store: store, namespace: namespace}
+}
+
+// unreachableService is a workflow.Service for a known state store whose
+// backend could not be opened. Every method returns ErrStoreUnreachable
+// wrapped with the store's display name and secrets-free connection so the
+// API can surface an accurate "could not connect…" message.
+type unreachableService struct {
+	name string
+	conn string
+}
+
+// NewUnreachableService builds a Service whose List/Stats/Get all fail with a
+// store-specific ErrStoreUnreachable error.
+func NewUnreachableService(name, conn string) Service {
+	return unreachableService{name: name, conn: conn}
+}
+
+func (u unreachableService) err() error {
+	return fmt.Errorf("%w %q (%s)", ErrStoreUnreachable, u.name, u.conn)
+}
+
+func (u unreachableService) List(context.Context, ListQuery) (ListResult, error) {
+	return ListResult{}, u.err()
+}
+
+func (u unreachableService) Stats(context.Context, ListQuery) (StatsResult, error) {
+	return StatsResult{}, u.err()
+}
+
+func (u unreachableService) Get(context.Context, string, string) (Execution, error) {
+	return Execution{}, u.err()
 }
 
 // metaKeys returns instance-metadata keys: scoped to one app when appID != "",

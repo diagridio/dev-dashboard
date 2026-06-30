@@ -233,36 +233,37 @@ func (rc *reconciler) DeleteStore(id string) error {
 
 // ServiceFor satisfies server.WorkflowBackend. The argument is a registry entry
 // id (the ?store= value), never a name.
-//   - id == "" -> the elected active store, pre-warmed via the pool; if no
-//     store is elected, the degraded entry (ok=true).
-//   - id matches a registry entry -> build its component, connect via the pool.
+//   - id == "" -> the elected active store, pre-warmed via the pool. If no store
+//     is elected, the degraded (ErrNoStore) entry. If a store IS elected but the
+//     pool cannot open it, the unreachable service (ErrStoreUnreachable).
+//   - id matches a registry entry -> build its component and connect via the
+//     pool; on open failure, the unreachable service.
 //   - unknown id -> ok=false.
 func (rc *reconciler) ServiceFor(id string) (workflow.Service, server.WorkflowRemover, server.TargetResolver, bool) {
+	var comp statestore.Component
 	if id == "" {
 		active := rc.activeComponent()
 		if active == nil {
 			return rc.degraded.svc, rc.degraded.rem, rc.degraded.targets, true
 		}
-		octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-		defer cancel()
-		e, err := rc.pool.openOrGet(octx, *active)
-		if err != nil {
-			return rc.degraded.svc, rc.degraded.rem, rc.degraded.targets, true
+		comp = *active
+	} else {
+		c, ok := rc.componentFor(id)
+		if !ok {
+			return nil, nil, nil, false
 		}
-		return e.svc, e.rem, e.targets, true
+		comp = c
 	}
 
-	comp, ok := rc.componentFor(id)
-	if !ok {
-		return nil, nil, nil, false
-	}
 	octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
 	defer cancel()
 	e, err := rc.pool.openOrGet(octx, comp)
 	if err != nil {
-		// Known store, unreachable: surface a working-but-empty degraded entry so
-		// the API returns a graceful error from the workflow service, not 404.
-		return rc.degraded.svc, rc.degraded.rem, rc.degraded.targets, true
+		// Known store, unreachable: return a service that surfaces an accurate
+		// store-specific "could not connect…" error (not the no-store message),
+		// reusing the degraded remover/target-resolver.
+		return workflow.NewUnreachableService(comp.Name, statestore.ConnInfo(comp)),
+			rc.degraded.rem, rc.degraded.targets, true
 	}
 	return e.svc, e.rem, e.targets, true
 }

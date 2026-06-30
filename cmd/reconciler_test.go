@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
+	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/stretchr/testify/require"
 )
 
@@ -187,4 +189,84 @@ func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
 	for _, i := range rc.Stores() {
 		require.NotEqual(t, pgID, i.ID)
 	}
+}
+
+// failingOpener always fails to open, simulating an unreachable backend.
+type failingOpener struct{}
+
+func (failingOpener) open(_ context.Context, _ statestore.Component) (statestore.Store, error) {
+	return nil, errors.New("dial tcp: connection refused")
+}
+
+func TestReconciler_ServiceForUnreachableByID(t *testing.T) {
+	dir := t.TempDir()
+	home := t.TempDir()
+
+	autoPath := seedAutoComponentYAML(t, dir, "downstore", filepath.Join(dir, "down.db"))
+	reg := LoadRegistry(home)
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "downstore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
+
+	var id string
+	for _, e := range reg.List() {
+		if e.Path == autoPath {
+			id = e.ID
+		}
+	}
+	require.NotEmpty(t, id)
+
+	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	svc, _, _, ok := rc.ServiceFor(id)
+	require.True(t, ok, "a known but unreachable store is still ok=true")
+	_, err := svc.List(context.Background(), workflow.ListQuery{})
+	require.True(t, errors.Is(err, workflow.ErrStoreUnreachable), "unreachable store yields ErrStoreUnreachable, not ErrNoStore")
+	require.False(t, errors.Is(err, workflow.ErrNoStore))
+}
+
+func TestReconciler_ServiceForUnreachableActive(t *testing.T) {
+	dir := t.TempDir()
+	home := t.TempDir()
+
+	reg := LoadRegistry(home)
+	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	// Elect an active store; the pool's opener will fail to connect to it.
+	active := statestore.Component{Name: "activedown", Type: "state.sqlite", Metadata: map[string]string{"connectionString": filepath.Join(dir, "active.db")}}
+	rc.mu.Lock()
+	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil, nil)
+	rc.mu.Unlock()
+
+	svc, _, _, ok := rc.ServiceFor("")
+	require.True(t, ok)
+	_, err := svc.List(context.Background(), workflow.ListQuery{})
+	require.True(t, errors.Is(err, workflow.ErrStoreUnreachable), "active-but-unreachable yields ErrStoreUnreachable")
+}
+
+func TestReconciler_ServiceForNoStoreStillErrNoStore(t *testing.T) {
+	home := t.TempDir()
+	reg := LoadRegistry(home)
+	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	// No elected store and empty id -> degraded/ErrNoStore (genuinely no store).
+	svc, _, _, ok := rc.ServiceFor("")
+	require.True(t, ok)
+	_, err := svc.List(context.Background(), workflow.ListQuery{})
+	require.True(t, errors.Is(err, workflow.ErrNoStore), "no store at all stays ErrNoStore")
+}
+
+func TestReconciler_ServiceForUnknownID(t *testing.T) {
+	home := t.TempDir()
+	reg := LoadRegistry(home)
+	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	_, _, _, ok := rc.ServiceFor("nosuchid")
+	require.False(t, ok, "unknown id -> ok=false")
 }
