@@ -17,7 +17,7 @@ A manual state store is simply a Dapr `state.*` component, so this feature reuse
 
 **Reuse strategy (decided): port the logic, reimplement the UI natively.** We reuse the backend catalog, the metadata-driven data model, the `field.type → control` rendering rules, and the validation approach; we reimplement the form on dev-dashboard's controlled components + `theme.css`. dev-dashboard stays MUI-free.
 
-**Scope (decided): state-store slice now.** Only `state.*` types are exposed, the form saves to the connection registry (not downloadable YAML), and the full multi-type component builder + resiliency builder (see `2026-06-28-component-resiliency-builders-design.md`) are deferred. Because we save JSON to the registry rather than emit YAML, **this slice adds no new frontend dependency** (`js-yaml` is deferred with the full builder).
+**Scope (decided): state-store slice now.** Only the **three backend-connectable** state store types are exposed — `state.redis`, `state.sqlite`, `state.postgresql` (`pkg/statestore/store.go` imports components-contrib clients for exactly these, and the registry allowlist in `validateStoreBody` matches). The metadata-driven win is field *completeness*, not type *breadth*: each supported type's full, correctly-typed, sensitivity-flagged field set (required + optional) comes from the catalog rather than being hardcoded. The form saves to the connection registry (not downloadable YAML), and the full multi-type component builder + resiliency builder (see `2026-06-28-component-resiliency-builders-design.md`) are deferred. Because we save JSON to the registry rather than emit YAML, **this slice adds no new frontend dependency** (`js-yaml` is deferred with the full builder). Exposing store types the backend can't open is out of scope (it would require per-type client wiring in `pkg/statestore`).
 
 ## Locked decisions (from brainstorm)
 
@@ -98,7 +98,7 @@ export interface MetadataField {
 
 ### Hook — `web/src/hooks/useComponentCatalog.ts`
 
-TanStack Query (`useQuery`) → `fetchJSON('/metadata/components')`. Long `staleTime` (catalog is static + ETag-cached). Expose a selector that returns `state.*` schemas only, and a helper to resolve a chosen `state.<impl>` to its `MetadataField[]` (prefer the latest/`stable` version when multiple exist).
+TanStack Query (`useQuery`) → `fetchJSON('/metadata/components')`. Long `staleTime` (catalog is static + ETag-cached). Expose a selector that returns only the schemas for the supported types (`state.redis`, `state.sqlite`, `state.postgresql`), and a helper to resolve a chosen type to its `MetadataField[]` (prefer the latest/`stable` version when multiple exist). The supported-type list is a single shared constant (`SUPPORTED_STORE_TYPES`) so it stays in lockstep with the backend allowlist.
 
 ### Component — `StateStoreConnectionsPanel.tsx`
 
@@ -111,7 +111,7 @@ TanStack Query (`useQuery`) → `fetchJSON('/metadata/components')`. Long `stale
 
 Modal (generalize the focus-trap + Escape pattern from `ConfirmRemoveDialog`). Form state via controlled components (no form library):
 
-- **Type** — searchable select of `state.*` implementations from the catalog (disabled in edit mode; type is immutable once created).
+- **Type** — select of the three supported types (`state.redis`, `state.sqlite`, `state.postgresql`) sourced from the catalog (disabled in edit mode; type is immutable once created).
 - **Name** — required text.
 - **Required fields** — rendered from the chosen type's catalog `metadata` where `required`, prefilled with `default`. Control by `type`; `sensitive` → masked.
 - **Optional fields** — a "+ add optional field" searchable picker listing the type's non-required fields; added fields are removable.
