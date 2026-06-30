@@ -78,7 +78,7 @@ func identity(c *statestore.Component) string {
 // fingerprint for apps.
 func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	log := slog.Default().With("component", "reconciler")
-	resPaths, scanPaths, loaded := derivePaths(apps, rc.homeDir, rc.stateStorePath)
+	resPaths, scanPaths, loaded, appPaths := derivePaths(apps, rc.homeDir, rc.stateStorePath)
 	detected, _ := statestore.Detect(scanPaths)
 	secretStores, _ := statestore.DetectSecretStores(scanPaths)
 	for i := range detected {
@@ -98,7 +98,7 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 		}
 	}
 
-	newReg := newStoreRegistry(detected, loaded)
+	newReg := newStoreRegistry(detected, loaded, appPaths)
 
 	rc.mu.Lock()
 	if rc.closed {

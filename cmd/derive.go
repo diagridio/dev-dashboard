@@ -18,7 +18,7 @@ import (
 //
 // stateStorePath, when non-empty, is an explicit component YAML that overrides
 // state-store auto-detection (scanPaths becomes exactly that path).
-func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string) (resPaths, scanPaths []string, loaded map[string]bool) {
+func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string) (resPaths, scanPaths []string, loaded map[string]bool, appPaths []string) {
 	loaded = make(map[string]bool)
 	for _, a := range apps {
 		for _, c := range a.Components {
@@ -26,6 +26,7 @@ func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string) (res
 				loaded[c.Name] = true
 			}
 		}
+		appPaths = append(appPaths, a.ResourcePaths...)
 	}
 
 	if stateStorePath != "" {
@@ -48,7 +49,7 @@ func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string) (res
 			resPaths = append(resPaths, filepath.Dir(a.ConfigPath))
 		}
 	}
-	return resPaths, scanPaths, loaded
+	return resPaths, scanPaths, loaded, appPaths
 }
 
 // appsFingerprint hashes the apps-derived inputs that the reconciler depends on:

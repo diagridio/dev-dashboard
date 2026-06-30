@@ -14,7 +14,7 @@ func TestDerivePaths_AutoDetect(t *testing.T) {
 		{AppID: "order", ResourcePaths: []string{"/app/resources"}, ConfigPath: "/app/config/cfg.yaml",
 			Components: []discovery.Component{{Name: "statestore", Type: "state.redis"}}},
 	}
-	resPaths, scanPaths, loaded := derivePaths(apps, "/home/me", "")
+	resPaths, scanPaths, loaded, _ := derivePaths(apps, "/home/me", "")
 
 	require.Contains(t, resPaths, "/home/me/.dapr/components")
 	require.Contains(t, resPaths, "/home/me/.dapr")
@@ -30,8 +30,18 @@ func TestDerivePaths_AutoDetect(t *testing.T) {
 
 func TestDerivePaths_ExplicitStateStoreOverride(t *testing.T) {
 	apps := []discovery.Instance{{AppID: "order", ResourcePaths: []string{"/app/resources"}}}
-	_, scanPaths, _ := derivePaths(apps, "/home/me", "/explicit/store.yaml")
+	_, scanPaths, _, _ := derivePaths(apps, "/home/me", "/explicit/store.yaml")
 	require.Equal(t, []string{"/explicit/store.yaml"}, scanPaths)
+}
+
+func TestDerivePaths_AppPaths(t *testing.T) {
+	apps := []discovery.Instance{
+		{AppID: "a", ResourcePaths: []string{"/app/a/resources"}},
+		{AppID: "b", ResourcePaths: []string{"/app/b/resources"}},
+	}
+	_, _, _, appPaths := derivePaths(apps, "/home/me", "")
+	require.ElementsMatch(t, []string{"/app/a/resources", "/app/b/resources"}, appPaths)
+	require.NotContains(t, appPaths, "/home/me/.dapr/components")
 }
 
 func TestAppsFingerprint_StableAndChangeSensitive(t *testing.T) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/server"
@@ -26,20 +28,40 @@ type storeRegistry struct {
 	activeIndex int // -1 means no active component
 }
 
-// newStoreRegistry builds a storeRegistry from detected components and the set of
-// state-store component names that running apps have actually loaded.
+// pathUnder reports whether child equals, or is nested under, any of parents,
+// after normalization (filepath.Clean, case-folded on Windows via normPath).
+func pathUnder(child string, parents []string) bool {
+	if child == "" {
+		return false
+	}
+	c := normPath(child)
+	for _, p := range parents {
+		np := normPath(p)
+		if c == np || strings.HasPrefix(c, np+string(os.PathSeparator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// newStoreRegistry builds a storeRegistry from detected components, the set of
+// state-store component names that running apps have actually loaded, and the
+// resource paths of those apps.
 //
 // Active-store election precedence:
-//  1. app-loaded AND actorStateStore=="true"
-//  2. app-loaded (any)
-//  3. actorStateStore=="true"
-//  4. first component
-//  5. none (empty slice)
+//  1. app-provided AND actorStateStore=="true"
+//  2. app-provided (any)
+//  3. loaded AND actorStateStore=="true"
+//  4. loaded (any)
+//  5. actorStateStore=="true"
+//  6. first component
 //
-// Preferring app-loaded stores stops the global ~/.dapr default (also flagged
-// actorStateStore) from shadowing the store an externally-launched app (e.g. one
-// started by .NET Aspire) actually loaded.
-func newStoreRegistry(comps []statestore.Component, loaded map[string]bool) *storeRegistry {
+// "app-provided" means the app loaded the store by name AND its component file
+// lives under one of the app's resource paths — distinguishing the app's own
+// store from a same-named global ~/.dapr default. When appPaths is nil the
+// path-aware steps (1–2) never fire and behavior falls back to the original
+// name-only precedence (steps 3–6), preserving backward compatibility.
+func newStoreRegistry(comps []statestore.Component, loaded map[string]bool, appPaths []string) *storeRegistry {
 	r := &storeRegistry{comps: comps, activeIndex: -1}
 	if len(comps) == 0 {
 		return r
@@ -47,29 +69,47 @@ func newStoreRegistry(comps []statestore.Component, loaded map[string]bool) *sto
 
 	isLoaded := func(c statestore.Component) bool { return loaded != nil && loaded[c.Name] }
 	isActor := func(c statestore.Component) bool { return c.Metadata["actorStateStore"] == "true" }
+	// isAppProvided: the app loaded a store of this name AND the detected file
+	// lives under one of the running apps' resource paths — i.e. the store the
+	// app actually provided, as opposed to a same-named global ~/.dapr default.
+	isAppProvided := func(c statestore.Component) bool { return isLoaded(c) && pathUnder(c.Path, appPaths) }
 
-	// 1. app-loaded AND actorStateStore.
+	// 1. app-provided AND actorStateStore.
+	for i, c := range comps {
+		if isAppProvided(c) && isActor(c) {
+			r.activeIndex = i
+			return r
+		}
+	}
+	// 2. app-provided (any).
+	for i, c := range comps {
+		if isAppProvided(c) {
+			r.activeIndex = i
+			return r
+		}
+	}
+	// 3. loaded AND actorStateStore (fallback: app uses a global default store).
 	for i, c := range comps {
 		if isLoaded(c) && isActor(c) {
 			r.activeIndex = i
 			return r
 		}
 	}
-	// 2. app-loaded (any).
+	// 4. loaded (any).
 	for i, c := range comps {
 		if isLoaded(c) {
 			r.activeIndex = i
 			return r
 		}
 	}
-	// 3. actorStateStore.
+	// 5. actorStateStore.
 	for i, c := range comps {
 		if isActor(c) {
 			r.activeIndex = i
 			return r
 		}
 	}
-	// 4. first component.
+	// 6. first component.
 	r.activeIndex = 0
 	return r
 }

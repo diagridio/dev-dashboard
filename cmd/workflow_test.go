@@ -84,7 +84,7 @@ func TestStoreRegistry_StoresReturnsActiveOnly_FirstFallback(t *testing.T) {
 		{Name: "redis", Type: "state.redis", Path: "/a/redis.yaml", Metadata: map[string]string{"redisHost": "localhost:6379"}},
 		{Name: "sqlite", Type: "state.sqlite", Path: "/a/sqlite.yaml", Metadata: map[string]string{}},
 	}
-	r := newStoreRegistry(comps, nil)
+	r := newStoreRegistry(comps, nil, nil)
 
 	act := r.active()
 	require.NotNil(t, act)
@@ -105,7 +105,7 @@ func TestStoreRegistry_StoresReturnsActiveOnly_ActorStateStoreWins(t *testing.T)
 			"connectionString": "host=localhost port=5432 dbname=orders password=x",
 		}},
 	}
-	r := newStoreRegistry(comps, nil)
+	r := newStoreRegistry(comps, nil, nil)
 
 	act := r.active()
 	require.NotNil(t, act)
@@ -122,7 +122,7 @@ func TestStoreRegistry_StoreInfoMapping(t *testing.T) {
 	comps := []statestore.Component{
 		{Name: "mystore", Type: "state.sqlite", Path: "/path/to/sqlite.yaml", Metadata: map[string]string{"connectionString": "data.db"}},
 	}
-	r := newStoreRegistry(comps, nil)
+	r := newStoreRegistry(comps, nil, nil)
 
 	infos := r.Stores()
 	require.Len(t, infos, 1)
@@ -134,7 +134,7 @@ func TestStoreRegistry_StoreInfoMapping(t *testing.T) {
 }
 
 func TestStoreRegistry_StoresEmptyWhenNoComponents(t *testing.T) {
-	r := newStoreRegistry(nil, nil)
+	r := newStoreRegistry(nil, nil, nil)
 	require.Nil(t, r.active())
 	got := r.Stores()
 	require.NotNil(t, got)
@@ -163,7 +163,7 @@ func TestStoreRegistry_AppLoadedStoreWinsOverDefault(t *testing.T) {
 	}
 	loaded := map[string]bool{"workflow-store": true} // only the app-loaded one
 
-	r := newStoreRegistry(comps, loaded)
+	r := newStoreRegistry(comps, loaded, nil)
 
 	act := r.active()
 	require.NotNil(t, act)
@@ -175,7 +175,7 @@ func TestStoreRegistry_FallsBackWhenNoneLoaded(t *testing.T) {
 		{Name: "redis", Type: "state.redis", Path: "/a/redis.yaml", Metadata: map[string]string{"redisHost": "localhost:6379"}},
 		{Name: "pg", Type: "state.postgresql", Path: "/a/pg.yaml", Metadata: map[string]string{"actorStateStore": "true"}},
 	}
-	r := newStoreRegistry(comps, nil) // no apps loaded anything
+	r := newStoreRegistry(comps, nil, nil) // no apps loaded anything
 
 	act := r.active()
 	require.NotNil(t, act)
@@ -191,7 +191,37 @@ func TestStoreRegistry_AppLoadedNonActorPreferredOverUnloadedActor(t *testing.T)
 	}
 	loaded := map[string]bool{"appstore": true}
 
-	r := newStoreRegistry(comps, loaded)
+	r := newStoreRegistry(comps, loaded, nil)
 	require.Equal(t, "appstore", r.active().Name, "an app-loaded store beats an unloaded default even without the actor flag")
+}
+
+func TestStoreRegistry_AppPathStoreWinsOverSameNamedGlobalDefault(t *testing.T) {
+	comps := []statestore.Component{
+		// Global ~/.dapr default — detected first.
+		{Name: "statestore", Type: "state.redis", Path: "/home/me/.dapr/components/statestore.yaml",
+			Metadata: map[string]string{"actorStateStore": "true", "redisHost": "localhost:6379"}},
+		// The app's own store, under its resource path.
+		{Name: "statestore", Type: "state.redis", Path: "/app/pr-digest/resources/statestore.yaml",
+			Metadata: map[string]string{"actorStateStore": "true", "redisHost": "localhost:16379"}},
+	}
+	loaded := map[string]bool{"statestore": true}
+	appPaths := []string{"/app/pr-digest/resources"}
+
+	r := newStoreRegistry(comps, loaded, appPaths)
+	require.NotNil(t, r.active())
+	require.Equal(t, "localhost:16379", r.active().Metadata["redisHost"],
+		"the app-provided store must win over the same-named ~/.dapr default")
+}
+
+func TestStoreRegistry_FallsBackToGlobalDefaultWhenNoAppStore(t *testing.T) {
+	comps := []statestore.Component{
+		{Name: "statestore", Type: "state.redis", Path: "/home/me/.dapr/components/statestore.yaml",
+			Metadata: map[string]string{"actorStateStore": "true", "redisHost": "localhost:6379"}},
+	}
+	loaded := map[string]bool{"statestore": true}
+	// No appPaths: the app provided no store of its own → the loaded global default is elected.
+	r := newStoreRegistry(comps, loaded, nil)
+	require.NotNil(t, r.active())
+	require.Equal(t, "localhost:6379", r.active().Metadata["redisHost"])
 }
 

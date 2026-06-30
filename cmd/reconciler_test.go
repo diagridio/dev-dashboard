@@ -94,7 +94,7 @@ func TestReconciler_ServiceForRouting(t *testing.T) {
 	// Seed an elected active store directly (no apps needed for this routing test).
 	active := statestore.Component{Name: "active", Type: "state.sqlite", Metadata: map[string]string{"connectionString": filepath.Join(dir, "active.db")}}
 	rc.mu.Lock()
-	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil)
+	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil, nil)
 	rc.mu.Unlock()
 
 	t.Run("empty id -> active (pre-warmed via pool)", func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
 	active := statestore.Component{Name: "autostore", Type: "state.sqlite", Path: autoPath,
 		Metadata: map[string]string{"connectionString": filepath.Join(dir, "auto.db")}}
 	rc.mu.Lock()
-	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil)
+	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil, nil)
 	rc.mu.Unlock()
 
 	// AddStore -> a manual entry appears in Stores().
