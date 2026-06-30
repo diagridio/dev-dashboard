@@ -773,7 +773,29 @@ describe('WorkflowDetail', () => {
     )
     renderDetail(undefined, '/workflows/order/parent-1')
     const link = await screen.findByRole('link', { name: /child-9/ })
-    expect(link).toHaveAttribute('href', expect.stringContaining('/workflows/order/child-9'))
+    expect(link).toHaveAttribute('href', '/workflows/order/child-9')
+  })
+
+  it('child link includes ?store= when parent is rendered with a store param', async () => {
+    server.use(
+      http.get('/api/workflows/order/parent-1', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'parent-1',
+          name: 'ParentWorkflow',
+          status: 'Running',
+          createdAt: '2026-06-26T10:00:00Z',
+          replayCount: 0,
+          history: [
+            { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'ExecutionStarted', name: 'ParentWorkflow' },
+            { sequenceId: 1, timestamp: '2026-06-26T10:00:01Z', type: 'SubOrchestrationCreated', name: 'ChildWorkflow', instanceId: 'child-9' },
+          ],
+        }),
+      ),
+    )
+    renderDetail(undefined, '/workflows/order/parent-1?store=redis-auto')
+    const link = await screen.findByRole('link', { name: /child-9/ })
+    expect(link).toHaveAttribute('href', '/workflows/order/child-9?store=redis-auto')
   })
 })
 

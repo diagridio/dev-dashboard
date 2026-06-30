@@ -474,7 +474,7 @@ export function Workflows() {
         </label>
 
         {/* Show/hide child workflows */}
-        <label className="search" style={{ gap: 6 }}>
+        <label className="childtoggle">
           <input
             type="checkbox"
             aria-label="Show child workflows"
