@@ -38,8 +38,10 @@ export interface WorkflowStats {
 }
 
 export interface StateStore {
+  id: string
   name: string
   type: string
+  source: string // 'auto' | 'manual'
   path: string
   active: boolean
   connection: string

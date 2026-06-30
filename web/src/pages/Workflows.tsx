@@ -6,9 +6,11 @@ import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { dedupeWorkflows } from '../lib/dedupeWorkflows'
-import type { WorkflowStatus, WorkflowSummary } from '../types/workflow'
+import type { StateStore, WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
 const ALL_STATUSES: WorkflowStatus[] = ['Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
+
+const STORE_KEY = 'devdash.workflowStore'
 
 /** Format a UTC ISO string as a short local time HH:MM:SS */
 function formatCreated(createdAt?: string): string {
@@ -73,17 +75,48 @@ export function Workflows() {
     [appsData],
   )
 
-  // Active state store (the one Dapr Workflow uses). The API returns only this
-  // store, so there is no switching — we render it as a label.
+  // State stores. The user can pick any listed store; the choice (a store id)
+  // is threaded into the workflow list/stats/detail and persisted across reloads.
   const { data: storeList } = useStateStores()
   const activeStore = storeList?.find((s) => s.active) ?? storeList?.[0]
-  // Label: short type + secrets-free connection, e.g. "redis · localhost:6379".
-  const storeTypeShort = activeStore
-    ? (activeStore.type.split('.').pop() ?? activeStore.type)
-    : ''
-  const storeLabel = activeStore
-    ? (activeStore.connection ? `${storeTypeShort} · ${activeStore.connection}` : storeTypeShort)
-    : 'unknown'
+
+  // selectedStore is a store id (null = not yet determined; waits for storeList).
+  // Initialize from localStorage when that id is still in the list, else the
+  // active store's id. A stale persisted id falls back to active.
+  // Using null-sentinel avoids a double-fetch: the workflow query is disabled
+  // until selectedStore is resolved.
+  const [selectedStore, setSelectedStore] = useState<string | null>(null)
+  useEffect(() => {
+    if (!storeList || storeList.length === 0) return
+    if (selectedStore !== null && storeList.some((s) => s.id === selectedStore)) return
+    const persisted = window.localStorage.getItem(STORE_KEY)
+    const fromPersisted = persisted && storeList.some((s) => s.id === persisted) ? persisted : undefined
+    const fallback = activeStore?.id ?? storeList[0].id
+    setSelectedStore(fromPersisted ?? fallback)
+  }, [storeList, activeStore, selectedStore])
+
+  // The currently-selected store object (for the component link + labels).
+  const selectedStoreObj = useMemo(
+    () => storeList?.find((s) => s.id === selectedStore),
+    [storeList, selectedStore],
+  )
+
+  // Option label: "name — type · connection", with a short type (state.redis → redis).
+  function storeOptionLabel(s: StateStore): string {
+    const typeShort = s.type.split('.').pop() ?? s.type
+    const head = `${s.name} — ${s.connection ? `${typeShort} · ${s.connection}` : typeShort}`
+    return s.active ? `${head} (active)` : head
+  }
+
+  function onStoreChange(id: string) {
+    setSelectedStore(id)
+    window.localStorage.setItem(STORE_KEY, id)
+    // A different store has different apps — reset the app filter to "All apps".
+    setSelectedApp('')
+    setPage(undefined)
+    setPageIndex(0)
+    setLoadedCount(0)
+  }
 
   // Active app-id = the running app that loaded the active store. Used to default
   // the dropdown to the most relevant workflows on first load.
@@ -123,11 +156,14 @@ export function Workflows() {
     search: debouncedSearch || undefined,
     page,
     appId: selectedApp || undefined,
+    store: selectedStore ?? undefined,
+    enabled: selectedStore !== null,
   })
 
   const { data: stats } = useWorkflowStats({
     appId: selectedApp || undefined,
     search: debouncedSearch || undefined,
+    store: selectedStore ?? undefined,
   })
 
   // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows)
@@ -163,14 +199,14 @@ export function Workflows() {
       defaultAppliedRef.current = true
       return
     }
-    // Wait until the initial "All apps" workflows result, the apps list, and the
-    // store list are all available before deciding.
-    if (isLoading || appsData === undefined || storeList === undefined) return
+    // Wait until the store is determined, the initial workflows result, the apps
+    // list, and the store list are all available before deciding.
+    if (selectedStore === null || isLoading || appsData === undefined || storeList === undefined) return
     if (activeAppId && appIds.includes(activeAppId)) {
       setSelectedApp(activeAppId)
     }
     defaultAppliedRef.current = true
-  }, [urlApp, isLoading, appsData, storeList, activeAppId, appIds])
+  }, [urlApp, selectedStore, isLoading, appsData, storeList, activeAppId, appIds])
 
   function setStatus(s: WorkflowStatus | '') {
     setActiveStatus(s)
@@ -246,13 +282,20 @@ export function Workflows() {
   if (isError) {
     const errStr = String(error)
     if (errStr.includes('503')) {
+      const isNoStore = errStr.includes('no state store detected')
+      // The server message follows the "API error 503: <message> for <path>" shape.
+      const serverMsg = errStr.replace(/^.*?503:\s*/, '').replace(/\s*for\s+\/\S*$/, '')
       return (
         <div className="page">
-          <p style={{ color: 'var(--fail-fg)', fontWeight: 600 }}>No state store detected</p>
-          <p style={{ color: 'var(--muted)', marginTop: 8 }}>
-            Dapr requires a state store to persist workflow state. Configure one with the{' '}
-            <span className="mono">--statestore</span> flag or add a state store component.
+          <p style={{ color: 'var(--fail-fg)', fontWeight: 600 }}>
+            {isNoStore ? 'No state store detected' : serverMsg}
           </p>
+          {isNoStore && (
+            <p style={{ color: 'var(--muted)', marginTop: 8 }}>
+              Dapr requires a state store to persist workflow state. Configure one with the{' '}
+              <span className="mono">--statestore</span> flag or add a state store component.
+            </p>
+          )}
         </div>
       )
     }
@@ -276,11 +319,33 @@ export function Workflows() {
           </div>
         </div>
         <div className="ctrlset">
-          {activeStore ? (
-            <Link className="chip link" to={`/components/${activeStore.name}`}>
+          {storeList && storeList.length > 0 ? (
+            <>
               <span className="led" />
-              statestore <b>{storeLabel}</b>
-            </Link>
+              <select
+                className="select"
+                data-testid="store-select"
+                aria-label="Switch state store"
+                value={selectedStore ?? ''}
+                onChange={(e) => onStoreChange(e.target.value)}
+              >
+                {storeList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {storeOptionLabel(s)}
+                  </option>
+                ))}
+              </select>
+              {selectedStoreObj && (
+                <Link
+                  className="chip link"
+                  to={`/components/${selectedStoreObj.name}`}
+                  aria-label={`Open the ${selectedStoreObj.name} component page`}
+                  title={`Open the ${selectedStoreObj.name} component page`}
+                >
+                  ↗
+                </Link>
+              )}
+            </>
           ) : (
             <span className="chip">
               <span className="led" />

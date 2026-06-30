@@ -10,6 +10,7 @@ interface WorkflowsParams {
   page?: string
   limit?: number
   store?: string
+  enabled?: boolean
 }
 
 function queryString(p: WorkflowsParams): string {
@@ -31,6 +32,7 @@ export function useWorkflows(params: WorkflowsParams) {
     queryKey: ['workflows', qs],
     queryFn: () => fetchJSON<WorkflowListResult>(`/workflows${qs}`),
     refetchInterval: refetchMs(ctx),
+    enabled: params.enabled !== false,
   })
 }
 

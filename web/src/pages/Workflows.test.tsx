@@ -10,13 +10,16 @@ import { RefreshProvider } from '../lib/refresh'
 import { Workflows } from './Workflows'
 
 const activeStoreOnly = [
-  { name: 'redis', type: 'state.redis', path: '/components/redis.yaml', active: true, connection: 'localhost:6379' },
+  { id: 'redis-auto', name: 'redis', type: 'state.redis', source: 'auto', path: '/components/redis.yaml', active: true, connection: 'localhost:6379' },
 ]
 
-// Register statestores handler for all tests in this file
+// Register default handlers for all tests in this file.
+// Individual tests may override these with server.use(...) before the assertion.
 beforeEach(() => {
   server.use(
     http.get('/api/statestores', () => HttpResponse.json(activeStoreOnly)),
+    http.get('/api/apps', () => HttpResponse.json([])),
+    http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
   )
 })
 
@@ -88,35 +91,30 @@ describe('Workflows', () => {
     await waitFor(() => expect(screen.getByText(/no workflows/i)).toBeInTheDocument())
   })
 
-  it('shows the active store type and connection as a label in the statestore chip', async () => {
-    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
+  it('renders the store selector with the active store selected and an active marker', async () => {
+    server.use(
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
     renderAt()
-    await waitFor(() => {
-      const chip = document.querySelector('.chip')
-      expect(chip).not.toBeNull()
-      expect(chip?.textContent).toMatch(/statestore/)
-      // "state.redis" → "redis", plus the secrets-free connection summary
-      expect(chip?.textContent).toMatch(/redis · localhost:6379/)
-    })
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    // value is the store id, not its name
+    await waitFor(() => expect(storeSelect.value).toBe('redis-auto'))
+    const opt = storeSelect.querySelector('option[value="redis-auto"]') as HTMLOptionElement
+    // label: "name — type · connection (active)"
+    expect(opt.textContent).toMatch(/redis — redis · localhost:6379 \(active\)/)
   })
 
-  it('renders the statestore as a label, not a select', async () => {
-    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
+  it('keeps a component link beside the store selector pointing at the selected store', async () => {
+    server.use(
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
     renderAt()
-    await waitFor(() => {
-      const chip = document.querySelector('.chip')
-      expect(chip).not.toBeNull()
-    })
-    expect(document.querySelector('select[aria-label="Switch state store"]')).toBeNull()
-  })
-
-  it('keeps the colored status dot in the statestore chip', async () => {
-    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
-    renderAt()
-    await waitFor(() => {
-      const chip = document.querySelector('.chip')
-      expect(chip?.querySelector('.led')).not.toBeNull()
-    })
+    const link = await screen.findByRole('link', { name: /open the .* component page/i })
+    expect(link).toHaveAttribute('href', '/components/redis')
   })
 
   it('status filter segments render All + all status options', async () => {
@@ -267,7 +265,7 @@ describe('Workflows', () => {
   it('defaults the dropdown to the active app-id when it has workflows', async () => {
     server.use(
       http.get('/api/statestores', () =>
-        HttpResponse.json([{ name: 'redis', type: 'state.redis', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
+        HttpResponse.json([{ id: 'redis-auto', name: 'redis', type: 'state.redis', source: 'auto', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
       ),
       http.get('/api/apps', () =>
         HttpResponse.json([{ appId: 'order', health: 'healthy', components: [{ name: 'redis', type: 'state.redis' }] }]),
@@ -286,7 +284,7 @@ describe('Workflows', () => {
   it('falls back to All apps when the active app has no workflows', async () => {
     server.use(
       http.get('/api/statestores', () =>
-        HttpResponse.json([{ name: 'redis', type: 'state.redis', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
+        HttpResponse.json([{ id: 'redis-auto', name: 'redis', type: 'state.redis', source: 'auto', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
       ),
       // Running app wf-app loaded the active store but has no workflows.
       http.get('/api/apps', () =>
@@ -307,7 +305,7 @@ describe('Workflows', () => {
   it('a ?app= URL param overrides the computed default', async () => {
     server.use(
       http.get('/api/statestores', () =>
-        HttpResponse.json([{ name: 'redis', type: 'state.redis', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
+        HttpResponse.json([{ id: 'redis-auto', name: 'redis', type: 'state.redis', source: 'auto', path: '/c/redis.yaml', active: true, connection: 'localhost:6379' }]),
       ),
       http.get('/api/apps', () =>
         HttpResponse.json([{ appId: 'order', health: 'healthy', components: [{ name: 'redis', type: 'state.redis' }] }]),
@@ -337,19 +335,19 @@ function renderPage(initialEntry = '/workflows?status=Failed') {
 }
 
 describe('Workflows page — statestore chip', () => {
-  it('renders the statestore chip as a link to its component', async () => {
+  it('renders the store selector and a component link for the selected store', async () => {
     server.use(
       http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
       http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
       http.get('/api/statestores', () =>
         HttpResponse.json([
-          { name: 'statestore', type: 'state.redis', path: '/x', active: true, connection: 'localhost:6379' },
+          { id: 'statestore-auto', name: 'statestore', type: 'state.redis', source: 'auto', path: '/x', active: true, connection: 'localhost:6379' },
         ]),
       ),
     )
     renderPage('/workflows')
-    const chip = await screen.findByRole('link', { name: /statestore/ })
-    expect(chip).toHaveAttribute('href', '/components/statestore')
+    const link = await screen.findByRole('link', { name: /open the statestore component page/i })
+    expect(link).toHaveAttribute('href', '/components/statestore')
   })
 })
 
@@ -393,5 +391,104 @@ describe('Workflows page — select all', () => {
     await waitFor(() => expect(screen.getByText('2 selected')).toBeInTheDocument())
     fireEvent.click(selectAll)
     await waitFor(() => expect(screen.queryByText('2 selected')).not.toBeInTheDocument())
+  })
+})
+
+describe('Workflows page — store selector', () => {
+  const twoStores = [
+    { id: 'statestore-a', name: 'statestore', type: 'state.redis', source: 'auto', path: '/a', active: true, connection: 'localhost:6379' },
+    { id: 'statestore-b', name: 'statestore', type: 'state.redis', source: 'manual', path: '/b', active: false, connection: 'localhost:16379' },
+  ]
+
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('lists every store with a disambiguating "name — type · connection" label', async () => {
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
+    renderAt()
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    const labels = Array.from(storeSelect.querySelectorAll('option')).map((o) => o.textContent)
+    expect(labels).toContain('statestore — redis · localhost:6379 (active)')
+    expect(labels).toContain('statestore — redis · localhost:16379')
+  })
+
+  it('selecting a store sends ?store=<id>, shows that store rows, and resets the app filter', async () => {
+    let capturedStore: string | null = null
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', ({ request }) => {
+        const url = new URL(request.url)
+        capturedStore = url.searchParams.get('store')
+        const rows =
+          url.searchParams.get('store') === 'statestore-b'
+            ? [{ appId: 'pr-digest', instanceId: 'b1', name: 'AgentRunWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }]
+            : [{ appId: 'order', instanceId: 'a1', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }]
+        return HttpResponse.json({ items: rows })
+      }),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
+    renderAt('/workflows?app=order')
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    await screen.findByRole('link', { name: 'a1' })
+    await userEvent.selectOptions(storeSelect, 'statestore-b')
+    await waitFor(() => expect(capturedStore).toBe('statestore-b'))
+    expect(await screen.findByRole('link', { name: 'b1' })).toBeInTheDocument()
+    // The app filter was reset to "All apps".
+    const appSelect = screen.getByTestId('app-select') as HTMLSelectElement
+    await waitFor(() => expect(appSelect.value).toBe(''))
+  })
+
+  it('persists the selection to localStorage and restores it on reload', async () => {
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
+    const first = renderAt()
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    await userEvent.selectOptions(storeSelect, 'statestore-b')
+    await waitFor(() => expect(window.localStorage.getItem('devdash.workflowStore')).toBe('statestore-b'))
+    first.unmount()
+
+    // Reload: a fresh render reads the persisted id.
+    renderAt()
+    const restored = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    await waitFor(() => expect(restored.value).toBe('statestore-b'))
+  })
+
+  it('falls back to the active store when the persisted id is no longer in the list', async () => {
+    window.localStorage.setItem('devdash.workflowStore', 'gone-store-id')
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
+    renderAt()
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    await waitFor(() => expect(storeSelect.value).toBe('statestore-a')) // the active one
+  })
+
+  it('shows the server "could not connect…" message on an unreachable 503 (not the no-store guidance)', async () => {
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({ error: 'could not connect to state store "statestore" (localhost:16379)' }, { status: 503 }),
+      ),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
+    renderAt()
+    await waitFor(() => expect(screen.getByText(/could not connect to state store/i)).toBeInTheDocument())
+    expect(screen.getByText(/localhost:16379/)).toBeInTheDocument()
+    // The --statestore guidance is only for the genuine no-store case.
+    expect(screen.queryByText(/--statestore/)).toBeNull()
   })
 })
