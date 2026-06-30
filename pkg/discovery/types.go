@@ -14,7 +14,8 @@ const (
 type Instance struct {
 	AppID           string         `json:"appId"`
 	Health          Health         `json:"health"`
-	Runtime         string         `json:"runtime"` // e.g. "go", "python", "node", "dotnet", "java", "unknown"
+	Runtime         string         `json:"runtime"`            // e.g. "go", "python", "node", "dotnet", "java", "unknown"
+	IsAspire        bool           `json:"isAspire,omitempty"` // true when the app is .NET Aspire-managed
 	HTTPPort        int            `json:"httpPort"`
 	GRPCPort        int            `json:"grpcPort"`
 	AppPort         int            `json:"appPort"`

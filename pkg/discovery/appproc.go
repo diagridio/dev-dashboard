@@ -22,28 +22,29 @@ func isAspireProxy(cmd string) bool {
 		(strings.Contains(c, "dcp") && strings.Contains(c, "run-controllers"))
 }
 
-// appRuntime determines an app's runtime. It first tries InferRuntime on the
-// daprd-reported command; if that is "unknown" (e.g. the app was launched
-// outside dapr-run, as with .NET Aspire, so daprd carries no app command) it
-// falls back to inspecting the process listening on the app port.
-func appRuntime(command string, appPort int, r appProcResolver) string {
+// appRuntime determines an app's runtime and whether it is Aspire-managed. It
+// first tries InferRuntime on the daprd-reported command; if that is "unknown"
+// (e.g. the app was launched outside dapr-run, as with .NET Aspire, so daprd
+// carries no app command) it falls back to inspecting the process listening on
+// the app port. isAspire is true only when that listener is the Aspire DCP proxy.
+func appRuntime(command string, appPort int, r appProcResolver) (runtime string, isAspire bool) {
 	rt := InferRuntime(command)
 	if rt != "unknown" || appPort == 0 || r == nil {
-		return rt
+		return rt, false
 	}
 	cmd, ok := r.CommandForPort(appPort)
 	if !ok {
-		return rt
+		return rt, false
 	}
 	if rt2 := InferRuntime(cmd); rt2 != "unknown" {
-		return rt2
+		return rt2, false
 	}
 	// .NET Aspire fronts apps with the DCP proxy, so the app-port listener is
 	// dcp, not the app itself. Treat that as a .NET (Aspire-hosted) app.
 	if isAspireProxy(cmd) {
-		return "dotnet"
+		return "dotnet", true
 	}
-	return rt
+	return rt, false
 }
 
 // gopsutilResolver is the default appProcResolver, backed by gopsutil.
