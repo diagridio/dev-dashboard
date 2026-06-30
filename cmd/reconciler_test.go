@@ -272,3 +272,17 @@ func TestReconciler_ServiceForUnknownID(t *testing.T) {
 	_, _, _, ok := rc.ServiceFor("nosuchid")
 	require.False(t, ok, "unknown id -> ok=false")
 }
+
+func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
+	home := t.TempDir()
+	reg := LoadRegistry(home)
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	require.NoError(t, rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"}))
+	err := rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `a connection named "dup" already exists`)
+}

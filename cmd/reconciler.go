@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -190,12 +193,17 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 }
 
 // AddStore satisfies server.StoreRegistry: adds a manual connection. The
-// registry assigns its stable id from the name.
+// registry assigns its stable id from the name. A duplicate name is reported
+// with a user-facing message (the API surfaces err.Error() in the 400 body).
 func (rc *reconciler) AddStore(name, typ string, metadata map[string]string) error {
 	if rc.registry == nil {
 		return nil
 	}
-	return rc.registry.Add(ConnEntry{Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
+	err := rc.registry.Add(ConnEntry{Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
+	if errors.Is(err, os.ErrExist) {
+		return fmt.Errorf("a connection named %q already exists", name)
+	}
+	return err
 }
 
 // UpdateStore satisfies server.StoreRegistry: edits the manual connection with
