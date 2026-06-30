@@ -549,10 +549,15 @@ describe('Workflows page — child workflows toggle', () => {
 
   it('requests includeChildren=false when the toggle is unchecked', async () => {
     const urls: string[] = []
+    const statsUrls: string[] = []
     server.use(
       http.get('/api/workflows', ({ request }) => {
         urls.push(request.url)
         return HttpResponse.json({ items: [] })
+      }),
+      http.get('/api/workflows/stats', ({ request }) => {
+        statsUrls.push(request.url)
+        return HttpResponse.json({ counts: {}, total: 0 })
       }),
     )
     renderAt()
@@ -561,6 +566,7 @@ describe('Workflows page — child workflows toggle', () => {
     const toggle = screen.getByLabelText('Show child workflows')
     await userEvent.click(toggle)
     await waitFor(() => expect(urls.some((u) => u.includes('includeChildren=false'))).toBe(true))
+    await waitFor(() => expect(statsUrls.some((u) => u.includes('includeChildren=false'))).toBe(true))
   })
 })
 
