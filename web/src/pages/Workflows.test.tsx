@@ -63,7 +63,8 @@ describe('Workflows', () => {
     )
     renderAt()
     const link = await screen.findByRole('link', { name: 'abc' })
-    expect(link).toHaveAttribute('href', '/workflows/order/abc')
+    // Store id 'redis-auto' is auto-selected from the default activeStoreOnly fixture.
+    expect(link).toHaveAttribute('href', '/workflows/order/abc?store=redis-auto')
     // StatusPill renders status in UPPERCASE per mock design
     expect(screen.getByText('RUNNING')).toBeInTheDocument()
   })
@@ -541,5 +542,18 @@ describe('Workflows page — store selector', () => {
     expect(screen.getByText(/localhost:16379/)).toBeInTheDocument()
     // The --statestore guidance is only for the genuine no-store case.
     expect(screen.queryByText(/--statestore/)).toBeNull()
+  })
+
+  it('instance-row links carry ?store=<id> for the selected store', async () => {
+    window.localStorage.setItem('devdash.workflowStore', 'statestore-b')
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({ items: [{ appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }] }),
+      ),
+    )
+    renderAt()
+    const link = await screen.findByRole('link', { name: 'abc' })
+    expect(link).toHaveAttribute('href', '/workflows/order/abc?store=statestore-b')
   })
 })

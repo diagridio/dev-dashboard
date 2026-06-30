@@ -275,6 +275,13 @@ export function WorkflowDetail() {
 
   const lastRefreshed = useLastRefreshed(dataUpdatedAt)
 
+  const copyWorkflowLink = () => {
+    const { origin, pathname } = window.location
+    const qs = store ? `?store=${encodeURIComponent(store)}` : ''
+    copyText(`${origin}${pathname}${qs}`)
+    toast.show('Link copied')
+  }
+
   if (isLoading) {
     return (
       <div className="page">
@@ -384,6 +391,14 @@ export function WorkflowDetail() {
         <div className="dactions">
           <button className="btn ghost" onClick={() => navigate(-1)}>
             ← Back
+          </button>
+          <button
+            className="btn ghost"
+            aria-label="Copy link to this workflow"
+            title="Copy link to this workflow"
+            onClick={copyWorkflowLink}
+          >
+            ⧉ Copy link
           </button>
           <button
             className="btn ghost"

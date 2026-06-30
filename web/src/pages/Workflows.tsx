@@ -118,6 +118,13 @@ export function Workflows() {
     setLoadedCount(0)
   }
 
+  // Build the detail-page path for a row, carrying the selected store id so the
+  // detail page reads from the same store.
+  function detailPath(appId: string, instanceId: string): string {
+    const base = `/workflows/${appId}/${instanceId}`
+    return selectedStore ? `${base}?store=${encodeURIComponent(selectedStore)}` : base
+  }
+
   // Active app-id = the running app that loaded the active store. Used to default
   // the dropdown to the most relevant workflows on first load.
   const activeAppId = useMemo(() => {
@@ -541,7 +548,7 @@ export function Workflows() {
                     <tr
                       key={rowKey}
                       className={selected.has(rowKey) ? 'sel' : undefined}
-                      onClick={() => navigate(`/workflows/${wf.appId}/${wf.instanceId}`)}
+                      onClick={() => navigate(detailPath(wf.appId, wf.instanceId))}
                     >
                       <td>
                         <span
@@ -566,7 +573,7 @@ export function Workflows() {
                       <td className="iid">
                         <Link
                           className="celllink"
-                          to={`/workflows/${wf.appId}/${wf.instanceId}`}
+                          to={detailPath(wf.appId, wf.instanceId)}
                           onClick={(e) => e.stopPropagation()}
                         >
                           {wf.instanceId}

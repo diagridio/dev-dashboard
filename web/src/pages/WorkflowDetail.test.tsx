@@ -11,12 +11,12 @@ import { WorkflowDetail, EventRow } from './WorkflowDetail'
 import type { WorkflowHistoryEvent } from '../types/workflow'
 import type { ToastHandle } from '../lib/toast'
 
-function renderDetail(client?: QueryClient) {
+function renderDetail(client?: QueryClient, entry = '/workflows/order/abc') {
   // Always use a fresh client to avoid cross-test cache pollution
   const qc = client ?? makeQueryClient()
   const router = createMemoryRouter(
     [{ path: '/workflows/:appId/:instanceId', element: <WorkflowDetail /> }],
-    { initialEntries: ['/workflows/order/abc'], future: { v7_relativeSplatPath: true } },
+    { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={qc}>
@@ -752,6 +752,49 @@ describe('WorkflowDetail', () => {
     // ...and must point at the ExecutionCompleted row, not the colliding TaskScheduled.
     const target = container.querySelector(`[id="${targetId}"]`)!
     expect(target.querySelector('.evtype')?.textContent).toBe('ExecutionCompleted')
+  })
+})
+
+describe('WorkflowDetail — store threading', () => {
+  beforeEach(() => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([{ appId: 'order', health: 'healthy' }])))
+  })
+
+  it('forwards ?store=<id> to the workflow fetch', async () => {
+    let capturedStore: string | null = null
+    server.use(
+      http.get('/api/workflows/order/abc', ({ request }) => {
+        capturedStore = new URL(request.url).searchParams.get('store')
+        return HttpResponse.json({
+          appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running',
+          createdAt: '2026-06-26T10:00:00Z', replayCount: 0, history: [],
+        })
+      }),
+    )
+    renderDetail(undefined, '/workflows/order/abc?store=statestore-b')
+    await waitFor(() => expect(screen.getByText('RUNNING')).toBeInTheDocument())
+    expect(capturedStore).toBe('statestore-b')
+  })
+
+  it('the copy-link button copies a URL including the store param', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running',
+          createdAt: '2026-06-26T10:00:00Z', replayCount: 0, history: [],
+        }),
+      ),
+    )
+    let copied = ''
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: (t: string) => { copied = t; return Promise.resolve() } },
+      configurable: true,
+    })
+    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
+    renderDetail(undefined, '/workflows/order/abc?store=statestore-b')
+    await waitFor(() => expect(screen.getByText('RUNNING')).toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: /copy link to this workflow/i }))
+    expect(copied).toContain('store=statestore-b')
   })
 })
 
