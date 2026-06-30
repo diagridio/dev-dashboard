@@ -5,6 +5,7 @@ export interface WorkflowSummary {
   instanceId: string
   name: string
   status: WorkflowStatus
+  parentInstanceId?: string
   createdAt?: string
   lastUpdatedAt?: string
 }

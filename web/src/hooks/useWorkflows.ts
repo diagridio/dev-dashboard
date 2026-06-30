@@ -10,6 +10,7 @@ interface WorkflowsParams {
   page?: string
   limit?: number
   store?: string
+  includeChildren?: boolean
   enabled?: boolean
 }
 
@@ -21,6 +22,7 @@ function queryString(p: WorkflowsParams): string {
   if (p.page) sp.set('page', p.page)
   if (p.limit) sp.set('limit', String(p.limit))
   if (p.store) sp.set('store', p.store)
+  if (p.includeChildren === false) sp.set('includeChildren', 'false')
   const s = sp.toString()
   return s ? `?${s}` : ''
 }
@@ -36,12 +38,13 @@ export function useWorkflows(params: WorkflowsParams) {
   })
 }
 
-export function useWorkflowStats(params: { appId?: string; search?: string; store?: string; enabled?: boolean }) {
+export function useWorkflowStats(params: { appId?: string; search?: string; store?: string; includeChildren?: boolean; enabled?: boolean }) {
   const ctx = useRefreshInterval()
   const sp = new URLSearchParams()
   if (params.appId) sp.set('appId', params.appId)
   if (params.search) sp.set('search', params.search)
   if (params.store) sp.set('store', params.store)
+  if (params.includeChildren === false) sp.set('includeChildren', 'false')
   const qs = sp.toString() ? `?${sp.toString()}` : ''
   return useQuery<WorkflowStats>({
     queryKey: ['workflow-stats', qs],
