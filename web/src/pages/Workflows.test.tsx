@@ -394,6 +394,57 @@ describe('Workflows page — select all', () => {
   })
 })
 
+describe('Workflows page — store-resolve loading gate', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('shows the loading state (not "No workflows found") while the store list is unresolved', async () => {
+    // Delay the /api/statestores response so selectedStore stays null initially
+    let resolveStores!: () => void
+    const storesPromise = new Promise<void>((res) => { resolveStores = res })
+    server.use(
+      http.get('/api/statestores', async () => {
+        await storesPromise
+        return HttpResponse.json(activeStoreOnly)
+      }),
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+    )
+    renderAt()
+    // Before stores resolve the page must show Loading…, not the empty state
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByText(/no workflows/i)).toBeNull()
+    // Unblock and confirm transition to empty state
+    resolveStores()
+    await waitFor(() => expect(screen.getByText(/no workflows/i)).toBeInTheDocument())
+  })
+
+  it('does not issue a /api/workflows/stats request without a ?store= before the store resolves', async () => {
+    const statsRequests: string[] = []
+    let resolveStores!: () => void
+    const storesPromise = new Promise<void>((res) => { resolveStores = res })
+    server.use(
+      http.get('/api/statestores', async () => {
+        await storesPromise
+        return HttpResponse.json(activeStoreOnly)
+      }),
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', ({ request }) => {
+        const url = new URL(request.url)
+        statsRequests.push(url.search)
+        return HttpResponse.json({ counts: {}, total: 0 })
+      }),
+    )
+    renderAt()
+    // No stats request should fire before the store resolves
+    expect(statsRequests).toHaveLength(0)
+    resolveStores()
+    // After store resolves, any stats request must carry ?store=
+    await waitFor(() => expect(statsRequests.length).toBeGreaterThan(0))
+    statsRequests.forEach((qs) => expect(qs).toMatch(/store=/))
+  })
+})
+
 describe('Workflows page — store selector', () => {
   const twoStores = [
     { id: 'statestore-a', name: 'statestore', type: 'state.redis', source: 'auto', path: '/a', active: true, connection: 'localhost:6379' },

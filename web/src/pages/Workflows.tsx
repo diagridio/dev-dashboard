@@ -164,6 +164,7 @@ export function Workflows() {
     appId: selectedApp || undefined,
     search: debouncedSearch || undefined,
     store: selectedStore ?? undefined,
+    enabled: selectedStore !== null,
   })
 
   // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows)
@@ -489,7 +490,7 @@ export function Workflows() {
 
         {/* Table */}
         <div className="tablewrap">
-          {isLoading ? (
+          {(isLoading || selectedStore === null) ? (
             <p style={{ padding: 20, color: 'var(--muted)' }}>Loading…</p>
           ) : items.length === 0 ? (
             <p style={{ padding: 20, color: 'var(--muted)' }}>No workflows found</p>

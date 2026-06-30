@@ -36,7 +36,7 @@ export function useWorkflows(params: WorkflowsParams) {
   })
 }
 
-export function useWorkflowStats(params: { appId?: string; search?: string; store?: string }) {
+export function useWorkflowStats(params: { appId?: string; search?: string; store?: string; enabled?: boolean }) {
   const ctx = useRefreshInterval()
   const sp = new URLSearchParams()
   if (params.appId) sp.set('appId', params.appId)
@@ -47,6 +47,7 @@ export function useWorkflowStats(params: { appId?: string; search?: string; stor
     queryKey: ['workflow-stats', qs],
     queryFn: () => fetchJSON<WorkflowStats>(`/workflows/stats${qs}`),
     refetchInterval: refetchMs(ctx),
+    enabled: params.enabled !== false,
   })
 }
 
