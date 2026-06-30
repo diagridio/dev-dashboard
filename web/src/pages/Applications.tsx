@@ -62,9 +62,13 @@ export function Applications() {
   const running = apps.length
   const healthy = apps.filter((a) => a.health === 'healthy').length
   const starting = apps.filter((a) => a.health === 'starting').length
-  // Components-loaded is only available per-app (AppDetail), not from useApps.
-  const componentsLoaded = '—'
-  const runTemplate = apps.find((a) => a.runTemplate)?.runTemplate || '—'
+  // Total components loaded across every running app; '—' when none report any.
+  const componentsTotal = apps.reduce((n, a) => n + (a.components?.length ?? 0), 0)
+  const componentsLoaded = componentsTotal > 0 ? componentsTotal : '—'
+  // Prefer a real run-template name; else label Aspire-managed apps; else '—'.
+  const runTemplate =
+    apps.find((a) => a.runTemplate)?.runTemplate ||
+    (apps.some((a) => a.isAspire) ? 'Aspire' : '—')
 
   return (
     <div className="page">
@@ -151,7 +155,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       {num(app.daprdPid)}
       {num(app.appPid)}
       <td className="muted mono tabnum">{app.age}</td>
-      <td className="mono muted">{app.runTemplate || '—'}</td>
+      <td className="mono muted">{app.runTemplate || (app.isAspire ? 'Aspire' : '—')}</td>
       <td className="kebab">⋯</td>
     </tr>
   )

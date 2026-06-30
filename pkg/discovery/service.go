@@ -115,7 +115,7 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	if md.AppCommand != "" {
 		in.Command = md.AppCommand
 	}
-	in.Runtime = appRuntime(in.Command, in.AppPort, s.appProc)
+	in.Runtime, in.IsAspire = appRuntime(in.Command, in.AppPort, s.appProc)
 	if md.AppLogPath != "" {
 		in.AppLogPath = md.AppLogPath
 	}

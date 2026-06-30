@@ -9,6 +9,8 @@ export interface AppSummary {
   appId: string
   health: HealthStatus
   runtime: string
+  /** true when the app is .NET Aspire-managed (started by the Aspire host, not a run template) */
+  isAspire?: boolean
   httpPort: number
   grpcPort: number
   appPort: number
