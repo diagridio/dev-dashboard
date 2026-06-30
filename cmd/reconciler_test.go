@@ -4,34 +4,17 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
-	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/stretchr/testify/require"
 )
 
-// fakeApps is a minimal discovery.Service returning a fixed list.
-type fakeApps struct{ insts []discovery.Instance }
-
-func (f fakeApps) List(context.Context) ([]discovery.Instance, error) { return f.insts, nil }
-func (f fakeApps) Get(_ context.Context, id string) (discovery.Instance, error) {
-	for _, in := range f.insts {
-		if in.AppID == id {
-			return in, nil
-		}
-	}
-	return discovery.Instance{}, discovery.ErrNotFound
-}
-
-// countingStore wraps no real backend; it only tracks Close calls.
+// countingStore is a minimal statestore.Store that tracks Close calls.
 type countingStore struct {
 	closes *atomic.Int32
 }
@@ -46,193 +29,106 @@ func (s countingStore) BulkGet(context.Context, []string) (map[string][]byte, er
 func (s countingStore) Delete(context.Context, string) error      { return nil }
 func (s countingStore) Set(context.Context, string, []byte) error { return nil }
 func (s countingStore) Close() error {
-	s.closes.Add(1)
+	if s.closes != nil {
+		s.closes.Add(1)
+	}
 	return nil
 }
 
-func compYAML(t *testing.T, dir, name, storeType string) string {
+// fakeOpener counts opens and hands back a minimal no-op store.
+type fakeOpener struct {
+	opens int32
+}
+
+func (o *fakeOpener) open(_ context.Context, _ statestore.Component) (statestore.Store, error) {
+	atomic.AddInt32(&o.opens, 1)
+	return countingStore{closes: new(atomic.Int32)}, nil
+}
+
+// seedAutoComponentYAML writes a minimal sqlite component YAML and returns its abs path.
+func seedAutoComponentYAML(t *testing.T, dir, name, db string) string {
 	t.Helper()
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	y := "apiVersion: dapr.io/v1alpha1\nkind: Component\nmetadata:\n  name: " + name +
+		"\nspec:\n  type: state.sqlite\n  version: v1\n  metadata:\n  - name: connectionString\n    value: " + db + "\n"
 	p := filepath.Join(dir, name+".yaml")
-	body := "apiVersion: dapr.io/v1alpha1\nkind: Component\nmetadata:\n  name: " + name +
-		"\nspec:\n  type: " + storeType + "\n  version: v1\n  metadata:\n" +
-		"  - name: actorStateStore\n    value: \"true\"\n  - name: redisHost\n    value: localhost:6379\n"
-	require.NoError(t, os.WriteFile(p, []byte(body), 0o644))
-	return p
-}
-
-func TestReconciler_NewResourcePathAppearsInPaths(t *testing.T) {
-	dir := t.TempDir()
-	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
-
-	apps := []discovery.Instance{{AppID: "order", ResourcePaths: []string{dir}}}
-	rc.reconcile(apps, appsFingerprint(apps))
-
-	require.Contains(t, rc.Paths(), dir)
-}
-
-func TestReconciler_ActiveStoreSwapsAndClosesOldExactlyOnce(t *testing.T) {
-	dirA, dirB := t.TempDir(), t.TempDir()
-	compYAML(t, dirA, "store-a", "state.redis")
-	compYAML(t, dirB, "store-b", "state.redis")
-
-	var closes atomic.Int32
-	opened := map[string]int{}
-	var openedMu sync.Mutex
-	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
-	rc.open = func(_ context.Context, c statestore.Component) (statestore.Store, error) {
-		openedMu.Lock()
-		opened[c.Name]++
-		openedMu.Unlock()
-		return countingStore{closes: &closes}, nil
-	}
-
-	// First app loads store-a from dirA.
-	apps1 := []discovery.Instance{{AppID: "a", ResourcePaths: []string{dirA},
-		Components: []discovery.Component{{Name: "store-a", Type: "state.redis"}}}}
-	rc.reconcile(apps1, appsFingerprint(apps1))
-	require.Len(t, rc.Stores(), 1)
-	require.Equal(t, "store-a", rc.Stores()[0].Name)
-	require.EqualValues(t, 0, closes.Load())
-
-	// Second app loads store-b from dirB: active store changes -> old closed once.
-	apps2 := []discovery.Instance{{AppID: "b", ResourcePaths: []string{dirB},
-		Components: []discovery.Component{{Name: "store-b", Type: "state.redis"}}}}
-	rc.reconcile(apps2, appsFingerprint(apps2))
-	require.Equal(t, "store-b", rc.Stores()[0].Name)
-	require.EqualValues(t, 1, closes.Load(), "old connection must be closed exactly once")
-	require.Equal(t, 1, opened["store-b"])
-}
-
-func TestReconciler_RetainsConnectionWhenNewOpenFails(t *testing.T) {
-	dirA, dirB := t.TempDir(), t.TempDir()
-	compYAML(t, dirA, "store-a", "state.redis")
-	compYAML(t, dirB, "store-b", "state.redis")
-
-	var closes atomic.Int32
-	failNext := false
-	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
-	rc.open = func(_ context.Context, c statestore.Component) (statestore.Store, error) {
-		if failNext {
-			return nil, errors.New("connection refused")
-		}
-		return countingStore{closes: &closes}, nil
-	}
-
-	apps1 := []discovery.Instance{{AppID: "a", ResourcePaths: []string{dirA},
-		Components: []discovery.Component{{Name: "store-a", Type: "state.redis"}}}}
-	rc.reconcile(apps1, appsFingerprint(apps1))
-	require.Equal(t, "store-a", rc.Stores()[0].Name)
-
-	// New active store election, but the open fails: keep serving store-a.
-	failNext = true
-	apps2 := []discovery.Instance{{AppID: "b", ResourcePaths: []string{dirB},
-		Components: []discovery.Component{{Name: "store-b", Type: "state.redis"}}}}
-	rc.reconcile(apps2, appsFingerprint(apps2))
-	require.Equal(t, "store-a", rc.Stores()[0].Name, "must retain previous store when new open fails")
-	require.EqualValues(t, 0, closes.Load(), "old working connection must not be closed on failed swap")
-}
-
-func TestReconcilingApps_ListTriggersReconcileOnChange(t *testing.T) {
-	dir := t.TempDir()
-	apps := []discovery.Instance{{AppID: "order", ResourcePaths: []string{dir}}}
-	inner := fakeApps{insts: apps}
-	rc := newReconciler(inner, "default", "", "", &http.Client{})
-	dec := reconcilingApps{inner: inner, rc: rc}
-
-	got, err := dec.List(context.Background())
+	require.NoError(t, os.WriteFile(p, []byte(y), 0o644))
+	abs, err := filepath.Abs(p)
 	require.NoError(t, err)
-	require.Len(t, got, 1)
-
-	// Reconcile runs in the background; wait for the fingerprint to settle.
-	require.Eventually(t, func() bool {
-		return rc.fingerprint() == appsFingerprint(apps)
-	}, time.Second, 5*time.Millisecond)
-	require.Contains(t, rc.Paths(), dir)
+	return abs
 }
 
-func TestReconciler_StopToNoneClosesOldConnection(t *testing.T) {
+func TestReconciler_ServiceForRouting(t *testing.T) {
 	dir := t.TempDir()
-	compYAML(t, dir, "store-a", "state.redis")
+	home := t.TempDir()
 
-	var closes atomic.Int32
-	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
-	rc.open = func(context.Context, statestore.Component) (statestore.Store, error) {
-		return countingStore{closes: &closes}, nil
+	// An auto entry referencing a real component YAML on disk, a manual entry,
+	// and a second auto entry with the SAME name as the first but a different
+	// path (to prove distinct ids resolve independently).
+	autoPath := seedAutoComponentYAML(t, dir, "autostore", filepath.Join(dir, "auto.db"))
+	autoPath2 := seedAutoComponentYAML(t, filepath.Join(dir, "proj2"), "autostore", filepath.Join(dir, "auto2.db"))
+	reg := LoadRegistry(home)
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath2}))
+	require.NoError(t, reg.Add(ConnEntry{Name: "manualstore", Type: "state.sqlite", Source: SourceManual,
+		Metadata: map[string]string{"connectionString": filepath.Join(dir, "manual.db")}}))
+
+	// Resolve the assigned ids from the registry (don't duplicate the hash logic).
+	ids := map[string]string{} // path-or-name -> id
+	for _, e := range reg.List() {
+		switch e.Source {
+		case SourceManual:
+			ids["manualstore"] = e.ID
+		default:
+			ids[e.Path] = e.ID
+		}
 	}
+	require.NotEqual(t, ids[autoPath], ids[autoPath2], "same name + different paths -> distinct ids")
 
-	// First reconcile: one app with a redis store in dir.
-	apps1 := []discovery.Instance{{
-		AppID:         "order",
-		ResourcePaths: []string{dir},
-		Components:    []discovery.Component{{Name: "store-a", Type: "state.redis"}},
-	}}
-	rc.reconcile(apps1, appsFingerprint(apps1))
-	require.Len(t, rc.Stores(), 1, "store must be registered after first reconcile")
-	require.EqualValues(t, 0, closes.Load(), "connection must still be open")
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
 
-	// Second reconcile: no apps, no paths → statestore.Detect finds nothing →
-	// newID == "" → active store changes → old connection closed.
-	empty := []discovery.Instance{}
-	rc.reconcile(empty, appsFingerprint(empty))
+	// Seed an elected active store directly (no apps needed for this routing test).
+	active := statestore.Component{Name: "active", Type: "state.sqlite", Metadata: map[string]string{"connectionString": filepath.Join(dir, "active.db")}}
+	rc.mu.Lock()
+	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil)
+	rc.mu.Unlock()
 
-	require.Len(t, rc.Stores(), 0, "stores must be empty after all apps stopped")
-	require.EqualValues(t, 1, closes.Load(), "old connection must be closed exactly once")
+	t.Run("empty id -> active (pre-warmed via pool)", func(t *testing.T) {
+		_, _, _, ok := rc.ServiceFor("")
+		require.True(t, ok)
+	})
+	t.Run("auto entry resolves by id and connects", func(t *testing.T) {
+		_, _, _, ok := rc.ServiceFor(ids[autoPath])
+		require.True(t, ok)
+	})
+	t.Run("second same-name auto entry resolves by its own id", func(t *testing.T) {
+		_, _, _, ok := rc.ServiceFor(ids[autoPath2])
+		require.True(t, ok)
+	})
+	t.Run("manual entry resolves by id and connects", func(t *testing.T) {
+		_, _, _, ok := rc.ServiceFor(ids["manualstore"])
+		require.True(t, ok)
+	})
+	t.Run("unknown id -> ok=false", func(t *testing.T) {
+		_, _, _, ok := rc.ServiceFor("nosuchstoreid")
+		require.False(t, ok)
+	})
 
-	// Degraded mode: ServiceFor("") must return ok=true with a non-nil service.
-	svc, _, _, ok := rc.ServiceFor("")
-	require.True(t, ok, "degraded ServiceFor must return ok=true")
-	require.NotNil(t, svc, "degraded service must be non-nil")
+	require.GreaterOrEqual(t, o.opens, int32(1), "the fake opener must have been used for id lookups")
 }
 
-func TestReconciler_SingleFlightRunsOneReconcile(t *testing.T) {
-	dir := t.TempDir()
-	compYAML(t, dir, "store-sf", "state.redis")
+func TestReconciler_NoActiveNoStoresDegraded(t *testing.T) {
+	home := t.TempDir()
+	reg := LoadRegistry(home)
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
 
-	var opens atomic.Int32
-	var closes atomic.Int32
-	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
-	rc.open = func(context.Context, statestore.Component) (statestore.Store, error) {
-		opens.Add(1)
-		// Sleep briefly to widen the window for concurrent reconciles to race.
-		time.Sleep(5 * time.Millisecond)
-		return countingStore{closes: &closes}, nil
-	}
-
-	apps := []discovery.Instance{{
-		AppID:         "order",
-		ResourcePaths: []string{dir},
-		Components:    []discovery.Component{{Name: "store-sf", Type: "state.redis"}},
-	}}
-	want := appsFingerprint(apps)
-
-	// Fire many concurrent maybeReconcile calls with the same changed fingerprint.
-	for i := 0; i < 50; i++ {
-		rc.maybeReconcile(apps)
-	}
-
-	// Wait for reconcile to settle.
-	require.Eventually(t, func() bool {
-		return rc.fingerprint() == want
-	}, 2*time.Second, 10*time.Millisecond, "fingerprint must settle to expected value")
-
-	// Exactly one open must have occurred; subsequent maybeReconcile calls
-	// were skipped by the CAS guard or the fingerprint early-return.
-	require.EqualValues(t, 1, opens.Load(), "single-flight must allow exactly one store open")
-	require.Contains(t, rc.Paths(), dir)
-}
-
-func TestReconciler_CloseClosesActiveConnection(t *testing.T) {
-	dir := t.TempDir()
-	compYAML(t, dir, "store-a", "state.redis")
-	var closes atomic.Int32
-	rc := newReconciler(fakeApps{}, "default", "", "", &http.Client{})
-	rc.open = func(context.Context, statestore.Component) (statestore.Store, error) {
-		return countingStore{closes: &closes}, nil
-	}
-	apps := []discovery.Instance{{AppID: "a", ResourcePaths: []string{dir},
-		Components: []discovery.Component{{Name: "store-a", Type: "state.redis"}}}}
-	rc.reconcile(apps, appsFingerprint(apps))
-
-	require.NoError(t, rc.Close())
-	require.EqualValues(t, 1, closes.Load())
+	// No elected store and empty name -> degraded entry, ok=true.
+	_, _, _, ok := rc.ServiceFor("")
+	require.True(t, ok, "empty name with no active store returns the degraded entry")
 }

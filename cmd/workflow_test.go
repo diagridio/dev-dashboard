@@ -7,9 +7,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"net/http"
-	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -168,63 +165,6 @@ func TestNewRootCmd_NewFlags(t *testing.T) {
 	require.Equal(t, "default", ns)
 }
 
-// --- storeBackend unit tests ---
-
-// buildTestBackend builds a storeBackend with a hand-crafted services map,
-// bypassing the real statestore.New (which needs disk/network).
-func buildTestBackend(activeName string, names ...string) *storeBackend {
-	b := &storeBackend{
-		services:   make(map[string]storeEntry),
-		activeName: activeName,
-		degraded:   storeEntry{}, // nil svc/rem/targets — sufficient for name-routing tests
-	}
-	for _, n := range names {
-		b.services[n] = storeEntry{} // entries just need to be present
-	}
-	return b
-}
-
-func TestStoreBackend_EmptyNameReturnsActive(t *testing.T) {
-	b := buildTestBackend("redis", "redis", "pg")
-	_, _, _, ok := b.ServiceFor("")
-	require.True(t, ok)
-}
-
-func TestStoreBackend_KnownNameReturnsEntry(t *testing.T) {
-	b := buildTestBackend("redis", "redis", "pg")
-	_, _, _, ok := b.ServiceFor("pg")
-	require.True(t, ok)
-}
-
-func TestStoreBackend_UnknownNameReturnsFalse(t *testing.T) {
-	b := buildTestBackend("redis", "redis", "pg")
-	_, _, _, ok := b.ServiceFor("nosuchstore")
-	require.False(t, ok)
-}
-
-func TestStoreBackend_NoStoresDegraded(t *testing.T) {
-	b := buildTestBackend("") // no stores, no activeName
-	_, _, _, ok := b.ServiceFor("")
-	require.True(t, ok, "degraded entry should always return ok=true")
-}
-
-func TestStoreBackend_NoStoresUnknownExplicit(t *testing.T) {
-	b := buildTestBackend("") // no stores
-	_, _, _, ok := b.ServiceFor("anything")
-	require.False(t, ok)
-}
-
-func TestNewStoreBackend_LogsNoStoreDetected(t *testing.T) {
-	buf := withCapturedLogs(t)
-	_, closers := newStoreBackend(context.Background(), nil, nil, "default", &http.Client{}, nil, statestore.New)
-	for _, c := range closers {
-		_ = c()
-	}
-	if !strings.Contains(buf.String(), "no state store detected") {
-		t.Fatalf("expected 'no state store detected' WARN, got %q", buf.String())
-	}
-}
-
 func TestStoreRegistry_AppLoadedStoreWinsOverDefault(t *testing.T) {
 	// Both have actorStateStore=true; default ~/.dapr store is scanned first.
 	comps := []statestore.Component{
@@ -267,44 +207,3 @@ func TestStoreRegistry_AppLoadedNonActorPreferredOverUnloadedActor(t *testing.T)
 	require.Equal(t, "appstore", r.active().Name, "an app-loaded store beats an unloaded default even without the actor flag")
 }
 
-func TestNewStoreBackend_RegistersOnlyActiveStore(t *testing.T) {
-	_ = withCapturedLogs(t)
-
-	dir := t.TempDir()
-	comps := []statestore.Component{
-		// Active: sqlite with actorStateStore=true (initialises from a local file).
-		{
-			Name: "wfstore", Type: "state.sqlite", Path: "/x/wf.yaml",
-			Metadata: map[string]string{
-				"actorStateStore":  "true",
-				"connectionString": filepath.Join(dir, "wf.db"),
-			},
-		},
-		// Non-active: sqlite, different name. Must NOT be served.
-		{
-			Name: "other", Type: "state.sqlite", Path: "/x/other.yaml",
-			Metadata: map[string]string{"connectionString": filepath.Join(dir, "other.db")},
-		},
-	}
-
-	b, closers := newStoreBackend(context.Background(), comps, nil, "default", &http.Client{}, nil, statestore.New)
-	defer func() {
-		for _, c := range closers {
-			_ = c()
-		}
-	}()
-
-	require.Equal(t, "wfstore", b.activeName)
-
-	// Active store (explicit name) is served.
-	_, _, _, ok := b.ServiceFor("wfstore")
-	require.True(t, ok)
-
-	// Empty name resolves to the active store.
-	_, _, _, ok = b.ServiceFor("")
-	require.True(t, ok)
-
-	// Non-active store name is rejected.
-	_, _, _, ok = b.ServiceFor("other")
-	require.False(t, ok, "non-active store must not be served")
-}

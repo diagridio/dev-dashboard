@@ -30,9 +30,13 @@ type serveDeps struct {
 func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Options, []func() error) {
 	appsSvc := deps.Apps
 
+	// Load the persisted connection registry and build the lazy connection pool.
+	registry := LoadRegistry(deps.HomeDir)
+	pool := newConnPool(deps.Namespace, deps.HTTPClient, appsSvc, nil)
+
 	// Build the reconciler that owns all apps-derived state (resource paths,
-	// detected state stores, active-store election, live workflow DB connection).
-	rc := newReconciler(appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient)
+	// detected state stores, active-store election) plus the registry and pool.
+	rc := newReconciler(appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool)
 
 	// Seed once synchronously from the boot snapshot so the first request is
 	// correct. Best-effort: an empty/failed list yields an empty derived state.

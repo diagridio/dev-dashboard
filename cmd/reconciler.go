@@ -21,12 +21,12 @@ var _ server.WorkflowBackend = (*reconciler)(nil)
 // connectTimeout bounds a single state-store connection attempt during reconcile.
 const connectTimeout = 15 * time.Second
 
-// reconciler owns all state that used to be frozen at boot from the running-apps
-// snapshot: the resource scan paths, the detected state stores, the active-store
-// election, and the live workflow DB connection. It re-derives this state when
-// the apps fingerprint changes, swapping the DB connection only when the elected
-// active store's identity changes. All reads take the read lock and never block
-// on a reconnect.
+// reconciler owns the apps-derived state: resource scan paths, the active-store
+// election, the persisted connection registry, and the lazy connection pool. It
+// re-derives this state when the apps fingerprint changes: auto-persisting each
+// detected store to the registry and pre-warming the elected active store
+// through the pool. It no longer owns a single connection or closers — the pool
+// retains connections for the session.
 type reconciler struct {
 	// immutable after construction
 	apps           discovery.Service
@@ -35,22 +35,23 @@ type reconciler struct {
 	stateStorePath string
 	client         *http.Client
 	open           storeOpener
+	registry       *ConnRegistry
+	pool           *connPool
+	degraded       storeEntry
 
 	reconciling atomic.Bool // single-flight guard for background reconciles
 
-	mu             sync.RWMutex
-	fp             string
-	resPaths       []string
-	registry       *storeRegistry
-	backend        *storeBackend
-	closers        []func() error
-	activeIdentity string // name|type|connInfo of the open store; "" means none
-	closed         bool
+	mu         sync.RWMutex
+	fp         string
+	resPaths   []string
+	electedReg *storeRegistry // last election (for active() + the active flag)
+	closed     bool
 }
 
 // newReconciler builds a reconciler. open defaults to statestore.New; tests
-// override it via the exported field after construction.
-func newReconciler(apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client) *reconciler {
+// override it via the exported field after construction. The registry and pool
+// are injected (the pool already carries the opener used for connections).
+func newReconciler(apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client, registry *ConnRegistry, pool *connPool) *reconciler {
 	return &reconciler{
 		apps:           apps,
 		namespace:      namespace,
@@ -58,11 +59,13 @@ func newReconciler(apps discovery.Service, namespace, homeDir, stateStorePath st
 		stateStorePath: stateStorePath,
 		client:         client,
 		open:           statestore.New,
-		registry:       newStoreRegistry(nil, nil),
+		registry:       registry,
+		pool:           pool,
+		degraded:       buildStoreEntry(nil, namespace, client, apps),
 	}
 }
 
-// identity returns a secrets-free key for connection-change detection.
+// identity returns a secrets-free key for connection identity.
 func identity(c *statestore.Component) string {
 	if c == nil {
 		return ""
@@ -71,13 +74,11 @@ func identity(c *statestore.Component) string {
 }
 
 // reconcile is NOT safe for concurrent use: callers MUST ensure only one
-// reconcile runs at a time (the reconcilingApps decorator's single-flight
-// guard and the synchronous boot seed are the only callers).
-// It re-derives state from apps and swaps it in. fp is the precomputed
-// fingerprint for apps. The DB connection is reopened only when the active
-// store's identity changes; if reopening fails while a working connection
-// exists, the previous connection is retained (registry unchanged) and only the
-// resource paths and fingerprint are refreshed.
+// reconcile runs at a time (the reconcilingApps decorator's single-flight guard
+// and the synchronous boot seed are the only callers). It re-derives state from
+// apps: detect + resolve stores, auto-persist them to the registry, elect the
+// active store, and pre-warm it through the pool. fp is the precomputed
+// fingerprint for apps.
 func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	log := slog.Default().With("component", "reconciler")
 	resPaths, scanPaths, loaded := derivePaths(apps, rc.homeDir, rc.stateStorePath)
@@ -89,81 +90,131 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 		if len(unresolved) > 0 {
 			log.Warn("unresolved secretKeyRef metadata", "store", detected[i].Name, "keys", unresolved)
 		}
-	}
-	newReg := newStoreRegistry(detected, loaded)
-	newID := identity(newReg.active())
-
-	rc.mu.RLock()
-	curID := rc.activeIdentity
-	curHasConn := rc.backend != nil && rc.backend.activeName != ""
-	rc.mu.RUnlock()
-
-	// Active store unchanged: refresh listings only, keep the live connection.
-	if newID == curID && (newReg.active() == nil || curHasConn) {
-		rc.mu.Lock()
-		rc.resPaths, rc.registry, rc.fp = resPaths, newReg, fp
-		rc.mu.Unlock()
-		return
-	}
-
-	// Active store changed: build a fresh backend (opens the new connection).
-	octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
-	defer cancel()
-	newBackend, newClosers := newStoreBackend(octx, detected, loaded, rc.namespace, rc.client, rc.apps, rc.open)
-	openFailed := newReg.active() != nil && newBackend.activeName == ""
-
-	if openFailed && curHasConn {
-		// Keep the previous working connection; only refresh resource paths + fp.
-		for _, c := range newClosers {
-			_ = c()
+		// Auto-persist every detected store as a path-ref. Persist the YAML path,
+		// not the resolved metadata, so no secrets land in the registry file.
+		if rc.registry != nil {
+			if err := rc.registry.UpsertAuto(ConnEntry{
+				Name: detected[i].Name, Type: detected[i].Type, Source: SourceAuto, Path: detected[i].Path,
+			}); err != nil {
+				log.Warn("auto-persist store failed", "store", detected[i].Name, "err", err)
+			}
 		}
-		rc.mu.Lock()
-		rc.resPaths, rc.fp = resPaths, fp
-		rc.mu.Unlock()
-		log.Warn("new active store failed to open; retaining previous connection",
-			"intended", newID, "active", curID)
-		return
 	}
+
+	newReg := newStoreRegistry(detected, loaded)
 
 	rc.mu.Lock()
 	if rc.closed {
 		rc.mu.Unlock()
-		for _, c := range newClosers {
-			_ = c()
-		}
 		return
 	}
-	old := rc.closers
-	rc.resPaths, rc.registry, rc.backend, rc.closers = resPaths, newReg, newBackend, newClosers
-	rc.activeIdentity, rc.fp = newID, fp
+	rc.resPaths, rc.electedReg, rc.fp = resPaths, newReg, fp
 	rc.mu.Unlock()
 
-	for _, c := range old {
-		_ = c()
+	// Pre-warm the elected active store through the pool. The pool retains it;
+	// it is never closed when the active store later changes.
+	if active := newReg.active(); active != nil && rc.pool != nil {
+		octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+		defer cancel()
+		if _, err := rc.pool.openOrGet(octx, *active); err != nil {
+			log.Warn("pre-warm active store failed", "store", active.Name, "err", err)
+		}
 	}
-	log.Info("reconciled derived state", "activeStore", newID, "detected", len(detected))
+	log.Info("reconciled derived state", "activeStore", identity(newReg.active()), "detected", len(detected))
 }
 
-// Stores satisfies server.StoreRegistry.
-func (rc *reconciler) Stores() []server.StoreInfo {
+// activeComponent returns the elected active component, or nil if none.
+func (rc *reconciler) activeComponent() *statestore.Component {
 	rc.mu.RLock()
-	reg := rc.registry
-	rc.mu.RUnlock()
-	if reg == nil {
+	defer rc.mu.RUnlock()
+	if rc.electedReg == nil {
+		return nil
+	}
+	return rc.electedReg.active()
+}
+
+// componentFor resolves a registry entry id to a built statestore.Component.
+// auto entries are re-read from their YAML path and 2a-resolved; manual entries
+// use their inline metadata. ok=false means no registry entry with that id.
+func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
+	if rc.registry == nil {
+		return statestore.Component{}, false
+	}
+	for _, e := range rc.registry.List() {
+		if e.ID != id {
+			continue
+		}
+		switch e.Source {
+		case SourceManual:
+			return statestore.Component{Name: e.Name, Type: e.Type, Metadata: e.Metadata}, true
+		default: // auto
+			detected, _ := statestore.Detect([]string{e.Path})
+			for i := range detected {
+				if detected[i].Path == e.Path || detected[i].Name == e.Name {
+					secretStores, _ := statestore.DetectSecretStores([]string{e.Path})
+					resolved, _ := statestore.ResolveSecrets(detected[i], secretStores)
+					detected[i].Metadata = resolved
+					return detected[i], true
+				}
+			}
+			// YAML missing/unreadable: return a bare component (connect will error).
+			return statestore.Component{Name: e.Name, Type: e.Type, Path: e.Path}, true
+		}
+	}
+	return statestore.Component{}, false
+}
+
+// Stores satisfies server.StoreRegistry. Reconciler-level implementation lands
+// in Task 4 (all registry entries with Source + active flag). This base version
+// returns the elected active store only; Task 4 replaces it.
+func (rc *reconciler) Stores() []server.StoreInfo {
+	active := rc.activeComponent()
+	if active == nil {
 		return []server.StoreInfo{}
 	}
-	return reg.Stores()
+	return []server.StoreInfo{{
+		Name:       active.Name,
+		Type:       active.Type,
+		Path:       active.Path,
+		Active:     true,
+		Connection: statestore.ConnInfo(*active),
+	}}
 }
 
-// ServiceFor satisfies server.WorkflowBackend.
-func (rc *reconciler) ServiceFor(name string) (workflow.Service, server.WorkflowRemover, server.TargetResolver, bool) {
-	rc.mu.RLock()
-	b := rc.backend
-	rc.mu.RUnlock()
-	if b == nil {
+// ServiceFor satisfies server.WorkflowBackend. The argument is a registry entry
+// id (the ?store= value), never a name.
+//   - id == "" -> the elected active store, pre-warmed via the pool; if no
+//     store is elected, the degraded entry (ok=true).
+//   - id matches a registry entry -> build its component, connect via the pool.
+//   - unknown id -> ok=false.
+func (rc *reconciler) ServiceFor(id string) (workflow.Service, server.WorkflowRemover, server.TargetResolver, bool) {
+	if id == "" {
+		active := rc.activeComponent()
+		if active == nil {
+			return rc.degraded.svc, rc.degraded.rem, rc.degraded.targets, true
+		}
+		octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+		defer cancel()
+		e, err := rc.pool.openOrGet(octx, *active)
+		if err != nil {
+			return rc.degraded.svc, rc.degraded.rem, rc.degraded.targets, true
+		}
+		return e.svc, e.rem, e.targets, true
+	}
+
+	comp, ok := rc.componentFor(id)
+	if !ok {
 		return nil, nil, nil, false
 	}
-	return b.ServiceFor(name)
+	octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+	defer cancel()
+	e, err := rc.pool.openOrGet(octx, comp)
+	if err != nil {
+		// Known store, unreachable: surface a working-but-empty degraded entry so
+		// the API returns a graceful error from the workflow service, not 404.
+		return rc.degraded.svc, rc.degraded.rem, rc.degraded.targets, true
+	}
+	return e.svc, e.rem, e.targets, true
 }
 
 // Paths returns the current resource scan paths (provider for resources.New).
@@ -199,20 +250,15 @@ func (rc *reconciler) maybeReconcile(apps []discovery.Instance) {
 	}()
 }
 
-// Close closes whatever connection is currently open and prevents further swaps.
+// Close closes the connection pool and prevents further reconciles.
 func (rc *reconciler) Close() error {
 	rc.mu.Lock()
 	rc.closed = true
-	old := rc.closers
-	rc.closers = nil
 	rc.mu.Unlock()
-	var err error
-	for _, c := range old {
-		if e := c(); e != nil {
-			err = e
-		}
+	if rc.pool != nil {
+		return rc.pool.Close()
 	}
-	return err
+	return nil
 }
 
 // reconcilingApps decorates a discovery.Service so every List fires a
