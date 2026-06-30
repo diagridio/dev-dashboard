@@ -185,16 +185,28 @@ describe('ResourcesSidebar News section', () => {
     expect(link).toHaveAttribute('target', '_blank')
   })
 
-  it('renders empty state for absent report slot', async () => {
+  it('renders nothing (no label) for absent report slot', async () => {
     renderSidebar()
     await screen.findByRole('link', { name: /Blog A/i })
-    expect(screen.getByText('No reports')).toBeInTheDocument()
+    expect(screen.queryByText(/No reports/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Report/)).not.toBeInTheDocument()
   })
 
-  it('renders empty state for absent event slot', async () => {
+  it('renders nothing (no label) for absent event slot', async () => {
     renderSidebar()
     await screen.findByRole('link', { name: /Blog A/i })
-    expect(screen.getByText('No upcoming events')).toBeInTheDocument()
+    expect(screen.queryByText(/No upcoming events/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Event/)).not.toBeInTheDocument()
+  })
+
+  it('orders present news items Blog before Webinar', async () => {
+    renderSidebar()
+    await screen.findByRole('link', { name: /Blog A/i })
+    const links = screen.getAllByRole('link')
+    const blogIdx = links.findIndex((l) => /Blog A/.test(l.textContent ?? ''))
+    const webinarIdx = links.findIndex((l) => /WB/.test(l.textContent ?? ''))
+    expect(blogIdx).toBeGreaterThanOrEqual(0)
+    expect(webinarIdx).toBeGreaterThan(blogIdx)
   })
 
   it('shows bell indicator when items are unseen', async () => {
@@ -227,6 +239,30 @@ describe('ResourcesSidebar News section', () => {
       const raw = localStorage.getItem('devdash.newsSeen')
       expect(raw).toBeTruthy()
     })
+  })
+
+  it('news item with a zero-value publish date shows the type only, no date', async () => {
+    // Upstream sends Go's zero time for dateless items (e.g. reports). The UI must
+    // show just the label ("Report"), never "Report · Jan 1".
+    server.use(
+      http.get('/api/news', () =>
+        HttpResponse.json({
+          blog: null,
+          report: {
+            title: 'Start of Dapr 2026 Report',
+            url: 'https://example.com/report',
+            publishedAt: '0001-01-01T00:00:00Z',
+          },
+          webinar: null,
+          event: null,
+        }),
+      ),
+    )
+    renderSidebar()
+    expect(await screen.findByText('Start of Dapr 2026 Report')).toBeInTheDocument()
+    expect(screen.getByText('Report')).toBeInTheDocument()
+    expect(screen.queryByText(/Report · /)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Jan 1/)).not.toBeInTheDocument()
   })
 
   it('news item shows type + publish date, not the description', async () => {

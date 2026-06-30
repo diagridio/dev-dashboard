@@ -66,11 +66,16 @@ const SECTIONS: Section[] = [
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-/** Formats an ISO publish date as "Jun 22" (time excluded). Returns undefined if unparseable. */
+/**
+ * Formats an ISO publish date as "Jun 22" (time excluded). Returns undefined if
+ * unparseable or if the date is a zero-value sentinel (e.g. Go's "0001-01-01"),
+ * which upstream sends for dateless items like reports — those show no date.
+ */
 function formatPublishDate(iso?: string): string | undefined {
   if (!iso) return undefined
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso) // matches date prefix of YYYY-MM-DD[THH:MM…]
   if (!m) return undefined
+  if (Number(m[1]) <= 1) return undefined // zero-value sentinel (year 0000/0001) → no date
   const month = MONTHS[Number(m[2]) - 1]
   if (!month) return undefined
   return `${month} ${Number(m[3])}`
@@ -82,23 +87,10 @@ function newsSubtitle(item: NewsItem, label: string): string {
   return date ? `${label} · ${date}` : label
 }
 
-function emptyStateText(type: 'blog' | 'report' | 'webinar' | 'event'): string {
-  switch (type) {
-    case 'blog':
-      return 'No recent posts'
-    case 'report':
-      return 'No reports'
-    case 'webinar':
-      return 'No upcoming webinars'
-    case 'event':
-      return 'No upcoming events'
-  }
-}
-
 const NEWS_SLOTS: Array<{ key: 'blog' | 'report' | 'webinar' | 'event'; label: string }> = [
   { key: 'blog', label: 'Blog' },
-  { key: 'report', label: 'Report' },
   { key: 'webinar', label: 'Webinar' },
+  { key: 'report', label: 'Report' },
   { key: 'event', label: 'Event' },
 ]
 
@@ -113,29 +105,23 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
       <div className="sbtitle">News</div>
       {NEWS_SLOTS.map(({ key, label }) => {
         const item = news[key]
-        if (item) {
-          const subtitle = newsSubtitle(item, label)
-          return (
-            <a
-              key={key}
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={onMarkSeen}
-              className="sblink"
-            >
-              <span className="col">
-                <span className="txt">{item.title}</span>
-                <span className="sub">{subtitle}</span>
-              </span>
-              <span className="ext">↗</span>
-            </a>
-          )
-        }
+        if (!item) return null
+        const subtitle = newsSubtitle(item, label)
         return (
-          <div key={key} style={{ padding: '7px 10px', fontSize: '12.5px', color: 'var(--faint)' }}>
-            {emptyStateText(key)}
-          </div>
+          <a
+            key={key}
+            href={item.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={onMarkSeen}
+            className="sblink"
+          >
+            <span className="col">
+              <span className="txt">{item.title}</span>
+              <span className="sub">{subtitle}</span>
+            </span>
+            <span className="ext">↗</span>
+          </a>
         )
       })}
     </div>
