@@ -62,10 +62,11 @@ func postJSON(t *testing.T, h http.Handler, path, body string) (*http.Response, 
 }
 
 type fakeWF struct {
-	list  workflow.ListResult
-	stats workflow.StatsResult
-	one   workflow.Execution
-	err   error
+	list   workflow.ListResult
+	stats  workflow.StatsResult
+	one    workflow.Execution
+	appIDs []string
+	err    error
 }
 
 func (f fakeWF) List(context.Context, workflow.ListQuery) (workflow.ListResult, error) {
@@ -73,6 +74,9 @@ func (f fakeWF) List(context.Context, workflow.ListQuery) (workflow.ListResult, 
 }
 func (f fakeWF) Stats(context.Context, workflow.ListQuery) (workflow.StatsResult, error) {
 	return f.stats, f.err
+}
+func (f fakeWF) AppIDs(context.Context) ([]string, error) {
+	return f.appIDs, f.err
 }
 func (f fakeWF) Get(_ context.Context, appID, id string) (workflow.Execution, error) {
 	if f.err != nil {
@@ -90,6 +94,21 @@ func TestWorkflowsList(t *testing.T) {
 	res, body := get(t, h, "/?status=Running&search=ab")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"instanceId":"abc"`)
+}
+
+func TestWorkflowAppIDs(t *testing.T) {
+	svc := fakeWF{appIDs: []string{"order", "pr-digest"}}
+	h := workflowsRouter(newFakeBackend(svc), nil)
+	res, body := get(t, h, "/appids")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.JSONEq(t, `["order","pr-digest"]`, body)
+}
+
+func TestWorkflowAppIDsNoStore(t *testing.T) {
+	noStore := fakeWF{err: workflow.ErrNoStore}
+	h := workflowsRouter(newFakeBackend(noStore), nil)
+	res, _ := get(t, h, "/appids")
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
 }
 
 func TestWorkflowDetailAndNotFound(t *testing.T) {

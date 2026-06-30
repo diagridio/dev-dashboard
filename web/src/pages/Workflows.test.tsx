@@ -20,6 +20,7 @@ beforeEach(() => {
     http.get('/api/statestores', () => HttpResponse.json(activeStoreOnly)),
     http.get('/api/apps', () => HttpResponse.json([])),
     http.get('/api/workflows/stats', () => HttpResponse.json({ counts: {}, total: 0 })),
+    http.get('/api/workflows/appids', () => HttpResponse.json([])),
   )
 })
 
@@ -304,6 +305,37 @@ describe('Workflows', () => {
     expect(await screen.findAllByText('not running')).toHaveLength(1)
   })
 
+  it('keeps every store app-id in the filter after one is selected', async () => {
+    // The app filter must list all app-ids in the store regardless of the active
+    // selection — selecting one must not collapse the dropdown to just that app.
+    server.use(
+      http.get('/api/workflows/appids', () => HttpResponse.json(['order', 'pr-digest', 'ship'])),
+      http.get('/api/workflows', ({ request }) => {
+        const url = new URL(request.url)
+        const appId = url.searchParams.get('appId')
+        const all = [
+          { appId: 'order', instanceId: 'o1', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' },
+          { appId: 'pr-digest', instanceId: 'p1', name: 'AgentRunWorkflow', status: 'Completed', createdAt: '2026-06-29T09:00:00Z' },
+          { appId: 'ship', instanceId: 's1', name: 'ShipWorkflow', status: 'Running', createdAt: '2026-06-29T08:00:00Z' },
+        ]
+        const items = appId ? all.filter((w) => w.appId === appId) : all
+        return HttpResponse.json({ items })
+      }),
+    )
+    renderAt()
+    const select = (await screen.findByTestId('app-select')) as HTMLSelectElement
+    // All apps + the three store app-ids.
+    await waitFor(() => expect(select.querySelectorAll('option')).toHaveLength(4))
+
+    await userEvent.selectOptions(select, 'order')
+    await waitFor(() => expect(select.value).toBe('order'))
+
+    // Bug regression: the other app-ids must still be selectable.
+    await waitFor(() => expect(select.querySelectorAll('option')).toHaveLength(4))
+    const values = Array.from(select.querySelectorAll('option')).map((o) => o.value)
+    expect(values).toEqual(expect.arrayContaining(['', 'order', 'pr-digest', 'ship']))
+  })
+
   it('defaults the dropdown to the active app-id when it has workflows', async () => {
     server.use(
       http.get('/api/statestores', () =>
@@ -312,6 +344,7 @@ describe('Workflows', () => {
       http.get('/api/apps', () =>
         HttpResponse.json([{ appId: 'order', health: 'healthy', components: [{ name: 'redis', type: 'state.redis' }] }]),
       ),
+      http.get('/api/workflows/appids', () => HttpResponse.json(['order'])),
       http.get('/api/workflows', () =>
         HttpResponse.json({
           items: [{ appId: 'order', instanceId: 'i1', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }],
@@ -332,6 +365,7 @@ describe('Workflows', () => {
       http.get('/api/apps', () =>
         HttpResponse.json([{ appId: 'wf-app', health: 'healthy', components: [{ name: 'redis', type: 'state.redis' }] }]),
       ),
+      http.get('/api/workflows/appids', () => HttpResponse.json(['pr-digest'])),
       http.get('/api/workflows', () =>
         HttpResponse.json({
           items: [{ appId: 'pr-digest', instanceId: 'i1', name: 'AgentRunWorkflow', status: 'Completed', createdAt: '2026-06-29T10:00:00Z' }],

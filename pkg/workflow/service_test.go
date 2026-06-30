@@ -113,6 +113,32 @@ func TestServiceListNoStore(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoStore)
 }
 
+func TestServiceAppIDs(t *testing.T) {
+	f := newFakeStore()
+	// Two instances under one app, one under another — AppIDs must dedupe and sort.
+	seedWorkflow(t, f, "default", "order", "i1", "OrderWorkflow", nil)
+	seedWorkflow(t, f, "default", "order", "i2", "OrderWorkflow", nil)
+	seedWorkflow(t, f, "default", "pr-digest", "i3", "AgentRunWorkflow", nil)
+	svc := New(f, "default")
+
+	ids, err := svc.AppIDs(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"order", "pr-digest"}, ids)
+}
+
+func TestServiceAppIDsEmptyStore(t *testing.T) {
+	svc := New(newFakeStore(), "default")
+	ids, err := svc.AppIDs(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, ids)
+}
+
+func TestServiceAppIDsNoStore(t *testing.T) {
+	svc := New(nil, "default")
+	_, err := svc.AppIDs(context.Background())
+	require.ErrorIs(t, err, ErrNoStore)
+}
+
 func TestServiceGetDetail(t *testing.T) {
 	f := newFakeStore()
 	completed := &protos.HistoryEvent{EventId: 1, Timestamp: timestamppb.Now(), EventType: &protos.HistoryEvent_ExecutionCompleted{

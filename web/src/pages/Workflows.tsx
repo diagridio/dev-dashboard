@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { useWorkflows, useWorkflowStats, useStateStores } from '../hooks/useWorkflows'
+import { useWorkflows, useWorkflowStats, useStateStores, useWorkflowAppIds } from '../hooks/useWorkflows'
 import { useApps } from '../hooks/useApps'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
@@ -188,12 +188,14 @@ export function Workflows() {
   // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows)
   const items = useMemo<WorkflowSummary[]>(() => dedupeWorkflows(data?.items ?? []), [data?.items])
 
-  // Collect unique app IDs from all loaded items for the app filter dropdown
-  const appIds = useMemo(() => {
-    const seen = new Set<string>()
-    items.forEach((w) => seen.add(w.appId))
-    return Array.from(seen).sort()
-  }, [items])
+  // App IDs for the filter dropdown come from the store (every app-id with
+  // workflow data), not the current page of rows — so applying the filter never
+  // collapses the option list to just the selected app.
+  const { data: storeAppIds } = useWorkflowAppIds({
+    store: selectedStore ?? undefined,
+    enabled: selectedStore !== null,
+  })
+  const appIds = useMemo(() => storeAppIds ?? [], [storeAppIds])
 
   // One-time default: prefer the active app-id when it has workflows, else leave
   // "All apps". A ?app= URL param always wins. Never overrides a later manual change.
@@ -204,14 +206,14 @@ export function Workflows() {
       defaultAppliedRef.current = true
       return
     }
-    // Wait until the store is determined, the initial workflows result, the apps
+    // Wait until the store is determined, the store's app-id list, the apps
     // list, and the store list are all available before deciding.
-    if (selectedStore === null || isLoading || appsData === undefined || storeList === undefined) return
+    if (selectedStore === null || storeAppIds === undefined || appsData === undefined || storeList === undefined) return
     if (activeAppId && appIds.includes(activeAppId)) {
       setSelectedApp(activeAppId)
     }
     defaultAppliedRef.current = true
-  }, [urlApp, selectedStore, isLoading, appsData, storeList, activeAppId, appIds])
+  }, [urlApp, selectedStore, storeAppIds, appsData, storeList, activeAppId, appIds])
 
   function setStatus(s: WorkflowStatus | '') {
     setActiveStatus(s)
