@@ -173,3 +173,13 @@ func TestRegistry_LoadBackfillsMissingID(t *testing.T) {
 	require.Equal(t, entryID(SourceManual, "legacy"), byName["legacy"].ID)
 	require.Equal(t, entryID(SourceAuto, normPath("/a/b/store.yaml")), byName["legacy-auto"].ID)
 }
+
+func TestRegistry_UpsertAutoNeverDuplicatesManualEmptyPath(t *testing.T) {
+	home := t.TempDir()
+	reg := LoadRegistry(home)
+	require.NoError(t, reg.Add(ConnEntry{Name: "m", Type: "state.redis", Source: SourceManual}))
+	before := len(reg.List())
+	// auto upsert with an empty path must not add a spurious entry alongside the manual one
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "m", Type: "state.redis", Source: SourceAuto}))
+	require.Len(t, reg.List(), before, "empty-path auto upsert must not duplicate around a manual entry")
+}

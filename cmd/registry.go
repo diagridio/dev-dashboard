@@ -125,7 +125,7 @@ func (r *ConnRegistry) UpsertAuto(e ConnEntry) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for i := range r.entries {
-		if r.entries[i].Source == SourceManual && normPath(r.entries[i].Path) == key && key != normPath("") {
+		if r.entries[i].Source == SourceManual && normPath(r.entries[i].Path) == key {
 			return nil // never overwrite a manual entry
 		}
 	}
