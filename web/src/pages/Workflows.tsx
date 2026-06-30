@@ -78,6 +78,8 @@ export function Workflows() {
   // State stores. The user can pick any listed store; the choice (a store id)
   // is threaded into the workflow list/stats/detail and persisted across reloads.
   const { data: storeList } = useStateStores()
+  const storesResolved = storeList !== undefined
+  const noStores = storesResolved && storeList.length === 0
   const activeStore = storeList?.find((s) => s.active) ?? storeList?.[0]
 
   // selectedStore is a store id (null = not yet determined; waits for storeList).
@@ -287,23 +289,33 @@ export function Workflows() {
 
   // --- Error states ---
 
+  // No-store guidance block — shared between the empty-list case and the 503 no-store case.
+  const noStoreGuidance = (
+    <div className="page">
+      <p style={{ color: 'var(--fail-fg)', fontWeight: 600 }}>No state store detected</p>
+      <p style={{ color: 'var(--muted)', marginTop: 8 }}>
+        Dapr requires a state store to persist workflow state. Configure one with the{' '}
+        <span className="mono">--statestore</span> flag or add a state store component.
+      </p>
+    </div>
+  )
+
+  if (noStores) return noStoreGuidance
+
   if (isError) {
     const errStr = String(error)
     if (errStr.includes('503')) {
       const isNoStore = errStr.includes('no state store detected')
+      if (isNoStore) return noStoreGuidance
       // The server message follows the "API error 503: <message> for <path>" shape.
-      const serverMsg = errStr.replace(/^.*?503:\s*/, '').replace(/\s*for\s+\/\S*$/, '')
+      // Fall back to a generic message if the separator isn't present.
+      const extracted = errStr.replace(/^.*?503[:\s]+/, '').replace(/\s*for\s+\/\S*$/, '').trim()
+      const serverMsg = extracted && extracted !== errStr ? extracted : 'state store unavailable'
       return (
         <div className="page">
           <p style={{ color: 'var(--fail-fg)', fontWeight: 600 }}>
-            {isNoStore ? 'No state store detected' : serverMsg}
+            {serverMsg}
           </p>
-          {isNoStore && (
-            <p style={{ color: 'var(--muted)', marginTop: 8 }}>
-              Dapr requires a state store to persist workflow state. Configure one with the{' '}
-              <span className="mono">--statestore</span> flag or add a state store component.
-            </p>
-          )}
         </div>
       )
     }
@@ -497,7 +509,7 @@ export function Workflows() {
 
         {/* Table */}
         <div className="tablewrap">
-          {(isLoading || selectedStore === null) ? (
+          {(isLoading || (!noStores && selectedStore === null)) ? (
             <p style={{ padding: 20, color: 'var(--muted)' }}>Loading…</p>
           ) : items.length === 0 ? (
             <p style={{ padding: 20, color: 'var(--muted)' }}>No workflows found</p>

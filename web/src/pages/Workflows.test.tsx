@@ -400,6 +400,17 @@ describe('Workflows page — store-resolve loading gate', () => {
     window.localStorage.clear()
   })
 
+  it('shows no-store guidance (not "Loading…") when /api/statestores returns an empty array', async () => {
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json([])),
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+    )
+    renderAt()
+    await waitFor(() => expect(screen.getByText(/no state store detected/i)).toBeInTheDocument())
+    expect(screen.getByText(/--statestore/)).toBeInTheDocument()
+    expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
   it('shows the loading state (not "No workflows found") while the store list is unresolved', async () => {
     // Delay the /api/statestores response so selectedStore stays null initially
     let resolveStores!: () => void
