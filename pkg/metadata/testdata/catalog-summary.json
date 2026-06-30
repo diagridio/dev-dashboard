@@ -1,0 +1,848 @@
+[
+  {
+    "type": "bindings",
+    "name": "aws.dynamodb",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "aws.s3",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "aws.ses",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "alicloud.tablestore",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "kafka",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.blobstorage",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.cosmosdb",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.eventhubs",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.servicebus.queues",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.storagequeues",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "cron",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "http",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "localstorage",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "postgres",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "rabbitmq",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "redis",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "twilio.sms",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "zeebe.command",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "zeebe.jobworker",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.eventgrid",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "bindings",
+    "name": "kubemq",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "bindings",
+    "name": "mqtt3",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "bindings",
+    "name": "rethinkdb.statechange",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "bindings",
+    "name": "aws.kinesis",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "aws.sns",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "aws.sqs",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "alicloud.dingtalk.webhook",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "alicloud.oss",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "alicloud.sls",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "dubbo",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "rocketmq",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "apns",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.cosmosdb.gremlinapi",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.openai",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "azure.signalr",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "cloudflare.queues",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "commercetools",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "gcp.bucket",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "gcp.pubsub",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "graphql",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "huawei.obs",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "influx",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "kitex",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "kubernetes",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "mysql",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "postmark",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "smtp",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "sftp",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "twilio.sendgrid",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "wasm",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "configuration",
+    "name": "postgresql",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "configuration",
+    "name": "redis",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "configuration",
+    "name": "azure.appconfig",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "configuration",
+    "name": "kubernetes",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "aws.bedrock",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "anthropic",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "deepseek",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "echo",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "googleai",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "huggingface",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "mistral",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "ollama",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "conversation",
+    "name": "openai",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "crypto",
+    "name": "azure.keyvault",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "crypto",
+    "name": "jwks",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "crypto",
+    "name": "kubernetes.secrets",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "crypto",
+    "name": "localstorage",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "lock",
+    "name": "redis",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "middleware",
+    "name": "bearer",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "middleware",
+    "name": "ratelimit",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "middleware",
+    "name": "oauth2",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "middleware",
+    "name": "oauth2clientcredentials",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "middleware",
+    "name": "opa",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "middleware",
+    "name": "routeralias",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "middleware",
+    "name": "routerchecker",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "middleware",
+    "name": "sentinel",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "middleware",
+    "name": "wasm",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "nameresolution",
+    "name": "kubernetes",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "nameresolution",
+    "name": "sqlite",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "nameresolution",
+    "name": "mdns",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "nameresolution",
+    "name": "aws.cloudmap",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "nameresolution",
+    "name": "hashicorp.consul",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "nameresolution",
+    "name": "nameformat",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "pubsub",
+    "name": "aws.snssqs",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "kafka",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "pulsar",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "azure.eventhubs",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "azure.servicebus.queues",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "azure.servicebus.topics",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "gcp.pubsub",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "in-memory",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "mqtt3",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "rabbitmq",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "redis",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "pubsub",
+    "name": "jetstream",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "pubsub",
+    "name": "kubemq",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "pubsub",
+    "name": "solace.amqp",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "pubsub",
+    "name": "rocketmq",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "secretstores",
+    "name": "azure.keyvault",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "secretstores",
+    "name": "hashicorp.vault",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "secretstores",
+    "name": "kubernetes",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "secretstores",
+    "name": "local.file",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "secretstores",
+    "name": "local.env",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "secretstores",
+    "name": "aws.secretsmanager",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "secretstores",
+    "name": "aws.parameterstore",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "secretstores",
+    "name": "alicloud.parameterstore",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "secretstores",
+    "name": "gcp.secretmanager",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "secretstores",
+    "name": "huaweicloud.csms",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "secretstores",
+    "name": "tencentcloud.ssm",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "aws.dynamodb",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "cassandra",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "azure.blobstorage",
+    "version": "v2",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "azure.blobstorage",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "azure.cosmosdb",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "azure.tablestorage",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "cockroachdb",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "gcp.firestore",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "in-memory",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "memcached",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "mongodb",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "mysql",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "postgresql",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "postgresql",
+    "version": "v2",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "redis",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "sqlserver",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "sqlserver",
+    "version": "v2",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "sqlite",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "state",
+    "name": "cloudflare.workerskv",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "state",
+    "name": "rethinkdb",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "state",
+    "name": "aerospike",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "alicloud.tablestore",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "coherence",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "couchbase",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "hashicorp.consul",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "hazelcast",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "jetstream",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "oci.objectstorage",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "oracledatabase",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "ravendb",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "zookeeper",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "state",
+    "name": "etcd",
+    "version": "v1",
+    "status": "alpha"
+  }
+]
