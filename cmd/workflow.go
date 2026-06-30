@@ -234,3 +234,13 @@ func newStoreBackend(
 
 	return b, closers
 }
+
+// buildStoreEntry assembles the per-store workflow service, remover, and target
+// resolver for an already-opened state store. It is the construction the old
+// newStoreBackend did inline; the connpool reuses it for each opened identity.
+func buildStoreEntry(st statestore.Store, namespace string, client *http.Client, apps discovery.Service) storeEntry {
+	svc := workflow.New(st, namespace)
+	rem := workflow.NewRemover(client, st, namespace)
+	res := newTargetResolver(apps, svc)
+	return storeEntry{svc: svc, rem: rem, targets: res}
+}
