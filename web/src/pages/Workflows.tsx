@@ -6,6 +6,7 @@ import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { dedupeWorkflows } from '../lib/dedupeWorkflows'
+import { dedupeStores } from '../lib/dedupeStores'
 import type { StateStore, WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
 const ALL_STATUSES: WorkflowStatus[] = ['Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
@@ -93,6 +94,12 @@ export function Workflows() {
   const noStores = storesResolved && storeList.length === 0
   const activeStore = storeList?.find((s) => s.active) ?? storeList?.[0]
 
+  // Collapse stores that differ only by file path (same name + type + connection)
+  // into one dropdown option — they read identical data. The active member, when
+  // present, represents its group. This is a display concern for THIS selector
+  // only; the shared store list still feeds the connections panel in full.
+  const displayStores = useMemo(() => dedupeStores(storeList ?? []), [storeList])
+
   // selectedStore is a store id (null = not yet determined; waits for storeList).
   // Initialize from localStorage when that id is still in the list, else the
   // active store's id. A stale persisted id falls back to active.
@@ -100,13 +107,13 @@ export function Workflows() {
   // until selectedStore is resolved.
   const [selectedStore, setSelectedStore] = useState<string | null>(null)
   useEffect(() => {
-    if (!storeList || storeList.length === 0) return
-    if (selectedStore !== null && storeList.some((s) => s.id === selectedStore)) return
+    if (!displayStores || displayStores.length === 0) return
+    if (selectedStore !== null && displayStores.some((s) => s.id === selectedStore)) return
     const persisted = window.localStorage.getItem(STORE_KEY)
-    const fromPersisted = persisted && storeList.some((s) => s.id === persisted) ? persisted : undefined
-    const fallback = activeStore?.id ?? storeList[0].id
+    const fromPersisted = persisted && displayStores.some((s) => s.id === persisted) ? persisted : undefined
+    const fallback = activeStore?.id ?? displayStores[0].id
     setSelectedStore(fromPersisted ?? fallback)
-  }, [storeList, activeStore, selectedStore])
+  }, [displayStores, activeStore, selectedStore])
 
   // The currently-selected store object (for the component link + labels).
   const selectedStoreObj = useMemo(
@@ -344,7 +351,7 @@ export function Workflows() {
                 value={selectedStore ?? ''}
                 onChange={(e) => onStoreChange(e.target.value)}
               >
-                {storeList.map((s) => (
+                {displayStores.map((s) => (
                   <option key={s.id} value={s.id}>
                     {storeOptionLabel(s)}
                   </option>
