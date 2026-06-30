@@ -184,9 +184,13 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 
 func parseListQuery(req *http.Request) workflow.ListQuery {
 	q := workflow.ListQuery{
-		AppID:     req.URL.Query().Get("appId"),
-		Search:    req.URL.Query().Get("search"),
-		PageToken: req.URL.Query().Get("page"),
+		AppID:           req.URL.Query().Get("appId"),
+		Search:          req.URL.Query().Get("search"),
+		PageToken:       req.URL.Query().Get("page"),
+		IncludeChildren: true,
+	}
+	if req.URL.Query().Get("includeChildren") == "false" {
+		q.IncludeChildren = false
 	}
 	if s := req.URL.Query().Get("status"); s != "" {
 		for _, part := range strings.Split(s, ",") {

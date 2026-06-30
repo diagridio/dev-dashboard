@@ -200,6 +200,46 @@ func TestServiceStatsNoStore(t *testing.T) {
 	require.ErrorIs(t, err, ErrNoStore)
 }
 
+func childStartedEvent(name, parentInstanceID string) *protos.HistoryEvent {
+	return &protos.HistoryEvent{EventId: 0, Timestamp: timestamppb.Now(), EventType: &protos.HistoryEvent_ExecutionStarted{
+		ExecutionStarted: &protos.ExecutionStartedEvent{
+			Name:           name,
+			ParentInstance: &protos.ParentInstanceInfo{WorkflowInstance: &protos.WorkflowInstance{InstanceId: parentInstanceID}},
+		},
+	}}
+}
+
+func TestServiceListExcludesChildren(t *testing.T) {
+	f := newFakeStore()
+	seedWorkflow(t, f, "default", "order", "parent-1", "ParentWorkflow", []*protos.HistoryEvent{startedEvent("ParentWorkflow")})
+	seedWorkflow(t, f, "default", "order", "child-1", "ChildWorkflow", []*protos.HistoryEvent{childStartedEvent("ChildWorkflow", "parent-1")})
+	svc := New(f, "default")
+
+	all, err := svc.List(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, all.Items, 2)
+
+	topOnly, err := svc.List(context.Background(), ListQuery{IncludeChildren: false})
+	require.NoError(t, err)
+	require.Len(t, topOnly.Items, 1)
+	require.Equal(t, "parent-1", topOnly.Items[0].InstanceID)
+}
+
+func TestServiceStatsExcludesChildren(t *testing.T) {
+	f := newFakeStore()
+	seedWorkflow(t, f, "default", "order", "parent-1", "ParentWorkflow", []*protos.HistoryEvent{startedEvent("ParentWorkflow")})
+	seedWorkflow(t, f, "default", "order", "child-1", "ChildWorkflow", []*protos.HistoryEvent{childStartedEvent("ChildWorkflow", "parent-1")})
+	svc := New(f, "default")
+
+	all, err := svc.Stats(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Equal(t, 2, all.Total)
+
+	topOnly, err := svc.Stats(context.Background(), ListQuery{IncludeChildren: false})
+	require.NoError(t, err)
+	require.Equal(t, 1, topOnly.Total)
+}
+
 func TestServiceListEnumeratesAllAppIDsFromStore(t *testing.T) {
 	f := newFakeStore()
 	seedWorkflow(t, f, "default", "order", "i1", "OrderWorkflow", nil)

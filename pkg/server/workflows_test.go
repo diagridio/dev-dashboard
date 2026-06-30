@@ -276,6 +276,20 @@ func TestWorkflowsListUnreachableStore(t *testing.T) {
 	require.NotContains(t, body, "no state store detected")
 }
 
+func TestParseListQueryIncludeChildren(t *testing.T) {
+	// Absent param ⇒ children shown (default true).
+	req := httptest.NewRequest(http.MethodGet, "/workflows", nil)
+	require.True(t, parseListQuery(req).IncludeChildren)
+
+	// Explicit false ⇒ children hidden.
+	req = httptest.NewRequest(http.MethodGet, "/workflows?includeChildren=false", nil)
+	require.False(t, parseListQuery(req).IncludeChildren)
+
+	// Explicit true ⇒ children shown.
+	req = httptest.NewRequest(http.MethodGet, "/workflows?includeChildren=true", nil)
+	require.True(t, parseListQuery(req).IncludeChildren)
+}
+
 func TestWorkflowsStatsUnreachableStore(t *testing.T) {
 	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379")
 	h := workflowsRouter(newFakeBackend(unreachable), nil)
