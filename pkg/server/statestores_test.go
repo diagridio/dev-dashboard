@@ -77,10 +77,13 @@ func TestStateStores_PostValidType(t *testing.T) {
 	h := newAPI(reg)
 	res, _ := postJSON(t, h, "/statestores",
 		`{"name":"pg","type":"state.postgresql","metadata":{"connectionString":"host=a"}}`)
+	// Handler contract: 201 Created on success.
 	require.Equal(t, http.StatusCreated, res.StatusCode)
+	// AddStore must have been called once with the posted values.
 	require.Len(t, reg.added, 1)
 	require.Equal(t, "pg", reg.added[0].Name)
-	require.NotEmpty(t, reg.added[0].ID, "the backend assigns a stable id on add")
+	require.Equal(t, "state.postgresql", reg.added[0].Type)
+	// ID assignment is the registry's responsibility, not the handler's — not asserted here.
 }
 
 func TestStateStores_PostUnsupportedType(t *testing.T) {

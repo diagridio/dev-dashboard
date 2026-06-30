@@ -12,16 +12,15 @@ import (
 )
 
 // Compile-time interface assertions.
-var _ server.StoreRegistry = (*storeRegistry)(nil)
 var _ server.TargetResolver = (*targetResolver)(nil)
 
 // storeOpener opens a state store from a component spec. Production uses
 // statestore.New; tests inject a fake to assert connection lifecycle.
 type storeOpener func(context.Context, statestore.Component) (statestore.Store, error)
 
-// storeRegistry wraps a slice of detected state-store components and exposes the
-// server.StoreRegistry interface. The active component is computed once at
-// construction time.
+// storeRegistry wraps a slice of detected state-store components. It is the
+// active-store election helper used by the reconciler; only active() and comps
+// are used externally.
 type storeRegistry struct {
 	comps       []statestore.Component
 	activeIndex int // -1 means no active component
@@ -83,31 +82,26 @@ func (r *storeRegistry) active() *statestore.Component {
 	return &r.comps[r.activeIndex]
 }
 
-// Stores satisfies server.StoreRegistry. It returns ONLY the active state store
-// (the one used by Dapr Workflow), or an empty slice when no store is detected.
-// The connection summary is secrets-free (see statestore.ConnInfo).
+// Stores returns the active store as a single-element slice suitable for
+// read-only display (election result only). ID and Source are derived the same
+// way the registry derives them for auto entries, so the frontend can address
+// the entry consistently. Returns an empty (non-nil) slice when no store is
+// elected.
 func (r *storeRegistry) Stores() []server.StoreInfo {
 	active := r.active()
 	if active == nil {
 		return []server.StoreInfo{}
 	}
 	return []server.StoreInfo{{
+		ID:         entryID(SourceAuto, normPath(active.Path)),
 		Name:       active.Name,
 		Type:       active.Type,
+		Source:     SourceAuto,
 		Path:       active.Path,
 		Active:     true,
 		Connection: statestore.ConnInfo(*active),
 	}}
 }
-
-// AddStore is a no-op on the internal storeRegistry (read-only from detected components).
-func (r *storeRegistry) AddStore(string, string, map[string]string) error { return nil }
-
-// UpdateStore is a no-op on the internal storeRegistry (read-only from detected components).
-func (r *storeRegistry) UpdateStore(string, string, string, map[string]string) error { return nil }
-
-// DeleteStore is a no-op on the internal storeRegistry (read-only from detected components).
-func (r *storeRegistry) DeleteStore(string) error { return nil }
 
 // targetResolver resolves an (appID, instanceID) pair into a workflow.RemoveTarget
 // by combining information from the discovery service and the workflow service.

@@ -194,13 +194,16 @@ func TestWorkflowsStatsUnknownStore(t *testing.T) {
 
 func TestStateStoresEndpoint(t *testing.T) {
 	stores := fakeStoreRegistry{stores: []StoreInfo{
-		{Name: "statestore", Type: "state.redis", Active: true, Connection: "localhost:6379"},
+		{ID: "statestore-auto", Name: "statestore", Type: "state.redis", Source: "auto", Active: true, Connection: "localhost:6379"},
 	}}
 	h := apiRouter(version.Info{}, nil, newFakeBackend(fakeWF{}), stores, fakeResources{}, fakeNews{})
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"name":"statestore"`)
 	require.Contains(t, body, `"connection":"localhost:6379"`)
+	// Lock the contract the frontend depends on: id and source must be serialised.
+	require.Contains(t, body, `"id":"statestore-auto"`)
+	require.Contains(t, body, `"source":"auto"`)
 }
 
 func TestStateStoresNilRegistry(t *testing.T) {
