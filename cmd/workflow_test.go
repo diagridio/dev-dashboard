@@ -45,6 +45,10 @@ func (f fakeWorkflowSvc) Stats(_ context.Context, _ workflow.ListQuery) (workflo
 	return workflow.StatsResult{}, nil
 }
 
+func (f fakeWorkflowSvc) AppIDs(_ context.Context) ([]string, error) {
+	return nil, nil
+}
+
 func TestTargetResolver(t *testing.T) {
 	ctx := context.Background()
 

@@ -33,6 +33,9 @@ type Service interface {
 	List(ctx context.Context, q ListQuery) (ListResult, error)
 	Stats(ctx context.Context, q ListQuery) (StatsResult, error)
 	Get(ctx context.Context, appID, instanceID string) (Execution, error)
+	// AppIDs returns every distinct app-id that has workflow data in the store,
+	// independent of any list filter — the source of truth for the app filter.
+	AppIDs(ctx context.Context) ([]string, error)
 }
 
 type service struct {
@@ -76,6 +79,10 @@ func (u unreachableService) Stats(context.Context, ListQuery) (StatsResult, erro
 
 func (u unreachableService) Get(context.Context, string, string) (Execution, error) {
 	return Execution{}, u.err()
+}
+
+func (u unreachableService) AppIDs(context.Context) ([]string, error) {
+	return nil, u.err()
 }
 
 // metaKeys returns instance-metadata keys: scoped to one app when appID != "",
@@ -174,6 +181,35 @@ func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 		res.Total++
 	}
 	return res, nil
+}
+
+// AppIDs scans every instance-metadata key across the namespace and returns the
+// distinct app-ids, sorted. It reads only keys (no per-instance load), so it is
+// cheap relative to List/Stats and is the filter-independent source for the UI's
+// app dropdown.
+func (s *service) AppIDs(ctx context.Context) ([]string, error) {
+	if s.store == nil {
+		return nil, ErrNoStore
+	}
+	keys, _, err := s.store.Keys(ctx, statestore.AllInstanceMetaPattern(s.namespace), "", 0)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	var ids []string
+	for _, k := range keys {
+		appID, ok := statestore.ParseAppID(k)
+		if !ok {
+			continue
+		}
+		if _, dup := seen[appID]; dup {
+			continue
+		}
+		seen[appID] = struct{}{}
+		ids = append(ids, appID)
+	}
+	sort.Strings(ids)
+	return ids, nil
 }
 
 func (s *service) Get(ctx context.Context, appID, instanceID string) (Execution, error) {

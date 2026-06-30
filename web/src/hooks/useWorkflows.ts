@@ -51,6 +51,19 @@ export function useWorkflowStats(params: { appId?: string; search?: string; stor
   })
 }
 
+// All app-ids that have workflow data in the store — the filter-independent
+// source for the app dropdown (so a selection never collapses the options).
+export function useWorkflowAppIds(params: { store?: string; enabled?: boolean }) {
+  const ctx = useRefreshInterval()
+  const qs = params.store ? `?store=${encodeURIComponent(params.store)}` : ''
+  return useQuery<string[]>({
+    queryKey: ['workflow-appids', qs],
+    queryFn: () => fetchJSON<string[]>(`/workflows/appids${qs}`),
+    refetchInterval: refetchMs(ctx),
+    enabled: params.enabled !== false,
+  })
+}
+
 export function useWorkflow(appId: string, instanceId: string, store?: string) {
   const ctx = useRefreshInterval()
   const qs = store ? `?store=${encodeURIComponent(store)}` : ''
