@@ -12,10 +12,10 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/dapr/durabletask-go/api/protos"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
-	"github.com/dapr/durabletask-go/api/protos"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"

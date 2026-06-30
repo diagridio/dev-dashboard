@@ -23,11 +23,11 @@ type poolStore struct {
 func (s poolStore) Keys(context.Context, string, string, int) ([]string, string, error) {
 	return nil, "", nil
 }
-func (s poolStore) Get(context.Context, string) ([]byte, error)                    { return nil, nil }
-func (s poolStore) BulkGet(context.Context, []string) (map[string][]byte, error)   { return nil, nil }
-func (s poolStore) Delete(context.Context, string) error                           { return nil }
-func (s poolStore) Set(context.Context, string, []byte) error                      { return nil }
-func (s poolStore) Close() error                                                   { atomic.AddInt32(s.closes, 1); return nil }
+func (s poolStore) Get(context.Context, string) ([]byte, error)                  { return nil, nil }
+func (s poolStore) BulkGet(context.Context, []string) (map[string][]byte, error) { return nil, nil }
+func (s poolStore) Delete(context.Context, string) error                         { return nil }
+func (s poolStore) Set(context.Context, string, []byte) error                    { return nil }
+func (s poolStore) Close() error                                                 { atomic.AddInt32(s.closes, 1); return nil }
 
 // poolOpener counts opens and hands back poolStores. If block is non-nil it
 // waits on it before returning (to probe single-flight).

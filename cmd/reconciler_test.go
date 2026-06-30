@@ -25,7 +25,7 @@ type countingStore struct {
 func (s countingStore) Keys(context.Context, string, string, int) ([]string, string, error) {
 	return nil, "", nil
 }
-func (s countingStore) Get(context.Context, string) ([]byte, error)            { return nil, nil }
+func (s countingStore) Get(context.Context, string) ([]byte, error) { return nil, nil }
 func (s countingStore) BulkGet(context.Context, []string) (map[string][]byte, error) {
 	return map[string][]byte{}, nil
 }
