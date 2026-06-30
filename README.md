@@ -5,10 +5,9 @@ view of everything Dapr running on their machine.
 
 ## Goal
 
-The Dapr Dev Dashboard is a **passive observer** for local Dapr development. It inspects the
-apps you start with `dapr run` / `dapr run -f` and surfaces everything about them — sidecars,
-workflows, actors, subscriptions, components, configurations, and logs — in one dense,
-minimal UI.
+The Dapr Dev Dashboard is an observer for local Dapr development. It inspects the
+apps you start with `dapr run` / `dapr run -f` or Aspire and surfaces everything about them — sidecars,
+workflows, actors, subscriptions, components, configurations, and logs.
 
 Design goals:
 
