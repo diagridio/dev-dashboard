@@ -213,8 +213,12 @@ Reusable React components — prefer these over re-implementing.
 |---|---|---|
 | `StatusPill` | `components/StatusPill.tsx` | Workflow status → correct `.pill .s-*` class + uppercased label. **Use this; don't hand-map statuses.** |
 | `LiveIndicator` | `components/LiveIndicator.tsx` | The pulsing "live" dot for `.phead`. |
-| `RefreshControl` | `components/RefreshControl.tsx` | Auto-refresh control inside a `.refreshbar`. |
-| `ConfirmRemoveDialog` | `components/ConfirmRemoveDialog.tsx` | Modal confirm for destructive actions. |
+| `RefreshControl` | `components/RefreshControl.tsx` | Global auto-refresh control, mounted in `TopNav` (top-right). Renders as `.refresh-compact` — a `.beatbtn` pulse/pause toggle (`.beat` dot) plus a `.select.compact` interval dropdown. |
+| `Modal` | `components/Modal.tsx` | Focus-trapped modal shell: `.modal-backdrop` overlay + `.card.modal-card` dialog + `.modal-title`. Wrap dialog content in this; close on backdrop/Escape. |
+| `ConfirmRemoveDialog` | `components/ConfirmRemoveDialog.tsx` | Modal confirm for destructive actions (built on `Modal`). |
+| `MetadataFieldInput` | `components/MetadataFieldInput.tsx` | Renders one form control (`.inp` text or select) from a component-metadata field descriptor. Use for metadata-driven forms; don't hand-build inputs. |
+| `StateStoreConnectionDialog` | `components/StateStoreConnectionDialog.tsx` | Add/edit a state-store connection — a `Modal` with `.field` rows driven by `MetadataFieldInput`. |
+| `StateStoreConnectionsPanel` | `components/StateStoreConnectionsPanel.tsx` | The list/add/edit/delete connections panel mounted on the Components page. |
 | `ThemeToggle` | `components/ThemeToggle.tsx` | Light/dark switch (lives in `TopNav`). |
 | `useToast()` | `lib/toast.tsx` | Transient confirmation (e.g. "Instance ID copied"). |
 | `copyText()` | `lib/clipboard.ts` | Clipboard write; pair with a toast. |
@@ -237,6 +241,10 @@ Reusable React components — prefer these over re-implementing.
 - `.twocol` / `.io` — two equal columns (collapse to 1 on narrow screens).
 - `.md` — master-detail split (300px list + flexible pane); list items are `.ci`
   (`.ci.sel` = selected).
+- **Modal shell** — `.modal-backdrop` (fixed full-screen overlay, centers its child) wraps
+  `.card.modal-card` (the dialog surface; composes `.card`), with `.modal-title` for the
+  heading and `.modal-actions` for the right-aligned footer button row. Prefer the `Modal`
+  component over assembling these by hand.
 
 **Tables**
 - `table.t` — standard table; add `.click` to make rows clickable (cursor + hover).
@@ -264,10 +272,19 @@ Reusable React components — prefer these over re-implementing.
 - `.segs` — segmented toggle group (`button[aria-pressed]`).
 - `.lvchip` — log-level toggle chips; `.followbtn` — log follow toggle.
 
+**Form fields** (used in modal dialogs — see `StateStoreConnectionDialog`)
+- `.inp` — full-width text input / `<select>` (the metadata-form control style). `.select` is
+  the compact filter variant; `.inp` is the form-field variant.
+- `.field` — a label-over-control row (`grid`, `gap`); `.field > label` is the muted caption.
+  `.req` marks a required-field asterisk; `.field-err` is the inline error line under a control;
+  `.field-row` lays out a control plus adjacent element horizontally.
+
 **Feedback**
 - `.toast` (`.show`) — driven by `useToast`.
 - `.hint` — centered faint helper line under content.
-- `.refreshbar` — the refresh/clock strip on auto-refreshing pages.
+- `.refresh-compact` — the compact global refresh control in the top nav (`.beatbtn` + `.beat`
+  pulse toggle, `.select.compact` interval dropdown); rendered by `RefreshControl`.
+- `.refreshbar` — the wider refresh/clock strip still used on the Workflow detail page.
 
 **Code blocks**
 - `<pre className="json">` + `highlightJson(...)` for JSON.
