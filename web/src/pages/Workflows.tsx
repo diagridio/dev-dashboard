@@ -522,7 +522,6 @@ export function Workflows() {
                   <th>Created</th>
                   <th>Duration</th>
                   <th>Last event</th>
-                  <th style={{ width: 34 }} />
                 </tr>
               </thead>
               <tbody>
@@ -584,7 +583,6 @@ export function Workflows() {
                       <td className="muted mono tabnum">{formatCreated(wf.createdAt)}</td>
                       <td className="mono tabnum">{duration}</td>
                       <td className={`muted mono tabnum${isFailed ? ' err' : ''}`}>{lastEventText}</td>
-                      <td className="kebab">⋯</td>
                     </tr>
                   )
                 })}

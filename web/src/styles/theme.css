@@ -308,8 +308,8 @@ table.wf tbody tr:last-child td { border-bottom: none; }
 .appcell { display: inline-flex; align-items: center; gap: 6px; }
 .dprchip { font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--dapr); color: var(--dapr); }
 .cbx { width: 14px; height: 14px; border: 1.5px solid var(--faint); border-radius: 4px; display: inline-block; vertical-align: middle; }
-.cbx.on { background: var(--accent-bright); border-color: var(--accent-bright); position: relative; }
-.cbx.on::after { content: ""; position: absolute; left: 4px; top: 1px; width: 3px; height: 7px; border: solid #06231a; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.cbx.on { position: relative; }
+.cbx.on::after { content: ""; position: absolute; left: 4px; top: 1px; width: 3px; height: 7px; border: solid var(--accent-bright); border-width: 0 2px 2px 0; transform: rotate(45deg); }
 tr.sel { background: color-mix(in srgb, var(--accent2) 9%, var(--surface)); }
 tr.sel:hover { background: color-mix(in srgb, var(--accent2) 13%, var(--surface)); }
 .selbar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); font-size: 13px; }
