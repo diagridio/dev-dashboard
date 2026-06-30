@@ -100,6 +100,15 @@ func (r *storeRegistry) Stores() []server.StoreInfo {
 	}}
 }
 
+// AddStore is a no-op on the internal storeRegistry (read-only from detected components).
+func (r *storeRegistry) AddStore(string, string, map[string]string) error { return nil }
+
+// UpdateStore is a no-op on the internal storeRegistry (read-only from detected components).
+func (r *storeRegistry) UpdateStore(string, string, string, map[string]string) error { return nil }
+
+// DeleteStore is a no-op on the internal storeRegistry (read-only from detected components).
+func (r *storeRegistry) DeleteStore(string) error { return nil }
+
 // targetResolver resolves an (appID, instanceID) pair into a workflow.RemoveTarget
 // by combining information from the discovery service and the workflow service.
 type targetResolver struct {

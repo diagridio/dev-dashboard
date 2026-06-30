@@ -34,7 +34,6 @@ type reconciler struct {
 	homeDir        string
 	stateStorePath string
 	client         *http.Client
-	open           storeOpener
 	registry       *ConnRegistry
 	pool           *connPool
 	degraded       storeEntry
@@ -48,9 +47,8 @@ type reconciler struct {
 	closed     bool
 }
 
-// newReconciler builds a reconciler. open defaults to statestore.New; tests
-// override it via the exported field after construction. The registry and pool
-// are injected (the pool already carries the opener used for connections).
+// newReconciler builds a reconciler. The registry and pool are injected (the
+// pool already carries the opener used for connections).
 func newReconciler(apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client, registry *ConnRegistry, pool *connPool) *reconciler {
 	return &reconciler{
 		apps:           apps,
@@ -58,7 +56,6 @@ func newReconciler(apps discovery.Service, namespace, homeDir, stateStorePath st
 		homeDir:        homeDir,
 		stateStorePath: stateStorePath,
 		client:         client,
-		open:           statestore.New,
 		registry:       registry,
 		pool:           pool,
 		degraded:       buildStoreEntry(nil, namespace, client, apps),
@@ -164,21 +161,74 @@ func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 	return statestore.Component{}, false
 }
 
-// Stores satisfies server.StoreRegistry. Reconciler-level implementation lands
-// in Task 4 (all registry entries with Source + active flag). This base version
-// returns the elected active store only; Task 4 replaces it.
+// Stores satisfies server.StoreRegistry. It returns ALL registry entries (auto
+// ∪ manual) with Source set and the elected active store flagged. The list
+// opens NO DB connections: for each entry it builds the component (auto: read +
+// resolve its YAML; manual: inline metadata) and computes the secrets-free
+// ConnInfo — a file read, never a connect. A missing YAML yields an empty
+// Connection (unreachable), not an error.
 func (rc *reconciler) Stores() []server.StoreInfo {
-	active := rc.activeComponent()
-	if active == nil {
+	if rc.registry == nil {
 		return []server.StoreInfo{}
 	}
-	return []server.StoreInfo{{
-		Name:       active.Name,
-		Type:       active.Type,
-		Path:       active.Path,
-		Active:     true,
-		Connection: statestore.ConnInfo(*active),
-	}}
+	activeID := identity(rc.activeComponent())
+	entries := rc.registry.List()
+	out := make([]server.StoreInfo, 0, len(entries))
+	for _, e := range entries {
+		comp, _ := rc.componentFor(e.ID)
+		out = append(out, server.StoreInfo{
+			ID:         e.ID,
+			Name:       e.Name,
+			Type:       e.Type,
+			Source:     e.Source,
+			Path:       e.Path,
+			Active:     identity(&comp) == activeID && activeID != "",
+			Connection: statestore.ConnInfo(comp),
+		})
+	}
+	return out
+}
+
+// AddStore satisfies server.StoreRegistry: adds a manual connection. The
+// registry assigns its stable id from the name.
+func (rc *reconciler) AddStore(name, typ string, metadata map[string]string) error {
+	if rc.registry == nil {
+		return nil
+	}
+	return rc.registry.Add(ConnEntry{Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
+}
+
+// UpdateStore satisfies server.StoreRegistry: edits the manual connection with
+// the given id and evicts its pooled connection so the next select reconnects
+// with new metadata. It evicts the OLD component (resolved before the update).
+func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]string) error {
+	if rc.registry == nil {
+		return nil
+	}
+	oldComp, hadOld := rc.componentFor(id)
+	if err := rc.registry.Update(ConnEntry{ID: id, Name: name, Type: typ, Source: SourceManual, Metadata: metadata}); err != nil {
+		return err
+	}
+	if hadOld && rc.pool != nil {
+		rc.pool.evict(oldComp)
+	}
+	return nil
+}
+
+// DeleteStore satisfies server.StoreRegistry: removes the entry with the given
+// id and evicts its pooled connection if open.
+func (rc *reconciler) DeleteStore(id string) error {
+	if rc.registry == nil {
+		return nil
+	}
+	comp, ok := rc.componentFor(id)
+	if err := rc.registry.Delete(id); err != nil {
+		return err
+	}
+	if ok && rc.pool != nil {
+		rc.pool.evict(comp)
+	}
+	return nil
 }
 
 // ServiceFor satisfies server.WorkflowBackend. The argument is a registry entry

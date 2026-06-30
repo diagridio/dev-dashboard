@@ -17,15 +17,22 @@ type WorkflowRemover interface {
 	RemoveMany(ctx context.Context, targets []workflow.RemoveTarget, force bool) []workflow.RemoveResult
 }
 
-// StoreRegistry exposes detected/active state stores to the API (Task 12).
+// StoreRegistry exposes the persisted connection registry to the API: listing
+// all entries and adding/updating/deleting manual connections.
 type StoreRegistry interface {
 	Stores() []StoreInfo
+	AddStore(name, typ string, metadata map[string]string) error
+	UpdateStore(id, name, typ string, metadata map[string]string) error
+	DeleteStore(id string) error
 }
 
-// StoreInfo describes the active detected state store.
+// StoreInfo describes one registry connection. ID is the stable, URL-safe key
+// the API/selection address it by; Name is the human-facing label.
 type StoreInfo struct {
+	ID         string `json:"id"`
 	Name       string `json:"name"`
 	Type       string `json:"type"`
+	Source     string `json:"source"` // "auto" | "manual"
 	Path       string `json:"path"`
 	Active     bool   `json:"active"`
 	Connection string `json:"connection"` // secrets-free host/db summary for display

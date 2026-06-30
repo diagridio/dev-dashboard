@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/stretchr/testify/require"
 )
@@ -131,4 +132,59 @@ func TestReconciler_NoActiveNoStoresDegraded(t *testing.T) {
 	// No elected store and empty name -> degraded entry, ok=true.
 	_, _, _, ok := rc.ServiceFor("")
 	require.True(t, ok, "empty name with no active store returns the degraded entry")
+}
+
+func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
+	dir := t.TempDir()
+	home := t.TempDir()
+
+	autoPath := seedAutoComponentYAML(t, dir, "autostore", filepath.Join(dir, "auto.db"))
+	reg := LoadRegistry(home)
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
+
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	// Elect "autostore" active so the active flag is exercised.
+	active := statestore.Component{Name: "autostore", Type: "state.sqlite", Path: autoPath,
+		Metadata: map[string]string{"connectionString": filepath.Join(dir, "auto.db")}}
+	rc.mu.Lock()
+	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil)
+	rc.mu.Unlock()
+
+	// AddStore -> a manual entry appears in Stores().
+	require.NoError(t, rc.AddStore("manualpg", "state.postgresql", map[string]string{"connectionString": "host=h dbname=d"}))
+
+	infos := rc.Stores()
+	byName := map[string]server.StoreInfo{}
+	for _, i := range infos {
+		byName[i.Name] = i
+	}
+	require.Contains(t, byName, "autostore")
+	require.Contains(t, byName, "manualpg")
+	require.Equal(t, "auto", byName["autostore"].Source)
+	require.NotEmpty(t, byName["autostore"].ID)
+	require.True(t, byName["autostore"].Active, "the elected store is flagged active")
+	require.Equal(t, "manual", byName["manualpg"].Source)
+	require.NotEmpty(t, byName["manualpg"].ID)
+	require.False(t, byName["manualpg"].Active)
+	require.Equal(t, "h/d", byName["manualpg"].Connection, "manual pg connection is secrets-free ConnInfo")
+
+	pgID := byName["manualpg"].ID
+
+	// UpdateStore mutates the manual entry, addressed by id.
+	require.NoError(t, rc.UpdateStore(pgID, "manualpg", "state.postgresql", map[string]string{"connectionString": "host=h2 dbname=d2"}))
+	for _, i := range rc.Stores() {
+		if i.ID == pgID {
+			require.Equal(t, "h2/d2", i.Connection)
+		}
+	}
+
+	// DeleteStore removes it, addressed by id.
+	require.NoError(t, rc.DeleteStore(pgID))
+	for _, i := range rc.Stores() {
+		require.NotEqual(t, pgID, i.ID)
+	}
 }

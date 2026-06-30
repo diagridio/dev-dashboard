@@ -3,10 +3,8 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"log/slog"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -14,16 +12,6 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/stretchr/testify/require"
 )
-
-// withCapturedLogs swaps the default logger for one writing to buf, returns a restore func.
-func withCapturedLogs(t *testing.T) *bytes.Buffer {
-	t.Helper()
-	var buf bytes.Buffer
-	old := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
-	t.Cleanup(func() { slog.SetDefault(old) })
-	return &buf
-}
 
 // --- targetResolver unit tests ---
 

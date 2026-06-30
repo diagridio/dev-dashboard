@@ -215,7 +215,10 @@ type fakeStoreRegistry struct {
 	stores []StoreInfo
 }
 
-func (f fakeStoreRegistry) Stores() []StoreInfo { return f.stores }
+func (f fakeStoreRegistry) Stores() []StoreInfo                                            { return f.stores }
+func (f fakeStoreRegistry) AddStore(string, string, map[string]string) error               { return nil }
+func (f fakeStoreRegistry) UpdateStore(string, string, string, map[string]string) error    { return nil }
+func (f fakeStoreRegistry) DeleteStore(string) error                                       { return nil }
 
 // fakeBackend implements WorkflowBackend for tests.
 // It returns a fixed svc/rem/resolver for any store name except "unknown".
