@@ -248,8 +248,11 @@ Reusable React components — prefer these over re-implementing.
 - `.pill .s-*` — status pill (use `StatusPill`).
 - `.health` + `.led.{ok,warn,bad}` — colored LED + label.
 - `.chip`, `.typechip`, `.appref`, `.dprchip`, `.rulebadge`, `.tag-int` — small
-  mono badges for types, app refs, Dapr tags. `.chip.link` / `.appref.link` add
-  hover affordance (and an `↗` for `.chip.link`).
+  mono badges for types, app refs, Dapr tags. `.appref.link` adds a hover
+  affordance (border/colour change, **no arrow**). **There is no `.chip.link`** —
+  a chip that navigates renders as a plain `.chip` wrapped in a `<Link>` (internal
+  navigation, no `↗`); see §6. The old `.chip.link` appended an `↗` that read as an
+  *external* link, which these never are, so it was removed.
 - `.lang .sw` — language label with a color swatch.
 - `.kebab` — the `⋯` row-actions glyph.
 
@@ -281,6 +284,15 @@ Reusable React components — prefer these over re-implementing.
   ```tsx
   <Link className="celllink" to={`/apps/${id}`} onClick={(e) => e.stopPropagation()}>{id}</Link>
   ```
+- **Internal-link chips:** a chip that navigates *within* the app is a plain
+  `.chip` wrapped in a `<Link>` — never add an external-link `↗`. Reserve the `↗`
+  affordance for links that genuinely leave the app. Example (the workflow store's
+  link to its component page):
+  ```tsx
+  <Link className="chip" to={`/components/${name}`}>component</Link>
+  ```
+  The App-detail component chips follow the same rule (`.chip.k` wrapped in a
+  `<Link>`). In tables, prefer `.celllink` (above).
 - **Em dash for empty values:** render `<span className="faint">—</span>`, not an
   empty cell.
 - **Copy-to-clipboard:** `.copybtn` (or click-to-copy on a `.vv.mono`) → `copyText()`
