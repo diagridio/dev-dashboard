@@ -1,7 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import { useActors } from '../hooks/useResources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-import { LiveIndicator } from '../components/LiveIndicator'
 import type { Actor } from '../types/resources'
 
 const INTERNAL_PREFIX = 'dapr.internal'
@@ -40,7 +39,6 @@ export function Actors() {
         </div>
         {filterChip}
       </div>
-      <LiveIndicator />
     </div>
   )
 

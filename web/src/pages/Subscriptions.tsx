@@ -1,7 +1,6 @@
 import { Link, useSearchParams } from 'react-router-dom'
 import { useSubscriptions } from '../hooks/useResources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-import { LiveIndicator } from '../components/LiveIndicator'
 import type { Subscription } from '../types/resources'
 
 export function Subscriptions() {
@@ -38,7 +37,6 @@ export function Subscriptions() {
         </div>
         {filterChip}
       </div>
-      <LiveIndicator />
     </div>
   )
 

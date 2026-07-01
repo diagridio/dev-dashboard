@@ -1,6 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useApps } from '../hooks/useApps'
-import { LiveIndicator } from '../components/LiveIndicator'
 import type { AppSummary, HealthStatus } from '../types/api'
 
 // Maps a health status to its LED modifier class.
@@ -33,7 +32,6 @@ const PAGE_HEADER = (
       <h1>Applications</h1>
       <div className="sub">Dapr apps &amp; sidecars discovered on this machine</div>
     </div>
-    <LiveIndicator />
   </div>
 )
 

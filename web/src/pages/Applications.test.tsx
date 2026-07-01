@@ -72,14 +72,6 @@ describe('Applications', () => {
     expect(screen.getAllByText(/run template/i).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows a display-only refresh indicator', async () => {
-    server.use(http.get('/api/apps', () => HttpResponse.json(sampleApps)))
-    const { container } = renderAt()
-    await screen.findByRole('link', { name: 'order' })
-    expect(screen.getByText(/refreshing every 3s/i)).toBeInTheDocument()
-    expect(container.querySelector('.beat')).not.toBeNull()
-  })
-
   it('shows an empty state when no apps', async () => {
     server.use(http.get('/api/apps', () => HttpResponse.json([])))
     renderAt()
