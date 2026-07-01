@@ -60,4 +60,18 @@ describe('StepType category filter', () => {
     expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ type: 'SELECT_SCHEMA', version: 'v1' }))
     expect(dispatch.mock.calls[dispatch.mock.calls.length - 1]?.[0].schema.name).toBe('redis')
   })
+
+  it('clears the search query when the category changes', async () => {
+    const { rerender } = renderStep(reducer(initialState(), { type: 'SELECT_CATEGORY', category: 'state' }))
+    const box = await screen.findByRole('searchbox')
+    fireEvent.change(box, { target: { value: 'redis' } })
+    expect((box as HTMLInputElement).value).toBe('redis')
+    // switch category via a fresh state prop
+    rerender(
+      <QueryProvider client={makeQueryClient()}>
+        <StepType state={reducer(initialState(), { type: 'SELECT_CATEGORY', category: 'pubsub' })} dispatch={vi.fn()} />
+      </QueryProvider>,
+    )
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('')
+  })
 })

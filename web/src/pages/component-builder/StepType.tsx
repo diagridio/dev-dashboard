@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useComponentSchemas } from '../../hooks/useComponentSchemas'
 import type { Action, ComponentBuilderState } from './reducer'
 
@@ -10,6 +10,10 @@ interface Props {
 export function StepType({ state, dispatch }: Props) {
   const { byType, isLoading } = useComponentSchemas()
   const [q, setQ] = useState('')
+
+  useEffect(() => {
+    setQ('')
+  }, [state.category])
 
   if (isLoading) return <p className="muted">Loading catalog…</p>
 
