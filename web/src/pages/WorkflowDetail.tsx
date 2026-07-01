@@ -299,31 +299,11 @@ export function WorkflowDetail() {
 
   const [order, setOrder] = useState<HistoryOrder>(() => getHistoryOrder())
   const [hoveredPair, setHoveredPair] = useState<number | null>(null)
+  const [selection, setSelection] = useState<{ pairId: number; index: number } | null>(null)
 
   useEffect(() => {
     setHistoryOrder(order)
   }, [order])
-
-  // Scroll to and pulse the row referenced by the URL hash (e.g. #event-2),
-  // both on mount and whenever the hash changes via an in-page anchor click.
-  useEffect(() => {
-    function jumpToHash() {
-      const id = window.location.hash.slice(1)
-      if (!id) return
-      const el = document.getElementById(id)
-      if (!el) return
-      try {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      } catch {
-        // jsdom / unsupported environments: scrolling is non-essential
-      }
-      el.classList.add('target-pulse')
-      window.setTimeout(() => el.classList.remove('target-pulse'), 1500)
-    }
-    jumpToHash()
-    window.addEventListener('hashchange', jumpToHash)
-    return () => window.removeEventListener('hashchange', jumpToHash)
-  }, [execution])
 
   const { toast, toastNode } = useToast()
 
@@ -344,12 +324,43 @@ export function WorkflowDetail() {
     return { canonicalIndex: ci, pairIndex: buildPairIndex(ascending) }
   }, [_history])
 
+  // Scroll to and pulse the row referenced by the URL hash (e.g. #event-2), both
+  // on mount and on in-page anchor clicks. If the target is part of a pair, also
+  // select it (highlight both rows) and mark it active so its body expands.
+  useEffect(() => {
+    function jumpToHash() {
+      const id = window.location.hash.slice(1)
+      if (!id) return
+      const el = document.getElementById(id)
+      if (!el) return
+      try {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } catch {
+        // jsdom / unsupported environments: scrolling is non-essential
+      }
+      el.classList.add('target-pulse')
+      window.setTimeout(() => el.classList.remove('target-pulse'), 1500)
+      const m = id.match(/^event-(\d+)$/)
+      if (m) {
+        const idx = Number(m[1])
+        const p = pairIndex.get(idx)
+        if (p) setSelection({ pairId: p.pairId, index: idx })
+      }
+    }
+    jumpToHash()
+    window.addEventListener('hashchange', jumpToHash)
+    return () => window.removeEventListener('hashchange', jumpToHash)
+  }, [execution, pairIndex])
+
   const copyWorkflowLink = () => {
     const { origin, pathname } = window.location
     const qs = store ? `?store=${encodeURIComponent(store)}` : ''
     copyText(`${origin}${pathname}${qs}`)
     toast.show('Link copied')
   }
+
+  const togglePairSelection = (pairId: number, index: number) =>
+    setSelection((cur) => (cur && cur.pairId === pairId && cur.index === index ? null : { pairId, index }))
 
   if (isLoading) {
     return (
@@ -687,7 +698,7 @@ export function WorkflowDetail() {
             const pair = pairIndex.get(ci) ?? null
             return (
               <EventRow
-                key={idx}
+                key={ci}
                 event={event}
                 createdAt={execution.createdAt}
                 isNewest={event === newestEvent}
@@ -698,6 +709,9 @@ export function WorkflowDetail() {
                 pair={pair}
                 pairHovered={pair !== null && pair.pairId === hoveredPair}
                 onPairHover={setHoveredPair}
+                pairSelected={pair !== null && selection !== null && pair.pairId === selection.pairId}
+                isActive={selection !== null && selection.index === ci}
+                onToggleSelect={pair !== null ? () => togglePairSelection(pair.pairId, ci) : undefined}
               />
             )
           })}

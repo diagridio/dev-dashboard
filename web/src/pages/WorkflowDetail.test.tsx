@@ -926,3 +926,91 @@ describe('EventRow', () => {
     )
   })
 })
+
+describe('WorkflowDetail — pair selection', () => {
+  beforeEach(() => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([{ appId: 'order', health: 'healthy' }])))
+  })
+
+  function seedPair() {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Completed',
+          createdAt: '2026-06-28T10:00:00.000Z', lastUpdatedAt: '2026-06-28T10:00:01.000Z',
+          replayCount: 0, output: '"ok"',
+          history: [
+            { sequenceId: 0, type: 'ExecutionStarted', name: 'OrderWorkflow', input: '{}', timestamp: '2026-06-28T10:00:00.000Z' },
+            { sequenceId: 1, type: 'TaskScheduled', name: 'Charge', input: '{"amt":5}', timestamp: '2026-06-28T10:00:00.100Z' },
+            { sequenceId: 2, type: 'TaskCompleted', scheduledId: 1, output: '"charged"', timestamp: '2026-06-28T10:00:00.440Z' },
+            { sequenceId: 3, type: 'ExecutionCompleted', output: '"ok"', timestamp: '2026-06-28T10:00:01.000Z' },
+          ],
+        }),
+      ),
+    )
+  }
+
+  function rowByType(container: HTMLElement, type: string): HTMLElement {
+    const row = Array.from(container.querySelectorAll('.timeline .ev')).find(
+      (el) => el.querySelector('.evtype')?.textContent === type,
+    )
+    if (!row) throw new Error(`row ${type} not found`)
+    return row as HTMLElement
+  }
+
+  it('clicking a paired row selects the pair (both highlighted) and expands the clicked row', async () => {
+    seedPair()
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+
+    const scheduled = rowByType(container, 'TaskScheduled')
+    await userEvent.click(scheduled.querySelector('summary') as HTMLElement)
+
+    expect(rowByType(container, 'TaskScheduled').className).toContain('pair-selected')
+    expect(rowByType(container, 'TaskCompleted').className).toContain('pair-selected')
+    expect((rowByType(container, 'TaskScheduled').querySelector('details') as HTMLDetailsElement).open).toBe(true)
+    // partner highlighted but not expanded
+    expect((rowByType(container, 'TaskCompleted').querySelector('details') as HTMLDetailsElement).open).toBe(false)
+  })
+
+  it('clicking the selected row again clears the selection and collapses it', async () => {
+    seedPair()
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+    const summary = () => rowByType(container, 'TaskScheduled').querySelector('summary') as HTMLElement
+
+    await userEvent.click(summary())
+    expect(rowByType(container, 'TaskScheduled').className).toContain('pair-selected')
+    await userEvent.click(summary())
+    expect(rowByType(container, 'TaskScheduled').className).not.toContain('pair-selected')
+    expect(rowByType(container, 'TaskCompleted').className).not.toContain('pair-selected')
+    expect((rowByType(container, 'TaskScheduled').querySelector('details') as HTMLDetailsElement).open).toBe(false)
+  })
+
+  it('clicking an unpaired row does not select anything', async () => {
+    seedPair()
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+    await userEvent.click(rowByType(container, 'ExecutionStarted').querySelector('summary') as HTMLElement)
+    expect(container.querySelector('.ev.pair-selected')).toBeNull()
+  })
+
+  it('navigating via hash to a paired event selects the pair and expands the target', async () => {
+    seedPair()
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+
+    // TaskCompleted is canonical index 2 -> anchor event-2.
+    await act(async () => {
+      window.location.hash = '#event-2'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+
+    expect(rowByType(container, 'TaskCompleted').className).toContain('pair-selected')
+    expect(rowByType(container, 'TaskScheduled').className).toContain('pair-selected')
+    expect((rowByType(container, 'TaskCompleted').querySelector('details') as HTMLDetailsElement).open).toBe(true)
+
+    // reset hash so it doesn't leak into other tests
+    await act(async () => { window.location.hash = '' })
+  })
+})
