@@ -71,3 +71,21 @@ func TestResolveDCPLogs_AppIdDiffersFromResourceName(t *testing.T) {
 	require.Equal(t, filepath.Join(dir, "AAA_out"), daprdPath)
 	require.Equal(t, filepath.Join(dir, "BBB_out"), appPath)
 }
+
+func TestParseLsofStdout(t *testing.T) {
+	t.Run("regular file", func(t *testing.T) {
+		out := []byte("p58324\nf1\ntREG\nn/private/tmp/lsoftest.out\n")
+		require.Equal(t, "/private/tmp/lsoftest.out", parseLsofStdout(out))
+	})
+	t.Run("pipe -> empty", func(t *testing.T) {
+		out := []byte("p82640\nf1\ntPIPE\nn->0x4652e99aa6990ec3\n")
+		require.Equal(t, "", parseLsofStdout(out))
+	})
+	t.Run("tty -> empty", func(t *testing.T) {
+		out := []byte("p61604\nf1\ntCHR\nn/dev/ttys014\n")
+		require.Equal(t, "", parseLsofStdout(out))
+	})
+	t.Run("empty input -> empty", func(t *testing.T) {
+		require.Equal(t, "", parseLsofStdout(nil))
+	})
+}

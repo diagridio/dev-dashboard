@@ -3,7 +3,9 @@ package discovery
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -147,4 +149,40 @@ func dcpAppBaseName(sidecarExecutable string) string {
 		return n[:i]
 	}
 	return n
+}
+
+// parseLsofStdout extracts the file path from `lsof -F ftn` output when the
+// descriptor is a regular file (type "REG"). Returns "" for pipes, ttys ("CHR"),
+// or unparseable output. lsof -F emits one field per line prefixed by a type
+// character: 't' = descriptor type, 'n' = name.
+func parseLsofStdout(out []byte) string {
+	var typ string
+	for _, line := range strings.Split(string(out), "\n") {
+		if len(line) == 0 {
+			continue
+		}
+		switch line[0] {
+		case 't':
+			typ = line[1:]
+		case 'n':
+			if typ == "REG" {
+				return line[1:]
+			}
+		}
+	}
+	return ""
+}
+
+// lsofStdoutFile returns the filesystem path backing pid's stdout (fd 1) when it
+// is a regular file, else "". It shells out to lsof, which is available on macOS
+// and Linux (gopsutil's OpenFiles is not implemented on darwin).
+func lsofStdoutFile(pid int) string {
+	if pid <= 0 {
+		return ""
+	}
+	out, err := exec.Command("lsof", "-p", strconv.Itoa(pid), "-a", "-d", "1", "-F", "ftn").Output()
+	if err != nil {
+		return ""
+	}
+	return parseLsofStdout(out)
 }
