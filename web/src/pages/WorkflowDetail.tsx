@@ -342,6 +342,17 @@ export function WorkflowDetail() {
 
   const lastRefreshed = useLastRefreshed(dataUpdatedAt)
 
+  // Memoize the two derived maps so they are only recomputed when history changes,
+  // not on every render (e.g. order toggle, hover state). Must be before early returns
+  // to satisfy the Rules of Hooks.
+  const _history = execution?.history ?? []
+  const { canonicalIndex, pairIndex } = useMemo(() => {
+    const ascending = sortHistoryForDisplay(_history)
+    const ci = new Map<WorkflowHistoryEvent, number>()
+    ascending.forEach((e, i) => ci.set(e, i))
+    return { canonicalIndex: ci, pairIndex: buildPairIndex(ascending) }
+  }, [_history])
+
   const copyWorkflowLink = () => {
     const { origin, pathname } = window.location
     const qs = store ? `?store=${encodeURIComponent(store)}` : ''
@@ -393,10 +404,6 @@ export function WorkflowDetail() {
   const history = execution.history ?? []
   const orderedHistory = sortHistoryForDisplay(history) // canonical ascending — used for derived data
   const displayHistory = orderHistoryForDisplay(history, order) // what the timeline renders
-  // Reference→canonical-index map so each row resolves the same id regardless of display order.
-  const canonicalIndex = new Map<WorkflowHistoryEvent, number>()
-  orderedHistory.forEach((e, i) => canonicalIndex.set(e, i))
-  const pairIndex = buildPairIndex(orderedHistory)
   const newestEvent =
     orderedHistory.length > 0 ? orderedHistory[orderedHistory.length - 1] : undefined
   const terminal = isTerminal(execution.status)
