@@ -345,7 +345,7 @@ pre.json { margin: 0; padding: 13px; font-family: var(--mono); font-size: 12px; 
 .json .b { color: var(--dapr); }
 .pendingout { padding: 13px; font-family: var(--mono); font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 9px; }
 .timeline { position: relative; padding: 6px 0; }
-.ev { display: grid; grid-template-columns: max-content 26px 1fr; gap: 0; align-items: start; --ev-head: 40px; --ev-head-top: 8px; }
+.ev { position: relative; display: grid; grid-template-columns: max-content 26px 1fr; gap: 0; align-items: start; --ev-head: 40px; --ev-head-top: 8px; }
 .ev .t { font-family: var(--mono); font-size: 11px; color: var(--muted); padding-top: var(--ev-head-top); padding-right: 12px; min-height: var(--ev-head); box-sizing: content-box; display: flex; flex-direction: column; align-items: stretch; justify-content: center; white-space: nowrap; }
 .ev .t .off { text-align: left; }
 .ev .t .dt { text-align: left; color: var(--muted); font-size: 10px; margin-top: 2px; }
@@ -397,7 +397,18 @@ a.pairchip { cursor: pointer; }
 a.pairchip:hover { color: var(--text); border-color: var(--accent2); }
 a.pairchip:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
 span.pairchip.pending { border-style: dashed; color: var(--faint); cursor: default; }
-.ev.pair-hover { background: color-mix(in srgb, var(--accent2) 10%, transparent); border-radius: 10px; }
+.ev.pair-hover::after {
+  content: "";
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  top: 4px;
+  bottom: -6px;
+  background: color-mix(in srgb, var(--accent2) 10%, transparent);
+  border-radius: 10px;
+  z-index: -1;
+  pointer-events: none;
+}
 .evanchor { grid-column: 5; font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; cursor: pointer; opacity: 0; transition: opacity .12s ease, color .12s ease, border-color .12s ease; }
 .ev:hover .evanchor, .evanchor:focus-visible { opacity: 1; }
 .evanchor:hover { color: var(--text); border-color: var(--line); }
