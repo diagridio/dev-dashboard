@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { EventRow } from './WorkflowDetail'
@@ -48,6 +48,14 @@ function renderRowEx(
 }
 
 describe('EventRow selection', () => {
+  beforeEach(() => {
+    Object.defineProperty(document, 'execCommand', {
+      value: vi.fn().mockReturnValue(true),
+      writable: true,
+      configurable: true,
+    })
+  })
+
   const scheduled: WorkflowHistoryEvent = {
     type: 'TaskScheduled', sequenceId: 1, timestamp: '2026-06-28T10:00:00.100Z', name: 'Charge', input: '{"x":1}',
   }
