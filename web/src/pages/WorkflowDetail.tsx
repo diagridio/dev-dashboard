@@ -5,12 +5,13 @@ import { useApps } from '../hooks/useApps'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
-import { elapsed, elapsedTenths, formatOffset, formatDateTime } from '../lib/wallclock'
+import { elapsed, elapsedTenths, formatOffset, formatDateTime, formatDuration } from '../lib/wallclock'
 import { highlightJson } from '../lib/json-highlight'
 import { useToast, type ToastHandle } from '../lib/toast'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
 import { sortHistoryForDisplay, orderHistoryForDisplay, eventAnchorId, type HistoryOrder } from '../lib/eventOrder'
+import { buildPairIndex, type PairInfo } from '../lib/pairing'
 import { getHistoryOrder, setHistoryOrder } from '../lib/prefs'
 
 // ---------------------------------------------------------------------------
@@ -62,6 +63,7 @@ function nodeClass(eventType: string): string {
   if (eventType === 'TaskCompleted') return 'n-done'
   if (eventType.endsWith('Failed') && !eventType.startsWith('Execution')) return 'n-fail'
   if (eventType.includes('Timer')) return 'n-timer'
+  if (eventType === 'SubOrchestrationCompleted') return 'n-done'
   if (eventType === 'ExecutionCompleted') return 'n-end'
   if (eventType === 'ExecutionFailed' || eventType === 'ExecutionTerminated') return 'n-endfail'
   return 'n-start'
@@ -79,6 +81,9 @@ export function EventRow({
   anchorId,
   appId,
   store,
+  pair,
+  pairHovered,
+  onPairHover,
 }: {
   event: WorkflowHistoryEvent
   createdAt: string | undefined
@@ -87,6 +92,9 @@ export function EventRow({
   anchorId: string
   appId: string
   store?: string
+  pair?: PairInfo | null
+  pairHovered?: boolean
+  onPairHover?: (pairId: number | null) => void
 }) {
   const offset = formatOffset(createdAt, event.timestamp)
   const dateTime = formatDateTime(event.timestamp) ?? ''
@@ -95,6 +103,48 @@ export function EventRow({
   // sequenceId -1 is durabletask's sentinel for OrchestratorStarted (replay) events —
   // not a user-facing event index, so it gets no Event ID tag.
   const eventIdTag = event.sequenceId >= 0 ? `Event ID ${event.sequenceId}` : null
+
+  const pairChip = (() => {
+    if (!pair) return null
+    const enter = () => onPairHover?.(pair.pairId)
+    const leave = () => onPairHover?.(null)
+    if (pair.partnerIndex === null) {
+      // Running (start with no completion yet) or orphan completion.
+      const arrow = pair.role === 'end' ? ' ↑' : ''
+      return (
+        <span
+          className="pairchip pending"
+          title={pair.role === 'start' ? 'Awaiting result' : 'No matching scheduled event'}
+          onMouseEnter={enter}
+          onMouseLeave={leave}
+        >
+          #{pair.pairId}{arrow}
+        </span>
+      )
+    }
+    const href = `#${eventAnchorId(pair.partnerIndex)}`
+    if (pair.role === 'start') {
+      return (
+        <a className="pairchip" href={href} aria-label="Jump to result" title="Jump to result" onMouseEnter={enter} onMouseLeave={leave}>
+          #{pair.pairId} ↓
+        </a>
+      )
+    }
+    const dur = pair.durationMs !== null ? formatDuration(pair.durationMs) : ''
+    return (
+      <a className="pairchip" href={href} aria-label="Jump to scheduled" title="Jump to scheduled" onMouseEnter={enter} onMouseLeave={leave}>
+        #{pair.pairId} ↑{dur ? ` ${dur}` : ''}
+      </a>
+    )
+  })()
+
+  // The column-4 tag cell: the pair chip when paired, else the plain Event ID tag.
+  const tagCell =
+    pairChip !== null ? (
+      <span className="evtag">{pairChip}</span>
+    ) : eventIdTag ? (
+      <span className="evtag">{eventIdTag}</span>
+    ) : null
 
   const hasDetails = !!(event.input || event.output)
 
@@ -105,7 +155,7 @@ export function EventRow({
   }
 
   return (
-    <div id={anchorId} className={`ev${isNewest ? ' reveal' : ''}`}>
+    <div id={anchorId} className={`ev${isNewest ? ' reveal' : ''}${pairHovered ? ' pair-hover' : ''}`}>
       <div className="t">
         <span className="off">{offset}</span>
         <span className="dt">{dateTime}</span>
@@ -120,7 +170,7 @@ export function EventRow({
               <span className="caret">▸</span>
               <span className="evtype">{event.type}</span>
               {event.name && <span className="evname">{event.name}</span>}
-              {eventIdTag && <span className="evtag">{eventIdTag}</span>}
+              {tagCell}
               <button
                 className="evanchor"
                 aria-label="Copy link to this event"
@@ -188,7 +238,7 @@ export function EventRow({
                   </Link>
                 )}
               </div>
-              {eventIdTag && <span className="evtag">{eventIdTag}</span>}
+              {tagCell}
               <button
                 className="evanchor"
                 aria-label="Copy link to this event"
@@ -231,6 +281,7 @@ export function WorkflowDetail() {
   const [removeForce, setRemoveForce] = useState(false)
 
   const [order, setOrder] = useState<HistoryOrder>(() => getHistoryOrder())
+  const [hoveredPair, setHoveredPair] = useState<number | null>(null)
 
   useEffect(() => {
     setHistoryOrder(order)
@@ -264,6 +315,17 @@ export function WorkflowDetail() {
     execution?.lastUpdatedAt,
     execution?.status ?? 'Pending',
   )
+
+  // Memoize the two derived maps so they are only recomputed when history changes,
+  // not on every render (e.g. order toggle, hover state). Must be before early returns
+  // to satisfy the Rules of Hooks.
+  const _history = execution?.history ?? []
+  const { canonicalIndex, pairIndex } = useMemo(() => {
+    const ascending = sortHistoryForDisplay(_history)
+    const ci = new Map<WorkflowHistoryEvent, number>()
+    ascending.forEach((e, i) => ci.set(e, i))
+    return { canonicalIndex: ci, pairIndex: buildPairIndex(ascending) }
+  }, [_history])
 
   const copyWorkflowLink = () => {
     const { origin, pathname } = window.location
@@ -316,9 +378,6 @@ export function WorkflowDetail() {
   const history = execution.history ?? []
   const orderedHistory = sortHistoryForDisplay(history) // canonical ascending — used for derived data
   const displayHistory = orderHistoryForDisplay(history, order) // what the timeline renders
-  // Reference→canonical-index map so each row resolves the same id regardless of display order.
-  const canonicalIndex = new Map<WorkflowHistoryEvent, number>()
-  orderedHistory.forEach((e, i) => canonicalIndex.set(e, i))
   const newestEvent =
     orderedHistory.length > 0 ? orderedHistory[orderedHistory.length - 1] : undefined
   const terminal = isTerminal(execution.status)
@@ -606,18 +665,25 @@ export function WorkflowDetail() {
         <p className="hint">No history events.</p>
       ) : (
         <div className="timeline">
-          {displayHistory.map((event, idx) => (
-            <EventRow
-              key={idx}
-              event={event}
-              createdAt={execution.createdAt}
-              isNewest={event === newestEvent}
-              toast={toast}
-              anchorId={eventAnchorId(canonicalIndex.get(event) ?? idx)}
-              appId={appId ?? ''}
-              store={store}
-            />
-          ))}
+          {displayHistory.map((event, idx) => {
+            const ci = canonicalIndex.get(event) ?? idx
+            const pair = pairIndex.get(ci) ?? null
+            return (
+              <EventRow
+                key={idx}
+                event={event}
+                createdAt={execution.createdAt}
+                isNewest={event === newestEvent}
+                toast={toast}
+                anchorId={eventAnchorId(ci)}
+                appId={appId ?? ''}
+                store={store}
+                pair={pair}
+                pairHovered={pair !== null && pair.pairId === hoveredPair}
+                onPairHover={setHoveredPair}
+              />
+            )
+          })}
         </div>
       )}
 

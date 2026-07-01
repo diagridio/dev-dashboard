@@ -53,3 +53,19 @@ export function formatDateTime(ts: string | undefined): string | undefined {
   if (isNaN(d.getTime())) return undefined
   return `${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`
 }
+
+/**
+ * Format a millisecond duration compactly: "340ms" (<1s), "1.2s" (<10s),
+ * "12s" (<1min), "1m 05s" (>=1min). Returns '' for NaN or negative input.
+ */
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return ''
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  const totalSecs = ms / 1000
+  if (totalSecs < 60) {
+    return totalSecs < 10 ? `${totalSecs.toFixed(1)}s` : `${Math.round(totalSecs)}s`
+  }
+  const m = Math.floor(totalSecs / 60)
+  const s = Math.round(totalSecs % 60)
+  return `${m}m ${String(s).padStart(2, '0')}s`
+}
