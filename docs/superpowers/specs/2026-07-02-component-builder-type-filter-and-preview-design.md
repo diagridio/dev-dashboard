@@ -5,10 +5,11 @@
 **Branch:** `feat/component-resiliency-builders`
 **Builds on:** the Component Builder shipped in `docs/superpowers/plans/2026-07-01-builders-02-component.md`.
 
-Two changes to the existing Component Builder wizard:
+Three changes to the existing Component Builder wizard:
 
 1. **Category filter on step 1 (Type).** Add single-select category filter buttons (one per Dapr component `type`: bindings, configuration, conversation, crypto, lock, middleware, nameresolution, pubsub, secretstores, state). Selecting a category filters the component list to that category and scopes the search box to it. The selected category + component remain visible across all wizard steps.
 2. **Highlighted, read-only Preview.** Replace the editable `<textarea>` preview with the same syntax-highlighted rendering the Components detail view uses (`highlightYaml` in `<pre className="code">`), reusing that proven look. Copy + Download still act on the generated YAML.
+3. **Removable optional fields on step 3 (Configure).** Added optional metadata fields must be removable again, reusing the add/remove UI the "Add state store connection" dialog already uses on the Components page (`StateStoreConnectionDialog.tsx`): each added optional field shows its control alongside a ghost **✕** remove button; a `+ add optional field…` select adds from the not-yet-added pool. The builder currently has the add-select but no remove control (the reducer already exposes an unused `REMOVE_OPTIONAL`).
 
 ## Decisions (from brainstorming, 2026-07-02)
 
@@ -20,7 +21,8 @@ Two changes to the existing Component Builder wizard:
 ## Current state (what changes)
 
 - `web/src/pages/component-builder/StepType.tsx` — currently a search box over ALL components grouped by type. Becomes category-chip-gated.
-- `web/src/pages/component-builder/reducer.ts` — gains a `category` field + `SELECT_CATEGORY` action.
+- `web/src/pages/component-builder/reducer.ts` — gains a `category` field + `SELECT_CATEGORY` action; `REMOVE_OPTIONAL` also clears the field's value/secret state.
+- `web/src/pages/component-builder/StepConfigure.tsx` — added optional fields gain a ✕ remove button (reusing the state-connection dialog pattern).
 - `web/src/pages/component-builder/ComponentBuilder.tsx` — gains the persistent selection bar; drops the `previewEdited` gate.
 - `web/src/components/YamlPreview.tsx` — becomes read-only + highlighted; loses `edited`/`onEditedChange`/Reset and the mount-emit effect.
 - Tests for all four, plus `ComponentBuilder.test.tsx` (reads a `<pre>` instead of a textbox; drops the back-then-forward Finish probe which no longer applies).
@@ -43,6 +45,8 @@ Add action:
 
 Update `SELECT_SCHEMA`: also set `category = action.schema.type` (keep the chip in sync with the picked component). All other behavior (advance to step 1) unchanged.
 
+Update `REMOVE_OPTIONAL`: in addition to removing the field from `optionalAdded`, clear that field's entries from `values`, `secretRefs`, and `useSecret` (so a re-added field starts clean and no stale value lingers) — mirrors the state-connection dialog, which deletes the value on remove.
+
 `canContinue`, `assembleComponentSpec`, and every other action are unchanged.
 
 ### Step 1 (`StepType.tsx`)
@@ -56,6 +60,14 @@ Update `SELECT_SCHEMA`: also set `category = action.schema.type` (keep the chip 
 
 - A bar rendered above the `Wizard` (so it shows on all four steps). When `state.category` is set, show a category chip (`.typechip`); when `state.schema` is set, also show the component: `{schema.title} · {version}` (e.g. `[ state ]  Redis · v1`). When nothing is selected yet, the bar is empty/omitted.
 - Purely presentational, derived from `state`.
+
+### Step 3 Configure (`StepConfigure.tsx`) — removable optional fields
+
+Reuse the add/remove pattern from `StateStoreConnectionDialog.tsx` (lines ~110–150):
+- Keep the "Required fields" rows as-is.
+- Render each added optional field (`state.optionalAdded`) in its own row where the value control (the "use secret" toggle + secret inputs OR `MetadataFieldInput`) sits next to a ghost remove button: `<button className="btn ghost" aria-label={`remove ${field.name}`}>✕</button>` that dispatches `{ type: 'REMOVE_OPTIONAL', field: field.name }`. Use the existing `.field`/`.field-row` layout so the control and ✕ align, matching the dialog.
+- Keep the `+ add optional field…` select (dispatches `ADD_OPTIONAL`), sourced from the not-yet-added optional pool (`activeFields(schema, authProfile).optional` minus `optionalAdded`). It renders only when the pool is non-empty.
+- Required fields have no remove button (they are not optional).
 
 ### Step 4 Preview (`YamlPreview.tsx` → read-only)
 
@@ -73,7 +85,8 @@ Edit `docs/superpowers/plans/2026-07-01-builders-03-resiliency.md`: its Task 5 u
 
 ## Testing
 
-- `reducer.test.ts`: `SELECT_CATEGORY` sets category; switching category clears schema + config; `SELECT_SCHEMA` sets category = schema.type.
+- `reducer.test.ts`: `SELECT_CATEGORY` sets category; switching category clears schema + config; `SELECT_SCHEMA` sets category = schema.type; `REMOVE_OPTIONAL` removes the field from `optionalAdded` AND clears its `values`/`secretRefs`/`useSecret` entries.
+- `StepConfigure.test.tsx`: adding an optional field then clicking its ✕ (`remove <field>`) dispatches `REMOVE_OPTIONAL` and the field's row disappears; the removed field reappears in the add-select pool.
 - `StepType.test.tsx`: chips render; no-category shows the hint and no list; selecting a category shows the scoped list + search; search filters within the category; clicking a component dispatches `SELECT_SCHEMA`.
 - `YamlPreview.test.tsx`: renders highlighted YAML read-only (a `<pre>`, no textbox); Copy calls copyText with the yaml; Download (`.btn.mono`) triggers a download; no Reset/edited behavior.
 - `ComponentBuilder.test.tsx`: full walk Type (pick category → pick component) → Auth → Configure → Preview; assert the Preview `<pre>`/container text contains `type: state.redis` and `name: order-store`; Finish enabled on preview. Remove the back-then-forward Finish probe (no longer applicable).
@@ -90,4 +103,5 @@ Edit `docs/superpowers/plans/2026-07-01-builders-03-resiliency.md`: its Task 5 u
 2. The selected category + component stay visible on every wizard step.
 3. Preview renders syntax-highlighted, read-only YAML matching the Components detail view; Copy + Download work.
 4. Switching category resets the stale component/config.
-5. All touched tests pass; `tsc -b` clean; `main` untouched.
+5. Added optional fields can be removed again via a ✕ button (matching the state-connection dialog); removing clears the field's value/secret state and returns it to the add pool.
+6. All touched tests pass; `tsc -b` clean; `main` untouched.
