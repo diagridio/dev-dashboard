@@ -17,10 +17,12 @@ describe('downloadText', () => {
       if (tag === 'a') (el as HTMLAnchorElement).click = click
       return el
     })
+    const appendSpy = vi.spyOn(document.body, 'appendChild')
     downloadText('order.yaml', 'a: 1\n')
     const anchor = spy.mock.results.map((r) => r.value as HTMLElement).find((e) => e.tagName === 'A') as HTMLAnchorElement
     expect(anchor.download).toBe('order.yaml')
     expect(anchor.href).toContain('blob:mock')
+    expect(appendSpy).toHaveBeenCalledWith(anchor)
     expect(click).toHaveBeenCalledOnce()
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock')
   })
