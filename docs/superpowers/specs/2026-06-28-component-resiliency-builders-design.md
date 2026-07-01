@@ -84,13 +84,37 @@ The frontend builders reuse this endpoint as-is. **No backend work is required**
 - `web/src/components/MetadataFieldInput.tsx` — per-field control (reuse for the Configure step's
   metadata editor).
 
-## Routing & entry points (frontend)
+## Routing & entry points (frontend) — decided 2026-07-01
 
-- `router.tsx`: `/components/new` → `<ComponentBuilder />`; `/resiliency/new` →
-  `<ResiliencyBuilder />`. Static `new` outranks dynamic `:name`, so no conflict with
-  `components/:name`.
-- "New component" button on the components `ResourceList` page; Resiliency nav/sidebar entry →
-  builder.
+**Placement: contextual button for the Component Builder + a new top-level "Resiliency" nav for the
+Resiliency Builder** (chosen over a unified "Create" hub because it mirrors Dapr's per-kind resource
+model — Resiliency is a first-class CRD sibling of Component/Configuration — and is forward-compatible
+with listing discovered resiliency policies later).
+
+**Component Builder**
+- Route in `router.tsx`: `{ path: 'components/new', element: <ComponentBuilder /> }`, added **before**
+  the existing `components/:name` route. Static `new` outranks the dynamic `:name` param in React
+  Router v6, so `/components/new` resolves to the builder, not the detail view.
+- Entry point: a **`+ New component`** button (`.btn.primary`) in the Components `ResourceList`
+  `.phead` header, present in all three render states (loading, empty, populated). `.phead` is already
+  `display:flex; justify-content:space-between`, so the button sits top-right of the title block.
+  Clicking navigates to `/components/new`.
+
+**Resiliency Builder**
+- New top-nav item: add `{ label: 'Resiliency', to: '/resiliency' }` to `NAV_ITEMS` in
+  `components/TopNav.tsx`, positioned **between `Configurations` and `Logs`**.
+- Routes in `router.tsx`:
+  - `{ path: 'resiliency', element: <Resiliency /> }` — a new **create-only landing page** that
+    reuses the `.page`/`.phead` + `.md` master-detail empty-state pattern from `ResourceList`: shows
+    a `+ New resiliency policy` button in the header and a "No resiliency policies" hint in the body.
+    (v1 lists nothing; the page exists as the discoverable home and a forward-compatible seam for
+    listing discovered policies later.)
+  - `{ path: 'resiliency/new', element: <ResiliencyBuilder /> }` — the wizard.
+- Entry point: the `Resiliency` nav item → `/resiliency` → `+ New resiliency policy` button →
+  `/resiliency/new`.
+
+**On finish/cancel:** both wizards return to their origin list (`/components` and `/resiliency`
+respectively).
 
 ## Shared frontend infrastructure (built once, used by both)
 
