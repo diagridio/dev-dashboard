@@ -66,6 +66,38 @@ describe('assembleComponentSpec', () => {
     expect(spec.spec.metadata).toEqual([{ name: 'redisHost', secretKeyRef: { name: 'sec', key: 'host' } }])
   })
 
+  it('does not emit secretKeyRef when use-secret is on but name/key are whitespace-only', () => {
+    const schema: ComponentMetadataSchema = {
+      type: 'state', name: 'redis', version: 'v1', title: 'Redis', status: 'stable',
+      metadata: [{ name: 'redisHost', required: true }, { name: 'password', required: false }],
+    }
+    let s = reducer(initialState(), { type: 'SELECT_SCHEMA', schema, version: 'v1' })
+    s = reducer(s, { type: 'NEXT' })
+    s = reducer(s, { type: 'SET_NAME', name: 'order-store' })
+    s = reducer(s, { type: 'SET_VALUE', field: 'redisHost', value: 'localhost:6379' })
+    // Optional field with use-secret on but whitespace-only name and key
+    s = reducer(s, { type: 'ADD_OPTIONAL', field: 'password' })
+    s = reducer(s, { type: 'TOGGLE_SECRET', field: 'password', on: true })
+    s = reducer(s, { type: 'SET_SECRET', field: 'password', ref: { name: '  ', key: '  ' } })
+    const spec = assembleComponentSpec(s)
+    // Only redisHost should appear; whitespace-only secret ref must not be emitted
+    expect(spec.spec.metadata).toEqual([{ name: 'redisHost', value: 'localhost:6379' }])
+  })
+
+  it('keeps raw string value when number field contains non-numeric input (NaN guard)', () => {
+    const schema: ComponentMetadataSchema = {
+      type: 'state', name: 'x', version: 'v1', title: 'X', status: 'stable',
+      metadata: [{ name: 'port', type: 'number', required: true }],
+    }
+    let s = reducer(initialState(), { type: 'SELECT_SCHEMA', schema, version: 'v1' })
+    s = reducer(s, { type: 'NEXT' })
+    s = reducer(s, { type: 'SET_NAME', name: 'x1' })
+    s = reducer(s, { type: 'SET_VALUE', field: 'port', value: 'not-a-number' })
+    const spec = assembleComponentSpec(s)
+    // Should keep raw string, not emit NaN
+    expect(spec.spec.metadata).toEqual([{ name: 'port', value: 'not-a-number' }])
+  })
+
   it('coerces number and bool field values', () => {
     const schema: ComponentMetadataSchema = {
       type: 'state', name: 'x', version: 'v1', title: 'X', status: 'stable',

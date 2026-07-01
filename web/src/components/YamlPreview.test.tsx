@@ -24,6 +24,12 @@ describe('YamlPreview', () => {
     expect(onEditedChange).toHaveBeenLastCalledWith(false)
   })
 
+  it('calls onEditedChange(false) on mount so parent stale state is cleared', () => {
+    const onEditedChange = vi.fn()
+    render(<YamlPreview yaml={'a: 1\n'} filename="c.yaml" onEditedChange={onEditedChange} />)
+    expect(onEditedChange).toHaveBeenCalledWith(false)
+  })
+
   it('download button uses the current buffer and the monochrome class', () => {
     render(<YamlPreview yaml={'a: 1\n'} filename="order.yaml" />)
     const dl = screen.getByRole('button', { name: /download/i })

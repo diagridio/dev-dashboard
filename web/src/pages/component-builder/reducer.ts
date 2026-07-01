@@ -120,13 +120,13 @@ export function assembleComponentSpec(state: ComponentBuilderState): ComponentSp
   for (const [name, field] of byName) {
     if (state.useSecret[name]) {
       const ref = state.secretRefs[name]
-      if (ref && ref.name && ref.key) spec.spec.metadata.push({ name, secretKeyRef: ref })
+      if (ref && ref.name.trim() && ref.key.trim()) spec.spec.metadata.push({ name, secretKeyRef: ref })
       continue
     }
     const raw = (state.values[name] ?? '').trim()
     if (raw === '') continue
     let value: string | number | boolean = raw
-    if (field.type === 'number') value = Number(raw)
+    if (field.type === 'number') { const n = Number(raw); value = Number.isNaN(n) ? raw : n }
     else if (field.type === 'bool') value = raw === 'true'
     spec.spec.metadata.push({ name, value })
   }

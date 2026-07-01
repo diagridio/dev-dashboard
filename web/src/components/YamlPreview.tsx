@@ -14,6 +14,12 @@ export function YamlPreview({ yaml, filename, onEditedChange }: YamlPreviewProps
   const [edited, setEdited] = useState(false)
   const { toast, toastNode } = useToast()
 
+  // Notify parent of initial (false) edited state on mount so stale parent state is cleared.
+  useEffect(() => {
+    onEditedChange?.(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Re-seed when the generated yaml changes AND the user hasn't manually edited.
   useEffect(() => {
     if (!edited) setBuffer(yaml)
