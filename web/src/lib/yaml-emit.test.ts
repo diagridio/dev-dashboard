@@ -26,4 +26,7 @@ describe('recursivelyRemoveEmptyValues', () => {
     expect(out).toEqual({ spec: { timeout: '30s' } })
     expect(input.spec.extra).toBe('') // original untouched
   })
+  it('preserves non-empty array values without creating holes', () => {
+    expect(recursivelyRemoveEmptyValues({ scopes: ['a', 'b'] })).toEqual({ scopes: ['a', 'b'] })
+  })
 })

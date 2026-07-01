@@ -5,7 +5,7 @@ export function dumpYaml(obj: unknown): string {
   return dump(obj)
 }
 
-// lodash-isEmpty equivalent for the only cases used here: plain objects and arrays.
+// Check if the value is an empty array or empty plain object.
 function isEmptyContainer(v: unknown): boolean {
   if (Array.isArray(v)) return v.length === 0
   if (v && typeof v === 'object') return Object.keys(v as Record<string, unknown>).length === 0
@@ -21,7 +21,7 @@ function isEmptyContainer(v: unknown): boolean {
  */
 export function recursivelyRemoveEmptyValues<T>(input: T): T {
   const obj = structuredClone(input)
-  if (typeof obj === 'object' && obj !== null) {
+  if (typeof obj === 'object' && obj !== null && !Array.isArray(obj)) {
     const rec = obj as Record<string, unknown>
     for (const key of Object.keys(rec)) {
       const v = rec[key]
@@ -32,7 +32,7 @@ export function recursivelyRemoveEmptyValues<T>(input: T): T {
         (typeof v === 'object' && isEmptyContainer(v))
       ) {
         delete rec[key]
-      } else if (typeof v === 'object') {
+      } else if (typeof v === 'object' && !Array.isArray(v)) {
         rec[key] = recursivelyRemoveEmptyValues(v)
         if (isEmptyContainer(rec[key])) delete rec[key]
       }
