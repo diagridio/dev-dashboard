@@ -23,7 +23,7 @@ export function StepConfigure({ state, dispatch }: Props) {
       <Field label="Name" htmlFor="c-name" required error={nameError}>
         <TextInput id="c-name" value={state.name} onChange={(v) => dispatch({ type: 'SET_NAME', name: v })} />
       </Field>
-      <Field label="Namespace" htmlFor="c-ns">
+      <Field label="Resource namespace" htmlFor="c-ns">
         <TextInput id="c-ns" value={state.namespace} onChange={(v) => dispatch({ type: 'SET_NAMESPACE', namespace: v })} />
       </Field>
 

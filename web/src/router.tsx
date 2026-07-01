@@ -8,6 +8,7 @@ import { WorkflowDetail } from './pages/WorkflowDetail'
 import { Actors } from './pages/Actors'
 import { Subscriptions } from './pages/Subscriptions'
 import { ResourceList } from './pages/ResourceList'
+import { ComponentBuilder } from './pages/component-builder/ComponentBuilder'
 
 export const routes: RouteObject[] = [
   {
@@ -20,6 +21,7 @@ export const routes: RouteObject[] = [
       { path: 'workflows/:appId/:instanceId', element: <WorkflowDetail /> },
       { path: 'actors', element: <Actors /> },
       { path: 'subscriptions', element: <Subscriptions /> },
+      { path: 'components/new', element: <ComponentBuilder /> },
       { path: 'components', element: <ResourceList kind="component" /> },
       { path: 'components/:name', element: <ResourceList kind="component" /> },
       { path: 'configurations', element: <ResourceList kind="configuration" /> },
