@@ -350,7 +350,7 @@ export function WorkflowDetail() {
     jumpToHash()
     window.addEventListener('hashchange', jumpToHash)
     return () => window.removeEventListener('hashchange', jumpToHash)
-  }, [execution, pairIndex])
+  }, [pairIndex])
 
   const copyWorkflowLink = () => {
     const { origin, pathname } = window.location

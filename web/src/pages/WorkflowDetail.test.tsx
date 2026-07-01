@@ -995,6 +995,24 @@ describe('WorkflowDetail — pair selection', () => {
     expect(container.querySelector('.ev.pair-selected')).toBeNull()
   })
 
+  it('clicking the inactive partner moves selection to it (does not clear)', async () => {
+    seedPair()
+    const { container } = renderDetail()
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+
+    // Select TaskScheduled (canonical index 1)
+    await userEvent.click(rowByType(container, 'TaskScheduled').querySelector('summary') as HTMLElement)
+    expect(rowByType(container, 'TaskScheduled').className).toContain('pair-selected')
+
+    // Click TaskCompleted (same pair, different index) — should MOVE selection, not clear
+    await userEvent.click(rowByType(container, 'TaskCompleted').querySelector('summary') as HTMLElement)
+    expect(rowByType(container, 'TaskCompleted').className).toContain('pair-selected')
+    expect(rowByType(container, 'TaskScheduled').className).toContain('pair-selected')
+    // Active row moved: TaskCompleted now open, TaskScheduled collapsed
+    expect((rowByType(container, 'TaskCompleted').querySelector('details') as HTMLDetailsElement).open).toBe(true)
+    expect((rowByType(container, 'TaskScheduled').querySelector('details') as HTMLDetailsElement).open).toBe(false)
+  })
+
   it('navigating via hash to a paired event selects the pair and expands the target', async () => {
     seedPair()
     const { container } = renderDetail()
