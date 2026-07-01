@@ -409,18 +409,13 @@ span.pairchip.pending { border-style: dashed; color: var(--faint); cursor: defau
   z-index: -1;
   pointer-events: none;
 }
-.ev.pair-selected::after {
-  content: "";
-  position: absolute;
-  left: -8px;
-  right: -8px;
-  top: 4px;
-  bottom: -6px;
-  background: color-mix(in srgb, var(--accent2) 14%, transparent);
-  border: 1.5px solid var(--accent2);
-  border-radius: 10px;
-  z-index: -1;
-  pointer-events: none;
+/* Selected pair: a clear accent ring + tint drawn directly on the card of BOTH
+   related rows (the clicked/active row and its partner). Painted on the visible
+   card rather than a behind-the-row overlay so the highlight is unmistakable. */
+.ev.pair-selected .evd {
+  border-color: var(--accent2);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent2) 45%, transparent);
+  background: color-mix(in srgb, var(--accent2) 12%, var(--surface));
 }
 .evd.evstatic.selectable { cursor: pointer; }
 .evanchor { grid-column: 5; font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; cursor: pointer; opacity: 0; transition: opacity .12s ease, color .12s ease, border-color .12s ease; }
