@@ -29,6 +29,8 @@ type Instance struct {
 	ConfigPath      string         `json:"configPath"`
 	AppLogPath      string         `json:"appLogPath"`
 	DaprdLogPath    string         `json:"daprdLogPath"`
+	AppLogFormat    string         `json:"appLogFormat,omitempty"`   // "" / "plain" / "dcp"
+	DaprdLogFormat  string         `json:"daprdLogFormat,omitempty"` // "" / "plain" / "dcp"
 	Command         string         `json:"command"`
 	RuntimeVersion  string         `json:"runtimeVersion"` // from metadata; "" if unavailable
 	MetadataOK      bool           `json:"metadataOk"`     // false if /v1.0/metadata failed

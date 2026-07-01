@@ -92,3 +92,22 @@ func TestLogsHandler_LogsSourceUnavailable(t *testing.T) {
 		t.Fatalf("expected 'log stream source unavailable' WARN, got %q", buf.String())
 	}
 }
+
+func TestNormalizeLine(t *testing.T) {
+	t.Run("dcp daprd line -> standard daprd format", func(t *testing.T) {
+		in := `3 2026-06-30T19:51:27.797Z time="2026..." level=info msg="hi" app_id=pr-digest`
+		want := `time="2026..." level=info msg="hi" app_id=pr-digest`
+		require.Equal(t, want, normalizeLine(in, "dcp"))
+	})
+	t.Run("dcp app line -> ansi stripped", func(t *testing.T) {
+		in := "1 2026-06-30T19:51:31.768Z \x1b[33mwarn\x1b[39m: Dapr.Workflow"
+		require.Equal(t, "warn: Dapr.Workflow", normalizeLine(in, "dcp"))
+	})
+	t.Run("plain strips ansi only, keeps content", func(t *testing.T) {
+		require.Equal(t, "level=info msg=x", normalizeLine("level=info msg=x", "plain"))
+		require.Equal(t, "hello", normalizeLine("\x1b[31mhello\x1b[0m", "plain"))
+	})
+	t.Run("empty format treated as plain", func(t *testing.T) {
+		require.Equal(t, "abc", normalizeLine("abc", ""))
+	})
+}

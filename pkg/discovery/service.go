@@ -37,13 +37,14 @@ type Service interface {
 }
 
 type service struct {
-	scan    Scanner
-	client  *http.Client
-	appProc appProcResolver
+	scan       Scanner
+	client     *http.Client
+	appProc    appProcResolver
+	stdoutFile func(pid int) string
 }
 
 func New(scan Scanner, client *http.Client) Service {
-	return &service{scan: scan, client: client, appProc: gopsutilResolver{}}
+	return &service{scan: scan, client: client, appProc: gopsutilResolver{}, stdoutFile: lsofStdoutFile}
 }
 
 const enrichWorkers = 8
@@ -117,15 +118,57 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	}
 	in.Runtime, in.IsAspire = appRuntime(in.Command, in.AppPort, s.appProc)
 	if md.AppLogPath != "" {
-		in.AppLogPath = md.AppLogPath
+		in.AppLogPath, in.AppLogFormat = md.AppLogPath, logFormatPlain
 	}
 	if md.DaprdLogPath != "" {
-		in.DaprdLogPath = md.DaprdLogPath
+		in.DaprdLogPath, in.DaprdLogFormat = md.DaprdLogPath, logFormatPlain
 	}
+	s.resolveLogSources(&in)
 	if md.RunTemplate != "" {
 		in.RunTemplate = md.RunTemplate
 	}
 	return in
+}
+
+// resolveLogSources fills in AppLogPath/DaprdLogPath (and their formats) when the
+// sidecar's metadata reported none. Aspire apps get their logs from the DCP
+// session dir; standalone `dapr run` gets them from the process's stdout when it
+// is a regular file (i.e. redirected to a file rather than a terminal).
+func (s *service) resolveLogSources(in *Instance) {
+	if in.DaprdLogPath != "" && in.AppLogPath != "" {
+		return
+	}
+
+	// Aspire: locate the DCP session dir from the app-port listener command.
+	if in.IsAspire && s.appProc != nil && in.AppPort != 0 {
+		if cmd, ok := s.appProc.CommandForPort(in.AppPort); ok {
+			if dir, ok := dcpSessionDir(cmd); ok {
+				daprdPath, appPath := resolveDCPLogs(dir, in.AppID)
+				if in.DaprdLogPath == "" && daprdPath != "" {
+					in.DaprdLogPath, in.DaprdLogFormat = daprdPath, logFormatDCP
+				}
+				if in.AppLogPath == "" && appPath != "" {
+					in.AppLogPath, in.AppLogFormat = appPath, logFormatDCP
+				}
+			}
+		}
+	}
+
+	// Standalone dapr run: stdout is tailable only if redirected to a regular file.
+	// Skip entirely for Aspire apps — fds are pipes so lsof always returns "".
+	if s.stdoutFile == nil || in.IsAspire {
+		return
+	}
+	if in.DaprdLogPath == "" && in.DaprdPID != 0 {
+		if p := s.stdoutFile(in.DaprdPID); p != "" {
+			in.DaprdLogPath, in.DaprdLogFormat = p, logFormatPlain
+		}
+	}
+	if in.AppLogPath == "" && in.AppPID != 0 {
+		if p := s.stdoutFile(in.AppPID); p != "" {
+			in.AppLogPath, in.AppLogFormat = p, logFormatPlain
+		}
+	}
 }
 
 func humanAge(t time.Time) string {

@@ -360,8 +360,9 @@ export function Logs() {
 
       {appId && !isLoading && app && !hasPath && (
         <div className="card">
-          No log file — this app was started with <code className="mono">dapr run</code> without{' '}
-          <code className="mono">-f</code>
+          No captured log file — this app streams its logs to the terminal. Redirect{' '}
+          <code className="mono">dapr run</code> output to a file, or use a{' '}
+          <code className="mono">-f</code> run template, to view logs here.
         </div>
       )}
 
