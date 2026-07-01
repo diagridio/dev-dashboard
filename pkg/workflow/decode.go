@@ -129,14 +129,14 @@ func decodeEvent(e *protos.HistoryEvent) HistoryEvent {
 		s := e.GetSubOrchestrationInstanceCreated()
 		ev.Name = s.GetName()
 		ev.InstanceID = s.GetInstanceId()
-	case e.GetSubOrchestrationInstanceCompleted() != nil:
+	case e.GetChildWorkflowInstanceCompleted() != nil:
 		ev.Type = "SubOrchestrationCompleted"
-		c := e.GetSubOrchestrationInstanceCompleted()
+		c := e.GetChildWorkflowInstanceCompleted()
 		ev.Output = strval(c.GetResult())
 		ev.ScheduledID = i32ptr(c.GetTaskScheduledId())
-	case e.GetSubOrchestrationInstanceFailed() != nil:
+	case e.GetChildWorkflowInstanceFailed() != nil:
 		ev.Type = "SubOrchestrationFailed"
-		ev.ScheduledID = i32ptr(e.GetSubOrchestrationInstanceFailed().GetTaskScheduledId())
+		ev.ScheduledID = i32ptr(e.GetChildWorkflowInstanceFailed().GetTaskScheduledId())
 	default:
 		ev.Type = "Unknown"
 	}
