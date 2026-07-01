@@ -119,8 +119,16 @@ respectively).
 ## Shared frontend infrastructure (built once, used by both)
 
 - `components/wizard/`: `Wizard` + `Stepper` (step labels styled with pill/tab classes) + `StepNav`
-  (Back/Continue/Finish using `.btn` variants). Per-builder typed `useReducer` for wizard state
-  (mirrors cloudgrid reducer shape: activeStep, steps, config object, etc.).
+  (Back/Continue/Finish). Per-builder typed `useReducer` for wizard state (mirrors cloudgrid reducer
+  shape: activeStep, steps, config object, etc.).
+- **Wizard button styling — monochrome, NOT green (decided 2026-07-01):** the wizard buttons must not
+  use the green brand `.btn.primary` (`background: var(--accent2)`). Do NOT change the global
+  `.btn.primary` (used elsewhere, e.g. the state-store dialog). Instead add a **wizard-scoped**
+  monochrome treatment: primary action (Continue/Finish) = filled neutral
+  (`background: var(--text); color: var(--bg)`, no accent color); secondary (Back/Cancel) = the
+  existing `.btn.ghost` (transparent, `--line` border, `--text`). Copy/Download in the finalizer also
+  use the neutral/ghost styles — no green. Keep focus-visible outlines as-is. This applies to both
+  builders and any dialog buttons inside them.
 - `components/form/`: thin controlled wrappers over native elements styled via theme.css — `Field`
   (label + control + inline error), `TextInput`, `NumberInput`, `SelectInput`, `Toggle`. No form
   library.
