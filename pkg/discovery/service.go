@@ -155,7 +155,8 @@ func (s *service) resolveLogSources(in *Instance) {
 	}
 
 	// Standalone dapr run: stdout is tailable only if redirected to a regular file.
-	if s.stdoutFile == nil {
+	// Skip entirely for Aspire apps — fds are pipes so lsof always returns "".
+	if s.stdoutFile == nil || in.IsAspire {
 		return
 	}
 	if in.DaprdLogPath == "" && in.DaprdPID != 0 {

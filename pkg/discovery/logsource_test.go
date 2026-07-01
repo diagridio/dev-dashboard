@@ -72,6 +72,34 @@ func TestResolveDCPLogs_AppIdDiffersFromResourceName(t *testing.T) {
 	require.Equal(t, filepath.Join(dir, "BBB_out"), appPath)
 }
 
+func TestResolveDCPLogs_MultiAppPrefixNotMisMatched(t *testing.T) {
+	dir := t.TempDir()
+	writeFile := func(name, content string) {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
+	}
+
+	// daprd sidecar for "order" (guid AAA) — resource name "order-dapr-cli-xx".
+	writeFile("resource-executable-AAA.log",
+		`x	info	r	Starting process...	{"Executable": "/order-dapr-cli-xx", "Cmd": "/usr/local/bin/dapr", "Args": ["run","--app-id","order"]}`+"\n")
+	writeFile("AAA_out", "order daprd log\n")
+
+	// app resource for "order" (guid BBB) — resource name "order-aaaa" (no extra dash in remainder).
+	writeFile("resource-executable-BBB.log",
+		`x	info	r	Starting process...	{"Executable": "/order-aaaa", "Cmd": "/usr/bin/myapp", "Args": []}`+"\n")
+	writeFile("BBB_out", "order app log\n")
+
+	// app resource for "order-worker" (guid CCC) — resource name "order-worker-bbbb".
+	// Its remainder after "order-" is "worker-bbbb" which contains a dash, so it must NOT match "order".
+	writeFile("resource-executable-CCC.log",
+		`x	info	r	Starting process...	{"Executable": "/order-worker-bbbb", "Cmd": "/usr/bin/worker", "Args": []}`+"\n")
+	writeFile("CCC_out", "order-worker app log\n")
+
+	daprdPath, appPath := resolveDCPLogs(dir, "order")
+	require.Equal(t, filepath.Join(dir, "AAA_out"), daprdPath)
+	// Must resolve to order's own resource (BBB), not order-worker's (CCC).
+	require.Equal(t, filepath.Join(dir, "BBB_out"), appPath)
+}
+
 func TestParseLsofStdout(t *testing.T) {
 	t.Run("regular file", func(t *testing.T) {
 		out := []byte("p58324\nf1\ntREG\nn/private/tmp/lsoftest.out\n")

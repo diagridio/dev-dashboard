@@ -95,10 +95,19 @@ func resolveDCPLogs(sessionDir, appID string) (daprdPath, appPath string) {
 			continue
 		}
 		execName := strings.TrimPrefix(r.info.Executable, "/")
-		if appBase != "" && strings.HasPrefix(execName, appBase+"-") && !strings.Contains(execName, "-dapr-cli-") {
-			appPath = filepath.Join(sessionDir, r.guid+"_out")
-			break
+		// The "-dapr-cli-" infix is a DCP naming convention observed empirically (not a stable public API).
+		if appBase == "" || !strings.HasPrefix(execName, appBase+"-") || strings.Contains(execName, "-dapr-cli-") {
+			continue
 		}
+		// Require an exact base match: the suffix after "<appBase>-" must be a single
+		// opaque token with no dash (e.g. "order-zfzg"), so "order-worker-abcd"
+		// (remainder "worker-abcd" contains a dash) does not mis-match app "order".
+		remainder := execName[len(appBase)+1:]
+		if strings.Contains(remainder, "-") {
+			continue
+		}
+		appPath = filepath.Join(sessionDir, r.guid+"_out")
+		break
 	}
 	return daprdPath, appPath
 }
