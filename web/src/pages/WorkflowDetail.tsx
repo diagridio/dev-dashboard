@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflow } from '../hooks/useWorkflows'
 import { useApps } from '../hooks/useApps'
@@ -84,6 +84,9 @@ export function EventRow({
   pair,
   pairHovered,
   onPairHover,
+  pairSelected,
+  isActive,
+  onToggleSelect,
 }: {
   event: WorkflowHistoryEvent
   createdAt: string | undefined
@@ -95,6 +98,9 @@ export function EventRow({
   pair?: PairInfo | null
   pairHovered?: boolean
   onPairHover?: (pairId: number | null) => void
+  pairSelected?: boolean
+  isActive?: boolean
+  onToggleSelect?: () => void
 }) {
   const offset = formatOffset(createdAt, event.timestamp)
   const dateTime = formatDateTime(event.timestamp) ?? ''
@@ -125,14 +131,14 @@ export function EventRow({
     const href = `#${eventAnchorId(pair.partnerIndex)}`
     if (pair.role === 'start') {
       return (
-        <a className="pairchip" href={href} aria-label="Jump to result" title="Jump to result" onMouseEnter={enter} onMouseLeave={leave}>
+        <a className="pairchip" href={href} aria-label="Jump to result" title="Jump to result" onClick={(e) => e.stopPropagation()} onMouseEnter={enter} onMouseLeave={leave}>
           #{pair.pairId} ↓
         </a>
       )
     }
     const dur = pair.durationMs !== null ? formatDuration(pair.durationMs) : ''
     return (
-      <a className="pairchip" href={href} aria-label="Jump to scheduled" title="Jump to scheduled" onMouseEnter={enter} onMouseLeave={leave}>
+      <a className="pairchip" href={href} aria-label="Jump to scheduled" title="Jump to scheduled" onClick={(e) => e.stopPropagation()} onMouseEnter={enter} onMouseLeave={leave}>
         #{pair.pairId} ↑{dur ? ` ${dur}` : ''}
       </a>
     )
@@ -148,6 +154,12 @@ export function EventRow({
 
   const hasDetails = !!(event.input || event.output)
 
+  const selectable = !!pair
+  const onHeaderClick = (e: ReactMouseEvent) => {
+    e.preventDefault() // suppress native <details> toggle; selection drives expansion
+    onToggleSelect?.()
+  }
+
   const copyAnchorLink = () => {
     const { origin, pathname } = window.location
     copyText(`${origin}${pathname}#${anchorId}`)
@@ -155,7 +167,7 @@ export function EventRow({
   }
 
   return (
-    <div id={anchorId} className={`ev${isNewest ? ' reveal' : ''}${pairHovered ? ' pair-hover' : ''}`}>
+    <div id={anchorId} className={`ev${isNewest ? ' reveal' : ''}${pairHovered ? ' pair-hover' : ''}${pairSelected ? ' pair-selected' : ''}`}>
       <div className="t">
         <span className="off">{offset}</span>
         <span className="dt">{dateTime}</span>
@@ -165,8 +177,8 @@ export function EventRow({
       </div>
       <div className="c">
         {hasDetails ? (
-          <details className="evd">
-            <summary>
+          <details className="evd" {...(selectable ? { open: !!isActive } : {})}>
+            <summary onClick={selectable ? onHeaderClick : undefined}>
               <span className="caret">▸</span>
               <span className="evtype">{event.type}</span>
               {event.name && <span className="evname">{event.name}</span>}
@@ -177,6 +189,7 @@ export function EventRow({
                 title="Copy link to this event"
                 onClick={(e) => {
                   e.preventDefault() // don't toggle the <details>
+                  e.stopPropagation() // don't trigger row selection
                   copyAnchorLink()
                 }}
               >
@@ -221,8 +234,8 @@ export function EventRow({
             </div>
           </details>
         ) : (
-          <div className="evd evstatic">
-            <div className="evstatic-head">
+          <div className={`evd evstatic${selectable ? ' selectable' : ''}`}>
+            <div className="evstatic-head" onClick={selectable ? () => onToggleSelect?.() : undefined}>
               <span className="caretspace" aria-hidden="true">▸</span>
               <span className="evtype">{event.type}</span>
               <div className="evnamecell">
@@ -233,6 +246,7 @@ export function EventRow({
                   <Link
                     className="evchildlink"
                     to={`/workflows/${appId}/${event.instanceId}${store ? `?store=${encodeURIComponent(store)}` : ''}`}
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {event.instanceId}
                   </Link>
@@ -243,7 +257,10 @@ export function EventRow({
                 className="evanchor"
                 aria-label="Copy link to this event"
                 title="Copy link to this event"
-                onClick={copyAnchorLink}
+                onClick={(e) => {
+                  e.stopPropagation() // don't trigger row selection
+                  copyAnchorLink()
+                }}
               >
                 #
               </button>
@@ -282,31 +299,12 @@ export function WorkflowDetail() {
 
   const [order, setOrder] = useState<HistoryOrder>(() => getHistoryOrder())
   const [hoveredPair, setHoveredPair] = useState<number | null>(null)
+  const [selection, setSelection] = useState<{ pairId: number; index: number } | null>(null)
+  const lastAutoSelectedHash = useRef<string>('')
 
   useEffect(() => {
     setHistoryOrder(order)
   }, [order])
-
-  // Scroll to and pulse the row referenced by the URL hash (e.g. #event-2),
-  // both on mount and whenever the hash changes via an in-page anchor click.
-  useEffect(() => {
-    function jumpToHash() {
-      const id = window.location.hash.slice(1)
-      if (!id) return
-      const el = document.getElementById(id)
-      if (!el) return
-      try {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      } catch {
-        // jsdom / unsupported environments: scrolling is non-essential
-      }
-      el.classList.add('target-pulse')
-      window.setTimeout(() => el.classList.remove('target-pulse'), 1500)
-    }
-    jumpToHash()
-    window.addEventListener('hashchange', jumpToHash)
-    return () => window.removeEventListener('hashchange', jumpToHash)
-  }, [execution])
 
   const { toast, toastNode } = useToast()
 
@@ -327,12 +325,50 @@ export function WorkflowDetail() {
     return { canonicalIndex: ci, pairIndex: buildPairIndex(ascending) }
   }, [_history])
 
+  // Scroll to and pulse the row referenced by the URL hash (e.g. #event-2), both
+  // on mount and on in-page anchor clicks. If the target is part of a pair, also
+  // select it (highlight both rows) and mark it active so its body expands.
+  useEffect(() => {
+    function jumpToHash() {
+      const id = window.location.hash.slice(1)
+      if (!id) return
+      const el = document.getElementById(id)
+      if (!el) return
+      try {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      } catch {
+        // jsdom / unsupported environments: scrolling is non-essential
+      }
+      el.classList.add('target-pulse')
+      window.setTimeout(() => el.classList.remove('target-pulse'), 1500)
+      // Only auto-select on genuine navigation to a new hash — not on effect
+      // re-runs from polling (pairIndex changes as a running workflow's history
+      // grows), which would otherwise re-assert a selection the user dismissed.
+      // The anchor id encodes the canonical index, which is how pairIndex is keyed.
+      if (id !== lastAutoSelectedHash.current) {
+        lastAutoSelectedHash.current = id
+        const m = id.match(/^event-(\d+)$/)
+        if (m) {
+          const idx = Number(m[1])
+          const p = pairIndex.get(idx)
+          if (p) setSelection({ pairId: p.pairId, index: idx })
+        }
+      }
+    }
+    jumpToHash()
+    window.addEventListener('hashchange', jumpToHash)
+    return () => window.removeEventListener('hashchange', jumpToHash)
+  }, [pairIndex])
+
   const copyWorkflowLink = () => {
     const { origin, pathname } = window.location
     const qs = store ? `?store=${encodeURIComponent(store)}` : ''
     copyText(`${origin}${pathname}${qs}`)
     toast.show('Link copied')
   }
+
+  const togglePairSelection = (pairId: number, index: number) =>
+    setSelection((cur) => (cur && cur.pairId === pairId && cur.index === index ? null : { pairId, index }))
 
   if (isLoading) {
     return (
@@ -670,7 +706,7 @@ export function WorkflowDetail() {
             const pair = pairIndex.get(ci) ?? null
             return (
               <EventRow
-                key={idx}
+                key={ci}
                 event={event}
                 createdAt={execution.createdAt}
                 isNewest={event === newestEvent}
@@ -681,6 +717,9 @@ export function WorkflowDetail() {
                 pair={pair}
                 pairHovered={pair !== null && pair.pairId === hoveredPair}
                 onPairHover={setHoveredPair}
+                pairSelected={pair !== null && selection !== null && pair.pairId === selection.pairId}
+                isActive={selection !== null && selection.index === ci}
+                onToggleSelect={pair !== null ? () => togglePairSelection(pair.pairId, ci) : undefined}
               />
             )
           })}
