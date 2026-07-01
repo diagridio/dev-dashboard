@@ -18,7 +18,7 @@ describe('StepConfigure', () => {
   it('dispatches SET_NAME and shows a validation error for a bad name', () => {
     const dispatch = vi.fn()
     render(<StepConfigure state={configureState()} dispatch={dispatch} />)
-    const name = screen.getByLabelText(/^name/i)
+    const name = screen.getByLabelText(/^Name\s*\*?$/)
     fireEvent.change(name, { target: { value: 'Bad Name' } })
     expect(dispatch).toHaveBeenCalledWith({ type: 'SET_NAME', name: 'Bad Name' })
   })

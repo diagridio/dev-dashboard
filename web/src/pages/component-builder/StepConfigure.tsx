@@ -23,7 +23,7 @@ export function StepConfigure({ state, dispatch }: Props) {
       <Field label="Name" htmlFor="c-name" required error={nameError}>
         <TextInput id="c-name" value={state.name} onChange={(v) => dispatch({ type: 'SET_NAME', name: v })} />
       </Field>
-      <Field label="Dapr namespace" htmlFor="c-ns">
+      <Field label="Namespace" htmlFor="c-ns">
         <TextInput id="c-ns" value={state.namespace} onChange={(v) => dispatch({ type: 'SET_NAMESPACE', namespace: v })} />
       </Field>
 
@@ -32,7 +32,7 @@ export function StepConfigure({ state, dispatch }: Props) {
         const useSecret = !!state.useSecret[f.name]
         const ref = state.secretRefs[f.name] ?? { name: '', key: '' }
         return (
-          <Field key={f.name} label={f.name} required={f.required} error={undefined}>
+          <Field key={f.name} label={f.name} required={f.required}>
             {f.description && <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{f.description}</div>}
             <Toggle
               label={`Use secret for ${f.name}`}
@@ -57,7 +57,6 @@ export function StepConfigure({ state, dispatch }: Props) {
         <Field label="Add optional field" htmlFor="add-opt">
           <SelectInput
             id="add-opt"
-            aria-label="Add optional field"
             value=""
             options={notAdded.map((f) => ({ label: f.name, value: f.name }))}
             onChange={(field) => field && dispatch({ type: 'ADD_OPTIONAL', field })}
