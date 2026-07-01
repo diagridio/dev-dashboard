@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflow } from '../hooks/useWorkflows'
 import { useApps } from '../hooks/useApps'
@@ -50,30 +50,6 @@ function useWallClock(
 
   void tick // ensure re-render
   return elapsedTenths(createdAt, null, Date.now())
-}
-
-// ---------------------------------------------------------------------------
-// Last-updated "N ago" string — driven by actual query fetch time
-// ---------------------------------------------------------------------------
-
-function useLastRefreshed(dataUpdatedAt: number): string {
-  const [, setTick] = useState(0)
-  // Keep a ref to ensure we always re-render when dataUpdatedAt changes
-  const prevRef = useRef(dataUpdatedAt)
-  if (prevRef.current !== dataUpdatedAt) {
-    prevRef.current = dataUpdatedAt
-  }
-
-  useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 5000)
-    return () => clearInterval(id)
-  }, [])
-
-  const secsAgo = Math.floor((Date.now() - dataUpdatedAt) / 1000)
-  if (secsAgo < 10) return 'updated just now'
-  if (secsAgo < 60) return `updated ${secsAgo}s ago`
-  const minsAgo = Math.floor(secsAgo / 60)
-  return `updated ${minsAgo}m ago`
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +213,7 @@ export function WorkflowDetail() {
   const { appId, instanceId } = useParams<{ appId: string; instanceId: string }>()
   const [searchParams] = useSearchParams()
   const store = searchParams.get('store') ?? undefined
-  const { data: execution, isLoading, isError, dataUpdatedAt } = useWorkflow(appId ?? '', instanceId ?? '', store)
+  const { data: execution, isLoading, isError } = useWorkflow(appId ?? '', instanceId ?? '', store)
   const navigate = useNavigate()
   const { mutate: removeWorkflows } = useRemoveWorkflows()
 
@@ -288,8 +264,6 @@ export function WorkflowDetail() {
     execution?.lastUpdatedAt,
     execution?.status ?? 'Pending',
   )
-
-  const lastRefreshed = useLastRefreshed(dataUpdatedAt)
 
   const copyWorkflowLink = () => {
     const { origin, pathname } = window.location
@@ -433,14 +407,6 @@ export function WorkflowDetail() {
             Force delete…
           </button>
         </div>
-      </div>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* Refresh bar                                                          */}
-      {/* ------------------------------------------------------------------ */}
-      <div className="refreshbar">
-        <span className="sp" />
-        <span className="mono faint">{lastRefreshed}</span>
       </div>
 
       {/* ------------------------------------------------------------------ */}
