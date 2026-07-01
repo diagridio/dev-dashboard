@@ -381,8 +381,9 @@ export function Logs() {
       )}
 
       <p className="hint">
-        Logs are read from the run-template log files (<span className="mono">~/.dapr/logs/…</span>
-        ). Level chips &amp; search filter live; search matches are highlighted.
+        Logs are read from run-template files (<span className="mono">~/.dapr/logs/…</span>), .NET Aspire
+        captured output, or a redirected <span className="mono">dapr run</span> stdout file. Level chips &amp;
+        search filter live; search matches are highlighted.
       </p>
     </div>
   )
