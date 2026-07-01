@@ -43,13 +43,14 @@ type FailureDetails struct {
 }
 
 type HistoryEvent struct {
-	SequenceID int32     `json:"sequenceId"`
-	Timestamp  time.Time `json:"timestamp"`
-	Type       string    `json:"type"`
-	Name       string    `json:"name,omitempty"`
-	InstanceID string    `json:"instanceId,omitempty"` // child instance id for SubOrchestrationCreated
-	Input      *string   `json:"input,omitempty"`
-	Output     *string   `json:"output,omitempty"`
+	SequenceID  int32     `json:"sequenceId"`
+	Timestamp   time.Time `json:"timestamp"`
+	Type        string    `json:"type"`
+	Name        string    `json:"name,omitempty"`
+	InstanceID  string    `json:"instanceId,omitempty"` // child instance id for SubOrchestrationCreated
+	ScheduledID *int32    `json:"scheduledId,omitempty"` // start event's EventId; set on completion/fired events
+	Input       *string   `json:"input,omitempty"`
+	Output      *string   `json:"output,omitempty"`
 }
 
 type ExecutionSummary struct {

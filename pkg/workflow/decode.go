@@ -99,13 +99,17 @@ func decodeEvent(e *protos.HistoryEvent) HistoryEvent {
 		ev.Input = strval(s.GetInput())
 	case e.GetTaskCompleted() != nil:
 		ev.Type = "TaskCompleted"
-		ev.Output = strval(e.GetTaskCompleted().GetResult())
+		c := e.GetTaskCompleted()
+		ev.Output = strval(c.GetResult())
+		ev.ScheduledID = i32ptr(c.GetTaskScheduledId())
 	case e.GetTaskFailed() != nil:
 		ev.Type = "TaskFailed"
+		ev.ScheduledID = i32ptr(e.GetTaskFailed().GetTaskScheduledId())
 	case e.GetTimerCreated() != nil:
 		ev.Type = "TimerCreated"
 	case e.GetTimerFired() != nil:
 		ev.Type = "TimerFired"
+		ev.ScheduledID = i32ptr(e.GetTimerFired().GetTimerId())
 	case e.GetEventRaised() != nil:
 		ev.Type = "EventRaised"
 		s := e.GetEventRaised()
@@ -125,6 +129,14 @@ func decodeEvent(e *protos.HistoryEvent) HistoryEvent {
 		s := e.GetSubOrchestrationInstanceCreated()
 		ev.Name = s.GetName()
 		ev.InstanceID = s.GetInstanceId()
+	case e.GetSubOrchestrationInstanceCompleted() != nil:
+		ev.Type = "SubOrchestrationCompleted"
+		c := e.GetSubOrchestrationInstanceCompleted()
+		ev.Output = strval(c.GetResult())
+		ev.ScheduledID = i32ptr(c.GetTaskScheduledId())
+	case e.GetSubOrchestrationInstanceFailed() != nil:
+		ev.Type = "SubOrchestrationFailed"
+		ev.ScheduledID = i32ptr(e.GetSubOrchestrationInstanceFailed().GetTaskScheduledId())
 	default:
 		ev.Type = "Unknown"
 	}
@@ -138,3 +150,5 @@ func strval(v *wrapperspb.StringValue) *string {
 	s := v.GetValue()
 	return &s
 }
+
+func i32ptr(v int32) *int32 { return &v }
