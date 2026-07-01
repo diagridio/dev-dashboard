@@ -5,6 +5,7 @@ import { activeFields } from '../../hooks/useComponentSchemas'
 
 export interface ComponentBuilderState {
   activeStep: number
+  category?: string
   schema?: ComponentMetadataSchema
   version: string
   authProfile?: AuthenticationProfile
@@ -27,6 +28,7 @@ export type Action =
   | { type: 'SET_SECRET'; field: string; ref: { name: string; key: string } }
   | { type: 'ADD_OPTIONAL'; field: string }
   | { type: 'REMOVE_OPTIONAL'; field: string }
+  | { type: 'SELECT_CATEGORY'; category: string }
   | { type: 'NEXT' }
   | { type: 'BACK' }
 
@@ -48,8 +50,32 @@ export function reducer(state: ComponentBuilderState, action: Action): Component
   switch (action.type) {
     case 'SELECT_SCHEMA': {
       const hasAuthProfiles = (action.schema.authenticationProfiles?.length ?? 0) > 0
-      return { ...state, schema: action.schema, version: action.version, hasAuthProfiles, activeStep: 1 }
+      return {
+        ...state,
+        category: action.schema.type,
+        schema: action.schema,
+        version: action.version,
+        hasAuthProfiles,
+        activeStep: 1,
+      }
     }
+    case 'SELECT_CATEGORY':
+      if (action.category === state.schema?.type) {
+        return { ...state, category: action.category }
+      }
+      // Switching category invalidates the chosen component + its config.
+      return {
+        ...state,
+        category: action.category,
+        schema: undefined,
+        version: '',
+        authProfile: undefined,
+        hasAuthProfiles: false,
+        values: {},
+        secretRefs: {},
+        useSecret: {},
+        optionalAdded: [],
+      }
     case 'SET_AUTH_PROFILE':
       return { ...state, authProfile: action.profile }
     case 'SET_NAME':
@@ -66,8 +92,21 @@ export function reducer(state: ComponentBuilderState, action: Action): Component
       return state.optionalAdded.includes(action.field)
         ? state
         : { ...state, optionalAdded: [...state.optionalAdded, action.field] }
-    case 'REMOVE_OPTIONAL':
-      return { ...state, optionalAdded: state.optionalAdded.filter((f) => f !== action.field) }
+    case 'REMOVE_OPTIONAL': {
+      const values = { ...state.values }
+      const secretRefs = { ...state.secretRefs }
+      const useSecret = { ...state.useSecret }
+      delete values[action.field]
+      delete secretRefs[action.field]
+      delete useSecret[action.field]
+      return {
+        ...state,
+        optionalAdded: state.optionalAdded.filter((f) => f !== action.field),
+        values,
+        secretRefs,
+        useSecret,
+      }
+    }
     case 'NEXT':
       return { ...state, activeStep: state.activeStep + 1 }
     case 'BACK':

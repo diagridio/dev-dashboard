@@ -112,3 +112,48 @@ describe('assembleComponentSpec', () => {
     expect(spec.spec.metadata).toEqual([{ name: 'port', value: 6379 }, { name: 'tls', value: true }])
   })
 })
+
+describe('SELECT_CATEGORY', () => {
+  const redis = {
+    type: 'state', name: 'redis', version: 'v1', title: 'Redis', status: 'stable',
+    metadata: [{ name: 'redisHost', required: true }, { name: 'enableTLS', type: 'bool' as const }],
+  }
+  it('sets the active category', () => {
+    const s = reducer(initialState(), { type: 'SELECT_CATEGORY', category: 'state' })
+    expect(s.category).toBe('state')
+    expect(s.activeStep).toBe(0)
+  })
+  it('SELECT_SCHEMA sets category = schema.type', () => {
+    const s = reducer(initialState(), { type: 'SELECT_SCHEMA', schema: redis, version: 'v1' })
+    expect(s.category).toBe('state')
+  })
+  it('switching to a different category clears schema + config', () => {
+    let s = reducer(initialState(), { type: 'SELECT_SCHEMA', schema: redis, version: 'v1' })
+    s = reducer(s, { type: 'SET_VALUE', field: 'redisHost', value: 'x' })
+    s = reducer(s, { type: 'SELECT_CATEGORY', category: 'pubsub' })
+    expect(s.category).toBe('pubsub')
+    expect(s.schema).toBeUndefined()
+    expect(s.version).toBe('')
+    expect(s.values).toEqual({})
+  })
+  it('re-selecting the same category keeps the schema', () => {
+    let s = reducer(initialState(), { type: 'SELECT_SCHEMA', schema: redis, version: 'v1' })
+    s = reducer(s, { type: 'SELECT_CATEGORY', category: 'state' })
+    expect(s.schema?.name).toBe('redis')
+  })
+})
+
+describe('REMOVE_OPTIONAL clears field state', () => {
+  it('removes the field from optionalAdded and clears its value/secret/useSecret', () => {
+    let s = initialState()
+    s = reducer(s, { type: 'ADD_OPTIONAL', field: 'enableTLS' })
+    s = reducer(s, { type: 'SET_VALUE', field: 'enableTLS', value: 'true' })
+    s = reducer(s, { type: 'TOGGLE_SECRET', field: 'enableTLS', on: true })
+    s = reducer(s, { type: 'SET_SECRET', field: 'enableTLS', ref: { name: 'n', key: 'k' } })
+    s = reducer(s, { type: 'REMOVE_OPTIONAL', field: 'enableTLS' })
+    expect(s.optionalAdded).not.toContain('enableTLS')
+    expect(s.values.enableTLS).toBeUndefined()
+    expect(s.secretRefs.enableTLS).toBeUndefined()
+    expect(s.useSecret.enableTLS).toBeUndefined()
+  })
+})
