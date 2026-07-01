@@ -161,7 +161,9 @@ respectively).
   secretKeyRef{name, key}}}).
 - `types/resiliency.ts`: `DaprResiliency` (kind `Resiliency`, spec{policies{timeouts, retries,
   circuitBreakers}, targets{apps, actors, components}}). RetryPolicy{policy `constant|exponential`,
-  duration, maxRetries, maxInterval, matching{httpStatusCodes, grcpStatusCodes}}.
+  duration, maxRetries, maxInterval, matching{httpStatusCodes, grpcStatusCodes}}.
+  (NOTE: cloudgrid's source type has the typo `grcpStatusCodes`; the port standardizes on the
+  correct `grpcStatusCodes` — implemented in `types/resiliency.ts`. Do not "correct" it back.)
   CircuitBreakerPolicy{maxRequests, timeout, trip (CEL), interval}.
   AppTarget / ActorTarget (+circuitBreakerScope `type|id|both`, circuitBreakerCacheSize) /
   ComponentTarget (inbound/outbound).
@@ -181,6 +183,13 @@ respectively).
 4. **Preview** — editable YAML, Copy + Download `<name>.yaml`.
 
 Dropped: cloudgrid's connected-mode "Access & Scopes" step.
+
+**Plan 2 implementation note (from Plan 1 foundation review):** `lib/yaml-emit.ts`
+`recursivelyRemoveEmptyValues` treats arrays as leaves — it does NOT prune empty keys *inside*
+objects held in an array. `ComponentSpec.spec.metadata` is an array of `{name, value? | secretKeyRef}`
+items, so the Component Builder must assemble each metadata item with only its populated key
+(`value` XOR `secretKeyRef`) and drop empty items itself, rather than relying on the stripper to
+clean item interiors. (Component emission does not run the stripper anyway; resiliency does.)
 
 ## Resiliency Builder flow (4 steps)
 
