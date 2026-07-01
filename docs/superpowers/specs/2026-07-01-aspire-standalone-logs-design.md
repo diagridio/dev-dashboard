@@ -92,10 +92,14 @@ are empty**, trying resolvers in priority order and recording the format of each
      (the app resource) → its `<guid>_out`. Format = `dcp`. Robust to app-id ≠
      resource-name.
 3. **FD resolver** (standalone `dapr run`) — used when still empty and not Aspire:
-   - Inspect the `daprd` process (`DaprdPID`) stdout via gopsutil `OpenFiles()`. If it
-     resolves to a **regular file** (not `/dev/*`, not a pipe), use it. Format = `plain`.
-   - App log: find the app process (child of `CLIPID` that is not daprd, or `AppPID` from
-     metadata) and inspect its stdout the same way. Format = `plain`.
+   - Inspect the `daprd` process (`DaprdPID`) stdout (fd 1) via `lsof -p <pid> -a -d 1
+     -F ftn`. If it resolves to a **regular file** (lsof type `REG`, not `CHR`/tty, not
+     `PIPE`), use it. Format = `plain`.
+     - Note: gopsutil `OpenFiles()` returns "not implemented" on darwin, so `lsof` is
+       used directly. lsof is standard on macOS and Linux.
+   - App log: inspect the app process (`AppPID` from metadata, when > 0) stdout the same
+     way. Format = `plain`. Deriving the app PID by walking `CLIPID` children is out of
+     scope for v1; when `AppPID` is unknown the app source simply has no log.
    - If the fd is a tty/pipe with no backing file, leave the path empty (no log).
 
 **New code:**
@@ -103,13 +107,13 @@ are empty**, trying resolvers in priority order and recording the format of each
 - `pkg/discovery/types.go`: add `AppLogFormat` and `DaprdLogFormat` fields to `Instance`
   (`"plain"` | `"dcp"`, default `"plain"`).
 - `pkg/discovery/logsource.go` (new): `dcpSessionDir(listenerCmd string) (string, bool)`,
-  `resolveDCPLogs(sessionDir, appID string) (daprdPath, appPath, daprdFmt, appFmt string)`,
-  `resolveFDLogs(daprdPID, appPID, cliPID int) (daprdPath, appPath string)`. The FD
-  resolver takes an injectable `openFiles` function so it can be unit-tested without real
-  processes.
-- `pkg/discovery/service.go`: wire the resolvers into `enrich()` after the metadata fetch.
-  Reuse the app-port listener command already resolved for Aspire detection rather than
-  resolving the process twice.
+  `resolveDCPLogs(sessionDir, appID string) (daprdPath, appPath string)`,
+  `parseLsofStdout(out []byte) string`, `lsofStdoutFile(pid int) string`. The service
+  holds an injectable `stdoutFile func(pid int) string` seam (default `lsofStdoutFile`) so
+  the FD path can be unit-tested without real processes.
+- `pkg/discovery/service.go`: add a `stdoutFile` field (defaulted in `New`), and wire a
+  `resolveLogSources(*Instance)` step into `enrich()` after the metadata fetch. Reuse the
+  app-port listener command (via `appProc.CommandForPort`) rather than resolving twice.
 - `metadata.go` is unchanged.
 
 ### 2. Backend normalization (`pkg/server/logs.go`)
@@ -144,8 +148,10 @@ are empty**, trying resolvers in priority order and recording the format of each
   name.
 - `normalizeLine`: DCP daprd sample → standard `time=…` line; DCP app sample (with ANSI)
   → clean text; plain line with ANSI → ANSI stripped; plain line without ANSI → unchanged.
-- `resolveFDLogs`: with an injected `openFiles` seam, selects a regular file and rejects
-  tty/pipe/`/dev/*` entries.
+- `parseLsofStdout`: returns the path for a `tREG` record; returns `""` for `tPIPE` and
+  `tCHR` (tty) records.
+- `resolveLogSources` (FD path): with an injected `stdoutFile` seam, populates
+  `DaprdLogPath` from a regular-file stdout and leaves it empty when the seam returns `""`.
 
 **Manual verification:**
 
