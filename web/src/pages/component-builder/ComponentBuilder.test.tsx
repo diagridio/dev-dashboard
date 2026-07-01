@@ -22,29 +22,6 @@ function renderBuilder() {
 }
 
 describe('ComponentBuilder', () => {
-  it('Finish is re-enabled after Back-from-preview when user had edited YAML', async () => {
-    renderBuilder()
-    fireEvent.click(await screen.findByRole('button', { name: 'state' })) // pick category
-    fireEvent.click(await screen.findByText('Redis')) // step 0 -> 1
-    fireEvent.click(screen.getByRole('button', { name: /continue/i })) // step 1 -> 2
-    fireEvent.change(screen.getByLabelText(/^Name\s/i), { target: { value: 'order-store' } })
-    fireEvent.change(screen.getByLabelText('redisHost'), { target: { value: 'localhost:6379' } })
-    fireEvent.click(screen.getByRole('button', { name: /continue/i })) // step 2 -> 3 (Preview)
-    const ta = await screen.findByRole('textbox', { name: /generated yaml/i })
-    await waitFor(() => expect((ta as HTMLTextAreaElement).value).toContain('type: state.redis'))
-    // Edit the YAML — this sets previewEdited=true in the parent
-    fireEvent.change(ta, { target: { value: 'edited: true\n' } })
-    // Go Back (YamlPreview unmounts)
-    fireEvent.click(screen.getByRole('button', { name: /back/i }))
-    // Return to Preview (YamlPreview remounts, mount effect fires onEditedChange(false))
-    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
-    await screen.findByRole('textbox', { name: /generated yaml/i })
-    // Finish should now be enabled (not disabled)
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /finish/i })).not.toBeDisabled()
-    })
-  })
-
   it('walks type → (auth) → configure → preview and shows generated YAML', async () => {
     renderBuilder()
     fireEvent.click(await screen.findByRole('button', { name: 'state' })) // pick category
@@ -53,8 +30,12 @@ describe('ComponentBuilder', () => {
     fireEvent.change(screen.getByLabelText(/^Name\s/i), { target: { value: 'order-store' } })
     fireEvent.change(screen.getByLabelText('redisHost'), { target: { value: 'localhost:6379' } })
     fireEvent.click(screen.getByRole('button', { name: /continue/i })) // step 2 -> 3
-    const ta = await screen.findByRole('textbox', { name: /generated yaml/i })
-    await waitFor(() => expect((ta as HTMLTextAreaElement).value).toContain('type: state.redis'))
-    expect((ta as HTMLTextAreaElement).value).toContain('name: order-store')
+    // after Continue into Preview:
+    // highlighted YAML may be split across spans, so use waitFor on textContent
+    await waitFor(() => expect(document.querySelector('pre.code')?.textContent).toContain('kind: Component'))
+    const pre = document.querySelector('pre.code') as HTMLPreElement
+    expect(pre.textContent).toContain('type: state.redis')
+    expect(pre.textContent).toContain('name: order-store')
+    expect(screen.getByRole('button', { name: /finish/i })).toBeEnabled()
   })
 })

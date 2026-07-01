@@ -979,10 +979,8 @@ describe('ResiliencyBuilder', () => {
     fireEvent.change(screen.getByLabelText(/^timeout policy/i), { target: { value: 'timeout1' } })
     fireEvent.click(screen.getByRole('button', { name: /save/i }))
     fireEvent.click(screen.getByRole('button', { name: /continue/i })) // 2->3
-    await waitFor(() => expect(screen.getByRole('textbox', { name: /generated yaml/i })).toHaveValue(
-      expect.stringContaining('kind: Resiliency'),
-    ))
-    expect(screen.getByRole('textbox', { name: /generated yaml/i })).toHaveValue(expect.stringContaining('name: my-res'))
+    await waitFor(() => expect(document.querySelector('pre.code')?.textContent).toContain('kind: Resiliency'))
+    expect(document.querySelector('pre.code')?.textContent).toContain('name: my-res')
   })
 })
 ```
@@ -995,7 +993,7 @@ Expected: FAIL — cannot resolve modules.
 - [ ] **Step 3: Implement `ResiliencyBuilder.tsx`**
 
 ```tsx
-import { useMemo, useReducer, useState } from 'react'
+import { useMemo, useReducer } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Wizard, type WizardStep } from '../../components/wizard'
 import { YamlPreview } from '../../components/YamlPreview'
@@ -1008,7 +1006,6 @@ import { StepTargets } from './StepTargets'
 export function ResiliencyBuilder() {
   const navigate = useNavigate()
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
-  const [previewEdited, setPreviewEdited] = useState(false)
 
   const yaml = useMemo(
     () => (state.activeStep === 3 ? dumpYaml(assembleResiliency(state.config)) : ''),
@@ -1019,7 +1016,7 @@ export function ResiliencyBuilder() {
     { label: 'General', content: <StepGeneral state={state} dispatch={dispatch} /> },
     { label: 'Policies', content: <StepPolicies state={state} dispatch={dispatch} /> },
     { label: 'Targets', content: <StepTargets state={state} dispatch={dispatch} /> },
-    { label: 'Preview', content: <YamlPreview yaml={yaml} filename={`${state.config.metadata.name || 'resiliency'}.yaml`} onEditedChange={setPreviewEdited} /> },
+    { label: 'Preview', content: <YamlPreview yaml={yaml} filename={`${state.config.metadata.name || 'resiliency'}.yaml`} /> },
   ]
 
   return (
@@ -1035,7 +1032,7 @@ export function ResiliencyBuilder() {
         <Wizard
           steps={steps}
           activeStep={state.activeStep}
-          canContinue={state.activeStep === 3 ? !previewEdited : canContinue(state)}
+          canContinue={canContinue(state)}
           onBack={() => dispatch({ type: 'BACK' })}
           onContinue={() => dispatch({ type: 'NEXT' })}
           onFinish={() => navigate('/resiliency')}
@@ -1121,7 +1118,7 @@ git commit -m "feat(web): wire Resiliency Builder route, landing page, and nav i
 - Policies: timeouts/retries/circuitBreakers, each list + Add dialog; ≥1 policy to proceed → Tasks 2, 4 + reducer gating (Task 1). ✓
 - Targets: apps/actors/components referencing named policies via dropdowns; actors add scope + cache size; components add inbound/outbound; ≥1 target to proceed → Tasks 3, 4 + gating (Task 1). ✓
 - DaprBuiltIn default-policy override table DROPPED for v1 → documented in Global Constraints. ✓
-- Preview: `recursivelyRemoveEmptyValues` over spec, editable, copy/download → Task 1 `assembleResiliency` + Task 5 using `YamlPreview`. ✓
+- Preview: `recursivelyRemoveEmptyValues` over spec, read-only highlighted `<pre>`, copy/download → Task 1 `assembleResiliency` + Task 5 using `YamlPreview`. ✓
 - `grpcStatusCodes` spelling → RetryDialog + types (Task 2). ✓
 - Sequential policy/target naming (`retry1`…) → `nextName` (Task 1), used by StepPolicies. ✓
 - Monochrome buttons in wizard + dialogs (`.btn.mono`/`.btn.ghost`) → Tasks 2, 3, 5. ✓
@@ -1131,6 +1128,6 @@ git commit -m "feat(web): wire Resiliency Builder route, landing page, and nav i
 
 **Placeholder scan:** No TBD/TODO; every code step has complete code + commands with expected results. Two "confirm the real API" notes (Task 5 `useDocumentTitle`; Task 5 `TopNav.test.tsx` update) are verification steps, not placeholders.
 
-**Type consistency:** `ResiliencyState`/`Action` (Task 1) consumed identically by steps (Task 4) and page (Task 5). `RetryPolicy`/`CircuitBreakerPolicy`/`AppTarget`/`ActorTarget`/`ComponentTarget` from `types/resiliency` used consistently across dialogs (Tasks 2–3) and reducer (Task 1). `PolicyNames` shape shared between target dialogs and StepTargets. `UPSERT_*`/`REMOVE_*` action names match between reducer, steps, and tests. `nextName(prefix, existing)` and `assembleResiliency(config)` signatures consistent. `YamlPreview` (Plan 2) prop shape (`yaml`, `filename`, `onEditedChange`) matches usage.
+**Type consistency:** `ResiliencyState`/`Action` (Task 1) consumed identically by steps (Task 4) and page (Task 5). `RetryPolicy`/`CircuitBreakerPolicy`/`AppTarget`/`ActorTarget`/`ComponentTarget` from `types/resiliency` used consistently across dialogs (Tasks 2–3) and reducer (Task 1). `PolicyNames` shape shared between target dialogs and StepTargets. `UPSERT_*`/`REMOVE_*` action names match between reducer, steps, and tests. `nextName(prefix, existing)` and `assembleResiliency(config)` signatures consistent. `YamlPreview` (Plan 2, updated in Plan 2 Task 4) read-only API `({ yaml, filename })` — no `onEditedChange`, no `previewEdited` state. `canContinue(state)` used directly; Finish always enabled on preview step.
 
 **Cross-plan note:** This plan depends on Plan 2's `components/YamlPreview.tsx`. If Plans are executed out of order, Task 5 (and its test) will fail until `YamlPreview` exists — execute Plan 2 first.

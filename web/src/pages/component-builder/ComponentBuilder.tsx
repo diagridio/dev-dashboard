@@ -1,4 +1,4 @@
-import { useMemo, useReducer, useState } from 'react'
+import { useMemo, useReducer } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Wizard, type WizardStep } from '../../components/wizard'
 import { YamlPreview } from '../../components/YamlPreview'
@@ -11,7 +11,6 @@ import { StepConfigure } from './StepConfigure'
 export function ComponentBuilder() {
   const navigate = useNavigate()
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
-  const [previewEdited, setPreviewEdited] = useState(false)
 
   const yaml = useMemo(
     () => (state.activeStep === 3 ? dumpYaml(assembleComponentSpec(state)) : ''),
@@ -22,12 +21,7 @@ export function ComponentBuilder() {
     { label: 'Type', content: <StepType state={state} dispatch={dispatch} /> },
     { label: 'Auth', content: <StepAuth state={state} dispatch={dispatch} /> },
     { label: 'Configure', content: <StepConfigure state={state} dispatch={dispatch} /> },
-    {
-      label: 'Preview',
-      content: (
-        <YamlPreview yaml={yaml} filename={`${state.name || 'component'}.yaml`} onEditedChange={setPreviewEdited} />
-      ),
-    },
+    { label: 'Preview', content: <YamlPreview yaml={yaml} filename={`${state.name || 'component'}.yaml`} /> },
   ]
 
   return (
@@ -39,11 +33,17 @@ export function ComponentBuilder() {
         </div>
         <button type="button" className="btn ghost" onClick={() => navigate('/components')}>Cancel</button>
       </div>
+      {(state.category || state.schema) && (
+        <div className="crumbs" aria-label="Selected component" style={{ marginBottom: 12 }}>
+          {state.category && <span className="typechip">{state.category}</span>}
+          {state.schema && <span className="b">{state.schema.title} · {state.version}</span>}
+        </div>
+      )}
       <div className="card" style={{ padding: 18 }}>
         <Wizard
           steps={steps}
           activeStep={state.activeStep}
-          canContinue={state.activeStep === 3 ? !previewEdited : canContinue(state)}
+          canContinue={canContinue(state)}
           onBack={() => dispatch({ type: 'BACK' })}
           onContinue={() => dispatch({ type: 'NEXT' })}
           onFinish={() => navigate('/components')}
