@@ -390,6 +390,16 @@ details.evd > summary::-webkit-details-marker { display: none; }
 .evchildlink { font-family: var(--mono); font-size: 10px; color: var(--muted); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .evchildlink:hover { color: var(--text); text-decoration: underline; }
 .evtag { grid-column: 4; font-family: var(--mono); font-size: 10px; color: var(--muted); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+a.pairchip, span.pairchip {
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+  text-decoration: none; border: 1px solid var(--line); border-radius: 6px;
+  padding: 1px 6px; display: inline-flex; gap: 5px; align-items: center; white-space: nowrap;
+}
+a.pairchip { cursor: pointer; }
+a.pairchip:hover { color: var(--text); border-color: var(--accent2); }
+a.pairchip:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
+span.pairchip.pending { border-style: dashed; color: var(--faint); cursor: default; }
+.ev.pair-hover { background: color-mix(in srgb, var(--accent2) 10%, transparent); border-radius: 10px; }
 .evanchor { grid-column: 5; font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 6px; cursor: pointer; opacity: 0; transition: opacity .12s ease, color .12s ease, border-color .12s ease; }
 .ev:hover .evanchor, .evanchor:focus-visible { opacity: 1; }
 .evanchor:hover { color: var(--text); border-color: var(--line); }
