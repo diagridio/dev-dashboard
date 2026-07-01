@@ -16,6 +16,7 @@ export interface WorkflowHistoryEvent {
   type: string
   name?: string
   instanceId?: string
+  scheduledId?: number // start event's EventId; present on completion/fired events
   input?: string
   output?: string
 }

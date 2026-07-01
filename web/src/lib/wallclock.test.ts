@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { elapsed, elapsedTenths, formatOffset, formatDateTime } from './wallclock'
+import { elapsed, elapsedTenths, formatOffset, formatDateTime, formatDuration } from './wallclock'
 
 describe('elapsed', () => {
   it('formats mm:ss between created and now', () => {
@@ -76,5 +76,26 @@ describe('formatDateTime', () => {
     const ts = '2026-06-28T10:00:05.600Z'
     const d = new Date(ts)
     expect(formatDateTime(ts)).toBe(`${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`)
+  })
+})
+
+describe('formatDuration', () => {
+  it('renders sub-second durations in ms', () => {
+    expect(formatDuration(0)).toBe('0ms')
+    expect(formatDuration(340)).toBe('340ms')
+    expect(formatDuration(999)).toBe('999ms')
+  })
+  it('renders seconds with one decimal below 10s and whole seconds below a minute', () => {
+    expect(formatDuration(1200)).toBe('1.2s')
+    expect(formatDuration(9900)).toBe('9.9s')
+    expect(formatDuration(12000)).toBe('12s')
+  })
+  it('renders minutes and padded seconds at or above a minute', () => {
+    expect(formatDuration(65000)).toBe('1m 05s')
+    expect(formatDuration(600000)).toBe('10m 00s')
+  })
+  it('returns empty string for invalid input', () => {
+    expect(formatDuration(NaN)).toBe('')
+    expect(formatDuration(-5)).toBe('')
   })
 })
