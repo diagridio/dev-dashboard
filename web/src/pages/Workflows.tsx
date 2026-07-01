@@ -7,17 +7,27 @@ import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { dedupeWorkflows } from '../lib/dedupeWorkflows'
 import { dedupeStores } from '../lib/dedupeStores'
+import { formatDateTimeParts } from '../lib/wallclock'
 import type { StateStore, WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
 const ALL_STATUSES: WorkflowStatus[] = ['Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
 
 const STORE_KEY = 'devdash.workflowStore'
 
-/** Format a UTC ISO string as a short local time HH:MM:SS */
-function formatCreated(createdAt?: string): string {
-  if (!createdAt) return '—'
-  const d = new Date(createdAt)
-  return d.toLocaleTimeString()
+/**
+ * Render a timestamp as localized date and time in separate spans so they sit
+ * on one line when there's room and stack (date first, time second) when the
+ * column is narrow. Falls back to an em dash on missing/invalid input.
+ */
+function DateTimeCell({ ts }: { ts?: string }) {
+  const parts = formatDateTimeParts(ts)
+  if (!parts) return <>—</>
+  return (
+    <>
+      <span className="dt-date">{parts.date}</span>{' '}
+      <span className="dt-time">{parts.time}</span>
+    </>
+  )
 }
 
 /** Compute a human-readable duration between two dates (or from createdAt to now if no end). */
@@ -556,9 +566,6 @@ export function Workflows() {
                     wf.createdAt,
                     isTerminal ? wf.lastUpdatedAt : undefined,
                   )
-                  const lastEventText = wf.lastUpdatedAt
-                    ? new Date(wf.lastUpdatedAt).toLocaleTimeString()
-                    : '—'
                   const isFailed = wf.status === 'Failed'
 
                   return (
@@ -611,9 +618,13 @@ export function Workflows() {
                           </span>
                         )}
                       </td>
-                      <td className="muted mono tabnum">{formatCreated(wf.createdAt)}</td>
+                      <td className="muted mono tabnum dt">
+                        <DateTimeCell ts={wf.createdAt} />
+                      </td>
                       <td className="mono tabnum">{duration}</td>
-                      <td className={`muted mono tabnum${isFailed ? ' err' : ''}`}>{lastEventText}</td>
+                      <td className={`muted mono tabnum dt${isFailed ? ' err' : ''}`}>
+                        <DateTimeCell ts={wf.lastUpdatedAt} />
+                      </td>
                     </tr>
                   )
                 })}

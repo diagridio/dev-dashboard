@@ -46,12 +46,20 @@ export function formatOffset(fromTs: string | undefined, toTs: string | undefine
   return out
 }
 
-/** Format a timestamp as localized "date - time", or undefined on bad input. */
-export function formatDateTime(ts: string | undefined): string | undefined {
+/** Split a timestamp into localized date and time parts, or undefined on bad input. */
+export function formatDateTimeParts(
+  ts: string | undefined,
+): { date: string; time: string } | undefined {
   if (!ts) return undefined
   const d = new Date(ts)
   if (isNaN(d.getTime())) return undefined
-  return `${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`
+  return { date: d.toLocaleDateString(), time: d.toLocaleTimeString() }
+}
+
+/** Format a timestamp as localized "date - time", or undefined on bad input. */
+export function formatDateTime(ts: string | undefined): string | undefined {
+  const parts = formatDateTimeParts(ts)
+  return parts && `${parts.date} - ${parts.time}`
 }
 
 /**
