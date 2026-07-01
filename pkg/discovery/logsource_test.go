@@ -89,3 +89,40 @@ func TestParseLsofStdout(t *testing.T) {
 		require.Equal(t, "", parseLsofStdout(nil))
 	})
 }
+
+func TestResolveLogSources_Aspire(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resource-executable-AAA.log"),
+		[]byte(`x	info	r	Starting process...	{"Executable":"/pr-digest-dapr-cli-yuha","Cmd":"/usr/local/bin/dapr","Args":["run","--app-id","pr-digest"]}`+"\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "AAA_out"), []byte("d\n"), 0o600))
+
+	dcpCmd := "/x/tools/dcp run-controllers --kubeconfig " + filepath.Join(dir, "kubeconfig")
+	s := &service{appProc: fakeResolver{cmd: dcpCmd, ok: true}}
+	in := Instance{AppID: "pr-digest", IsAspire: true, AppPort: 5090}
+	s.resolveLogSources(&in)
+
+	require.Equal(t, filepath.Join(dir, "AAA_out"), in.DaprdLogPath)
+	require.Equal(t, logFormatDCP, in.DaprdLogFormat)
+}
+
+func TestResolveLogSources_StandaloneRegularFile(t *testing.T) {
+	s := &service{stdoutFile: func(pid int) string {
+		if pid == 111 {
+			return "/tmp/app.out"
+		}
+		return ""
+	}}
+	in := Instance{AppID: "x", DaprdPID: 111}
+	s.resolveLogSources(&in)
+
+	require.Equal(t, "/tmp/app.out", in.DaprdLogPath)
+	require.Equal(t, logFormatPlain, in.DaprdLogFormat)
+}
+
+func TestResolveLogSources_StandaloneTTYLeavesEmpty(t *testing.T) {
+	s := &service{stdoutFile: func(int) string { return "" }}
+	in := Instance{AppID: "x", DaprdPID: 111}
+	s.resolveLogSources(&in)
+
+	require.Equal(t, "", in.DaprdLogPath)
+}
