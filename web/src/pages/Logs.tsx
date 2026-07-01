@@ -360,8 +360,9 @@ export function Logs() {
 
       {appId && !isLoading && app && !hasPath && (
         <div className="card">
-          No log file — this app was started with <code className="mono">dapr run</code> without{' '}
-          <code className="mono">-f</code>
+          No captured log file — this app streams its logs to the terminal. Redirect{' '}
+          <code className="mono">dapr run</code> output to a file, or use a{' '}
+          <code className="mono">-f</code> run template, to view logs here.
         </div>
       )}
 
@@ -380,8 +381,9 @@ export function Logs() {
       )}
 
       <p className="hint">
-        Logs are read from the run-template log files (<span className="mono">~/.dapr/logs/…</span>
-        ). Level chips &amp; search filter live; search matches are highlighted.
+        Logs are read from run-template files (<span className="mono">~/.dapr/logs/…</span>), .NET Aspire
+        captured output, or a redirected <span className="mono">dapr run</span> stdout file. Level chips &amp;
+        search filter live; search matches are highlighted.
       </p>
     </div>
   )

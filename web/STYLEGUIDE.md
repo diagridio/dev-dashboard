@@ -284,7 +284,6 @@ Reusable React components — prefer these over re-implementing.
 - `.hint` — centered faint helper line under content.
 - `.refresh-compact` — the compact global refresh control in the top nav (`.beatbtn` + `.beat`
   pulse toggle, `.select.compact` interval dropdown); rendered by `RefreshControl`.
-- `.refreshbar` — the wider refresh/clock strip still used on the Workflow detail page.
 
 **Code blocks**
 - `<pre className="json">` + `highlightJson(...)` for JSON.
