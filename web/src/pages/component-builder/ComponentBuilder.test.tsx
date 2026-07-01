@@ -24,6 +24,7 @@ function renderBuilder() {
 describe('ComponentBuilder', () => {
   it('Finish is re-enabled after Back-from-preview when user had edited YAML', async () => {
     renderBuilder()
+    fireEvent.click(await screen.findByRole('button', { name: 'state' })) // pick category
     fireEvent.click(await screen.findByText('Redis')) // step 0 -> 1
     fireEvent.click(screen.getByRole('button', { name: /continue/i })) // step 1 -> 2
     fireEvent.change(screen.getByLabelText(/^Name\s/i), { target: { value: 'order-store' } })
@@ -46,6 +47,7 @@ describe('ComponentBuilder', () => {
 
   it('walks type → (auth) → configure → preview and shows generated YAML', async () => {
     renderBuilder()
+    fireEvent.click(await screen.findByRole('button', { name: 'state' })) // pick category
     fireEvent.click(await screen.findByText('Redis')) // step 0 -> 1
     fireEvent.click(screen.getByRole('button', { name: /continue/i })) // step 1 -> 2 (no profiles)
     fireEvent.change(screen.getByLabelText(/^Name\s/i), { target: { value: 'order-store' } })

@@ -13,30 +13,43 @@ export function StepType({ state, dispatch }: Props) {
 
   if (isLoading) return <p className="muted">Loading catalog…</p>
 
+  const categories = Object.keys(byType).sort()
+  const category = state.category
   const query = q.trim().toLowerCase()
-  const types = Object.keys(byType).sort()
 
   return (
     <div>
-      <div className="search" style={{ marginBottom: 12 }}>
-        <input
-          type="search"
-          aria-label="Search components"
-          placeholder="Search components…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
+      <div className="filters" style={{ marginBottom: 12 }}>
+        {categories.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className="lvchip"
+            aria-pressed={category === c}
+            onClick={() => dispatch({ type: 'SELECT_CATEGORY', category: c })}
+          >
+            {c}
+          </button>
+        ))}
       </div>
-      <div className="complist card">
-        {types.map((type) => {
-          const matches = byType[type].filter(
-            (s) => !query || s.title.toLowerCase().includes(query) || s.name.toLowerCase().includes(query),
-          )
-          if (matches.length === 0) return null
-          return (
-            <div key={type} className="sbsection">
-              <div className="sbtitle">{type}</div>
-              {matches.map((s) => {
+
+      {!category ? (
+        <p className="muted">Choose a category to browse components.</p>
+      ) : (
+        <>
+          <div className="search" style={{ marginBottom: 12 }}>
+            <input
+              type="search"
+              aria-label="Search components"
+              placeholder={`Search ${category} components…`}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <div className="complist card">
+            {(byType[category] ?? [])
+              .filter((s) => !query || s.title.toLowerCase().includes(query) || s.name.toLowerCase().includes(query))
+              .map((s) => {
                 const selected = state.schema?.type === s.type && state.schema?.name === s.name
                 return (
                   <div
@@ -54,10 +67,9 @@ export function StepType({ state, dispatch }: Props) {
                   </div>
                 )
               })}
-            </div>
-          )
-        })}
-      </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
