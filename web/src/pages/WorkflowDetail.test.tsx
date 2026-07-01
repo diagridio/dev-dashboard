@@ -1031,4 +1031,62 @@ describe('WorkflowDetail — pair selection', () => {
     // reset hash so it doesn't leak into other tests
     await act(async () => { window.location.hash = '' })
   })
+
+  it('does not re-select on refetch after a manual deselect (running workflow)', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running',
+          createdAt: '2026-06-28T10:00:00.000Z', replayCount: 0,
+          history: [
+            { sequenceId: 0, type: 'ExecutionStarted', name: 'OrderWorkflow', input: '{}', timestamp: '2026-06-28T10:00:00.000Z' },
+            { sequenceId: 1, type: 'TaskScheduled', name: 'Charge', input: '{"amt":5}', timestamp: '2026-06-28T10:00:00.100Z' },
+            { sequenceId: 2, type: 'TaskCompleted', scheduledId: 1, output: '"charged"', timestamp: '2026-06-28T10:00:00.440Z' },
+          ],
+        }),
+      ),
+    )
+    const client = makeQueryClient()
+    const { container } = renderDetail(client)
+    await screen.findByRole('heading', { name: 'OrderWorkflow' })
+
+    // Navigate via hash to TaskCompleted (canonical index 2) -> selects the pair.
+    await act(async () => {
+      window.location.hash = '#event-2'
+      window.dispatchEvent(new HashChangeEvent('hashchange'))
+    })
+    expect(rowByType(container, 'TaskCompleted').className).toContain('pair-selected')
+
+    // Manually deselect by clicking the active row.
+    await userEvent.click(rowByType(container, 'TaskCompleted').querySelector('summary') as HTMLElement)
+    expect(container.querySelector('.ev.pair-selected')).toBeNull()
+
+    // A poll arrives with grown history; the hash still points at #event-2.
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running',
+          createdAt: '2026-06-28T10:00:00.000Z', replayCount: 0,
+          history: [
+            { sequenceId: 0, type: 'ExecutionStarted', name: 'OrderWorkflow', input: '{}', timestamp: '2026-06-28T10:00:00.000Z' },
+            { sequenceId: 1, type: 'TaskScheduled', name: 'Charge', input: '{"amt":5}', timestamp: '2026-06-28T10:00:00.100Z' },
+            { sequenceId: 2, type: 'TaskCompleted', scheduledId: 1, output: '"charged"', timestamp: '2026-06-28T10:00:00.440Z' },
+            { sequenceId: 3, type: 'TimerCreated', timestamp: '2026-06-28T10:00:00.900Z' },
+          ],
+        }),
+      ),
+    )
+    await act(async () => { await client.invalidateQueries({ queryKey: ['workflow', 'order', 'abc'] }) })
+    // Wait for the refetch to complete and the new event to appear in the DOM.
+    await waitFor(() => {
+      const rows = Array.from(container.querySelectorAll('.timeline .ev'))
+      const timerRow = rows.find(el => el.querySelector('.evtype')?.textContent === 'TimerCreated')
+      expect(timerRow).toBeTruthy()
+    })
+
+    // Selection must remain cleared — the poll must not re-assert the dismissed selection.
+    expect(container.querySelector('.ev.pair-selected')).toBeNull()
+
+    await act(async () => { window.location.hash = '' })
+  })
 })

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type MouseEvent as ReactMouseEvent } from 'react'
+import { useState, useEffect, useMemo, useRef, type MouseEvent as ReactMouseEvent } from 'react'
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflow } from '../hooks/useWorkflows'
 import { useApps } from '../hooks/useApps'
@@ -300,6 +300,7 @@ export function WorkflowDetail() {
   const [order, setOrder] = useState<HistoryOrder>(() => getHistoryOrder())
   const [hoveredPair, setHoveredPair] = useState<number | null>(null)
   const [selection, setSelection] = useState<{ pairId: number; index: number } | null>(null)
+  const lastAutoSelectedHash = useRef<string>('')
 
   useEffect(() => {
     setHistoryOrder(order)
@@ -340,11 +341,18 @@ export function WorkflowDetail() {
       }
       el.classList.add('target-pulse')
       window.setTimeout(() => el.classList.remove('target-pulse'), 1500)
-      const m = id.match(/^event-(\d+)$/)
-      if (m) {
-        const idx = Number(m[1])
-        const p = pairIndex.get(idx)
-        if (p) setSelection({ pairId: p.pairId, index: idx })
+      // Only auto-select on genuine navigation to a new hash — not on effect
+      // re-runs from polling (pairIndex changes as a running workflow's history
+      // grows), which would otherwise re-assert a selection the user dismissed.
+      // The anchor id encodes the canonical index, which is how pairIndex is keyed.
+      if (id !== lastAutoSelectedHash.current) {
+        lastAutoSelectedHash.current = id
+        const m = id.match(/^event-(\d+)$/)
+        if (m) {
+          const idx = Number(m[1])
+          const p = pairIndex.get(idx)
+          if (p) setSelection({ pairId: p.pairId, index: idx })
+        }
       }
     }
     jumpToHash()
