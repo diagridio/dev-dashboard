@@ -269,7 +269,7 @@ describe('Logs', () => {
     renderAt()
 
     await waitFor(() =>
-      expect(screen.getByText(/No log file/)).toBeInTheDocument(),
+      expect(screen.getByText(/No captured log file/)).toBeInTheDocument(),
     )
 
     expect(FakeES.instances).toHaveLength(0)
