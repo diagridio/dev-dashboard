@@ -31,6 +31,7 @@ export function StepConfigure({ state, dispatch }: Props) {
       {shown.map((f) => {
         const useSecret = !!state.useSecret[f.name]
         const ref = state.secretRefs[f.name] ?? { name: '', key: '' }
+        const removable = !f.required
         return (
           <Field key={f.name} label={f.name} required={f.required}>
             {f.description && <div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{f.description}</div>}
@@ -39,16 +40,22 @@ export function StepConfigure({ state, dispatch }: Props) {
               checked={useSecret}
               onChange={(on) => dispatch({ type: 'TOGGLE_SECRET', field: f.name, on })}
             />
-            {useSecret ? (
-              <div className="field-row">
-                <TextInput aria-label={`${f.name} secret name`} placeholder="secret name" value={ref.name}
-                  onChange={(v) => dispatch({ type: 'SET_SECRET', field: f.name, ref: { ...ref, name: v } })} />
-                <TextInput aria-label={`${f.name} secret key`} placeholder="secret key" value={ref.key}
-                  onChange={(v) => dispatch({ type: 'SET_SECRET', field: f.name, ref: { ...ref, key: v } })} />
-              </div>
-            ) : (
-              <MetadataFieldInput field={f} value={state.values[f.name] ?? ''} onChange={(v) => dispatch({ type: 'SET_VALUE', field: f.name, value: v })} />
-            )}
+            <div className="field-row">
+              {useSecret ? (
+                <>
+                  <TextInput aria-label={`${f.name} secret name`} placeholder="secret name" value={ref.name}
+                    onChange={(v) => dispatch({ type: 'SET_SECRET', field: f.name, ref: { ...ref, name: v } })} />
+                  <TextInput aria-label={`${f.name} secret key`} placeholder="secret key" value={ref.key}
+                    onChange={(v) => dispatch({ type: 'SET_SECRET', field: f.name, ref: { ...ref, key: v } })} />
+                </>
+              ) : (
+                <MetadataFieldInput field={f} value={state.values[f.name] ?? ''} onChange={(v) => dispatch({ type: 'SET_VALUE', field: f.name, value: v })} />
+              )}
+              {removable && (
+                <button type="button" className="btn ghost" aria-label={`remove ${f.name}`}
+                  onClick={() => dispatch({ type: 'REMOVE_OPTIONAL', field: f.name })}>✕</button>
+              )}
+            </div>
           </Field>
         )
       })}

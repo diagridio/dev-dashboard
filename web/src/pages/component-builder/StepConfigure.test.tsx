@@ -37,3 +37,20 @@ describe('StepConfigure', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'TOGGLE_SECRET', field: 'redisHost', on: true })
   })
 })
+
+describe('StepConfigure optional field removal', () => {
+  it('shows a remove button for an added optional field and dispatches REMOVE_OPTIONAL', () => {
+    const dispatch = vi.fn()
+    let s = configureState()
+    s = reducer(s, { type: 'ADD_OPTIONAL', field: 'enableTLS' })
+    render(<StepConfigure state={s} dispatch={dispatch} />)
+    const removeBtn = screen.getByRole('button', { name: /remove enableTLS/i })
+    fireEvent.click(removeBtn)
+    expect(dispatch).toHaveBeenCalledWith({ type: 'REMOVE_OPTIONAL', field: 'enableTLS' })
+  })
+
+  it('does not show a remove button for required fields', () => {
+    render(<StepConfigure state={configureState()} dispatch={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /remove redisHost/i })).not.toBeInTheDocument()
+  })
+})
