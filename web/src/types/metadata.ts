@@ -7,7 +7,15 @@ export interface MetadataField {
   default?: string
   example?: string
   allowedValues?: string[]
+  isCert?: boolean
+  binding?: { input?: boolean; output?: boolean }
   url?: { title: string; url: string }
+}
+
+export interface AuthenticationProfile {
+  title: string
+  description?: string
+  metadata: MetadataField[]
 }
 
 export interface ComponentMetadataSchema {
@@ -18,6 +26,7 @@ export interface ComponentMetadataSchema {
   status: string
   description?: string
   metadata?: MetadataField[]
+  authenticationProfiles?: AuthenticationProfile[]
 }
 
 export interface MetadataBundle {
