@@ -26,7 +26,7 @@ describe('ComponentBuilder', () => {
     renderBuilder()
     fireEvent.click(await screen.findByText('Redis')) // step 0 -> 1
     fireEvent.click(screen.getByRole('button', { name: /continue/i })) // step 1 -> 2 (no profiles)
-    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'order-store' } })
+    fireEvent.change(screen.getByLabelText(/^Name\s/i), { target: { value: 'order-store' } })
     fireEvent.change(screen.getByLabelText('redisHost'), { target: { value: 'localhost:6379' } })
     fireEvent.click(screen.getByRole('button', { name: /continue/i })) // step 2 -> 3
     const ta = await screen.findByRole('textbox', { name: /generated yaml/i })
