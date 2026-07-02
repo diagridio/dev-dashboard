@@ -51,6 +51,32 @@ The only raw hex values in the codebase are intentional one-offs: language swatc
 colors (`runtimeSwatch` in `Applications.tsx`/`AppDetail.tsx`) and the dark ink on
 mint/bright backgrounds (`#06231a`). If you reach for a hex, it should be that rare.
 
+### ⚠️ Antipattern: never build a class name from raw data
+
+Because there is **one flat global stylesheet** (no CSS modules / scoping) and the
+whole app lives under the global `.app` class, a class token you interpolate from a
+data value can silently collide with an unrelated global class and inherit its rules.
+
+```tsx
+// ❌ if `src` is "app", this renders class="lsrc app" — the token `app` matches the
+//    global `.app` shell rule (min-height: 100vh, font-family, …) and blows up layout
+<span className={`lsrc ${src}`}>{src}</span>
+
+// ✅ namespace the modifier so it can only match its own rule
+<span className={`lsrc lsrc-${src}`}>{src}</span>   // .lsrc.lsrc-app { … }
+```
+
+This actually happened: app log rows grew to full viewport height because the source
+tag `<span class="lsrc app">` picked up `.app { min-height: 100vh }`.
+
+**Rule:** any class token derived from runtime data (log source, status, type, id)
+should be **prefixed with its component name** so it lives in its own namespace — the
+way status pills use `.s-run` / `.s-fail` (via `StatusPill`) rather than bare `run` /
+`fail`. Never let a bare data word (`app`, `error`, `run`, …) stand alone as a class;
+it may already mean something globally. The existing `.lvl.info` / `.logrow.error`
+pattern uses bare level words and is safe only because no global `.info` / `.error`
+rule exists today — don't rely on that for new dynamic classes; prefix them.
+
 ---
 
 ## 2. Design tokens
@@ -362,6 +388,8 @@ already provides (e.g. re-specifying the whole `.ph` rule inline as
 - [ ] Root is `.page`; header is `.phead` or `.crumbs`.
 - [ ] Loading, empty, and error states are handled.
 - [ ] No hardcoded colors — everything is `var(--…)`.
+- [ ] Any class name built from runtime data is prefixed (e.g. `lsrc-${src}`), not a
+      bare data word that could collide with a global class (see §1 antipattern).
 - [ ] Labels are mono/uppercase/muted via existing classes; every number/time/
       duration/GUID value is mono, and table cells use `td.mono.tabnum`.
 - [ ] Used `StatusPill` / `LiveIndicator` / `RefreshControl` / toast where relevant.
