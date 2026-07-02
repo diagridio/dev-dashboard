@@ -30,3 +30,23 @@ describe('ComponentTargetDialog', () => {
     expect(onSave).toHaveBeenCalledWith('statestore', { outbound: { retry: 'retry1' } })
   })
 })
+
+describe('AppTargetDialog edit', () => {
+  it('prefills name + policy refs and title on edit', () => {
+    const onSave = vi.fn()
+    render(<AppTargetDialog open editing policies={policies} initialName="orders" initialTarget={{ timeout: 'timeout1', retry: 'retry1' }} onClose={vi.fn()} onSave={onSave} />)
+    expect(screen.getByText(/edit app target/i)).toBeInTheDocument()
+    expect((screen.getByLabelText(/app id/i) as HTMLInputElement).value).toBe('orders')
+    expect((screen.getByLabelText(/^timeout policy/i) as HTMLSelectElement).value).toBe('timeout1')
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(onSave).toHaveBeenCalledWith('orders', expect.objectContaining({ timeout: 'timeout1', retry: 'retry1' }))
+  })
+})
+
+describe('ComponentTargetDialog edit', () => {
+  it('derives both-direction and prefills from outbound leg', () => {
+    render(<ComponentTargetDialog open editing policies={policies} initialName="statestore" initialTarget={{ outbound: { retry: 'retry1' }, inbound: { retry: 'retry1' } }} onClose={vi.fn()} onSave={vi.fn()} />)
+    expect((screen.getByLabelText(/direction/i) as HTMLSelectElement).value).toBe('both')
+    expect((screen.getByLabelText(/^retry policy/i) as HTMLSelectElement).value).toBe('retry1')
+  })
+})
