@@ -1,7 +1,8 @@
 /bin/
 /dist/
 web/node_modules/
-web/dist/
+web/dist/*
+!web/dist/.gitkeep
 *.out
 *.tsbuildinfo
 coverage*
