@@ -3,9 +3,10 @@ interface NamedListProps {
   names: string[]
   onAdd: () => void
   onRemove: (name: string) => void
+  onEdit?: (name: string) => void
 }
 
-export function NamedList({ title, names, onAdd, onRemove }: NamedListProps) {
+export function NamedList({ title, names, onAdd, onRemove, onEdit }: NamedListProps) {
   return (
     <div className="sbsection">
       <div className="sech">
@@ -19,8 +20,27 @@ export function NamedList({ title, names, onAdd, onRemove }: NamedListProps) {
       ) : (
         names.map((name) => (
           <div key={name} className="chip k" style={{ marginRight: 6, marginBottom: 6 }}>
-            <b>{name}</b>
-            <button type="button" className="copybtn" aria-label={`Remove ${name}`} onClick={() => onRemove(name)}>✕</button>
+            {onEdit ? (
+              <button
+                type="button"
+                className="chip-edit"
+                aria-label={`Edit ${name}`}
+                onClick={() => onEdit(name)}
+                style={{ background: 'none', border: 0, cursor: 'pointer', font: 'inherit', padding: 0 }}
+              >
+                <b>{name}</b>
+              </button>
+            ) : (
+              <b>{name}</b>
+            )}
+            <button
+              type="button"
+              className="copybtn"
+              aria-label={`Remove ${name}`}
+              onClick={(e) => { e.stopPropagation(); onRemove(name) }}
+            >
+              ✕
+            </button>
           </div>
         ))
       )}

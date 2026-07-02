@@ -12,6 +12,16 @@ describe('NamedList', () => {
     fireEvent.click(screen.getByRole('button', { name: /remove timeout1/i }))
     expect(onRemove).toHaveBeenCalledWith('timeout1')
   })
+  it('fires onEdit from the chip body and not on remove', () => {
+    const onEdit = vi.fn(); const onRemove = vi.fn()
+    render(<NamedList title="Timeouts" names={['timeout1']} onAdd={vi.fn()} onRemove={onRemove} onEdit={onEdit} />)
+    fireEvent.click(screen.getByRole('button', { name: /edit timeout1/i }))
+    expect(onEdit).toHaveBeenCalledWith('timeout1')
+    expect(onRemove).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /remove timeout1/i }))
+    expect(onRemove).toHaveBeenCalledWith('timeout1')
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('TimeoutDialog', () => {
