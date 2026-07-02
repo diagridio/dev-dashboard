@@ -163,7 +163,7 @@ export function StateStoreConnectionDialog({ open, onClose }: Props) {
 
       <div className="modal-actions">
         <button className="btn ghost" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={!canSave} onClick={handleSave}>Save connection</button>
+        <button className="btn ghost" disabled={!canSave} onClick={handleSave}>Save connection</button>
       </div>
     </Modal>
   )

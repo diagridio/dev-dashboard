@@ -26,10 +26,10 @@ describe('YamlPreview (read-only)', () => {
     expect(copyText).toHaveBeenCalledWith('a: 1\n')
   })
 
-  it('Download uses the monochrome class and triggers a download', () => {
+  it('Download uses the ghost class and triggers a download', () => {
     render(<YamlPreview yaml={'a: 1\n'} filename="order.yaml" />)
     const dl = screen.getByRole('button', { name: /download/i })
-    expect(dl).toHaveClass('btn', 'mono')
+    expect(dl).toHaveClass('btn', 'ghost')
     fireEvent.click(dl)
     expect(URL.createObjectURL).toHaveBeenCalled()
   })

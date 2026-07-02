@@ -210,6 +210,7 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .btn { font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 7px 13px; cursor: pointer; border: 1px solid transparent; }
 .btn.primary { background: var(--accent2); color: #06231a; border-color: transparent; }
 .btn.ghost { background: transparent; color: var(--text); border-color: var(--line); }
+.btn.ghost:disabled { color: var(--faint); border-color: var(--line-soft); cursor: default; }
 .btn.danger { background: transparent; color: var(--fail-fg); border-color: color-mix(in srgb, var(--fail-fg) 45%, transparent); }
 .btn:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
 .copybtn { font: inherit; font-family: var(--mono); font-size: 10.5px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
@@ -463,9 +464,7 @@ details[open] .caret { transform: rotate(90deg); }
 .section-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 10px; margin: 6px 0 8px; }
 
 /* ---- Wizard (component/resiliency builders) ---- */
-/* Monochrome primary button — deliberately NOT the green .btn.primary. */
-.btn.mono { background: var(--text); color: var(--bg); border-color: transparent; }
-.btn.mono:disabled { opacity: .45; cursor: default; }
+/* Wizard/builder actions use the transparent .btn.ghost style (see above). */
 .wizard { display: flex; flex-direction: column; gap: 18px; }
 .stepper { display: flex; flex-wrap: wrap; gap: 8px; }
 .stepper .step { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; }

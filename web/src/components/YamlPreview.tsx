@@ -18,7 +18,7 @@ export function YamlPreview({ yaml, filename }: YamlPreviewProps) {
         <button type="button" className="btn ghost" onClick={() => { copyText(yaml); toast.show('Copied') }}>
           Copy
         </button>
-        <button type="button" className="btn mono" onClick={() => downloadText(filename, yaml)}>
+        <button type="button" className="btn ghost" onClick={() => downloadText(filename, yaml)}>
           Download
         </button>
       </div>

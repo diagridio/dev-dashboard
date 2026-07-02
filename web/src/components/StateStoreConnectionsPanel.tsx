@@ -17,7 +17,7 @@ export function StateStoreConnectionsPanel() {
     <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <b style={{ fontSize: 13 }}>State store connections</b>
-        <button className="btn primary" onClick={() => setAddOpen(true)}>+ Add connection</button>
+        <button className="btn ghost" onClick={() => setAddOpen(true)}>+ Add connection</button>
       </div>
 
       {(stores ?? []).length === 0 && <p className="hint">No state store connections yet.</p>}

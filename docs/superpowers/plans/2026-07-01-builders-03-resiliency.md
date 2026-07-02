@@ -14,7 +14,7 @@
 ## Global Constraints
 
 - **No new dependencies.** No MUI/react-hook-form/Yup. Controlled components; vanilla CSS theme tokens.
-- **Wizard/dialog buttons monochrome** (`.btn.mono` primary / `.btn.ghost` secondary); never green `.btn.primary`.
+- **Wizard/dialog buttons use the transparent `.btn.ghost` style** (disabled = light border + faint text); never green `.btn.primary` or filled `.btn.mono`.
 - **`grpcStatusCodes`** spelling (matches `types/resiliency.ts`; cloudgrid's `grcpStatusCodes` typo is NOT used).
 - **Emit rule:** clean ONLY `spec` with `recursivelyRemoveEmptyValues` before `dumpYaml`; assemble the emit object with `metadata.name` (+ `namespace` only if non-empty); omit empty `scopes`.
 - **Policy/target naming:** sequential defaults `timeout1`/`retry1`/`circuitBreaker1` etc. (count of existing + 1), editable in the dialog.
@@ -381,7 +381,7 @@ function DialogShell({ open, title, onClose, onSave, canSave, children }: {
       {children}
       <div className="modal-actions">
         <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn mono" disabled={!canSave} onClick={onSave}>Save</button>
+        <button type="button" className="btn ghost" disabled={!canSave} onClick={onSave}>Save</button>
       </div>
     </Modal>
   )
@@ -609,7 +609,7 @@ function Shell({ open, title, onClose, onSave, canSave, children }: {
       {children}
       <div className="modal-actions">
         <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn mono" disabled={!canSave} onClick={onSave}>Save</button>
+        <button type="button" className="btn ghost" disabled={!canSave} onClick={onSave}>Save</button>
       </div>
     </Modal>
   )
@@ -1058,7 +1058,7 @@ export function Resiliency() {
           <h1>Resiliency</h1>
           <div className="sub">Dapr resiliency policies</div>
         </div>
-        <Link className="btn mono" to="/resiliency/new">+ New resiliency policy</Link>
+        <Link className="btn ghost" to="/resiliency/new">+ New resiliency policy</Link>
       </div>
       <div className="md">
         <div className="card complist" />
