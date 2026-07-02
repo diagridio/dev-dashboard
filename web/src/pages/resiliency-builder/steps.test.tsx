@@ -28,6 +28,15 @@ describe('StepPolicies', () => {
     fireEvent.click(screen.getByRole('button', { name: /save/i }))
     expect(dispatch).toHaveBeenCalledWith({ type: 'UPSERT_TIMEOUT', name: 'timeout1', duration: '30s' })
   })
+  it('second add timeout uses name timeout2 not timeout1', () => {
+    const dispatch = vi.fn()
+    const s = reducer(initialState(), { type: 'UPSERT_TIMEOUT', name: 'timeout1', duration: '30s' })
+    render(<StepPolicies state={s} dispatch={dispatch} />)
+    fireEvent.click(screen.getByRole('button', { name: /add timeouts/i }))
+    fireEvent.change(screen.getByLabelText(/duration/i), { target: { value: '60s' } })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(dispatch).toHaveBeenCalledWith({ type: 'UPSERT_TIMEOUT', name: 'timeout2', duration: '60s' })
+  })
   it('lists an existing retry and removes it', () => {
     const dispatch = vi.fn()
     const s = reducer(initialState(), { type: 'UPSERT_RETRY', name: 'retry1', policy: { policy: 'constant', duration: '5s' } })

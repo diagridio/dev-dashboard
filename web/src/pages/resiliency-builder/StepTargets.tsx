@@ -19,12 +19,18 @@ export function StepTargets({ state, dispatch }: { state: ResiliencyState; dispa
       <NamedList title="Actors" names={Object.keys(targets.actors ?? {})} onAdd={() => setOpen('actor')} onRemove={(name) => dispatch({ type: 'REMOVE_ACTOR', name })} />
       <NamedList title="Components" names={Object.keys(targets.components ?? {})} onAdd={() => setOpen('component')} onRemove={(name) => dispatch({ type: 'REMOVE_COMPONENT', name })} />
 
-      <AppTargetDialog open={open === 'app'} policies={names} onClose={() => setOpen(null)}
-        onSave={(name, target) => { dispatch({ type: 'UPSERT_APP', name, target }); setOpen(null) }} />
-      <ActorTargetDialog open={open === 'actor'} policies={names} onClose={() => setOpen(null)}
-        onSave={(name, target) => { dispatch({ type: 'UPSERT_ACTOR', name, target }); setOpen(null) }} />
-      <ComponentTargetDialog open={open === 'component'} policies={names} onClose={() => setOpen(null)}
-        onSave={(name, target) => { dispatch({ type: 'UPSERT_COMPONENT', name, target }); setOpen(null) }} />
+      {open === 'app' && (
+        <AppTargetDialog open policies={names} onClose={() => setOpen(null)}
+          onSave={(name, target) => { dispatch({ type: 'UPSERT_APP', name, target }); setOpen(null) }} />
+      )}
+      {open === 'actor' && (
+        <ActorTargetDialog open policies={names} onClose={() => setOpen(null)}
+          onSave={(name, target) => { dispatch({ type: 'UPSERT_ACTOR', name, target }); setOpen(null) }} />
+      )}
+      {open === 'component' && (
+        <ComponentTargetDialog open policies={names} onClose={() => setOpen(null)}
+          onSave={(name, target) => { dispatch({ type: 'UPSERT_COMPONENT', name, target }); setOpen(null) }} />
+      )}
     </div>
   )
 }
