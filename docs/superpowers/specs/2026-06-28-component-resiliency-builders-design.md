@@ -1,13 +1,21 @@
 # Design: Component Builder & Resiliency Builder
 
-**Date:** 2026-06-28
-**Status:** Approved design. Implementation plan not yet started.
+**Date:** 2026-06-28 (reconciled 2026-07-01)
+**Status:** Approved design. Backend catalog endpoint already shipped (see "Backend"). Frontend wizards not yet started; implementation plan in progress.
 
 Port cloudgrid's **Component Builder** and **Resiliency Builder** into `dev-dashboard` as two
 multi-step wizards that generate Dapr YAML you can copy or download.
 
 - **Source:** `cloudgrid/services/admingrid/web/packages/cloud-ui-shared/components/{component-configurator,resiliency-builder}/` (React 19 + MUI + react-hook-form + Yup + js-yaml + Ace).
-- **Target:** `dev-dashboard` (Go backend + React 18 frontend in `web/`).
+- **Target:** `dev-dashboard` (Go backend + **React 19** frontend in `web/`; upgraded from React 18 on 2026-06-30).
+
+## Reconciliation notes (2026-07-01)
+
+Verified against `main` before planning:
+- **Frontend is React 19** (not 18 as originally written).
+- **Backend catalog endpoint is already implemented and merged** — the "Backend" section below is now a reuse note, not work to do.
+- **Reusable frontend pieces already exist** (see "Already in the repo") — the plan reuses `Modal.tsx` rather than creating a new `Dialog.tsx`, and generalizes the existing `useComponentCatalog.ts`.
+- The existing `MetadataField.type` union is `'string' | 'number' | 'bool' | 'duration'` (not `boolean|json`), and `ComponentMetadataSchema` currently omits `authenticationProfiles`; the builder must extend these (see "Types").
 
 ## Locked decisions
 
@@ -28,7 +36,7 @@ React Router v6.
 
 ## Target repo conventions (must match)
 
-- React 18 + TS + Vite, React Router v6 (routes in `web/src/router.tsx`).
+- React 19 + TS + Vite, React Router v6 (routes in `web/src/router.tsx`).
 - Styling: vanilla CSS, semantic tokens in `theme.css` (`.card`, `.btn`/`.btn.primary`/`.btn.ghost`/
   `.btn.danger`, `.select`, `.pill`, `.code`, `.md` master-detail, `.kv`, `.ph`). Light/dark via
   `data-theme`.
@@ -41,36 +49,93 @@ React Router v6.
 - Tests: Vitest + Testing Library, colocated `*.test.tsx`. Go: golden tests via `internal/golden`.
 - Directory layout: `pages/`, `components/`, `hooks/`, `lib/`, `types/`.
 
-## Backend — catalog endpoint
+## Backend — catalog endpoint (ALREADY SHIPPED — reuse, do NOT re-port)
 
-- New `pkg/metadata/metadata.go`: `go:embed component-metadata-bundle.json` (754 KB bundle copied
-  from cloudgrid `tools/diagrid-dashboard/pkg/metadata/`). Serve raw JSON with ETag + `Cache-Control`
-  headers (mirror cloudgrid's `HandleGetComponents`).
-- Wire into `apiRouter` in `pkg/server/api.go` (chi router) → reachable at
-  `GET /api/metadata/components`.
-- Port `update-component-metadata-bundle.sh` → `scripts/update-component-metadata-bundle.sh`
-  (refreshes bundle from `diagridio/dapr-components-contrib` release assets; current tag
-  `v1.18.0-catalyst.1`).
-- Handler test + golden following `internal/golden`.
+Verified present on `main` as of 2026-07-01:
+- `pkg/metadata/metadata.go` — `go:embed component-metadata-bundle.json`, serves raw JSON with
+  ETag/304 + `Cache-Control` via `HandleGetComponents`. `metadata.Init()` is wired in `cmd/root.go`.
+- Route registered in `pkg/server/api.go` (chi): `r.Get("/metadata/components", metadata.HandleGetComponents)`,
+  reachable at `GET /api/metadata/components`.
+- `scripts/update-component-metadata-bundle.sh` present (refreshes bundle from
+  `diagridio/dapr-components-contrib` release assets).
+- Unit test (`pkg/metadata/metadata_test.go`) + golden (`golden_test.go`, `testdata/`) present.
 
-## Routing & entry points (frontend)
+The frontend builders reuse this endpoint as-is. **No backend work is required** unless the
+`authenticationProfiles` gap below needs the bundle re-generated to include that field.
 
-- `router.tsx`: `/components/new` → `<ComponentBuilder />`; `/resiliency/new` →
-  `<ResiliencyBuilder />`. Static `new` outranks dynamic `:name`, so no conflict with
-  `components/:name`.
-- "New component" button on the components `ResourceList` page; Resiliency nav/sidebar entry →
-  builder.
+## Already in the repo (reuse, don't rebuild)
+
+- `web/src/types/metadata.ts` — `MetadataField { name; type?: 'string'|'number'|'bool'|'duration';
+  description?; required?; sensitive?; default?; example?; allowedValues?; url?: {title,url} }`,
+  `ComponentMetadataSchema { type; name; version; title; status; description?; metadata? }`,
+  `MetadataBundle { schemaVersion; date; components[] }`. **Gap:** no `authenticationProfiles` field —
+  the builder must extend `ComponentMetadataSchema` (and likely the bundle) to carry auth profiles.
+- `web/src/hooks/useComponentCatalog.ts` — fetches `/metadata/components` (TanStack Query, 1h
+  staleTime). **Currently narrowed** to `type === 'state'` + supported store names, and injects a
+  synthetic `connectionString` field for pg/sqlite (because auth profiles are absent). The full
+  builder must **generalize** it: expose all component types, drop the state-only filter (or make it
+  optional), and replace the synthetic-field hack with real `authenticationProfiles` handling once
+  the schema carries them.
+- `web/src/components/Modal.tsx` — backdrop + `role="dialog"` + `aria-modal` + Escape-to-close +
+  initial focus. **Reuse this** for add/edit forms instead of creating a new `Dialog.tsx`.
+  Caveats to address when reused for multi-instance forms: it hardcodes `id="modal-title"` /
+  `aria-labelledby="modal-title"` (fine for one-at-a-time), and it focuses the container but is not a
+  full focus-trap — add a trap if a builder form needs it.
+- `web/src/components/MetadataFieldInput.tsx` — per-field control (reuse for the Configure step's
+  metadata editor).
+
+## Routing & entry points (frontend) — decided 2026-07-01
+
+**Placement: contextual button for the Component Builder + a new top-level "Resiliency" nav for the
+Resiliency Builder** (chosen over a unified "Create" hub because it mirrors Dapr's per-kind resource
+model — Resiliency is a first-class CRD sibling of Component/Configuration — and is forward-compatible
+with listing discovered resiliency policies later).
+
+**Component Builder**
+- Route in `router.tsx`: `{ path: 'components/new', element: <ComponentBuilder /> }`, added **before**
+  the existing `components/:name` route. Static `new` outranks the dynamic `:name` param in React
+  Router v6, so `/components/new` resolves to the builder, not the detail view.
+- Entry point: a **`+ New component`** button (`.btn.primary`) in the Components `ResourceList`
+  `.phead` header, present in all three render states (loading, empty, populated). `.phead` is already
+  `display:flex; justify-content:space-between`, so the button sits top-right of the title block.
+  Clicking navigates to `/components/new`.
+
+**Resiliency Builder**
+- New top-nav item: add `{ label: 'Resiliency', to: '/resiliency' }` to `NAV_ITEMS` in
+  `components/TopNav.tsx`, positioned **between `Configurations` and `Logs`**.
+- Routes in `router.tsx`:
+  - `{ path: 'resiliency', element: <Resiliency /> }` — a new **create-only landing page** that
+    reuses the `.page`/`.phead` + `.md` master-detail empty-state pattern from `ResourceList`: shows
+    a `+ New resiliency policy` button in the header and a "No resiliency policies" hint in the body.
+    (v1 lists nothing; the page exists as the discoverable home and a forward-compatible seam for
+    listing discovered policies later.)
+  - `{ path: 'resiliency/new', element: <ResiliencyBuilder /> }` — the wizard.
+- Entry point: the `Resiliency` nav item → `/resiliency` → `+ New resiliency policy` button →
+  `/resiliency/new`.
+
+**On finish/cancel:** both wizards return to their origin list (`/components` and `/resiliency`
+respectively).
 
 ## Shared frontend infrastructure (built once, used by both)
 
 - `components/wizard/`: `Wizard` + `Stepper` (step labels styled with pill/tab classes) + `StepNav`
-  (Back/Continue/Finish using `.btn` variants). Per-builder typed `useReducer` for wizard state
-  (mirrors cloudgrid reducer shape: activeStep, steps, config object, etc.).
+  (Back/Continue/Finish). Per-builder typed `useReducer` for wizard state (mirrors cloudgrid reducer
+  shape: activeStep, steps, config object, etc.).
+- **Wizard button styling — monochrome, NOT green (decided 2026-07-01):** the wizard buttons must not
+  use the green brand `.btn.primary` (`background: var(--accent2)`). Do NOT change the global
+  `.btn.primary` (used elsewhere, e.g. the state-store dialog). Instead add a **wizard-scoped**
+  monochrome treatment: primary action (Continue/Finish) = filled neutral
+  (`background: var(--text); color: var(--bg)`, no accent color); secondary (Back/Cancel) = the
+  existing `.btn.ghost` (transparent, `--line` border, `--text`). Copy/Download in the finalizer also
+  use the neutral/ghost styles — no green. Keep focus-visible outlines as-is. This applies to both
+  builders and any dialog buttons inside them.
 - `components/form/`: thin controlled wrappers over native elements styled via theme.css — `Field`
   (label + control + inline error), `TextInput`, `NumberInput`, `SelectInput`, `Toggle`. No form
   library.
-- `components/Dialog.tsx`: small modal (focus trap + Escape) generalized from `ConfirmRemoveDialog`,
-  used for add/edit forms (policies, targets).
+- **Reuse `components/Modal.tsx`** (already exists — backdrop + `role="dialog"` + `aria-modal` +
+  Escape + initial focus) for add/edit forms (policies, targets). Do NOT create a new `Dialog.tsx`.
+  Add a focus-trap only if a form needs it, and give the title a unique id if two modals can ever
+  co-exist.
 - `components/YamlPreview.tsx`: editable finalizer. `<textarea>` styled as `.code`, initialized with
   generated YAML; tracks local edits; "Reset to generated" restores; **Back disabled once manually
   edited** (matches cloudgrid); Copy (`copyText` + `useToast`) + Download act on the current buffer.
@@ -84,15 +149,21 @@ React Router v6.
 
 ## Types (ported from cloudgrid TS types)
 
-- `types/metadata.ts`: `ComponentMetadataSchema`, `MetadataSchemaMetadataItem` (name, description,
-  type `string|number|boolean|json`, required, default, allowedValues, sensitive, url),
-  `AuthenticationProfile`, bundle response shape.
+- `types/metadata.ts`: **already exists** — `MetadataField` (name, `type?: 'string'|'number'|'bool'|'duration'`,
+  description, required, sensitive, default, example, allowedValues, `url?: {title,url}`),
+  `ComponentMetadataSchema`, `MetadataBundle`. **Extend it** to add `authenticationProfiles?:
+  AuthenticationProfile[]` on `ComponentMetadataSchema` and an `AuthenticationProfile` type. The
+  field controls map off the existing union (`bool` → boolean select, `duration` → text +
+  `validateGoDuration`, `allowedValues` → enum select); if the bundle ever emits `json`-typed
+  fields, add a JSON/textarea control then (YAGNI until observed).
 - `types/component.ts`: `ComponentSpec` (apiVersion `dapr.io/v1alpha1`, kind `Component`,
   metadata{name, namespace}, scopes[], spec{type, version, metadata[]{name, value? |
   secretKeyRef{name, key}}}).
 - `types/resiliency.ts`: `DaprResiliency` (kind `Resiliency`, spec{policies{timeouts, retries,
   circuitBreakers}, targets{apps, actors, components}}). RetryPolicy{policy `constant|exponential`,
-  duration, maxRetries, maxInterval, matching{httpStatusCodes, grcpStatusCodes}}.
+  duration, maxRetries, maxInterval, matching{httpStatusCodes, grpcStatusCodes}}.
+  (NOTE: cloudgrid's source type has the typo `grcpStatusCodes`; the port standardizes on the
+  correct `grpcStatusCodes` — implemented in `types/resiliency.ts`. Do not "correct" it back.)
   CircuitBreakerPolicy{maxRequests, timeout, trip (CEL), interval}.
   AppTarget / ActorTarget (+circuitBreakerScope `type|id|both`, circuitBreakerCacheSize) /
   ComponentTarget (inbound/outbound).
@@ -112,6 +183,13 @@ React Router v6.
 4. **Preview** — editable YAML, Copy + Download `<name>.yaml`.
 
 Dropped: cloudgrid's connected-mode "Access & Scopes" step.
+
+**Plan 2 implementation note (from Plan 1 foundation review):** `lib/yaml-emit.ts`
+`recursivelyRemoveEmptyValues` treats arrays as leaves — it does NOT prune empty keys *inside*
+objects held in an array. `ComponentSpec.spec.metadata` is an array of `{name, value? | secretKeyRef}`
+items, so the Component Builder must assemble each metadata item with only its populated key
+(`value` XOR `secretKeyRef`) and drop empty items itself, rather than relying on the stripper to
+clean item interiors. (Component emission does not run the stripper anyway; resiliency does.)
 
 ## Resiliency Builder flow (4 steps)
 

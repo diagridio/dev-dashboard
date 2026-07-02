@@ -7,7 +7,7 @@ import { RefreshProvider } from '../lib/refresh'
 const noop = () => {}
 
 describe('NAV_ITEMS', () => {
-  it('has exactly 7 items in the correct order', () => {
+  it('has exactly 8 items in the correct order', () => {
     const labels = NAV_ITEMS.map((i) => i.label)
     expect(labels).toEqual([
       'Applications',
@@ -16,6 +16,7 @@ describe('NAV_ITEMS', () => {
       'Subscriptions',
       'Components',
       'Configurations',
+      'Resiliency',
       'Logs',
     ])
   })
@@ -29,6 +30,7 @@ describe('NAV_ITEMS', () => {
       '/subscriptions',
       '/components',
       '/configurations',
+      '/resiliency',
       '/logs',
     ])
   })
@@ -50,7 +52,7 @@ describe('TopNav', () => {
     expect(screen.getByRole('img', { name: /diagrid/i })).toBeInTheDocument()
   })
 
-  it('renders all 7 nav links', () => {
+  it('renders all 8 nav links', () => {
     renderNav()
     for (const item of NAV_ITEMS) {
       expect(screen.getByRole('link', { name: item.label })).toBeInTheDocument()

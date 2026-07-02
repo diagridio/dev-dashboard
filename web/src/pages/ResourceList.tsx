@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useResources } from '../hooks/useResources'
 import type { ResourceKind } from '../types/resources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
@@ -58,6 +58,9 @@ export function ResourceList({ kind }: ResourceListProps) {
             <h1>{title}</h1>
             <div className="sub">{sub}</div>
           </div>
+          {kind === 'component' && (
+            <Link className="btn ghost" to="/components/new">+ New component</Link>
+          )}
         </div>
         {kind === 'component' && <StateStoreConnectionsPanel />}
         <p className="muted">Loading…</p>
@@ -74,6 +77,9 @@ export function ResourceList({ kind }: ResourceListProps) {
             <h1>{title}</h1>
             <div className="sub">{sub}</div>
           </div>
+          {kind === 'component' && (
+            <Link className="btn ghost" to="/components/new">+ New component</Link>
+          )}
         </div>
         {kind === 'component' && <StateStoreConnectionsPanel />}
         <div className="md">
@@ -99,6 +105,9 @@ export function ResourceList({ kind }: ResourceListProps) {
           <h1>{title}</h1>
           <div className="sub">{sub}</div>
         </div>
+        {kind === 'component' && (
+          <Link className="btn ghost" to="/components/new">+ New component</Link>
+        )}
       </div>
       {kind === 'component' && <StateStoreConnectionsPanel />}
       <div className="md">

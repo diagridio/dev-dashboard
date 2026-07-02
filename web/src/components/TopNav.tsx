@@ -16,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Subscriptions', to: '/subscriptions' },
   { label: 'Components', to: '/components' },
   { label: 'Configurations', to: '/configurations' },
+  { label: 'Resiliency', to: '/resiliency' },
   { label: 'Logs', to: '/logs' },
 ]
 
