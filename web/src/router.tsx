@@ -9,6 +9,8 @@ import { Actors } from './pages/Actors'
 import { Subscriptions } from './pages/Subscriptions'
 import { ResourceList } from './pages/ResourceList'
 import { ComponentBuilder } from './pages/component-builder/ComponentBuilder'
+import { Resiliency } from './pages/Resiliency'
+import { ResiliencyBuilder } from './pages/resiliency-builder/ResiliencyBuilder'
 
 export const routes: RouteObject[] = [
   {
@@ -26,6 +28,8 @@ export const routes: RouteObject[] = [
       { path: 'components/:name', element: <ResourceList kind="component" /> },
       { path: 'configurations', element: <ResourceList kind="configuration" /> },
       { path: 'configurations/:name', element: <ResourceList kind="configuration" /> },
+      { path: 'resiliency', element: <Resiliency /> },
+      { path: 'resiliency/new', element: <ResiliencyBuilder /> },
       { path: 'logs', element: <Logs /> },
     ],
   },
