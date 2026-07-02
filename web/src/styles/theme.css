@@ -270,7 +270,7 @@ pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; 
 .followbtn .d { width: 8px; height: 8px; border-radius: 50%; background: var(--done-fg); animation: beat 2.4s ease-out infinite; }
 .followbtn.on { color: var(--text); border-color: color-mix(in srgb, var(--done-fg) 45%, transparent); }
 .logwin { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); overflow: auto; max-height: 60vh; }
-.logrow { display: grid; grid-template-columns: 104px 60px 124px 1fr; gap: 12px; padding: 4px 14px; border-bottom: 1px solid var(--line-soft); align-items: baseline; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
+.logrow { display: grid; grid-template-columns: 104px 60px 62px 1fr; gap: 12px; padding: 4px 14px; border-bottom: 1px solid var(--line-soft); align-items: baseline; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
 .logrow:hover { background: var(--surface-2); }
 .logrow:last-child { border-bottom: none; }
 .ltime { color: var(--faint); white-space: nowrap; }
