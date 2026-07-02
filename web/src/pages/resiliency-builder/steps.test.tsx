@@ -44,4 +44,33 @@ describe('StepPolicies', () => {
     fireEvent.click(screen.getByRole('button', { name: /remove retry1/i }))
     expect(dispatch).toHaveBeenCalledWith({ type: 'REMOVE_RETRY', name: 'retry1' })
   })
+  it('edits an existing timeout via chip click (rename dispatches remove + upsert)', () => {
+    const dispatch = vi.fn()
+    const s = reducer(initialState(), { type: 'UPSERT_TIMEOUT', name: 'timeout1', duration: '30s' })
+    render(<StepPolicies state={s} dispatch={dispatch} />)
+    fireEvent.click(screen.getByRole('button', { name: /edit timeout1/i }))
+    fireEvent.change(screen.getByLabelText(/timeout name/i), { target: { value: 'renamed' } })
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(dispatch).toHaveBeenCalledWith({ type: 'REMOVE_TIMEOUT', name: 'timeout1' })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'UPSERT_TIMEOUT', name: 'renamed', duration: '30s' })
+  })
+  it('adds a DaprBuiltIn override with prefilled defaults', () => {
+    const dispatch = vi.fn()
+    render(<StepPolicies state={initialState()} dispatch={dispatch} />)
+    fireEvent.click(screen.getByRole('button', { name: /add DaprBuiltInServiceRetries/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(dispatch).toHaveBeenCalledWith({
+      type: 'UPSERT_RETRY',
+      name: 'DaprBuiltInServiceRetries',
+      policy: expect.objectContaining({ policy: 'constant', duration: '1s', maxRetries: 3 }),
+    })
+  })
+  it('does not list a DaprBuiltIn override in the regular Retries list', () => {
+    const dispatch = vi.fn()
+    const s = reducer(initialState(), { type: 'UPSERT_RETRY', name: 'DaprBuiltInServiceRetries', policy: { policy: 'constant', duration: '1s', maxRetries: 3 } })
+    render(<StepPolicies state={s} dispatch={dispatch} />)
+    // present as an editable override chip, but not offered as an "Add" row anymore
+    expect(screen.getByRole('button', { name: /edit DaprBuiltInServiceRetries/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add DaprBuiltInServiceRetries/i })).not.toBeInTheDocument()
+  })
 })
