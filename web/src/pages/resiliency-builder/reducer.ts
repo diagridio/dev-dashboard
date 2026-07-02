@@ -4,6 +4,7 @@ import {
 } from '../../types/resiliency'
 import { validateResourceName } from '../../lib/validation'
 import { recursivelyRemoveEmptyValues } from '../../lib/yaml-emit'
+import { isDefaultPolicyName } from './defaultPolicies'
 
 export interface ResiliencyState {
   config: DaprResiliency
@@ -101,8 +102,11 @@ export function canContinue(state: ResiliencyState): boolean {
       return validateResourceName(config.metadata.name) === null
     case 1:
       return countAll(policies.timeouts) + countAll(policies.retries) + countAll(policies.circuitBreakers) > 0
-    case 2:
-      return countAll(targets.apps) + countAll(targets.actors) + countAll(targets.components) > 0
+    case 2: {
+      const hasTarget = countAll(targets.apps) + countAll(targets.actors) + countAll(targets.components) > 0
+      const hasOverride = Object.keys(policies.retries).some(isDefaultPolicyName)
+      return hasTarget || hasOverride
+    }
     default:
       return true
   }

@@ -31,6 +31,20 @@ describe('canContinue', () => {
     s = reducer(s, { type: 'UPSERT_APP', name: 'orders', target: { timeout: 'timeout1' } })
     expect(canContinue(s)).toBe(true)
   })
+  it('step 2 passes with a DaprBuiltIn override and no explicit target', () => {
+    let s = reducer(initialState(), { type: 'SET_NAME', name: 'r' })
+    s = reducer(s, { type: 'UPSERT_RETRY', name: 'DaprBuiltInServiceRetries', policy: { policy: 'constant', duration: '1s', maxRetries: 3 } })
+    s = reducer(s, { type: 'NEXT' }) // 0->1
+    s = reducer(s, { type: 'NEXT' }) // 1->2
+    expect(canContinue(s)).toBe(true)
+  })
+  it('step 2 fails with only a non-builtin retry and no target', () => {
+    let s = reducer(initialState(), { type: 'SET_NAME', name: 'r' })
+    s = reducer(s, { type: 'UPSERT_RETRY', name: 'retry1', policy: { policy: 'constant', duration: '5s' } })
+    s = reducer(s, { type: 'NEXT' })
+    s = reducer(s, { type: 'NEXT' })
+    expect(canContinue(s)).toBe(false)
+  })
 })
 
 describe('reducer upserts/removes', () => {
