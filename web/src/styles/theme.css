@@ -84,6 +84,7 @@ body {
 .app.collapsed .sbscroll { display: none; }
 .sbsection { margin-top: 12px; }
 .sbsection:first-child { margin-top: 6px; }
+.policy-sections > .sbsection + .sbsection { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .sbtitle { font-family: var(--mono); font-size: 9.5px; letter-spacing: .15em; text-transform: uppercase; color: var(--muted); padding: 5px 10px 4px; white-space: nowrap; }
 .sblink { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 7px; color: var(--text); text-decoration: none; font-size: 13px; line-height: 1.3; white-space: nowrap; }
 .sblink:hover { background: var(--surface-2); }
@@ -138,6 +139,7 @@ body {
 .page { max-width: 1240px; margin: 0 auto; padding: clamp(16px, 3vw, 30px); }
 .phead { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
 .phead h1 { margin: 0; font-size: 22px; font-weight: 680; letter-spacing: -.01em; }
+.sub { color: var(--muted); font-size: 13px; }
 .phead .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
 .live { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; font-family: var(--mono); }
 .live .beat { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-bright); animation: beat 2.4s ease-out infinite; }
@@ -466,10 +468,11 @@ details[open] .caret { transform: rotate(90deg); }
 /* ---- Wizard (component/resiliency builders) ---- */
 /* Wizard/builder actions use the transparent .btn.ghost style (see above). */
 .wizard { display: flex; flex-direction: column; gap: 18px; }
-.stepper { display: flex; flex-wrap: wrap; gap: 8px; }
+.stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--line-soft); }
 .stepper .step { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; }
 .stepper .step.active { color: var(--text); border-color: var(--faint); background: var(--surface-2); }
 .stepper .step.done { color: var(--accent2); }
+.stepper .step-arrow { font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--faint); user-select: none; }
 .wizard-body { min-height: 120px; }
 .stepnav { display: flex; justify-content: space-between; gap: 10px; }
 .stepnav .spacer { flex: 1; }
