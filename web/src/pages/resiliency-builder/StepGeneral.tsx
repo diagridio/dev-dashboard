@@ -10,8 +10,8 @@ export function StepGeneral({ state, dispatch }: { state: ResiliencyState; dispa
       <Field label="Name" htmlFor="r-name" required error={nameErr}>
         <TextInput id="r-name" aria-label="Name" value={name} onChange={(v) => dispatch({ type: 'SET_NAME', name: v })} />
       </Field>
-      <Field label="Namespace">
-        <TextInput id="r-ns" value={state.config.metadata.namespace ?? ''} onChange={(v) => dispatch({ type: 'SET_NAMESPACE', namespace: v })} />
+      <Field label="Namespace" htmlFor="r-ns">
+        <TextInput id="r-ns" aria-label="Namespace" value={state.config.metadata.namespace ?? ''} onChange={(v) => dispatch({ type: 'SET_NAMESPACE', namespace: v })} />
       </Field>
     </div>
   )

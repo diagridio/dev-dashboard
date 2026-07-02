@@ -8,7 +8,7 @@ describe('StepGeneral', () => {
   it('dispatches SET_NAME', () => {
     const dispatch = vi.fn()
     render(<StepGeneral state={initialState()} dispatch={dispatch} />)
-    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'my-res' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'my-res' } })
     expect(dispatch).toHaveBeenCalledWith({ type: 'SET_NAME', name: 'my-res' })
   })
 })
