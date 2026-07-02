@@ -19,15 +19,15 @@ function DialogShell({ open, title, onClose, onSave, canSave, children }: {
   )
 }
 
-export function TimeoutDialog({ open, initialName, onClose, onSave }: {
-  open: boolean; initialName: string; onClose: () => void; onSave: (name: string, duration: string) => void
+export function TimeoutDialog({ open, initialName, initialDuration, editing, onClose, onSave }: {
+  open: boolean; initialName: string; initialDuration?: string; editing?: boolean; onClose: () => void; onSave: (name: string, duration: string) => void
 }) {
   const [name, setName] = useState(initialName)
-  const [duration, setDuration] = useState('')
+  const [duration, setDuration] = useState(initialDuration ?? '5s')
   const nameErr = name === '' ? 'Name is required' : validateResourceName(name)
   const durOk = duration !== '' && validateGoDuration(duration).valid
   return (
-    <DialogShell open={open} title="Add timeout policy" onClose={onClose} canSave={!nameErr && durOk}
+    <DialogShell open={open} title={editing ? 'Edit timeout policy' : 'Add timeout policy'} onClose={onClose} canSave={!nameErr && durOk}
       onSave={() => onSave(name, duration)}>
       <Field label="Name" required error={name === '' ? null : nameErr}>
         <TextInput aria-label="Timeout name" value={name} onChange={setName} />
@@ -39,16 +39,17 @@ export function TimeoutDialog({ open, initialName, onClose, onSave }: {
   )
 }
 
-export function RetryDialog({ open, initialName, onClose, onSave }: {
-  open: boolean; initialName: string; onClose: () => void; onSave: (name: string, policy: RetryPolicy) => void
+export function RetryDialog({ open, initialName, initialPolicy, editing, lockName, keepDurationForExponential, onClose, onSave }: {
+  open: boolean; initialName: string; initialPolicy?: RetryPolicy; editing?: boolean; lockName?: boolean; keepDurationForExponential?: boolean
+  onClose: () => void; onSave: (name: string, policy: RetryPolicy) => void
 }) {
   const [name, setName] = useState(initialName)
-  const [policy, setPolicy] = useState<'constant' | 'exponential'>('constant')
-  const [duration, setDuration] = useState('5s')
-  const [maxInterval, setMaxInterval] = useState('60s')
-  const [maxRetries, setMaxRetries] = useState('-1')
-  const [http, setHttp] = useState('')
-  const [grpc, setGrpc] = useState('')
+  const [policy, setPolicy] = useState<'constant' | 'exponential'>(initialPolicy?.policy ?? 'constant')
+  const [duration, setDuration] = useState(initialPolicy?.duration ?? '5s')
+  const [maxInterval, setMaxInterval] = useState(initialPolicy?.maxInterval ?? '60s')
+  const [maxRetries, setMaxRetries] = useState(initialPolicy?.maxRetries?.toString() ?? '-1')
+  const [http, setHttp] = useState(initialPolicy?.matching?.httpStatusCodes ?? '')
+  const [grpc, setGrpc] = useState(initialPolicy?.matching?.grpcStatusCodes ?? '')
   const nameErr = name === '' ? 'Name is required' : validateResourceName(name)
   const durField = policy === 'constant' ? duration : maxInterval
   const durOk = validateGoDuration(durField).valid
@@ -61,15 +62,23 @@ export function RetryDialog({ open, initialName, onClose, onSave }: {
       maxRetries: maxRetries === '' ? undefined : Number(maxRetries),
       matching: { httpStatusCodes: http, grpcStatusCodes: grpc },
     }
-    if (policy === 'constant') p.duration = duration
-    else p.maxInterval = maxInterval
+    if (policy === 'constant') {
+      p.duration = duration
+    } else {
+      p.maxInterval = maxInterval
+      if (keepDurationForExponential && duration !== '') p.duration = duration
+    }
     onSave(name, p)
   }
   return (
-    <DialogShell open={open} title="Add retry policy" onClose={onClose} canSave={canSave} onSave={save}>
-      <Field label="Name" required error={name === '' ? null : nameErr}>
-        <TextInput aria-label="Retry name" value={name} onChange={setName} />
-      </Field>
+    <DialogShell open={open} title={editing ? 'Edit retry policy' : 'Add retry policy'} onClose={onClose} canSave={canSave} onSave={save}>
+      {lockName ? (
+        <Field label="Name"><b>{name}</b></Field>
+      ) : (
+        <Field label="Name" required error={name === '' ? null : nameErr}>
+          <TextInput aria-label="Retry name" value={name} onChange={setName} />
+        </Field>
+      )}
       <Field label="Policy" required>
         <SelectInput aria-label="Retry policy type" value={policy}
           options={[{ label: 'constant', value: 'constant' }, { label: 'exponential', value: 'exponential' }]}
@@ -97,14 +106,14 @@ export function RetryDialog({ open, initialName, onClose, onSave }: {
   )
 }
 
-export function CircuitBreakerDialog({ open, initialName, onClose, onSave }: {
-  open: boolean; initialName: string; onClose: () => void; onSave: (name: string, policy: CircuitBreakerPolicy) => void
+export function CircuitBreakerDialog({ open, initialName, initialPolicy, editing, onClose, onSave }: {
+  open: boolean; initialName: string; initialPolicy?: CircuitBreakerPolicy; editing?: boolean; onClose: () => void; onSave: (name: string, policy: CircuitBreakerPolicy) => void
 }) {
   const [name, setName] = useState(initialName)
-  const [maxRequests, setMaxRequests] = useState('')
-  const [timeoutDur, setTimeoutDur] = useState('')
-  const [trip, setTrip] = useState('')
-  const [intervalDur, setIntervalDur] = useState('')
+  const [maxRequests, setMaxRequests] = useState(initialPolicy?.maxRequests?.toString() ?? '1')
+  const [timeoutDur, setTimeoutDur] = useState(initialPolicy?.timeout ?? '45s')
+  const [trip, setTrip] = useState(initialPolicy?.trip ?? 'consecutiveFailures >= 5')
+  const [intervalDur, setIntervalDur] = useState(initialPolicy?.interval ?? '8s')
   const nameErr = name === '' ? 'Name is required' : validateResourceName(name)
   const numOk = integerError(maxRequests) === null
   const toOk = validateGoDuration(timeoutDur).valid
@@ -117,7 +126,7 @@ export function CircuitBreakerDialog({ open, initialName, onClose, onSave }: {
     })
   }
   return (
-    <DialogShell open={open} title="Add circuit breaker policy" onClose={onClose} canSave={canSave} onSave={save}>
+    <DialogShell open={open} title={editing ? 'Edit circuit breaker policy' : 'Add circuit breaker policy'} onClose={onClose} canSave={canSave} onSave={save}>
       <Field label="Name" required error={name === '' ? null : nameErr}>
         <TextInput aria-label="Circuit breaker name" value={name} onChange={setName} />
       </Field>

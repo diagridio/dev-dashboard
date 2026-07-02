@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import { NamedList, TimeoutDialog, RetryDialog } from './policyDialogs'
+import { NamedList, TimeoutDialog, RetryDialog, CircuitBreakerDialog } from './policyDialogs'
 
 describe('NamedList', () => {
   it('renders names, add, and remove', () => {
@@ -45,5 +45,49 @@ describe('RetryDialog', () => {
     fireEvent.change(screen.getByLabelText(/^duration/i), { target: { value: '5s' } })
     fireEvent.click(screen.getByRole('button', { name: /save/i }))
     expect(onSave).toHaveBeenCalledWith('retry1', expect.objectContaining({ policy: 'constant', duration: '5s' }))
+  })
+})
+
+describe('TimeoutDialog defaults + edit', () => {
+  it('prefills 5s on add', () => {
+    render(<TimeoutDialog open initialName="timeout1" onClose={vi.fn()} onSave={vi.fn()} />)
+    expect((screen.getByLabelText(/duration/i) as HTMLInputElement).value).toBe('5s')
+  })
+  it('prefills the existing duration and title on edit', () => {
+    const onSave = vi.fn()
+    render(<TimeoutDialog open editing initialName="timeout1" initialDuration="42s" onClose={vi.fn()} onSave={onSave} />)
+    expect(screen.getByText(/edit timeout policy/i)).toBeInTheDocument()
+    expect((screen.getByLabelText(/duration/i) as HTMLInputElement).value).toBe('42s')
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(onSave).toHaveBeenCalledWith('timeout1', '42s')
+  })
+})
+
+describe('CircuitBreakerDialog defaults', () => {
+  it('prefills canonical defaults as real text', () => {
+    render(<CircuitBreakerDialog open initialName="circuitBreaker1" onClose={vi.fn()} onSave={vi.fn()} />)
+    expect((screen.getByLabelText(/max requests/i) as HTMLInputElement).value).toBe('1')
+    expect((screen.getByLabelText(/^timeout/i) as HTMLInputElement).value).toBe('45s')
+    expect((screen.getByLabelText(/trip/i) as HTMLInputElement).value).toBe('consecutiveFailures >= 5')
+    expect((screen.getByLabelText(/interval/i) as HTMLInputElement).value).toBe('8s')
+  })
+})
+
+describe('RetryDialog edit + lock + keep-duration', () => {
+  it('locks the name when lockName is set', () => {
+    render(<RetryDialog open initialName="DaprBuiltInServiceRetries" lockName onClose={vi.fn()} onSave={vi.fn()} />)
+    expect(screen.queryByLabelText(/retry name/i)).not.toBeInTheDocument()
+    expect(screen.getByText('DaprBuiltInServiceRetries')).toBeInTheDocument()
+  })
+  it('keeps duration for an exponential override on save', () => {
+    const onSave = vi.fn()
+    render(
+      <RetryDialog open editing lockName keepDurationForExponential
+        initialName="DaprBuiltInActorReminderRetries"
+        initialPolicy={{ policy: 'exponential', duration: '15m', maxInterval: '60s', maxRetries: 3 }}
+        onClose={vi.fn()} onSave={onSave} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(onSave).toHaveBeenCalledWith('DaprBuiltInActorReminderRetries', expect.objectContaining({ policy: 'exponential', duration: '15m', maxInterval: '60s', maxRetries: 3 }))
   })
 })
