@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { StepGeneral } from './StepGeneral'
 import { StepPolicies } from './StepPolicies'
+import { StepTargets } from './StepTargets'
 import { initialState, reducer } from './reducer'
 
 describe('StepGeneral', () => {
@@ -72,5 +73,18 @@ describe('StepPolicies', () => {
     // present as an editable override chip, but not offered as an "Add" row anymore
     expect(screen.getByRole('button', { name: /edit DaprBuiltInServiceRetries/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /add DaprBuiltInServiceRetries/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('StepTargets', () => {
+  it('edits an existing app target via chip click', () => {
+    const dispatch = vi.fn()
+    let s = reducer(initialState(), { type: 'UPSERT_TIMEOUT', name: 'timeout1', duration: '30s' })
+    s = reducer(s, { type: 'UPSERT_APP', name: 'orders', target: { timeout: 'timeout1' } })
+    render(<StepTargets state={s} dispatch={dispatch} />)
+    fireEvent.click(screen.getByRole('button', { name: /edit orders/i }))
+    expect((screen.getByLabelText(/app id/i) as HTMLInputElement).value).toBe('orders')
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(dispatch).toHaveBeenCalledWith({ type: 'UPSERT_APP', name: 'orders', target: expect.objectContaining({ timeout: 'timeout1' }) })
   })
 })
