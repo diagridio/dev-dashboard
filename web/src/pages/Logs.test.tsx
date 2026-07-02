@@ -340,11 +340,38 @@ describe('Logs', () => {
     expect(screen.getByText(/daprd-line-two/)).toBeInTheDocument()
     expect(screen.getByText(/app-line-three/)).toBeInTheDocument()
 
-    // daprd rows carry .lsrc.daprd, app rows carry .lsrc.app
-    const daprdSrcSpans = document.querySelectorAll('.lsrc.daprd')
-    const appSrcSpans = document.querySelectorAll('.lsrc.app')
+    // daprd rows carry .lsrc.lsrc-daprd, app rows carry .lsrc.lsrc-app
+    const daprdSrcSpans = document.querySelectorAll('.lsrc.lsrc-daprd')
+    const appSrcSpans = document.querySelectorAll('.lsrc.lsrc-app')
     expect(daprdSrcSpans.length).toBeGreaterThanOrEqual(2)
     expect(appSrcSpans.length).toBeGreaterThanOrEqual(1)
+  })
+
+  // Regression: the source-tag span must not reuse the bare "app" class token,
+  // which collides with the global ".app" app-shell class (min-height: 100vh)
+  // and blows up the row height. Source modifiers must be namespaced.
+  it('F2 — app source span does not collide with the global .app shell class', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=both')
+
+    await waitFor(() => expect(FakeES.instances).toHaveLength(2))
+    const appES = FakeES.instances.find(es => es.url.includes('source=app'))
+
+    act(() => {
+      appES!.onmessage?.({ data: '12:04:51.300 level=info app-collision-line' })
+    })
+
+    await screen.findByText(/app-collision-line/)
+
+    const srcSpans = Array.from(document.querySelectorAll<HTMLElement>('.lsrc'))
+    const appSrcSpan = srcSpans.find(s => s.textContent === 'app')
+    expect(appSrcSpan).toBeDefined()
+    // Must NOT carry the bare "app"/"daprd" tokens that collide with global classes
+    expect(appSrcSpan!.classList.contains('app')).toBe(false)
   })
 
   it('F2 — chronological ordering: earlier timestamp appears before later', async () => {
