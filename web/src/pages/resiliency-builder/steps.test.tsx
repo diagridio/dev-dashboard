@@ -11,6 +11,12 @@ describe('StepGeneral', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'my-res' } })
     expect(dispatch).toHaveBeenCalledWith({ type: 'SET_NAME', name: 'my-res' })
   })
+  it('dispatches SET_NAMESPACE', () => {
+    const dispatch = vi.fn()
+    render(<StepGeneral state={initialState()} dispatch={dispatch} />)
+    fireEvent.change(screen.getByLabelText('Namespace'), { target: { value: 'my-ns' } })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'SET_NAMESPACE', namespace: 'my-ns' })
+  })
 })
 
 describe('StepPolicies', () => {

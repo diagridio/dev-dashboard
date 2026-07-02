@@ -14,7 +14,7 @@ function renderBuilder() {
 describe('ResiliencyBuilder', () => {
   it('walks general → policies → targets → preview and emits YAML', async () => {
     renderBuilder()
-    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'my-res' } })
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'my-res' } })
     fireEvent.click(screen.getByRole('button', { name: /continue/i })) // 0->1
     fireEvent.click(screen.getByRole('button', { name: /add timeouts/i }))
     fireEvent.change(screen.getByLabelText(/duration/i), { target: { value: '30s' } })
