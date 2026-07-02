@@ -102,18 +102,18 @@ export function CircuitBreakerDialog({ open, initialName, onClose, onSave }: {
 }) {
   const [name, setName] = useState(initialName)
   const [maxRequests, setMaxRequests] = useState('')
-  const [timeout, setTimeout] = useState('')
+  const [timeoutDur, setTimeoutDur] = useState('')
   const [trip, setTrip] = useState('')
-  const [interval, setInterval] = useState('')
+  const [intervalDur, setIntervalDur] = useState('')
   const nameErr = name === '' ? 'Name is required' : validateResourceName(name)
   const numOk = integerError(maxRequests) === null
-  const toOk = validateGoDuration(timeout).valid
-  const ivOk = validateGoDuration(interval).valid
+  const toOk = validateGoDuration(timeoutDur).valid
+  const ivOk = validateGoDuration(intervalDur).valid
   const canSave = !nameErr && numOk && toOk && ivOk
   function save() {
     onSave(name, {
       maxRequests: maxRequests === '' ? undefined : Number(maxRequests),
-      timeout, trip, interval,
+      timeout: timeoutDur, trip, interval: intervalDur,
     })
   }
   return (
@@ -124,14 +124,14 @@ export function CircuitBreakerDialog({ open, initialName, onClose, onSave }: {
       <Field label="Max requests" error={numOk ? null : 'Must be an integer'}>
         <NumberInput aria-label="Max requests" value={maxRequests} onChange={setMaxRequests} />
       </Field>
-      <Field label="Timeout" error={timeout === '' ? null : (toOk ? null : validateGoDuration(timeout).error)}>
-        <TextInput aria-label="Timeout" placeholder="30s" value={timeout} onChange={setTimeout} />
+      <Field label="Timeout" error={timeoutDur === '' ? null : (toOk ? null : validateGoDuration(timeoutDur).error)}>
+        <TextInput aria-label="Timeout" placeholder="30s" value={timeoutDur} onChange={setTimeoutDur} />
       </Field>
       <Field label="Trip (CEL)">
         <TextInput aria-label="Trip" placeholder="consecutiveFailures >= 5" value={trip} onChange={setTrip} />
       </Field>
-      <Field label="Interval" error={interval === '' ? null : (ivOk ? null : validateGoDuration(interval).error)}>
-        <TextInput aria-label="Interval" placeholder="8s" value={interval} onChange={setInterval} />
+      <Field label="Interval" error={intervalDur === '' ? null : (ivOk ? null : validateGoDuration(intervalDur).error)}>
+        <TextInput aria-label="Interval" placeholder="8s" value={intervalDur} onChange={setIntervalDur} />
       </Field>
     </DialogShell>
   )

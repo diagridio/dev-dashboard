@@ -46,14 +46,14 @@ export function AppTargetDialog({ open, policies, onClose, onSave }: {
   open: boolean; policies: PolicyNames; onClose: () => void; onSave: (name: string, target: AppTarget) => void
 }) {
   const [name, setName] = useState('')
-  const [timeout, setTimeout] = useState('')
+  const [timeoutRef, setTimeoutRef] = useState('')
   const [retry, setRetry] = useState('')
   const [cb, setCb] = useState('')
   const nameOk = validateResourceName(name) === null
-  const anyPolicy = !!(timeout || retry || cb)
+  const anyPolicy = !!(timeoutRef || retry || cb)
   function save() {
     const t: AppTarget = {}
-    if (timeout) t.timeout = timeout
+    if (timeoutRef) t.timeout = timeoutRef
     if (retry) t.retry = retry
     if (cb) t.circuitBreaker = cb
     onSave(name, t)
@@ -63,7 +63,7 @@ export function AppTargetDialog({ open, policies, onClose, onSave }: {
       <Field label="App ID" required error={name === '' ? null : validateResourceName(name)}>
         <TextInput aria-label="App ID" value={name} onChange={setName} />
       </Field>
-      <PolicyPickers policies={policies} timeout={timeout} retry={retry} cb={cb} setTimeout={setTimeout} setRetry={setRetry} setCb={setCb} />
+      <PolicyPickers policies={policies} timeout={timeoutRef} retry={retry} cb={cb} setTimeout={setTimeoutRef} setRetry={setRetry} setCb={setCb} />
     </Shell>
   )
 }
@@ -72,17 +72,17 @@ export function ActorTargetDialog({ open, policies, onClose, onSave }: {
   open: boolean; policies: PolicyNames; onClose: () => void; onSave: (name: string, target: ActorTarget) => void
 }) {
   const [name, setName] = useState('')
-  const [timeout, setTimeout] = useState('')
+  const [timeoutRef, setTimeoutRef] = useState('')
   const [retry, setRetry] = useState('')
   const [cb, setCb] = useState('')
   const [scope, setScope] = useState<'' | 'type' | 'id' | 'both'>('')
   const [cacheSize, setCacheSize] = useState('')
   const nameOk = validateResourceName(name) === null
-  const anyPolicy = !!(timeout || retry || cb)
+  const anyPolicy = !!(timeoutRef || retry || cb)
   const cacheOk = integerError(cacheSize) === null
   function save() {
     const t: ActorTarget = {}
-    if (timeout) t.timeout = timeout
+    if (timeoutRef) t.timeout = timeoutRef
     if (retry) t.retry = retry
     if (cb) {
       t.circuitBreaker = cb
@@ -96,7 +96,7 @@ export function ActorTargetDialog({ open, policies, onClose, onSave }: {
       <Field label="Actor type" required error={name === '' ? null : validateResourceName(name)}>
         <TextInput aria-label="Actor type" value={name} onChange={setName} />
       </Field>
-      <PolicyPickers policies={policies} timeout={timeout} retry={retry} cb={cb} setTimeout={setTimeout} setRetry={setRetry} setCb={setCb} />
+      <PolicyPickers policies={policies} timeout={timeoutRef} retry={retry} cb={cb} setTimeout={setTimeoutRef} setRetry={setRetry} setCb={setCb} />
       {cb && (
         <>
           <Field label="Circuit breaker scope">
@@ -118,14 +118,14 @@ export function ComponentTargetDialog({ open, policies, onClose, onSave }: {
 }) {
   const [name, setName] = useState('')
   const [direction, setDirection] = useState<'outbound' | 'inbound' | 'both'>('outbound')
-  const [timeout, setTimeout] = useState('')
+  const [timeoutRef, setTimeoutRef] = useState('')
   const [retry, setRetry] = useState('')
   const [cb, setCb] = useState('')
   const nameOk = validateResourceName(name) === null
-  const anyPolicy = !!(timeout || retry || cb)
+  const anyPolicy = !!(timeoutRef || retry || cb)
   function leg() {
     const l: { timeout?: string; retry?: string; circuitBreaker?: string } = {}
-    if (timeout) l.timeout = timeout
+    if (timeoutRef) l.timeout = timeoutRef
     if (retry) l.retry = retry
     if (cb) l.circuitBreaker = cb
     return l
@@ -146,7 +146,7 @@ export function ComponentTargetDialog({ open, policies, onClose, onSave }: {
           options={[{ label: 'outbound', value: 'outbound' }, { label: 'inbound', value: 'inbound' }, { label: 'both', value: 'both' }]}
           onChange={(v) => setDirection(v === 'inbound' ? 'inbound' : v === 'both' ? 'both' : 'outbound')} />
       </Field>
-      <PolicyPickers policies={policies} timeout={timeout} retry={retry} cb={cb} setTimeout={setTimeout} setRetry={setRetry} setCb={setCb} />
+      <PolicyPickers policies={policies} timeout={timeoutRef} retry={retry} cb={cb} setTimeout={setTimeoutRef} setRetry={setRetry} setCb={setCb} />
     </Shell>
   )
 }
