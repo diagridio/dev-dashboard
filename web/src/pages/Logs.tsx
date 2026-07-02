@@ -62,7 +62,7 @@ function LogRow({ merged, search }: LogRowProps) {
     <div className={`logrow${isError ? ' error' : ''}`}>
       <span className="ltime">{time}</span>
       <span className={`lvl ${level}`}>{level}</span>
-      <span className={`lsrc ${src}`}>{src}</span>
+      <span className={`lsrc lsrc-${src}`}>{src}</span>
       <span className="lmsg">
         <HighlightedText text={line.text} query={search} />
       </span>

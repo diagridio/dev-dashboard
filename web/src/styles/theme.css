@@ -280,8 +280,8 @@ pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; 
 .lvl.warn { color: var(--pend-fg); background: var(--pend-bg); }
 .lvl.error { color: var(--fail-fg); background: var(--fail-bg); }
 .lsrc { white-space: nowrap; font-size: 11px; }
-.lsrc.daprd { color: var(--dapr); }
-.lsrc.app { color: var(--accent2); font-weight: 600; }
+.lsrc.lsrc-daprd { color: var(--dapr); }
+.lsrc.lsrc-app { color: var(--accent2); font-weight: 600; }
 .lmsg { color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .logrow.error .lmsg { color: var(--fail-fg); }
 .hl { background: color-mix(in srgb, var(--accent2) 30%, transparent); border-radius: 3px; padding: 0 1px; }
