@@ -28,4 +28,18 @@ describe('ResiliencyBuilder', () => {
     await waitFor(() => expect(document.querySelector('pre.code')?.textContent).toContain('kind: Resiliency'))
     expect(document.querySelector('pre.code')?.textContent).toContain('name: my-res')
   })
+
+  it('finishes with only a DaprBuiltIn override (no explicit target) and emits default namespace', async () => {
+    renderBuilder()
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'my-res' } })
+    fireEvent.click(screen.getByRole('button', { name: /continue/i })) // 0->1
+    fireEvent.click(screen.getByRole('button', { name: /add DaprBuiltInServiceRetries/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    fireEvent.click(screen.getByRole('button', { name: /continue/i })) // 1->2 (policy present)
+    fireEvent.click(screen.getByRole('button', { name: /continue/i })) // 2->3 (override satisfies gating)
+    await waitFor(() => expect(document.querySelector('pre.code')?.textContent).toContain('kind: Resiliency'))
+    const yaml = document.querySelector('pre.code')?.textContent ?? ''
+    expect(yaml).toContain('namespace: default')
+    expect(yaml).toContain('DaprBuiltInServiceRetries')
+  })
 })
