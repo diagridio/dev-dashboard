@@ -58,7 +58,7 @@ export function defaultResiliencyConfig(): DaprResiliency {
   return {
     apiVersion: 'dapr.io/v1alpha1',
     kind: 'Resiliency',
-    metadata: { name: '', namespace: '' },
+    metadata: { name: '', namespace: 'default' },
     scopes: [],
     spec: {
       policies: { timeouts: {}, retries: {}, circuitBreakers: {} },

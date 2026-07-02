@@ -23,7 +23,7 @@ describe('defaultResiliencyConfig', () => {
     const r = defaultResiliencyConfig()
     expect(r.apiVersion).toBe('dapr.io/v1alpha1')
     expect(r.kind).toBe('Resiliency')
-    expect(r.metadata).toEqual({ name: '', namespace: '' })
+    expect(r.metadata).toEqual({ name: '', namespace: 'default' })
     expect(r.spec.policies).toEqual({ timeouts: {}, retries: {}, circuitBreakers: {} })
     expect(r.spec.targets).toEqual({ apps: {}, actors: {}, components: {} })
   })
