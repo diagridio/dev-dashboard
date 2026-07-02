@@ -20,7 +20,7 @@ export function StepPolicies({ state, dispatch }: { state: ResiliencyState; disp
   }
 
   return (
-    <div>
+    <div className="policy-sections">
       <NamedList title="Timeouts" names={Object.keys(pol.timeouts)}
         onAdd={() => setOpen({ kind: 'timeout' })}
         onEdit={(name) => setOpen({ kind: 'timeout', editName: name })}
@@ -36,7 +36,7 @@ export function StepPolicies({ state, dispatch }: { state: ResiliencyState; disp
 
       <div className="sbsection">
         <div className="sech">Default policy overrides</div>
-        <p className="none" style={{ marginTop: 0 }}>&#9888; These override Dapr's built-in retry behavior globally.</p>
+        <p className="sub" style={{ marginTop: 0 }}>&#9888; These override Dapr's built-in retry behavior globally.</p>
         {DEFAULT_DAPR_RETRY_POLICIES.map((preset) => {
           const exists = pol.retries[preset.label] !== undefined
           return exists ? (

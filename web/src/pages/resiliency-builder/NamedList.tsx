@@ -16,7 +16,7 @@ export function NamedList({ title, names, onAdd, onRemove, onEdit }: NamedListPr
         </button>
       </div>
       {names.length === 0 ? (
-        <p className="none">None yet.</p>
+        <p className="none">-</p>
       ) : (
         names.map((name) => (
           <div key={name} className="chip k" style={{ marginRight: 6, marginBottom: 6 }}>
