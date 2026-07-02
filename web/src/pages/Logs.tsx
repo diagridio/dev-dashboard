@@ -15,6 +15,31 @@ interface MergedLine {
   src: 'daprd' | 'app'
   /** Arrival index across the merged list — used as tiebreaker when timestamps match */
   arrival: number
+  /**
+   * Effective time used for chronological sorting. A line without its own clock
+   * token inherits the last timestamp seen earlier in the SAME stream so it stays
+   * anchored to its neighbours (e.g. the daprd startup banner). Leading lines with
+   * no prior timestamp get -Infinity so they sort to the top rather than the bottom.
+   */
+  sortTime: number
+}
+
+/**
+ * Tag one stream's lines with source, arrival index, and a carry-forward sortTime.
+ * Lines are assumed to be in arrival (chronological) order within the stream.
+ */
+function tagStream(
+  lines: LogLine[],
+  src: 'daprd' | 'app',
+  arrivalBase: number,
+  arrivalStep: number,
+): MergedLine[] {
+  let last = -Infinity
+  return lines.map((line, i) => {
+    const t = parseLogTime(line.text)
+    if (Number.isFinite(t)) last = t
+    return { line, src, arrival: arrivalBase + i * arrivalStep, sortTime: last }
+  })
 }
 
 /** Extract a timestamp token from a log line, returning an empty string if none found. */
@@ -104,28 +129,20 @@ function LogViewerCore({
   // Build the merged list chronologically
   const merged: MergedLine[] = useMemo(() => {
     if (source === 'daprd') {
-      return daprdResult.lines.map((line, i) => ({ line, src: 'daprd' as const, arrival: i }))
+      return tagStream(daprdResult.lines, 'daprd', 0, 1)
     }
     if (source === 'app') {
-      return appResult.lines.map((line, i) => ({ line, src: 'app' as const, arrival: i }))
+      return tagStream(appResult.lines, 'app', 0, 1)
     }
-    // 'both': tag each stream's lines, merge and sort chronologically
-    const dLines: MergedLine[] = daprdResult.lines.map((line, i) => ({
-      line,
-      src: 'daprd' as const,
-      arrival: i * 2,       // interleave arrival order so equal timestamps retain stream order
-    }))
-    const aLines: MergedLine[] = appResult.lines.map((line, i) => ({
-      line,
-      src: 'app' as const,
-      arrival: i * 2 + 1,
-    }))
+    // 'both': tag each stream's lines, merge and sort chronologically.
+    // Interleave arrival order (daprd even, app odd) so equal timestamps retain stream order.
+    const dLines = tagStream(daprdResult.lines, 'daprd', 0, 2)
+    const aLines = tagStream(appResult.lines, 'app', 1, 2)
     const all = [...dLines, ...aLines]
-    // Stable sort: primary key = parsed timestamp (ms since midnight), secondary = arrival
+    // Stable sort: primary key = effective (carry-forward) timestamp, secondary = arrival.
+    // Guard against Infinity/-Infinity subtraction (which yields NaN) via the equality check.
     all.sort((a, b) => {
-      const ta = parseLogTime(a.line.text)
-      const tb = parseLogTime(b.line.text)
-      if (ta !== tb) return ta - tb
+      if (a.sortTime !== b.sortTime) return a.sortTime - b.sortTime
       return a.arrival - b.arrival
     })
     // Apply line cap after merge

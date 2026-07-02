@@ -405,6 +405,46 @@ describe('Logs', () => {
     expect(daprdIdx).toBeLessThan(appIdx)
   })
 
+  // Regression: untimestamped daprd startup banner lines (no clock token) must
+  // stay anchored where they arrived — at the TOP — instead of sorting to the
+  // bottom because parseLogTime returns Infinity for them.
+  it('F2 — untimestamped startup banner stays at the top, not the bottom', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=both')
+
+    await waitFor(() => expect(FakeES.instances).toHaveLength(2))
+
+    const daprdES = FakeES.instances.find(es => es.url.includes('source=daprd'))
+    const appES = FakeES.instances.find(es => es.url.includes('source=app'))
+
+    // daprd emits its untimestamped startup banner first, THEN timestamped logs
+    act(() => {
+      daprdES!.onmessage?.({ data: "You're up and running! Dapr logs will appear here." })
+      daprdES!.onmessage?.({ data: 'Updating metadata for app command: dotnet run' })
+      daprdES!.onmessage?.({ data: '12:04:50.980 level=info daprd-real-log' })
+      appES!.onmessage?.({ data: '12:04:51.300 level=info app-real-log' })
+    })
+
+    await screen.findByText(/up and running/)
+    await screen.findByText(/daprd-real-log/)
+
+    const rows = document.querySelectorAll('.logrow')
+    const texts = Array.from(rows).map(r => r.querySelector('.lmsg')?.textContent ?? '')
+    const bannerIdx = texts.findIndex(t => t.includes('up and running'))
+    const metaIdx = texts.findIndex(t => t.includes('Updating metadata'))
+    const realIdx = texts.findIndex(t => t.includes('daprd-real-log'))
+    expect(bannerIdx).toBeGreaterThanOrEqual(0)
+    expect(realIdx).toBeGreaterThanOrEqual(0)
+    // Banner + metadata lines (no timestamp, arrived first) must sort ABOVE the
+    // timestamped log, and keep their own arrival order.
+    expect(bannerIdx).toBeLessThan(metaIdx)
+    expect(metaIdx).toBeLessThan(realIdx)
+  })
+
   // F3: dynamic subtitle
   it('F3 — subtitle shows "daprd + application" for source=both', async () => {
     server.use(
