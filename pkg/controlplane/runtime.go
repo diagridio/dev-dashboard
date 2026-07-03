@@ -1,13 +1,15 @@
 package controlplane
 
 import (
+	"bufio"
 	"context"
 	"os/exec"
 )
 
-// runner executes a single runtime subcommand and returns its stdout.
+// runner executes runtime subcommands: run returns stdout; stream emits lines.
 type runner interface {
 	run(ctx context.Context, args ...string) ([]byte, error)
+	stream(ctx context.Context, args ...string) (<-chan string, error)
 }
 
 // lookPathFunc mirrors exec.LookPath; injectable for tests.
@@ -36,4 +38,31 @@ func newExecRunner(kind RuntimeKind) *execRunner { return &execRunner{bin: strin
 
 func (r *execRunner) run(ctx context.Context, args ...string) ([]byte, error) {
 	return exec.CommandContext(ctx, r.bin, args...).Output()
+}
+
+func (r *execRunner) stream(ctx context.Context, args ...string) (<-chan string, error) {
+	cmd := exec.CommandContext(ctx, r.bin, args...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		sc := bufio.NewScanner(stdout)
+		sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+		for sc.Scan() {
+			select {
+			case ch <- sc.Text():
+			case <-ctx.Done():
+				_ = cmd.Process.Kill()
+				return
+			}
+		}
+		_ = cmd.Wait()
+	}()
+	return ch, nil
 }

@@ -23,6 +23,11 @@ func (f *fakeManager) Do(_ context.Context, action, name string) error {
 	f.lastDo = [2]string{action, name}
 	return f.doErr
 }
+func (f *fakeManager) LogStream(context.Context, string) (<-chan string, error) {
+	ch := make(chan string)
+	close(ch)
+	return ch, nil
+}
 
 func TestControlPlaneListRoute(t *testing.T) {
 	mgr := &fakeManager{list: controlplane.ListResult{

@@ -24,6 +24,7 @@ type ListResult struct {
 type Manager interface {
 	List(ctx context.Context) (ListResult, error)
 	Do(ctx context.Context, action, name string) error
+	LogStream(ctx context.Context, name string) (<-chan string, error)
 }
 
 type manager struct {
@@ -98,4 +99,14 @@ func (m *manager) Do(ctx context.Context, action, name string) error {
 	}
 	_, err := m.run.run(ctx, action, name)
 	return err
+}
+
+func (m *manager) LogStream(ctx context.Context, name string) (<-chan string, error) {
+	if !IsLiveName(name) {
+		return nil, ErrUnknownService
+	}
+	if m.runtime == RuntimeNone {
+		return nil, ErrRuntimeUnavailable
+	}
+	return m.run.stream(ctx, "logs", "-f", "--tail", "200", name)
 }

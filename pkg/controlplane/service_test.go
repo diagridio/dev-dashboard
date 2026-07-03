@@ -11,9 +11,11 @@ import (
 
 // fakeRunner returns canned output/err keyed by the first two args joined.
 type fakeRunner struct {
-	calls   [][]string
-	outputs map[string][]byte
-	errs    map[string]error
+	calls       [][]string
+	outputs     map[string][]byte
+	errs        map[string]error
+	streamLines []string
+	streamCalls [][]string
 }
 
 func (f *fakeRunner) run(_ context.Context, args ...string) ([]byte, error) {
@@ -23,6 +25,18 @@ func (f *fakeRunner) run(_ context.Context, args ...string) ([]byte, error) {
 		key = args[0] + " " + args[1]
 	}
 	return f.outputs[key], f.errs[key]
+}
+
+func (f *fakeRunner) stream(_ context.Context, args ...string) (<-chan string, error) {
+	f.streamCalls = append(f.streamCalls, args)
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		for _, l := range f.streamLines {
+			ch <- l
+		}
+	}()
+	return ch, nil
 }
 
 func TestListUnavailableWhenNoRuntime(t *testing.T) {
@@ -69,6 +83,38 @@ func TestListRunningService(t *testing.T) {
 	k8s := res.Services[3]
 	if k8s.Status != StatusK8sOnly || k8s.Actionable {
 		t.Errorf("k8s placeholder = %+v, want kubernetes-only + non-actionable", k8s)
+	}
+}
+
+func TestLogStreamValidation(t *testing.T) {
+	m := newManager(RuntimeDocker, &fakeRunner{outputs: map[string][]byte{}})
+	if _, err := m.LogStream(context.Background(), "dapr_redis"); err != ErrUnknownService {
+		t.Errorf("unknown name: got %v, want ErrUnknownService", err)
+	}
+	none := newManager(RuntimeNone, nil)
+	if _, err := none.LogStream(context.Background(), "dapr_scheduler"); err != ErrRuntimeUnavailable {
+		t.Errorf("no runtime: got %v, want ErrRuntimeUnavailable", err)
+	}
+}
+
+func TestLogStreamEmitsLines(t *testing.T) {
+	f := &fakeRunner{streamLines: []string{"line one", "line two"}}
+	m := newManager(RuntimeDocker, f)
+	ch, err := m.LogStream(context.Background(), "dapr_scheduler")
+	if err != nil {
+		t.Fatalf("LogStream: %v", err)
+	}
+	got := []string{}
+	for l := range ch {
+		got = append(got, l)
+	}
+	if len(got) != 2 || got[0] != "line one" {
+		t.Errorf("lines = %v", got)
+	}
+	// confirm it invoked `logs -f ... dapr_scheduler`
+	last := f.streamCalls[len(f.streamCalls)-1]
+	if last[0] != "logs" {
+		t.Errorf("stream args = %v, want logs ...", last)
 	}
 }
 
