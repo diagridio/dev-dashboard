@@ -14,6 +14,13 @@ function opts(names: string[]) {
   return names.map((n) => ({ label: n, value: n }))
 }
 
+/** Saving a name that already exists upserts over that target — block it, unless it is the record being edited. */
+function duplicateNameError(name: string, existingNames: string[] | undefined, editing: boolean | undefined, initialName: string | undefined, what: string): string | null {
+  if (!existingNames?.includes(name)) return null
+  if (editing && name === initialName) return null
+  return `A ${what} with this name already exists`
+}
+
 function Shell({ open, title, onClose, onSave, canSave, children }: {
   open: boolean; title: string; onClose: () => void; onSave: () => void; canSave: boolean; children: React.ReactNode
 }) {
@@ -42,14 +49,16 @@ function PolicyPickers({ policies, timeout, retry, cb, setTimeout, setRetry, set
   )
 }
 
-export function AppTargetDialog({ open, policies, initialName, initialTarget, editing, onClose, onSave }: {
-  open: boolean; policies: PolicyNames; initialName?: string; initialTarget?: AppTarget; editing?: boolean; onClose: () => void; onSave: (name: string, target: AppTarget) => void
+export function AppTargetDialog({ open, policies, initialName, initialTarget, editing, existingNames, onClose, onSave }: {
+  open: boolean; policies: PolicyNames; initialName?: string; initialTarget?: AppTarget; editing?: boolean; existingNames?: string[]
+  onClose: () => void; onSave: (name: string, target: AppTarget) => void
 }) {
   const [name, setName] = useState(initialName ?? '')
   const [timeoutRef, setTimeoutRef] = useState(initialTarget?.timeout ?? '')
   const [retry, setRetry] = useState(initialTarget?.retry ?? '')
   const [cb, setCb] = useState(initialTarget?.circuitBreaker ?? '')
-  const nameOk = validateResourceName(name) === null
+  const nameErr = validateResourceName(name) ?? duplicateNameError(name, existingNames, editing, initialName, 'app target')
+  const nameOk = nameErr === null
   const anyPolicy = !!(timeoutRef || retry || cb)
   function save() {
     const t: AppTarget = {}
@@ -60,7 +69,7 @@ export function AppTargetDialog({ open, policies, initialName, initialTarget, ed
   }
   return (
     <Shell open={open} title={editing ? 'Edit app target' : 'Add app target'} onClose={onClose} canSave={nameOk && anyPolicy} onSave={save}>
-      <Field label="App ID" required error={name === '' ? null : validateResourceName(name)}>
+      <Field label="App ID" required error={name === '' ? null : nameErr}>
         <TextInput aria-label="App ID" value={name} onChange={setName} />
       </Field>
       <PolicyPickers policies={policies} timeout={timeoutRef} retry={retry} cb={cb} setTimeout={setTimeoutRef} setRetry={setRetry} setCb={setCb} />
@@ -68,8 +77,9 @@ export function AppTargetDialog({ open, policies, initialName, initialTarget, ed
   )
 }
 
-export function ActorTargetDialog({ open, policies, initialName, initialTarget, editing, onClose, onSave }: {
-  open: boolean; policies: PolicyNames; initialName?: string; initialTarget?: ActorTarget; editing?: boolean; onClose: () => void; onSave: (name: string, target: ActorTarget) => void
+export function ActorTargetDialog({ open, policies, initialName, initialTarget, editing, existingNames, onClose, onSave }: {
+  open: boolean; policies: PolicyNames; initialName?: string; initialTarget?: ActorTarget; editing?: boolean; existingNames?: string[]
+  onClose: () => void; onSave: (name: string, target: ActorTarget) => void
 }) {
   const [name, setName] = useState(initialName ?? '')
   const [timeoutRef, setTimeoutRef] = useState(initialTarget?.timeout ?? '')
@@ -77,7 +87,8 @@ export function ActorTargetDialog({ open, policies, initialName, initialTarget, 
   const [cb, setCb] = useState(initialTarget?.circuitBreaker ?? '')
   const [scope, setScope] = useState<'' | 'type' | 'id' | 'both'>(initialTarget?.circuitBreakerScope ?? '')
   const [cacheSize, setCacheSize] = useState(initialTarget?.circuitBreakerCacheSize?.toString() ?? '')
-  const nameOk = validateResourceName(name) === null
+  const nameErr = validateResourceName(name) ?? duplicateNameError(name, existingNames, editing, initialName, 'actor target')
+  const nameOk = nameErr === null
   const anyPolicy = !!(timeoutRef || retry || cb)
   const cacheOk = integerError(cacheSize) === null
   function save() {
@@ -93,7 +104,7 @@ export function ActorTargetDialog({ open, policies, initialName, initialTarget, 
   }
   return (
     <Shell open={open} title={editing ? 'Edit actor target' : 'Add actor target'} onClose={onClose} canSave={nameOk && anyPolicy && cacheOk} onSave={save}>
-      <Field label="Actor type" required error={name === '' ? null : validateResourceName(name)}>
+      <Field label="Actor type" required error={name === '' ? null : nameErr}>
         <TextInput aria-label="Actor type" value={name} onChange={setName} />
       </Field>
       <PolicyPickers policies={policies} timeout={timeoutRef} retry={retry} cb={cb} setTimeout={setTimeoutRef} setRetry={setRetry} setCb={setCb} />
@@ -113,8 +124,9 @@ export function ActorTargetDialog({ open, policies, initialName, initialTarget, 
   )
 }
 
-export function ComponentTargetDialog({ open, policies, initialName, initialTarget, editing, onClose, onSave }: {
-  open: boolean; policies: PolicyNames; initialName?: string; initialTarget?: ComponentTarget; editing?: boolean; onClose: () => void; onSave: (name: string, target: ComponentTarget) => void
+export function ComponentTargetDialog({ open, policies, initialName, initialTarget, editing, existingNames, onClose, onSave }: {
+  open: boolean; policies: PolicyNames; initialName?: string; initialTarget?: ComponentTarget; editing?: boolean; existingNames?: string[]
+  onClose: () => void; onSave: (name: string, target: ComponentTarget) => void
 }) {
   const hasOut = !!initialTarget?.outbound
   const hasIn = !!initialTarget?.inbound
@@ -125,7 +137,8 @@ export function ComponentTargetDialog({ open, policies, initialName, initialTarg
   const [timeoutRef, setTimeoutRef] = useState(initialLeg?.timeout ?? '')
   const [retry, setRetry] = useState(initialLeg?.retry ?? '')
   const [cb, setCb] = useState(initialLeg?.circuitBreaker ?? '')
-  const nameOk = validateResourceName(name) === null
+  const nameErr = validateResourceName(name) ?? duplicateNameError(name, existingNames, editing, initialName, 'component target')
+  const nameOk = nameErr === null
   const anyPolicy = !!(timeoutRef || retry || cb)
   function leg() {
     const l: { timeout?: string; retry?: string; circuitBreaker?: string } = {}
@@ -142,7 +155,7 @@ export function ComponentTargetDialog({ open, policies, initialName, initialTarg
   }
   return (
     <Shell open={open} title={editing ? 'Edit component target' : 'Add component target'} onClose={onClose} canSave={nameOk && anyPolicy} onSave={save}>
-      <Field label="Component name" required error={name === '' ? null : validateResourceName(name)}>
+      <Field label="Component name" required error={name === '' ? null : nameErr}>
         <TextInput aria-label="Component name" value={name} onChange={setName} />
       </Field>
       <Field label="Direction" required>

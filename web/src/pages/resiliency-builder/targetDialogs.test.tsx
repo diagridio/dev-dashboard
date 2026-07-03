@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import { AppTargetDialog, ComponentTargetDialog } from './targetDialogs'
+import { AppTargetDialog, ActorTargetDialog, ComponentTargetDialog } from './targetDialogs'
 
 const policies = { timeouts: ['timeout1'], retries: ['retry1'], circuitBreakers: ['cb1'] }
 
@@ -40,6 +40,39 @@ describe('AppTargetDialog edit', () => {
     expect((screen.getByLabelText(/^timeout policy/i) as HTMLSelectElement).value).toBe('timeout1')
     fireEvent.click(screen.getByRole('button', { name: /save/i }))
     expect(onSave).toHaveBeenCalledWith('orders', expect.objectContaining({ timeout: 'timeout1', retry: 'retry1' }))
+  })
+})
+
+describe('target dialogs duplicate name guard', () => {
+  it('AppTargetDialog blocks saving an App ID that already exists', () => {
+    render(<AppTargetDialog open policies={policies} existingNames={['orders']} onClose={vi.fn()} onSave={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: 'orders' } })
+    fireEvent.change(screen.getByLabelText(/^timeout policy/i), { target: { value: 'timeout1' } })
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
+  })
+  it('AppTargetDialog allows keeping the same App ID while editing but blocks renaming onto another', () => {
+    render(<AppTargetDialog open editing policies={policies} existingNames={['orders', 'billing']}
+      initialName="orders" initialTarget={{ timeout: 'timeout1' }} onClose={vi.fn()} onSave={vi.fn()} />)
+    const save = screen.getByRole('button', { name: /save/i })
+    expect(save).toBeEnabled() // unchanged name is the record being edited
+    fireEvent.change(screen.getByLabelText(/app id/i), { target: { value: 'billing' } })
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(save).toBeDisabled()
+  })
+  it('ActorTargetDialog blocks saving an actor type that already exists', () => {
+    render(<ActorTargetDialog open policies={policies} existingNames={['myactor']} onClose={vi.fn()} onSave={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/actor type/i), { target: { value: 'myactor' } })
+    fireEvent.change(screen.getByLabelText(/^retry policy/i), { target: { value: 'retry1' } })
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
+  })
+  it('ComponentTargetDialog blocks saving a component name that already exists', () => {
+    render(<ComponentTargetDialog open policies={policies} existingNames={['statestore']} onClose={vi.fn()} onSave={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/component name/i), { target: { value: 'statestore' } })
+    fireEvent.change(screen.getByLabelText(/^retry policy/i), { target: { value: 'retry1' } })
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
   })
 })
 
