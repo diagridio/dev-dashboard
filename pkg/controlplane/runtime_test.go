@@ -102,6 +102,29 @@ func TestExecRunnerStreamCancelEndsStream(t *testing.T) {
 	collect(t, ch, 5*time.Second) // fails if the channel never closes
 }
 
+// Shells fork rather than exec non-tail commands, and cancellation kills only
+// the direct child: a surviving descendant still holds a duplicate of the pipe
+// write end, so EOF alone would never come. `sleep 30 & wait` forces that fork
+// on every platform; the stream must still close promptly after cancel.
+func TestExecRunnerStreamCancelWithSurvivingGrandchild(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &execRunner{bin: "sh"}
+	ch, err := r.stream(ctx, "-c", "echo first; sleep 30 & wait")
+	if err != nil {
+		t.Fatalf("stream: %v", err)
+	}
+	select {
+	case line := <-ch:
+		if line != "first" {
+			t.Fatalf("first line = %q, want %q", line, "first")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no line before cancel")
+	}
+	cancel()
+	collect(t, ch, 5*time.Second) // fails if the channel never closes
+}
+
 // A scanner error (e.g. a line exceeding the buffer cap) must not look like a
 // normal EOF; it is surfaced as a final marker line.
 func TestExecRunnerStreamSurfacesScannerError(t *testing.T) {

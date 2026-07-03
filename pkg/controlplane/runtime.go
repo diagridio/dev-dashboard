@@ -74,8 +74,22 @@ func (r *execRunner) stream(ctx context.Context, args ...string) (<-chan string,
 	// scanner sees EOF once the child exits.
 	pw.Close()
 	ch := make(chan string)
+	// Cancellation kills only the direct child, but shells fork non-tail
+	// commands: a surviving descendant keeps a duplicate of the write end,
+	// so waiting for EOF alone would block the scanner forever. Close the
+	// read end on cancel to unblock it regardless of surviving writers.
+	// (Double-closing pr with the scanner goroutine's deferred Close is safe.)
+	scanDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			pr.Close()
+		case <-scanDone:
+		}
+	}()
 	go func() {
 		defer close(ch)
+		defer close(scanDone)
 		defer func() { _ = cmd.Wait() }()
 		// Closing the read end before Wait unblocks a child stuck writing
 		// (e.g. after a scanner error mid-line), so Wait cannot deadlock.
