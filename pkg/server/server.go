@@ -19,12 +19,12 @@ import (
 
 // Options configures the HTTP router.
 type Options struct {
-	BasePath  string // "" or e.g. "/dashboard"
-	DistFS    fs.FS  // embedded SPA assets (contains index.html)
-	Version   version.Info
-	Apps      discovery.Service
-	Backend   WorkflowBackend
-	Stores    StoreRegistry
+	BasePath     string // "" or e.g. "/dashboard"
+	DistFS       fs.FS  // embedded SPA assets (contains index.html)
+	Version      version.Info
+	Apps         discovery.Service
+	Backend      WorkflowBackend
+	Stores       StoreRegistry
 	Resources    resources.Service
 	News         news.Service
 	ControlPlane controlplane.Manager
