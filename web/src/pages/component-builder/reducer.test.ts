@@ -143,6 +143,48 @@ describe('SELECT_CATEGORY', () => {
   })
 })
 
+describe('SELECT_SCHEMA reset behavior', () => {
+  const memcached: ComponentMetadataSchema = {
+    type: 'state', name: 'memcached', version: 'v1', title: 'Memcached', status: 'stable',
+    metadata: [{ name: 'hosts', required: true }],
+  }
+  const redisWithAuth: ComponentMetadataSchema = {
+    ...redis,
+    authenticationProfiles: [{ title: 'Password', metadata: [{ name: 'redisPassword', required: true }] }],
+  }
+
+  function configured() {
+    let s = reducer(initialState(), { type: 'SELECT_SCHEMA', schema: redisWithAuth, version: 'v1' })
+    s = reducer(s, { type: 'SET_AUTH_PROFILE', profile: redisWithAuth.authenticationProfiles![0] })
+    s = reducer(s, { type: 'SET_VALUE', field: 'redisHost', value: 'localhost:6379' })
+    s = reducer(s, { type: 'ADD_OPTIONAL', field: 'enableTLS' })
+    s = reducer(s, { type: 'TOGGLE_SECRET', field: 'redisPassword', on: true })
+    s = reducer(s, { type: 'SET_SECRET', field: 'redisPassword', ref: { name: 'sec', key: 'pw' } })
+    return s
+  }
+
+  it('selecting a different schema in the same category clears auth profile + config', () => {
+    let s = configured()
+    s = reducer(s, { type: 'SELECT_SCHEMA', schema: memcached, version: 'v1' })
+    expect(s.schema?.name).toBe('memcached')
+    expect(s.authProfile).toBeUndefined()
+    expect(s.values).toEqual({})
+    expect(s.secretRefs).toEqual({})
+    expect(s.useSecret).toEqual({})
+    expect(s.optionalAdded).toEqual([])
+  })
+
+  it('re-selecting the same schema preserves auth profile + config', () => {
+    let s = configured()
+    s = reducer(s, { type: 'SELECT_SCHEMA', schema: redisWithAuth, version: 'v1' })
+    expect(s.authProfile?.title).toBe('Password')
+    expect(s.values).toEqual({ redisHost: 'localhost:6379' })
+    expect(s.secretRefs).toEqual({ redisPassword: { name: 'sec', key: 'pw' } })
+    expect(s.useSecret).toEqual({ redisPassword: true })
+    expect(s.optionalAdded).toEqual(['enableTLS'])
+  })
+})
+
 describe('REMOVE_OPTIONAL clears field state', () => {
   it('removes the field from optionalAdded and clears its value/secret/useSecret', () => {
     let s = initialState()
