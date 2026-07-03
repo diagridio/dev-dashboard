@@ -161,13 +161,21 @@ func (r *ConnRegistry) Add(e ConnEntry) error {
 
 // Update replaces a manual entry matched by ID; errors if none exists. The id
 // is recomputed from the (possibly new) name so it stays deterministic, and the
-// new id is returned so callers can re-address the renamed entry.
+// new id is returned so callers can re-address the renamed entry. Renaming onto
+// another manual entry's name errors (ids are keyed by name, so allowing it
+// would produce two entries with the same id); renaming an entry to its own
+// current name is fine.
 func (r *ConnRegistry) Update(e ConnEntry) (string, error) {
 	e.Source = SourceManual
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for i := range r.entries {
 		if r.entries[i].Source == SourceManual && r.entries[i].ID == e.ID {
+			for j := range r.entries {
+				if j != i && r.entries[j].Source == SourceManual && r.entries[j].Name == e.Name {
+					return "", os.ErrExist
+				}
+			}
 			e.ID = entryID(SourceManual, e.Name)
 			r.entries[i] = e
 			if err := r.save(); err != nil {
