@@ -38,10 +38,14 @@ interface Section {
 
 const SECTIONS: Section[] = [
   {
-    heading: 'Build',
+    heading: 'Community',
+    links: [{ label: 'Dapr Discord', href: 'https://diagrid.ws/dev-dashboard-dapr-discord' }],
+  },
+  {
+    heading: 'Read',
     links: [
-      { label: 'Dapr Workflow Skills', href: 'https://diagrid.ws/dev-dashboard-workflow-skill' },
-      { label: 'Dapr Composer', href: 'https://diagrid.ws/dev-dashboard-workflow-composer' },
+      { label: 'Dapr Docs', href: 'https://diagrid.ws/dev-dashboard-dapr-docs' },
+      { label: 'Diagrid Docs', href: 'https://diagrid.ws/dev-dashboard-diagrid-docs' },
     ],
   },
   {
@@ -52,15 +56,18 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    heading: 'Read',
+    heading: 'Build',
     links: [
-      { label: 'Dapr Docs', href: 'https://diagrid.ws/dev-dashboard-dapr-docs' },
-      { label: 'Diagrid Docs', href: 'https://diagrid.ws/dev-dashboard-diagrid-docs' },
+      { label: 'Dapr Workflow Skills', href: 'https://diagrid.ws/dev-dashboard-workflow-skill' },
+      { label: 'Dapr Composer', href: 'https://diagrid.ws/dev-dashboard-workflow-composer' },
     ],
   },
   {
     heading: 'Run & Operate',
-    links: [{ label: 'Diagrid Catalyst', href: 'https://diagrid.ws/dev-dashboard-try-catalyst' }],
+    links: [
+      { label: 'Diagrid Catalyst', href: 'https://diagrid.ws/dev-dashboard-try-catalyst' },
+      { label: 'Dapr Support', href: 'https://diagrid.ws/dev-dashboard-dapr-support' },
+    ],
   },
 ]
 
@@ -102,7 +109,18 @@ interface NewsSectionProps {
 function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
   return (
     <div className="sbsection">
-      <div className="sbtitle">News</div>
+      <div className="sbtitle newstitle">
+        <span>News</span>
+        {/* Bell visible when panel is open + has-new (CSS-controlled via .app.has-new) */}
+        <button
+          className="bellbtn"
+          id="bell-h"
+          onClick={onMarkSeen}
+          aria-label="Mark news as seen"
+        >
+          <BellIcon />
+        </button>
+      </div>
       {NEWS_SLOTS.map(({ key, label }) => {
         const item = news[key]
         if (!item) return null
@@ -168,16 +186,6 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, hasNew, onHasNe
   return (
     <aside className="sidebar" aria-label="Resources">
       <div className="sbhead">
-        {/* Bell visible when expanded + has-new (CSS-controlled via .app.has-new) */}
-        <button
-          className="bellbtn"
-          id="bell-h"
-          onClick={handleMarkSeen}
-          aria-label="Mark news as seen"
-        >
-          <BellIcon />
-          <span className="badge" />
-        </button>
         <span className="lbl">Resources</span>
         <button
           className="sbtoggle"
@@ -191,9 +199,6 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, hasNew, onHasNe
       </div>
 
       <nav className="sbscroll">
-        {/* News section */}
-        {news && <NewsSection news={news} onMarkSeen={handleMarkSeen} />}
-
         {SECTIONS.map((section) => (
           <div key={section.heading} className="sbsection">
             <div className="sbtitle">{section.heading}</div>
@@ -211,6 +216,9 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, hasNew, onHasNe
             ))}
           </div>
         ))}
+
+        {/* News section */}
+        {news && <NewsSection news={news} onMarkSeen={handleMarkSeen} />}
       </nav>
 
       {/* Collapsed vertical panel */}
@@ -222,7 +230,6 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, hasNew, onHasNe
           aria-label="Mark news as seen"
         >
           <BellIcon />
-          <span className="badge" />
         </button>
         <span
           className="vtext"

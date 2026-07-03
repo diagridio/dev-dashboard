@@ -103,10 +103,34 @@ describe('ResourcesSidebar static links', () => {
   it('renders section titles', () => {
     renderSidebar()
     // sbtitle elements (CSS uppercases them, but text content is mixed case)
+    expect(screen.getByText('Community')).toBeInTheDocument()
     expect(screen.getByText('Build')).toBeInTheDocument()
     expect(screen.getByText('Learn')).toBeInTheDocument()
     expect(screen.getByText('Read')).toBeInTheDocument()
     expect(screen.getByText('Run & Operate')).toBeInTheDocument()
+  })
+
+  it('renders Dapr Discord link under Community', () => {
+    renderSidebar()
+    const link = screen.getByRole('link', { name: /Dapr Discord/ })
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-dapr-discord')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('renders Dapr Support link under Run & Operate', () => {
+    renderSidebar()
+    const link = screen.getByRole('link', { name: /Dapr Support/ })
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-dapr-support')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('orders sections Community, Read, Learn, Build, Run & Operate, News', async () => {
+    renderSidebar()
+    await screen.findByRole('link', { name: /Blog A/i })
+    const titles = Array.from(document.querySelectorAll('.sbtitle')).map((el) => el.textContent)
+    expect(titles).toEqual(['Community', 'Read', 'Learn', 'Build', 'Run & Operate', 'News'])
   })
 })
 
