@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/controlplane"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
@@ -24,8 +25,9 @@ type Options struct {
 	Apps      discovery.Service
 	Backend   WorkflowBackend
 	Stores    StoreRegistry
-	Resources resources.Service
-	News      news.Service
+	Resources    resources.Service
+	News         news.Service
+	ControlPlane controlplane.Manager
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
@@ -37,7 +39,7 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(middleware.Recoverer)
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.Backend, opts.Stores, opts.Resources, opts.News))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane))
 		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath))
 	}
 
