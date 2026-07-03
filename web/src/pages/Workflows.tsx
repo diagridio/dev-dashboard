@@ -7,6 +7,7 @@ import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { dedupeWorkflows } from '../lib/dedupeWorkflows'
 import { dedupeStores } from '../lib/dedupeStores'
+import { parseEnum } from '../lib/parseEnum'
 import { formatDateTimeParts } from '../lib/wallclock'
 import type { StateStore, WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
@@ -60,9 +61,10 @@ export function Workflows() {
   const urlPage = searchParams.get('page') ?? undefined
   const urlApp = searchParams.get('app') ?? ''
 
-  // Single-status filter (one of ALL_STATUSES or '' for All)
+  // Single-status filter (one of ALL_STATUSES or '' for All). An unknown URL
+  // value (?status=Garbage) falls back to '' so it is never sent to the API.
   const [activeStatus, setActiveStatus] = useState<WorkflowStatus | ''>(
-    urlStatus as WorkflowStatus | '',
+    parseEnum<WorkflowStatus | ''>(urlStatus, ALL_STATUSES, ''),
   )
   const [selectedApp, setSelectedApp] = useState<string>(urlApp)
   const [searchInput, setSearchInput] = useState(urlSearch)
@@ -77,10 +79,14 @@ export function Workflows() {
   const [pageOffset, setPageOffset] = useState(0)
 
   // Reset paging to the first page (used whenever a filter/store changes).
+  // Also clears the row selection: the selected keys may no longer be visible
+  // under the new filter/store/search, so keeping them would let the bulk
+  // dialog target rows the user can no longer see.
   function resetPaging() {
     setPage(undefined)
     setHistory([])
     setPageOffset(0)
+    setSelected(new Set())
   }
 
   // Dialog open state + removal hook
@@ -649,6 +655,8 @@ export function Workflows() {
                 setPage(prev.token)
                 setPageOffset(prev.offset)
                 setHistory((h) => h.slice(0, -1))
+                // Selection is scoped to the visible page.
+                setSelected(new Set())
               }}
             >
               ← Prev
@@ -660,6 +668,8 @@ export function Workflows() {
                 setHistory((h) => [...h, { token: page, offset: pageOffset }])
                 setPageOffset((o) => o + items.length)
                 setPage(data.nextToken)
+                // Selection is scoped to the visible page.
+                setSelected(new Set())
               }}
             >
               Next →

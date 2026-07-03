@@ -329,35 +329,43 @@ export function WorkflowDetail() {
   // on mount and on in-page anchor clicks. If the target is part of a pair, also
   // select it (highlight both rows) and mark it active so its body expands.
   useEffect(() => {
+    let pulseTimer: number | undefined
     function jumpToHash() {
       const id = window.location.hash.slice(1)
-      if (!id) return
+      if (!id) {
+        // Hash cleared — allow a later return to the same anchor to jump again.
+        lastAutoSelectedHash.current = ''
+        return
+      }
+      // Only act on genuine navigation to a new hash — not on effect re-runs
+      // from polling (pairIndex changes as a running workflow's history grows),
+      // which would otherwise yank the viewport back to the anchor and
+      // re-assert a selection the user dismissed.
+      if (id === lastAutoSelectedHash.current) return
       const el = document.getElementById(id)
       if (!el) return
+      lastAutoSelectedHash.current = id
       try {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       } catch {
         // jsdom / unsupported environments: scrolling is non-essential
       }
       el.classList.add('target-pulse')
-      window.setTimeout(() => el.classList.remove('target-pulse'), 1500)
-      // Only auto-select on genuine navigation to a new hash — not on effect
-      // re-runs from polling (pairIndex changes as a running workflow's history
-      // grows), which would otherwise re-assert a selection the user dismissed.
+      pulseTimer = window.setTimeout(() => el.classList.remove('target-pulse'), 1500)
       // The anchor id encodes the canonical index, which is how pairIndex is keyed.
-      if (id !== lastAutoSelectedHash.current) {
-        lastAutoSelectedHash.current = id
-        const m = id.match(/^event-(\d+)$/)
-        if (m) {
-          const idx = Number(m[1])
-          const p = pairIndex.get(idx)
-          if (p) setSelection({ pairId: p.pairId, index: idx })
-        }
+      const m = id.match(/^event-(\d+)$/)
+      if (m) {
+        const idx = Number(m[1])
+        const p = pairIndex.get(idx)
+        if (p) setSelection({ pairId: p.pairId, index: idx })
       }
     }
     jumpToHash()
     window.addEventListener('hashchange', jumpToHash)
-    return () => window.removeEventListener('hashchange', jumpToHash)
+    return () => {
+      window.removeEventListener('hashchange', jumpToHash)
+      if (pulseTimer !== undefined) window.clearTimeout(pulseTimer)
+    }
   }, [pairIndex])
 
   const copyWorkflowLink = () => {

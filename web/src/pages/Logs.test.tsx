@@ -310,6 +310,26 @@ describe('Logs', () => {
     expect(screen.getByRole('option', { name: 'app only' })).toBeInTheDocument()
   })
 
+  it('falls back to "both" for an invalid ?source= URL param', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    const { container } = renderAt('/logs?app=order&source=garbage')
+
+    const sourceSelect = (await screen.findByRole('combobox', { name: /Source/i })) as HTMLSelectElement
+    // An unknown source must not leave the select blank — it falls back to "both".
+    await waitFor(() => expect(sourceSelect.value).toBe('both'))
+    // Subtitle reflects the fallback, not the garbage value.
+    expect(screen.getByText(/daprd \+ application/)).toBeInTheDocument()
+    // The raw URL value must not leak into rendering: the source-column width is
+    // sized to the "both" labels (max "daprd" = 5ch + 1), not to "garbage" (8ch).
+    await waitFor(() => expect(container.querySelector('.logwin')).not.toBeNull())
+    const logwin = container.querySelector('.logwin') as HTMLElement
+    expect(logwin.style.getPropertyValue('--lsrc-w')).toBe('6ch')
+  })
+
   // F2: combined "daprd + app" streams, both streams open, lines tagged by source
   it('F2 — "both" source opens two EventSources and tags lines by stream', async () => {
     server.use(
