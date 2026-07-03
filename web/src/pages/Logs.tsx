@@ -101,9 +101,10 @@ function LogRow({ merged, search }: LogRowProps) {
 interface CpLogRowProps {
   line: LogLine
   search: string
+  service: CpService
 }
 
-function CpLogRow({ line, search }: CpLogRowProps) {
+function CpLogRow({ line, search, service }: CpLogRowProps) {
   const level = line.level ?? 'info'
   const isError = level === 'error'
   const time = extractTime(line.text)
@@ -112,7 +113,7 @@ function CpLogRow({ line, search }: CpLogRowProps) {
     <div className={`logrow${isError ? ' error' : ''}`}>
       <span className="ltime">{time}</span>
       <span className={`lvl ${level}`}>{level}</span>
-      <span className="lsrc lsrc-cp">cp</span>
+      <span className="lsrc lsrc-cp">{service}</span>
       <span className="lmsg">
         <HighlightedText text={line.text} query={search} />
       </span>
@@ -261,7 +262,7 @@ function CpLogViewer({
   following,
   onFollowDisengage,
 }: CpLogViewerProps) {
-  const { lines } = usePathLogStream(`/controlplane/${cp}/logs`)
+  const { lines, status } = usePathLogStream(`/controlplane/${cp}/logs`)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const filtered = lines.filter(line => {
@@ -313,14 +314,14 @@ function CpLogViewer({
             key={line.seq}
             line={line}
             search={search}
+            service={cp}
           />
         ))}
       </div>
       <div className="logfoot">
-        <span
-          className="beat"
-          style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--done-fg)', display: 'inline-block' }}
-        />
+        <span className={`beatbtn${status === 'open' ? '' : ' off'}`} style={{ padding: 0, border: 'none', background: 'transparent', display: 'inline-flex' }}>
+          <span className="beat" style={{ width: 7, height: 7 }} />
+        </span>
         {filtered.length} lines
         {search && matchCount > 0 && ` · highlighting "${search}"`}
         {` · tail ${tailKB} KB`}
