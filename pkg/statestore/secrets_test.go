@@ -66,6 +66,27 @@ func TestDetectSecretStores(t *testing.T) {
 	require.Equal(t, ":", fs.NestedSeparator)
 }
 
+func TestDetectSecretStoresMultiDoc_StoreAfterOtherComponent(t *testing.T) {
+	dir := t.TempDir()
+	multi := k8sSecretStore + "\n---\n" + localFileSecretStore + "\n---\n" + localEnvSecretStore
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources.yaml"), []byte(multi), 0o600))
+
+	stores, err := DetectSecretStores([]string{dir})
+	require.NoError(t, err)
+
+	byName := map[string]SecretStore{}
+	for _, s := range stores {
+		byName[s.Name] = s
+	}
+	require.Contains(t, byName, "local-secrets")
+	require.Contains(t, byName, "env-secrets")
+	require.NotContains(t, byName, "k8s-secrets")
+
+	fs := byName["local-secrets"]
+	require.Equal(t, "secretstores.local.file", fs.Type)
+	require.Equal(t, filepath.Join(dir, "secrets.json"), fs.SecretsFile)
+}
+
 func TestResolveSecrets_LocalFileNested(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "secrets.json"),
