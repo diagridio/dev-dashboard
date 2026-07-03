@@ -155,10 +155,26 @@ func TestConnPool_EvictDuringOpenClosesStore(t *testing.T) {
 		// tight spin — opens is incremented inside open(), right at entry
 	}
 
-	// Evict the slot while the open is still blocked.
-	p.evict(comp)
+	// Evict the slot while the open is still blocked. evict waits for the
+	// in-flight open to finish (Fix 3), so it must run in its own goroutine;
+	// we release the opener only once evict has removed the slot from the map,
+	// preserving the evict-before-Fix-1-check interleaving this test covers.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		p.evict(comp)
+	}()
+	id := identity(&comp)
+	for {
+		p.mu.Lock()
+		_, present := p.slots[id]
+		p.mu.Unlock()
+		if !present {
+			break
+		}
+	}
 
-	// Release the blocked open so the goroutine can finish.
+	// Release the blocked open so both goroutines can finish.
 	close(block)
 	wg.Wait()
 
@@ -175,6 +191,50 @@ func TestConnPool_EvictDuringOpenClosesStore(t *testing.T) {
 	p2 := newConnPool("default", &http.Client{}, nil, o2.open)
 	_, err := p2.openOrGet(context.Background(), comp)
 	require.NoError(t, err) // sanity: a fresh pool works normally
+}
+
+// TestConnPool_EvictDuringStoreAssignment_NoLeakNoRace exercises the other
+// evict interleaving: the opener returns successfully and openOrGet passes the
+// Fix 1 re-check, then evict runs while the unsynchronized `slot.store = st`
+// assignment (which happens outside the lock) is still pending. Without Fix 3,
+// evict read slot.store without waiting on slot.done: a data race with that
+// assignment, and — if it observed nil — a freshly opened store that is closed
+// by nobody and no longer in the map, so even Close() can't reach it.
+//
+// There is no seam between the Fix 1 check and the store assignment, so this
+// is a stress test: each iteration releases evict the moment the opener
+// returns. Whenever evict takes the lock after the Fix 1 check, its slot.store
+// read has no happens-before edge to the write, so -race flags it; the
+// close-count assertion catches the leak.
+func TestConnPool_EvictDuringStoreAssignment_NoLeakNoRace(t *testing.T) {
+	comp := compA()
+	for i := 0; i < 200; i++ {
+		o := &poolOpener{}
+		returning := make(chan struct{})
+		open := func(ctx context.Context, c statestore.Component) (statestore.Store, error) {
+			st, err := o.open(ctx, c)
+			close(returning) // signal "opener about to return"; the store write happens after this
+			return st, err
+		}
+		p := newConnPool("default", &http.Client{}, nil, open)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = p.openOrGet(context.Background(), comp)
+		}()
+
+		<-returning
+		p.evict(comp)
+		wg.Wait()
+
+		// Exactly one close, whichever side won: Fix 1 closes the fresh store
+		// if evict got there first, evict closes the cached one otherwise.
+		// Zero means the store leaked.
+		require.Equal(t, int32(1), atomic.LoadInt32(&o.closes),
+			"iteration %d: store must be closed exactly once", i)
+	}
 }
 
 // TestConnPool_OpenOrGetAfterCloseErrors verifies Fix 2: after Close() no new

@@ -115,7 +115,18 @@ func (p *connPool) evict(c statestore.Component) {
 		delete(p.slots, id)
 	}
 	p.mu.Unlock()
-	if ok && slot.store != nil {
+	if !ok {
+		return
+	}
+	// Fix 3: an open may still be in flight for this slot — openOrGet writes
+	// slot.store outside the lock, after its Fix 1 re-check. Wait for the open
+	// to finish (as Close does) before reading slot.store; otherwise we race
+	// with that write and, if we observe nil, leak the freshly opened store,
+	// which is no longer in the map for Close to reach. If the open is still
+	// before its Fix 1 re-check, it will see the slot gone, close the store
+	// itself, and close done.
+	<-slot.done
+	if slot.store != nil {
 		_ = slot.store.Close()
 	}
 }
