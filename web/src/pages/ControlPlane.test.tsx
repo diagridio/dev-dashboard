@@ -56,6 +56,17 @@ describe('ControlPlane', () => {
     expect(screen.queryByRole('button', { name: /^start$/i })).not.toBeInTheDocument()
   })
 
+  it('renders a stopped service with null ports without crashing', async () => {
+    // A stopped container marshals Ports as JSON null; the card must not crash on svc.ports.length.
+    mockList({
+      runtime: 'docker', available: true, reachable: true, controlPlanePresent: true,
+      services: [{ name: 'dapr_scheduler', status: 'stopped', healthy: false, ports: null, memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true }],
+    })
+    renderPage()
+    expect(await screen.findByText('dapr_scheduler')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^start$/i })).toBeInTheDocument()
+  })
+
   it('renders k8s-only services without actions', async () => {
     mockList({
       runtime: 'docker', available: true, reachable: true, controlPlanePresent: true,

@@ -88,23 +88,33 @@ function ServiceCard({
         <div className="sub">Kubernetes only</div>
       ) : (
         <>
-          <div className="cp-status">
+          <div className="cp-field">
+            <div className="cp-label">Status</div>
             <span className="health">
               <span className={svc.healthy ? 'led ok' : 'led bad'} />
               {svc.status}
             </span>
           </div>
-          <div className="mono faint cp-field-ports">
-            {svc.ports.length ? svc.ports.join(', ') : '—'}
+          <div className="cp-field">
+            <div className="cp-label">Ports</div>
+            <div className="cp-value mono faint">
+              {svc.ports && svc.ports.length ? svc.ports.join(', ') : '—'}
+            </div>
           </div>
-          <div className="mono cp-field">
-            {svc.memoryHuman || '—'}
+          <div className="cp-field">
+            <div className="cp-label">Memory</div>
+            <div className="cp-value mono">
+              {svc.memoryHuman || '—'}
+            </div>
           </div>
-          <div className="mono faint cp-field cp-logpath">
-            {svc.logPath || '—'}
+          <div className="cp-field">
+            <div className="cp-label">Log</div>
+            <div className="cp-value mono faint cp-logpath">
+              {svc.logPath || '—'}
+            </div>
           </div>
-          <div className="cp-status">
-            <Link className="celllink" to={`/logs?cp=${encodeURIComponent(svc.name)}`}>
+          <div className="cp-field">
+            <Link className="chip k" to={`/logs?cp=${encodeURIComponent(svc.name)}`}>
               View logs
             </Link>
           </div>
