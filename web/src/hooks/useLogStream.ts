@@ -11,10 +11,13 @@ interface UseLogStreamResult {
   clear: () => void
 }
 
-export function useLogStream(
-  appId: string | undefined,
-  source: 'daprd' | 'app',
-  opts?: { max?: number }
+/**
+ * Streams an arbitrary API path via EventSource.
+ * When path is undefined or empty the stream is idle (no EventSource opened).
+ */
+export function usePathLogStream(
+  path: string | undefined,
+  opts?: { max?: number },
 ): UseLogStreamResult {
   const [lines, setLines] = useState<LogLine[]>([])
   const [status, setStatus] = useState<Status>('idle')
@@ -26,7 +29,7 @@ export function useLogStream(
   const clear = useCallback(() => setLines([]), [])
 
   useEffect(() => {
-    if (!appId) {
+    if (!path) {
       setStatus('idle')
       setLines([])
       return
@@ -35,10 +38,9 @@ export function useLogStream(
     setStatus('connecting')
     setLines([])
 
-    const url = apiUrl('/apps/' + appId + '/logs?source=' + source)
     // Use the global EventSource constructor so tests can stub it via globalThis.EventSource
     const ESConstructor = (globalThis as unknown as { EventSource: new (url: string) => EventSource }).EventSource
-    const es = new ESConstructor(url)
+    const es = new ESConstructor(apiUrl(path))
 
     es.onopen = () => {
       setStatus('open')
@@ -64,7 +66,21 @@ export function useLogStream(
     return () => {
       es.close()
     }
-  }, [appId, source])
+  }, [path])
 
   return { lines, status, clear }
+}
+
+/**
+ * Streams logs for a Dapr app container.
+ * Delegates to usePathLogStream with the resolved path.
+ * Existing signature and behavior are preserved.
+ */
+export function useLogStream(
+  appId: string | undefined,
+  source: 'daprd' | 'app',
+  opts?: { max?: number },
+): UseLogStreamResult {
+  const path = appId ? `/apps/${appId}/logs?source=${source}` : undefined
+  return usePathLogStream(path, opts)
 }
