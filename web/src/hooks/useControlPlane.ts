@@ -13,7 +13,7 @@ export function useControlPlane() {
 }
 
 async function sendAction(name: string, action: ControlPlaneAction): Promise<void> {
-  const res = await fetch(apiUrl(`/controlplane/${encodeURIComponent(name)}/${action}`), { method: 'POST' })
+  const res = await fetch(apiUrl(`/controlplane/${encodeURIComponent(name)}/${encodeURIComponent(action)}`), { method: 'POST' })
   if (!res.ok) {
     let msg = `request failed: ${res.status}`
     try {
