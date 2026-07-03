@@ -4,17 +4,19 @@ import { MetadataFieldInput } from './MetadataFieldInput'
 import { useComponentCatalog } from '../hooks/useComponentCatalog'
 import { useStoreMutations } from '../hooks/useStoreMutations'
 import { SUPPORTED_STORE_TYPES, storeTypeLabel } from '../lib/storeTypes'
-import { useToast } from '../lib/toast'
 
 interface Props {
   open: boolean
   onClose: () => void
+  /** Called after a successful save. The owner is responsible for closing the
+   * dialog and showing the confirmation toast — this component unmounts on
+   * close, so a toast rendered here would never be seen. */
+  onSaved: (name: string) => void
 }
 
-export function StateStoreConnectionDialog({ open, onClose }: Props) {
+export function StateStoreConnectionDialog({ open, onClose, onSaved }: Props) {
   const { fieldsFor, isError } = useComponentCatalog()
   const { addStore } = useStoreMutations()
-  const { toast, toastNode } = useToast()
 
   const [name, setName] = useState('')
   const [type, setType] = useState<string>(SUPPORTED_STORE_TYPES[0])
@@ -61,8 +63,7 @@ export function StateStoreConnectionDialog({ open, onClose }: Props) {
 
     try {
       await addStore.mutateAsync({ name: name.trim(), type, metadata })
-      toast.show(`Added ${name.trim()}`)
-      onClose()
+      onSaved(name.trim())
     } catch (e) {
       setError((e as Error).message)
     }
@@ -72,7 +73,6 @@ export function StateStoreConnectionDialog({ open, onClose }: Props) {
 
   return (
     <Modal open={open} title="Add state store connection" onClose={onClose}>
-      {toastNode}
       {isError && <p className="field-err">Couldn't load the component catalog; try reloading.</p>}
 
       <div className="field">
