@@ -197,3 +197,28 @@ func TestList_LogsDiscoveredCount(t *testing.T) {
 		t.Fatalf("expected 'discovered Dapr apps' INFO, got %q", buf.String())
 	}
 }
+
+func TestHumanAge(t *testing.T) {
+	now := time.Now()
+	t.Run("zero time -> empty", func(t *testing.T) {
+		require.Equal(t, "", humanAge(time.Time{}))
+	})
+	t.Run("seconds", func(t *testing.T) {
+		require.Equal(t, "5s", humanAge(now.Add(-5*time.Second)))
+	})
+	t.Run("minutes", func(t *testing.T) {
+		require.Equal(t, "5m", humanAge(now.Add(-5*time.Minute)))
+	})
+	t.Run("hours", func(t *testing.T) {
+		require.Equal(t, "5h", humanAge(now.Add(-5*time.Hour)))
+	})
+	t.Run("just under a day stays hours", func(t *testing.T) {
+		require.Equal(t, "23h", humanAge(now.Add(-23*time.Hour-30*time.Minute)))
+	})
+	t.Run("days", func(t *testing.T) {
+		require.Equal(t, "3d", humanAge(now.Add(-72*time.Hour-time.Minute)))
+	})
+	t.Run("negative clamps to 0s", func(t *testing.T) {
+		require.Equal(t, "0s", humanAge(now.Add(5*time.Second)))
+	})
+}
