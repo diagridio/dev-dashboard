@@ -52,6 +52,7 @@ func (r *execRunner) stream(ctx context.Context, args ...string) (<-chan string,
 	ch := make(chan string)
 	go func() {
 		defer close(ch)
+		defer func() { _ = cmd.Wait() }()
 		sc := bufio.NewScanner(stdout)
 		sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 		for sc.Scan() {
@@ -62,7 +63,6 @@ func (r *execRunner) stream(ctx context.Context, args ...string) (<-chan string,
 				return
 			}
 		}
-		_ = cmd.Wait()
 	}()
 	return ch, nil
 }
