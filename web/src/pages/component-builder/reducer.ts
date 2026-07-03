@@ -50,6 +50,18 @@ export function reducer(state: ComponentBuilderState, action: Action): Component
   switch (action.type) {
     case 'SELECT_SCHEMA': {
       const hasAuthProfiles = (action.schema.authenticationProfiles?.length ?? 0) > 0
+      const sameSchema = action.schema.type === state.schema?.type && action.schema.name === state.schema?.name
+      if (sameSchema) {
+        return {
+          ...state,
+          category: action.schema.type,
+          schema: action.schema,
+          version: action.version,
+          hasAuthProfiles,
+          activeStep: 1,
+        }
+      }
+      // Switching component invalidates the auth profile + its config.
       return {
         ...state,
         category: action.schema.type,
@@ -57,6 +69,11 @@ export function reducer(state: ComponentBuilderState, action: Action): Component
         version: action.version,
         hasAuthProfiles,
         activeStep: 1,
+        authProfile: undefined,
+        values: {},
+        secretRefs: {},
+        useSecret: {},
+        optionalAdded: [],
       }
     }
     case 'SELECT_CATEGORY':
