@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
 )
 
@@ -69,6 +70,21 @@ type rawMetadata struct {
 	} `json:"actorRuntime"`
 }
 
+// runTemplateFromExtended returns the run template's display name. The
+// CLI's "runTemplateName" is the run template YAML's optional top-level
+// `name` field, which is commonly left unset; in that case fall back to the
+// basename of "runTemplatePath" (the absolute path to the template file,
+// always set by the CLI when apps are started via `dapr run -f`).
+func runTemplateFromExtended(extended map[string]string) string {
+	if name := extended["runTemplateName"]; name != "" {
+		return name
+	}
+	if path := extended["runTemplatePath"]; path != "" {
+		return filepath.Base(path)
+	}
+	return ""
+}
+
 // FetchMetadata queries a sidecar's /v1.0/metadata endpoint.
 func FetchMetadata(ctx context.Context, client *http.Client, httpPort int) (Metadata, error) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/v1.0/metadata", httpPort)
@@ -109,7 +125,7 @@ func FetchMetadata(ctx context.Context, client *http.Client, httpPort int) (Meta
 		AppCommand:      raw.Extended["appCommand"],
 		AppLogPath:      raw.Extended["appLogPath"],
 		DaprdLogPath:    raw.Extended["daprdLogPath"],
-		RunTemplate:     raw.Extended["runTemplateName"],
+		RunTemplate:     runTemplateFromExtended(raw.Extended),
 		Actors:          raw.Actors,
 		Components:      raw.Components,
 		Subscriptions:   subs,
