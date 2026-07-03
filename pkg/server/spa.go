@@ -20,11 +20,17 @@ func SPAHandler(fsys fs.FS, basePath string) http.Handler {
 
 		if name := strings.TrimPrefix(upath, "/"); name != "" {
 			if f, err := fsys.Open(name); err == nil {
+				info, statErr := f.Stat()
 				_ = f.Close()
-				r2 := r.Clone(r.Context())
-				r2.URL.Path = upath
-				fileServer.ServeHTTP(w, r2)
-				return
+				// Serve regular files only: directories would get an
+				// http.FileServer auto-index of embedded assets, so treat
+				// them as a miss and use the SPA/404 fallback below.
+				if statErr == nil && !info.IsDir() {
+					r2 := r.Clone(r.Context())
+					r2.URL.Path = upath
+					fileServer.ServeHTTP(w, r2)
+					return
+				}
 			}
 		}
 		// Missing path: only fall back to the SPA shell for client routes

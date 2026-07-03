@@ -315,6 +315,28 @@ func TestParseListQueryIncludeChildren(t *testing.T) {
 	require.True(t, parseListQuery(req).IncludeChildren)
 }
 
+func TestParseListQueryLimitClamped(t *testing.T) {
+	// Absurdly large limit is clamped to 500, not passed through.
+	req := httptest.NewRequest(http.MethodGet, "/workflows?limit=100000", nil)
+	require.Equal(t, 500, parseListQuery(req).PageSize)
+
+	// Exactly the cap passes through unchanged.
+	req = httptest.NewRequest(http.MethodGet, "/workflows?limit=500", nil)
+	require.Equal(t, 500, parseListQuery(req).PageSize)
+
+	// Reasonable limit passes through unchanged.
+	req = httptest.NewRequest(http.MethodGet, "/workflows?limit=25", nil)
+	require.Equal(t, 25, parseListQuery(req).PageSize)
+
+	// Negative limit falls back to the default (PageSize 0 → service default).
+	req = httptest.NewRequest(http.MethodGet, "/workflows?limit=-1", nil)
+	require.Equal(t, 0, parseListQuery(req).PageSize)
+
+	// Zero is not a usable page size either → default.
+	req = httptest.NewRequest(http.MethodGet, "/workflows?limit=0", nil)
+	require.Equal(t, 0, parseListQuery(req).PageSize)
+}
+
 func TestWorkflowsStatsUnreachableStore(t *testing.T) {
 	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379")
 	h := workflowsRouter(newFakeBackend(unreachable), nil)

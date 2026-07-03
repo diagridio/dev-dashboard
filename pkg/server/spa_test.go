@@ -53,6 +53,19 @@ func TestSPARespectsBasePath(t *testing.T) {
 	require.Contains(t, body, "shell")
 }
 
+func TestSPADirectoryRequestDoesNotListContents(t *testing.T) {
+	h := SPAHandler(testFS(), "")
+
+	// An embedded directory must not produce an http.FileServer auto-index
+	// (or a redirect toward one); it is a client-route miss → SPA shell.
+	for _, p := range []string{"/assets", "/assets/"} {
+		res, body := get(t, h, p)
+		require.Equal(t, http.StatusOK, res.StatusCode, "path %s", p)
+		require.Contains(t, body, "shell", "path %s", p)
+		require.NotContains(t, body, "app.js", "path %s must not list directory contents", p)
+	}
+}
+
 func TestSPAMissingAssetReturns404(t *testing.T) {
 	h := SPAHandler(testFS(), "")
 	res, body := get(t, h, "/assets/missing.js")

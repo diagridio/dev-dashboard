@@ -41,6 +41,42 @@ func TestETagNotModified(t *testing.T) {
 	require.Equal(t, http.StatusNotModified, rec2.Result().StatusCode)
 }
 
+func TestETagNotModifiedVariants(t *testing.T) {
+	require.NoError(t, Init())
+
+	// First request to learn the ETag (quoted, e.g. `"abc..."`).
+	rec1 := httptest.NewRecorder()
+	HandleGetComponents(rec1, httptest.NewRequest(http.MethodGet, "/metadata/components", nil))
+	etag := rec1.Result().Header.Get("ETag")
+	require.NotEmpty(t, etag)
+
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{"weak validator", "W/" + etag},
+		{"list with match last", `"nomatch", ` + etag},
+		{"list with weak match", `"nomatch", W/` + etag + ` , "other"`},
+		{"wildcard", "*"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/metadata/components", nil)
+			req.Header.Set("If-None-Match", tc.value)
+			rec := httptest.NewRecorder()
+			HandleGetComponents(rec, req)
+			require.Equal(t, http.StatusNotModified, rec.Result().StatusCode)
+		})
+	}
+
+	// A non-matching list must still return the full body.
+	req := httptest.NewRequest(http.MethodGet, "/metadata/components", nil)
+	req.Header.Set("If-None-Match", `"nope", W/"also-nope"`)
+	rec := httptest.NewRecorder()
+	HandleGetComponents(rec, req)
+	require.Equal(t, http.StatusOK, rec.Result().StatusCode)
+}
+
 func TestProcessingInvariants(t *testing.T) {
 	require.NoError(t, Init())
 

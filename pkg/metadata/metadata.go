@@ -186,9 +186,24 @@ func statusOrder(status string) int {
 	}
 }
 
+// etagMatches reports whether an If-None-Match header value matches etag.
+// The header may carry a comma-separated list of entity tags, each optionally
+// a weak validator (W/"..."), or the wildcard "*".
+func etagMatches(header, etag string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		candidate = strings.TrimSpace(candidate)
+		candidate = strings.TrimPrefix(candidate, "W/")
+		if candidate == "*" || candidate == etag {
+			return true
+		}
+	}
+	return false
+}
+
 // HandleGetComponents serves the processed component metadata bundle as JSON.
 func HandleGetComponents(w http.ResponseWriter, r *http.Request) {
-	if match := r.Header.Get("If-None-Match"); match != "" && match == bundleETag {
+	if match := r.Header.Get("If-None-Match"); match != "" && etagMatches(match, bundleETag) {
+		w.Header().Set("ETag", bundleETag)
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
