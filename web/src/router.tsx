@@ -11,6 +11,7 @@ import { ResourceList } from './pages/ResourceList'
 import { ComponentBuilder } from './pages/component-builder/ComponentBuilder'
 import { Resiliency } from './pages/Resiliency'
 import { ResiliencyBuilder } from './pages/resiliency-builder/ResiliencyBuilder'
+import { ControlPlane } from './pages/ControlPlane'
 
 export const routes: RouteObject[] = [
   {
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
       { path: 'configurations/:name', element: <ResourceList kind="configuration" /> },
       { path: 'resiliency', element: <Resiliency /> },
       { path: 'resiliency/new', element: <ResiliencyBuilder /> },
+      { path: 'control-plane', element: <ControlPlane /> },
       { path: 'logs', element: <Logs /> },
     ],
   },
