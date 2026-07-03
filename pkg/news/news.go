@@ -41,45 +41,114 @@ type feedPayload struct {
 	UpcomingEvents   []Item `json:"upcomingEvents"`
 }
 
+// maxNegativeTTL caps how long a failed refresh suppresses retries.
+const maxNegativeTTL = 30 * time.Second
+
 type service struct {
-	client    *http.Client
-	url       string
-	ttl       time.Duration
+	client *http.Client
+	url    string
+	ttl    time.Duration
+	negTTL time.Duration
+
 	mu        sync.Mutex
 	cached    Response
-	fetchedAt time.Time
-	hasGood   bool
+	fetchedAt time.Time     // time of the last successful fetch
+	failedAt  time.Time     // time of the last failed fetch (zero after a success)
+	hasGood   bool          // whether cached holds a real (last-good) response
+	inflight  chan struct{} // non-nil while a fetch is in progress; closed when it completes
 }
 
 // New builds a caching news service. url is the upstream product feed URL; ttl is the cache lifetime.
+// Failed fetches are negatively cached for half the ttl, capped at 30s, so an
+// upstream outage is not re-probed on every request.
 func New(client *http.Client, url string, ttl time.Duration) Service {
+	negTTL := ttl / 2
+	if negTTL > maxNegativeTTL {
+		negTTL = maxNegativeTTL
+	}
 	return &service{
 		client: client,
 		url:    url,
 		ttl:    ttl,
+		negTTL: negTTL,
 	}
 }
 
-// Get returns a Response with up to four content slots. It serves from cache when fresh,
-// refetches when stale, and falls back to the last-good response on fetch/parse failure.
+// Get returns a Response with up to four content slots. It serves from cache when
+// fresh. When stale, at most one fetch is in flight at a time: callers with a
+// last-good response get it immediately (the refresh runs in the background),
+// while callers with no last-good wait for the single in-flight fetch. A failed
+// fetch is negatively cached and never evicts the last-good response.
 func (s *service) Get(ctx context.Context) Response {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	if s.hasGood && time.Since(s.fetchedAt) < s.ttl {
-		return s.cached
+		r := s.cached
+		s.mu.Unlock()
+		return r
 	}
 
-	resp, err := s.fetch(ctx)
+	// Negative cache: a recent failed fetch is not retried yet.
+	if s.inflight == nil && !s.failedAt.IsZero() && time.Since(s.failedAt) < s.negTTL {
+		r := s.cached // last-good (zero Response{} if none)
+		s.mu.Unlock()
+		return r
+	}
+
+	if ch := s.inflight; ch != nil {
+		// A fetch is already in progress.
+		if s.hasGood {
+			r := s.cached
+			s.mu.Unlock()
+			return r // serve stale immediately rather than blocking
+		}
+		s.mu.Unlock()
+		select {
+		case <-ch: // share the single in-flight fetch's outcome
+			s.mu.Lock()
+			r := s.cached
+			s.mu.Unlock()
+			return r
+		case <-ctx.Done():
+			return Response{}
+		}
+	}
+
+	// Become the refresher.
+	ch := make(chan struct{})
+	s.inflight = ch
+	if s.hasGood {
+		r := s.cached
+		s.mu.Unlock()
+		// Stale-while-revalidate: refresh in the background, detached from the
+		// caller's context so a canceled request doesn't abort the refresh.
+		go s.refresh(context.Background(), ch)
+		return r
+	}
+	s.mu.Unlock()
+	return s.refresh(ctx, ch)
+}
+
+// refresh performs one upstream fetch (without holding the lock), records the
+// outcome, and wakes any callers waiting on ch. On failure the last-good
+// response is preserved and the failure time is recorded for negative caching.
+func (s *service) refresh(ctx context.Context, ch chan struct{}) Response {
+	payload, err := s.fetch(ctx)
+
+	s.mu.Lock()
 	if err != nil {
-		return s.cached // last-good (zero Response{} if none)
+		s.failedAt = time.Now()
+	} else {
+		s.cached = derive(payload)
+		s.fetchedAt = time.Now()
+		s.failedAt = time.Time{}
+		s.hasGood = true
 	}
-
-	derived := derive(resp)
-	s.cached = derived
-	s.fetchedAt = time.Now()
-	s.hasGood = true
-	return derived
+	r := s.cached
+	s.inflight = nil
+	s.mu.Unlock()
+	close(ch)
+	return r
 }
 
 // fetch performs the HTTP request and parses the feed payload.
