@@ -24,6 +24,10 @@ export function useRemoveWorkflows() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workflows'] })
       qc.invalidateQueries({ queryKey: ['workflow'] })
+      // Counts and the app-id filter derive from the same store — they go stale
+      // after a removal too, and with auto-refresh paused they'd never catch up.
+      qc.invalidateQueries({ queryKey: ['workflow-stats'] })
+      qc.invalidateQueries({ queryKey: ['workflow-appids'] })
     },
   })
 }

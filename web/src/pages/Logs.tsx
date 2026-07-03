@@ -5,9 +5,11 @@ import { useLogStream, usePathLogStream } from '../hooks/useLogStream'
 import type { LogLine, LogLevel } from '../types/logs'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { parseLogTime } from '../lib/logtime'
+import { parseEnum } from '../lib/parseEnum'
 
 // LogSource is wider than the hook's 'daprd' | 'app'; 'both' composes two streams.
-type LogSource = 'both' | 'daprd' | 'app'
+const LOG_SOURCES = ['both', 'daprd', 'app'] as const
+type LogSource = (typeof LOG_SOURCES)[number]
 
 const CP_SERVICES = ['dapr_scheduler', 'dapr_placement', 'dapr_sentry', 'dapr_injector'] as const
 type CpService = (typeof CP_SERVICES)[number]
@@ -357,8 +359,10 @@ function sourceSubtitle(source: LogSource): string {
 export function Logs() {
   const [searchParams, setSearchParams] = useSearchParams()
   const appId = searchParams.get('app') ?? ''
-  const source = (searchParams.get('source') ?? 'both') as LogSource
-  const cp = (searchParams.get('cp') ?? '') as CpService | ''
+  // URL params are free-form — validate against the closed sets so
+  // ?source=garbage / ?cp=garbage fall back instead of leaking into the UI.
+  const source = parseEnum<LogSource>(searchParams.get('source'), LOG_SOURCES, 'both')
+  const cp = parseEnum<CpService | ''>(searchParams.get('cp'), CP_SERVICES, '')
 
   const [activeLevels, setActiveLevels] = useState<Set<LogLevel>>(new Set(ALL_LEVELS))
   const [search, setSearch] = useState('')
@@ -422,7 +426,8 @@ export function Logs() {
     setFollowing(f => !f)
   }
 
-  const isCpView = cp !== '' && (CP_SERVICES as readonly string[]).includes(cp)
+  // cp is already validated against CP_SERVICES above (garbage → '').
+  const isCpView = cp !== ''
 
   useDocumentTitle(
     isCpView

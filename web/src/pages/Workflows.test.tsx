@@ -398,6 +398,123 @@ describe('Workflows', () => {
   })
 })
 
+describe('Workflows page — selection reset', () => {
+  const twoRows = [
+    { appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' },
+    { appId: 'ship', instanceId: 'xyz', name: 'ShipWorkflow', status: 'Completed', createdAt: '2026-06-26T09:00:00Z' },
+  ]
+
+  async function selectFirstRow() {
+    await screen.findByRole('link', { name: 'abc' })
+    const checkboxes = document.querySelectorAll('tbody .cbx:not(.on)')
+    await userEvent.click(checkboxes[0])
+    await waitFor(() => expect(screen.getByText('1 selected')).toBeInTheDocument())
+  }
+
+  it('clears the selection when the status filter changes', async () => {
+    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: twoRows })))
+    renderAt()
+    await selectFirstRow()
+    const group = screen.getByRole('group', { name: 'Status filter' })
+    const runningBtn = Array.from(group.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('Running'),
+    )!
+    await userEvent.click(runningBtn)
+    await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument())
+  })
+
+  it('clears the selection when navigating to the next page', async () => {
+    server.use(
+      http.get('/api/workflows', ({ request }) => {
+        const page = new URL(request.url).searchParams.get('page')
+        if (page === 'tok1') {
+          return HttpResponse.json({
+            items: [{ appId: 'order', instanceId: 'def', name: 'OrderWorkflow', status: 'Completed', createdAt: '2026-06-26T11:00:00Z' }],
+          })
+        }
+        return HttpResponse.json({ items: twoRows, nextToken: 'tok1' })
+      }),
+    )
+    renderAt()
+    await selectFirstRow()
+    await userEvent.click(screen.getByRole('button', { name: 'Next →' }))
+    await screen.findByRole('link', { name: 'def' })
+    expect(screen.queryByText('1 selected')).not.toBeInTheDocument()
+    // Going back must not resurrect the stale selection either.
+    await userEvent.click(screen.getByRole('button', { name: '← Prev' }))
+    await screen.findByRole('link', { name: 'abc' })
+    expect(screen.queryByText('1 selected')).not.toBeInTheDocument()
+  })
+
+  it('clears the selection when the app filter changes', async () => {
+    server.use(
+      http.get('/api/workflows/appids', () => HttpResponse.json(['order', 'ship'])),
+      http.get('/api/workflows', () => HttpResponse.json({ items: twoRows })),
+    )
+    renderAt()
+    await selectFirstRow()
+    const select = (await screen.findByTestId('app-select')) as HTMLSelectElement
+    await userEvent.selectOptions(select, 'ship')
+    await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument())
+  })
+
+  it('clears the selection when the search input changes', async () => {
+    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: twoRows })))
+    renderAt()
+    await selectFirstRow()
+    await userEvent.type(screen.getByLabelText('Search'), 'x')
+    await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument())
+  })
+
+  it('clears the selection when the store changes', async () => {
+    window.localStorage.clear()
+    server.use(
+      http.get('/api/statestores', () =>
+        HttpResponse.json([
+          { id: 'statestore-a', name: 'statestore', type: 'state.redis', source: 'auto', path: '/a', active: true, connection: 'localhost:6379' },
+          { id: 'statestore-b', name: 'statestore', type: 'state.redis', source: 'manual', path: '/b', active: false, connection: 'localhost:16379' },
+        ]),
+      ),
+      http.get('/api/workflows', () => HttpResponse.json({ items: twoRows })),
+    )
+    renderAt()
+    await selectFirstRow()
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    await userEvent.selectOptions(storeSelect, 'statestore-b')
+    await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument())
+  })
+})
+
+describe('Workflows page — URL status validation', () => {
+  it('falls back to All and sends no status param when ?status= is not a valid status', async () => {
+    const statusParams: (string | null)[] = []
+    server.use(
+      http.get('/api/workflows', ({ request }) => {
+        statusParams.push(new URL(request.url).searchParams.get('status'))
+        return HttpResponse.json({ items: [] })
+      }),
+    )
+    renderAt('/workflows?status=Garbage')
+    await waitFor(() => expect(statusParams.length).toBeGreaterThan(0))
+    // No bogus status must ever reach the API.
+    statusParams.forEach((s) => expect(s).toBeNull())
+    const group = screen.getByRole('group', { name: 'Status filter' })
+    expect(group.querySelectorAll('button')[0]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('still honors a valid ?status= param', async () => {
+    const statusParams: (string | null)[] = []
+    server.use(
+      http.get('/api/workflows', ({ request }) => {
+        statusParams.push(new URL(request.url).searchParams.get('status'))
+        return HttpResponse.json({ items: [] })
+      }),
+    )
+    renderAt('/workflows?status=Failed')
+    await waitFor(() => expect(statusParams).toContain('Failed'))
+  })
+})
+
 function renderPage(initialEntry = '/workflows?status=Failed') {
   return render(
     <QueryProvider>

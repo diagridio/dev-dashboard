@@ -2,7 +2,7 @@ import { render, screen, waitFor, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider, makeQueryClient } from '../lib/query'
@@ -1088,5 +1088,72 @@ describe('WorkflowDetail — pair selection', () => {
     expect(container.querySelector('.ev.pair-selected')).toBeNull()
 
     await act(async () => { window.location.hash = '' })
+  })
+
+  it('does not re-scroll to the hash target on poll refetches, only on real hash changes', async () => {
+    const scrollSpy = vi.fn()
+    const orig = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrollSpy
+    try {
+      server.use(
+        http.get('/api/workflows/order/abc', () =>
+          HttpResponse.json({
+            appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running',
+            createdAt: '2026-06-28T10:00:00.000Z', replayCount: 0,
+            history: [
+              { sequenceId: 0, type: 'ExecutionStarted', name: 'OrderWorkflow', input: '{}', timestamp: '2026-06-28T10:00:00.000Z' },
+              { sequenceId: 1, type: 'TaskScheduled', name: 'Charge', input: '{"amt":5}', timestamp: '2026-06-28T10:00:00.100Z' },
+              { sequenceId: 2, type: 'TaskCompleted', scheduledId: 1, output: '"charged"', timestamp: '2026-06-28T10:00:00.440Z' },
+            ],
+          }),
+        ),
+      )
+      const client = makeQueryClient()
+      const { container } = renderDetail(client)
+      await screen.findByRole('heading', { name: 'OrderWorkflow' })
+
+      // Real navigation to #event-2 scrolls once.
+      await act(async () => {
+        window.location.hash = '#event-2'
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      })
+      const callsAfterNav = scrollSpy.mock.calls.length
+      expect(callsAfterNav).toBeGreaterThan(0)
+
+      // A poll arrives with grown history — pairIndex changes, hash does not.
+      server.use(
+        http.get('/api/workflows/order/abc', () =>
+          HttpResponse.json({
+            appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running',
+            createdAt: '2026-06-28T10:00:00.000Z', replayCount: 0,
+            history: [
+              { sequenceId: 0, type: 'ExecutionStarted', name: 'OrderWorkflow', input: '{}', timestamp: '2026-06-28T10:00:00.000Z' },
+              { sequenceId: 1, type: 'TaskScheduled', name: 'Charge', input: '{"amt":5}', timestamp: '2026-06-28T10:00:00.100Z' },
+              { sequenceId: 2, type: 'TaskCompleted', scheduledId: 1, output: '"charged"', timestamp: '2026-06-28T10:00:00.440Z' },
+              { sequenceId: 3, type: 'TimerCreated', timestamp: '2026-06-28T10:00:00.900Z' },
+            ],
+          }),
+        ),
+      )
+      await act(async () => { await client.invalidateQueries({ queryKey: ['workflow', 'order', 'abc'] }) })
+      await waitFor(() => {
+        const rows = Array.from(container.querySelectorAll('.timeline .ev'))
+        expect(rows.some((el) => el.querySelector('.evtype')?.textContent === 'TimerCreated')).toBe(true)
+      })
+
+      // The viewport must NOT have been yanked by the refetch.
+      expect(scrollSpy.mock.calls.length).toBe(callsAfterNav)
+
+      // A genuine hash change still scrolls.
+      await act(async () => {
+        window.location.hash = '#event-1'
+        window.dispatchEvent(new HashChangeEvent('hashchange'))
+      })
+      expect(scrollSpy.mock.calls.length).toBeGreaterThan(callsAfterNav)
+    } finally {
+      if (orig) Element.prototype.scrollIntoView = orig
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+      await act(async () => { window.location.hash = '' })
+    }
   })
 })
