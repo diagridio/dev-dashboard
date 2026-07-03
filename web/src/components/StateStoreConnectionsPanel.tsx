@@ -4,14 +4,41 @@ import { useStoreMutations } from '../hooks/useStoreMutations'
 import { StateStoreConnectionDialog } from './StateStoreConnectionDialog'
 import { Modal } from './Modal'
 import { storeTypeLabel } from '../lib/storeTypes'
+import { useToast } from '../lib/toast'
 import type { StateStore } from '../types/workflow'
 
 export function StateStoreConnectionsPanel() {
   const { data: stores } = useStateStores()
   const { deleteStore } = useStoreMutations()
+  // The panel owns the toast: the add dialog unmounts on close, so any toast
+  // rendered inside it would disappear before the user could see it.
+  const { toast, toastNode } = useToast()
 
   const [addOpen, setAddOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<StateStore | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const openDeleteConfirm = (s: StateStore) => {
+    setDeleteError(null)
+    setPendingDelete(s)
+  }
+  const closeDeleteConfirm = () => {
+    setDeleteError(null)
+    setPendingDelete(null)
+  }
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return
+    setDeleteError(null)
+    try {
+      await deleteStore.mutateAsync(pendingDelete.id)
+      toast.show(`Removed ${pendingDelete.name}`)
+      closeDeleteConfirm()
+    } catch (e) {
+      // Keep the modal open so the user sees what failed and can retry/cancel.
+      setDeleteError((e as Error).message)
+    }
+  }
 
   return (
     <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
@@ -37,7 +64,7 @@ export function StateStoreConnectionsPanel() {
           </span>
           {s.source === 'manual' && (
             <span style={{ display: 'flex', gap: 6 }}>
-              <button className="btn danger" aria-label={`delete ${s.name}`} onClick={() => setPendingDelete(s)}>Delete</button>
+              <button className="btn danger" aria-label={`delete ${s.name}`} onClick={() => openDeleteConfirm(s)}>Delete</button>
             </span>
           )}
         </div>
@@ -45,23 +72,29 @@ export function StateStoreConnectionsPanel() {
 
       {/* Mount the dialog only while open, so the component catalog isn't
           fetched on every Components-page load — only when Add is used. */}
-      {addOpen && <StateStoreConnectionDialog open onClose={() => setAddOpen(false)} />}
+      {addOpen && (
+        <StateStoreConnectionDialog
+          open
+          onClose={() => setAddOpen(false)}
+          onSaved={(name) => {
+            setAddOpen(false)
+            toast.show(`Added ${name}`)
+          }}
+        />
+      )}
 
-      <Modal open={pendingDelete !== null} title="Delete connection?" onClose={() => setPendingDelete(null)}>
+      <Modal open={pendingDelete !== null} title="Delete connection?" onClose={closeDeleteConfirm}>
         <p style={{ margin: '0 0 8px', color: 'var(--muted)', fontSize: 14 }}>
           Remove the connection <b>{pendingDelete?.name}</b>? This only removes it from the dashboard registry.
         </p>
+        {deleteError && <p className="field-err">{deleteError}</p>}
         <div className="modal-actions">
-          <button className="btn ghost" onClick={() => setPendingDelete(null)}>Cancel</button>
-          <button
-            className="btn danger"
-            onClick={async () => {
-              if (pendingDelete) await deleteStore.mutateAsync(pendingDelete.id)
-              setPendingDelete(null)
-            }}
-          >Delete</button>
+          <button className="btn ghost" onClick={closeDeleteConfirm}>Cancel</button>
+          <button className="btn danger" onClick={handleConfirmDelete}>Delete</button>
         </div>
       </Modal>
+
+      {toastNode}
     </div>
   )
 }
