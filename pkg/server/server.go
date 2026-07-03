@@ -37,6 +37,7 @@ func NewRouter(opts Options) http.Handler {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
+	r.Use(localhostGuard)
 
 	mount := func(router chi.Router) {
 		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane))

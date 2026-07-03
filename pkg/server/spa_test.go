@@ -22,6 +22,7 @@ func testFS() fstest.MapFS {
 func get(t *testing.T, h http.Handler, path string) (*http.Response, string) {
 	t.Helper()
 	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Host = "127.0.0.1:9090" // httptest defaults to example.com, which localhostGuard rejects
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	res := rec.Result()

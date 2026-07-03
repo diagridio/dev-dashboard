@@ -277,7 +277,7 @@ export function Workflows() {
       return { appId, instanceId }
     })
     removeWorkflows(
-      { ids, force },
+      { ids, force, store: selectedStore ?? undefined },
       {
         onSuccess: (results) => {
           const ok = results.filter((r) => r.ok).length
