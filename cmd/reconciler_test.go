@@ -375,4 +375,8 @@ func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
 	err := rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `a connection named "dup" already exists`)
+	// The API maps duplicates to 409 via errors.Is, so the friendly wrap must
+	// preserve the sentinel.
+	require.ErrorIs(t, err, os.ErrExist,
+		"AddStore duplicate error must keep os.ErrExist in the chain")
 }

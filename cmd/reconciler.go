@@ -225,7 +225,8 @@ func (rc *reconciler) AddStore(name, typ string, metadata map[string]string) err
 	}
 	err := rc.registry.Add(ConnEntry{Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
 	if errors.Is(err, os.ErrExist) {
-		return fmt.Errorf("a connection named %q already exists", name)
+		// Keep the sentinel in the chain: the API maps it to 409 via errors.Is.
+		return fmt.Errorf("a connection named %q already exists: %w", name, os.ErrExist)
 	}
 	return err
 }
