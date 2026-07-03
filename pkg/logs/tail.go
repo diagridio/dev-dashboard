@@ -66,6 +66,14 @@ func Tail(ctx context.Context, path string, backfillLines int, pollInterval time
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				// Detect in-place truncation/rotation (e.g. copytruncate): if the
+				// file shrank below our offset, restart from the beginning and drop
+				// any partial line carried over from the old content.
+				if fi, serr := f.Stat(); serr == nil && fi.Size() < offset {
+					offset = 0
+					carry = nil
+				}
+
 				n, rerr := f.ReadAt(buf, offset)
 				if n == 0 {
 					if rerr != nil && rerr != io.EOF {
