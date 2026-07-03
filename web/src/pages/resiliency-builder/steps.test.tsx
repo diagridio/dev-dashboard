@@ -45,15 +45,16 @@ describe('StepPolicies', () => {
     fireEvent.click(screen.getByRole('button', { name: /remove retry1/i }))
     expect(dispatch).toHaveBeenCalledWith({ type: 'REMOVE_RETRY', name: 'retry1' })
   })
-  it('edits an existing timeout via chip click (rename dispatches remove + upsert)', () => {
+  it('edits an existing timeout via chip click (rename dispatches rename + upsert)', () => {
     const dispatch = vi.fn()
     const s = reducer(initialState(), { type: 'UPSERT_TIMEOUT', name: 'timeout1', duration: '30s' })
     render(<StepPolicies state={s} dispatch={dispatch} />)
     fireEvent.click(screen.getByRole('button', { name: /edit timeout1/i }))
     fireEvent.change(screen.getByLabelText(/timeout name/i), { target: { value: 'renamed' } })
     fireEvent.click(screen.getByRole('button', { name: /save/i }))
-    expect(dispatch).toHaveBeenCalledWith({ type: 'REMOVE_TIMEOUT', name: 'timeout1' })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'RENAME_TIMEOUT', from: 'timeout1', to: 'renamed' })
     expect(dispatch).toHaveBeenCalledWith({ type: 'UPSERT_TIMEOUT', name: 'renamed', duration: '30s' })
+    expect(dispatch).not.toHaveBeenCalledWith({ type: 'REMOVE_TIMEOUT', name: 'timeout1' })
   })
   it('adds a DaprBuiltIn override with prefilled defaults', () => {
     const dispatch = vi.fn()

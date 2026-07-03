@@ -14,8 +14,8 @@ export function StepPolicies({ state, dispatch }: { state: ResiliencyState; disp
   const pol = state.config.spec.policies
   const customRetryNames = Object.keys(pol.retries).filter((n) => !isDefaultPolicyName(n))
 
-  function renameThenUpsert<A extends Action>(editName: string | undefined, name: string, removeType: Action['type'], upsert: A) {
-    if (editName && editName !== name) dispatch({ type: removeType, name: editName } as Action)
+  function renameThenUpsert<A extends Action>(editName: string | undefined, name: string, renameType: 'RENAME_TIMEOUT' | 'RENAME_RETRY' | 'RENAME_CB', upsert: A) {
+    if (editName && editName !== name) dispatch({ type: renameType, from: editName, to: name })
     dispatch(upsert)
   }
 
@@ -66,21 +66,21 @@ export function StepPolicies({ state, dispatch }: { state: ResiliencyState; disp
           initialName={open.editName ?? nextName('timeout', pol.timeouts)}
           initialDuration={open.editName ? pol.timeouts[open.editName] : undefined}
           onClose={() => setOpen(null)}
-          onSave={(name, duration) => { renameThenUpsert(open.editName, name, 'REMOVE_TIMEOUT', { type: 'UPSERT_TIMEOUT', name, duration }); setOpen(null) }} />
+          onSave={(name, duration) => { renameThenUpsert(open.editName, name, 'RENAME_TIMEOUT', { type: 'UPSERT_TIMEOUT', name, duration }); setOpen(null) }} />
       )}
       {open?.kind === 'retry' && (
         <RetryDialog open editing={!!open.editName}
           initialName={open.editName ?? nextName('retry', pol.retries)}
           initialPolicy={open.editName ? pol.retries[open.editName] : undefined}
           onClose={() => setOpen(null)}
-          onSave={(name, policy) => { renameThenUpsert(open.editName, name, 'REMOVE_RETRY', { type: 'UPSERT_RETRY', name, policy }); setOpen(null) }} />
+          onSave={(name, policy) => { renameThenUpsert(open.editName, name, 'RENAME_RETRY', { type: 'UPSERT_RETRY', name, policy }); setOpen(null) }} />
       )}
       {open?.kind === 'cb' && (
         <CircuitBreakerDialog open editing={!!open.editName}
           initialName={open.editName ?? nextName('circuitBreaker', pol.circuitBreakers)}
           initialPolicy={open.editName ? pol.circuitBreakers[open.editName] : undefined}
           onClose={() => setOpen(null)}
-          onSave={(name, policy) => { renameThenUpsert(open.editName, name, 'REMOVE_CB', { type: 'UPSERT_CB', name, policy }); setOpen(null) }} />
+          onSave={(name, policy) => { renameThenUpsert(open.editName, name, 'RENAME_CB', { type: 'UPSERT_CB', name, policy }); setOpen(null) }} />
       )}
       {open?.kind === 'override' && (
         <RetryDialog open lockName keepDurationForExponential editing={open.editing}
