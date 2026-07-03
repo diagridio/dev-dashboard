@@ -3,6 +3,7 @@ package cmd
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -173,7 +174,10 @@ func (r *ConnRegistry) Update(e ConnEntry) (string, error) {
 		if r.entries[i].Source == SourceManual && r.entries[i].ID == e.ID {
 			for j := range r.entries {
 				if j != i && r.entries[j].Source == SourceManual && r.entries[j].Name == e.Name {
-					return "", os.ErrExist
+					// Human-readable (the API surfaces err.Error() in the 400
+					// body, matching Add's message) while still matching
+					// errors.Is(err, os.ErrExist).
+					return "", fmt.Errorf("a connection named %q already exists: %w", e.Name, os.ErrExist)
 				}
 			}
 			e.ID = entryID(SourceManual, e.Name)
@@ -207,14 +211,39 @@ func (r *ConnRegistry) Delete(id string) error {
 	return r.save()
 }
 
-// save marshals the registry and writes it 0600 (parent dir 0700). Caller holds mu.
+// save marshals the registry and writes it 0600 (parent dir 0700). The write is
+// atomic: a temp file in the same directory is written, closed, then renamed
+// over the target, so a crash mid-write can never leave a truncated/malformed
+// file (which LoadRegistry would silently treat as empty, discarding every
+// manual entry). Caller holds mu.
 func (r *ConnRegistry) save() error {
-	if err := os.MkdirAll(filepath.Dir(r.path), 0o700); err != nil {
+	dir := filepath.Dir(r.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	data, err := yaml.Marshal(connFile{Connections: r.entries})
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(r.path, data, 0o600)
+	tmp, err := os.CreateTemp(dir, ".connections-*.yaml.tmp")
+	if err != nil {
+		return err
+	}
+	// Remove the temp file on any error path; after a successful rename the
+	// path no longer exists and this is a no-op.
+	defer os.Remove(tmp.Name())
+	// CreateTemp opens 0600, but chmod explicitly to preserve the exact perms
+	// os.WriteFile used to apply regardless of umask.
+	if err := tmp.Chmod(0o600); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), r.path)
 }

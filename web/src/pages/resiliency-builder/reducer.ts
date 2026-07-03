@@ -36,9 +36,13 @@ export function initialState(): ResiliencyState {
   return { config: defaultResiliencyConfig(), activeStep: 0 }
 }
 
-/** `retry1`, `retry2`, ... based on the count of existing keys (matches cloudgrid). */
+/** First free `prefixN` (N >= 1) not already taken — deletions can leave gaps, and
+ * counting keys would suggest a name that collides with (and upserts over) an existing one. */
 export function nextName(prefix: string, existing: Record<string, unknown>): string {
-  return `${prefix}${Object.keys(existing).length + 1}`
+  for (let i = 1; ; i++) {
+    const candidate = `${prefix}${i}`
+    if (!(candidate in existing)) return candidate
+  }
 }
 
 function withoutKey<T>(map: Record<string, T>, key: string): Record<string, T> {

@@ -28,6 +28,30 @@ func TestDcpSessionDir(t *testing.T) {
 		_, ok := dcpSessionDir("daprd --app-id x")
 		require.False(t, ok)
 	})
+
+	t.Run("path with spaces, space-separated flag", func(t *testing.T) {
+		cmd := "/Users/First Last/.nuget/packages/aspire.hosting.orchestration.osx-arm64/13.4.6/tools/dcp run-controllers --kubeconfig /Users/First Last/T/aspire-dcpZOY2Ea/kubeconfig --monitor 82529"
+		dir, ok := dcpSessionDir(cmd)
+		require.True(t, ok)
+		require.Equal(t, "/Users/First Last/T/aspire-dcpZOY2Ea", dir)
+	})
+
+	t.Run("path with spaces, equals form", func(t *testing.T) {
+		dir, ok := dcpSessionDir("dcp run-controllers --kubeconfig=/Users/First Last/tmp/aspire-dcpABC/kubeconfig --monitor 1")
+		require.True(t, ok)
+		require.Equal(t, "/Users/First Last/tmp/aspire-dcpABC", dir)
+	})
+
+	t.Run("path with spaces, flag is last", func(t *testing.T) {
+		dir, ok := dcpSessionDir("dcp run-controllers --kubeconfig /Users/First Last/tmp/aspire-dcpABC/kubeconfig")
+		require.True(t, ok)
+		require.Equal(t, "/Users/First Last/tmp/aspire-dcpABC", dir)
+	})
+
+	t.Run("kubeconfig flag with missing value", func(t *testing.T) {
+		_, ok := dcpSessionDir("dcp run-controllers --kubeconfig --monitor 1")
+		require.False(t, ok)
+	})
 }
 
 func TestResolveDCPLogs(t *testing.T) {

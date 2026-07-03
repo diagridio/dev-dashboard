@@ -218,6 +218,42 @@ func TestRegistry_UpdateRejectsRenameOntoExistingManualName(t *testing.T) {
 	assertIntact(LoadRegistry(home).List())
 }
 
+func TestRegistry_UpdateDuplicateNameErrorIsFriendly(t *testing.T) {
+	r := LoadRegistry(t.TempDir())
+	require.NoError(t, r.Add(ConnEntry{Name: "a", Type: "state.redis", Source: SourceManual}))
+	require.NoError(t, r.Add(ConnEntry{Name: "b", Type: "state.postgresql", Source: SourceManual}))
+
+	// Renaming a onto b must fail with a human-readable message that names the
+	// conflicting connection (parity with Add's API-surfaced message) while
+	// still satisfying errors.Is(err, os.ErrExist) for programmatic callers.
+	_, err := r.Update(ConnEntry{ID: entryID(SourceManual, "a"), Name: "b", Type: "state.redis", Source: SourceManual})
+	require.ErrorIs(t, err, os.ErrExist, "wrapped error must still match os.ErrExist")
+	require.Contains(t, err.Error(), `"b"`, "message must name the conflicting connection")
+	require.Contains(t, err.Error(), "already exists")
+}
+
+func TestRegistry_SaveLeavesNoTempLitter(t *testing.T) {
+	home := t.TempDir()
+	r := LoadRegistry(home)
+	require.NoError(t, r.Add(ConnEntry{Name: "pg", Type: "state.postgresql", Source: SourceManual,
+		Metadata: map[string]string{"connectionString": "host=a"}}))
+	require.NoError(t, r.UpsertAuto(ConnEntry{Name: "s", Type: "state.redis", Source: SourceAuto, Path: "/a/b/statestore.yaml"}))
+	require.NoError(t, r.Delete(entryID(SourceAuto, normPath("/a/b/statestore.yaml"))))
+
+	// After several saves the registry dir contains exactly the registry file —
+	// no leftover temp files from the write-then-rename dance.
+	ents, err := os.ReadDir(filepath.Dir(registryPath(home)))
+	require.NoError(t, err)
+	require.Len(t, ents, 1, "registry dir must contain only connections.yaml")
+	require.Equal(t, "connections.yaml", ents[0].Name())
+
+	// And the atomically-written content still round-trips through LoadRegistry.
+	got := LoadRegistry(home).List()
+	require.Len(t, got, 1)
+	require.Equal(t, "pg", got[0].Name)
+	require.Equal(t, "host=a", got[0].Metadata["connectionString"])
+}
+
 func TestRegistry_UpdateRenameToOwnNameSucceeds(t *testing.T) {
 	r := LoadRegistry(t.TempDir())
 	require.NoError(t, r.Add(ConnEntry{Name: "pg", Type: "state.postgresql", Source: SourceManual,

@@ -33,19 +33,19 @@ export function StepTargets({ state, dispatch }: { state: ResiliencyState; dispa
         onRemove={(name) => dispatch({ type: 'REMOVE_COMPONENT', name })} />
 
       {open?.kind === 'app' && (
-        <AppTargetDialog open policies={names} editing={!!open.editName}
+        <AppTargetDialog open policies={names} editing={!!open.editName} existingNames={Object.keys(apps)}
           initialName={open.editName} initialTarget={open.editName ? apps[open.editName] : undefined}
           onClose={() => setOpen(null)}
           onSave={(name, target) => { if (open.editName && open.editName !== name) dispatch({ type: 'REMOVE_APP', name: open.editName }); dispatch({ type: 'UPSERT_APP', name, target }); setOpen(null) }} />
       )}
       {open?.kind === 'actor' && (
-        <ActorTargetDialog open policies={names} editing={!!open.editName}
+        <ActorTargetDialog open policies={names} editing={!!open.editName} existingNames={Object.keys(actors)}
           initialName={open.editName} initialTarget={open.editName ? actors[open.editName] : undefined}
           onClose={() => setOpen(null)}
           onSave={(name, target) => { if (open.editName && open.editName !== name) dispatch({ type: 'REMOVE_ACTOR', name: open.editName }); dispatch({ type: 'UPSERT_ACTOR', name, target }); setOpen(null) }} />
       )}
       {open?.kind === 'component' && (
-        <ComponentTargetDialog open policies={names} editing={!!open.editName}
+        <ComponentTargetDialog open policies={names} editing={!!open.editName} existingNames={Object.keys(components)}
           initialName={open.editName} initialTarget={open.editName ? components[open.editName] : undefined}
           onClose={() => setOpen(null)}
           onSave={(name, target) => { if (open.editName && open.editName !== name) dispatch({ type: 'REMOVE_COMPONENT', name: open.editName }); dispatch({ type: 'UPSERT_COMPONENT', name, target }); setOpen(null) }} />

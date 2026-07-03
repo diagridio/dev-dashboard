@@ -3,13 +3,16 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
@@ -90,7 +93,7 @@ func TestReconciler_ServiceForRouting(t *testing.T) {
 
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Seed an elected active store directly (no apps needed for this routing test).
@@ -128,7 +131,7 @@ func TestReconciler_NoActiveNoStoresDegraded(t *testing.T) {
 	reg := LoadRegistry(home)
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// No elected store and empty name -> degraded entry, ok=true.
@@ -146,7 +149,7 @@ func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
 
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Elect "autostore" active so the active flag is exercised.
@@ -217,7 +220,7 @@ func TestReconciler_ServiceForUnreachableByID(t *testing.T) {
 	require.NotEmpty(t, id)
 
 	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	svc, _, _, ok := rc.ServiceFor(id)
@@ -233,7 +236,7 @@ func TestReconciler_ServiceForUnreachableActive(t *testing.T) {
 
 	reg := LoadRegistry(home)
 	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Elect an active store; the pool's opener will fail to connect to it.
@@ -252,7 +255,7 @@ func TestReconciler_ServiceForNoStoreStillErrNoStore(t *testing.T) {
 	home := t.TempDir()
 	reg := LoadRegistry(home)
 	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// No elected store and empty id -> degraded/ErrNoStore (genuinely no store).
@@ -266,11 +269,98 @@ func TestReconciler_ServiceForUnknownID(t *testing.T) {
 	home := t.TempDir()
 	reg := LoadRegistry(home)
 	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	_, _, _, ok := rc.ServiceFor("nosuchid")
 	require.False(t, ok, "unknown id -> ok=false")
+}
+
+// blockingCtxOpener blocks inside open until the passed context is cancelled,
+// simulating a slow dial. started is closed when the open begins.
+type blockingCtxOpener struct {
+	started chan struct{}
+}
+
+func (o *blockingCtxOpener) open(ctx context.Context, _ statestore.Component) (statestore.Store, error) {
+	close(o.started)
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// TestReconciler_BaseCtxCancelAbortsPreWarm verifies issue 4: a reconcile
+// pre-warm dial must derive its context from the reconciler's base context, so
+// shutdown (Ctrl-C) aborts an in-flight open promptly instead of blocking for
+// the full connectTimeout (15s).
+func TestReconciler_BaseCtxCancelAbortsPreWarm(t *testing.T) {
+	dir := t.TempDir()
+	home := t.TempDir()
+	compPath := seedAutoComponentYAML(t, dir, "slowstore", filepath.Join(dir, "slow.db"))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	o := &blockingCtxOpener{started: make(chan struct{})}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	reg := LoadRegistry(home)
+	// stateStorePath = compPath so reconcile detects and elects it, then pre-warms.
+	rc := newReconciler(ctx, nil, "default", home, compPath, &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	done := make(chan struct{})
+	go func() {
+		rc.reconcile(nil, "fp-prewarm")
+		close(done)
+	}()
+
+	<-o.started // the pre-warm dial is in flight
+	cancel()    // simulate Ctrl-C: base context cancelled
+
+	select {
+	case <-done:
+		// pre-warm aborted promptly
+	case <-time.After(3 * time.Second):
+		t.Fatal("reconcile pre-warm did not abort after base context cancellation")
+	}
+}
+
+// TestComponentFor_WarnsOnUnresolvedSecrets verifies issue 3: componentFor must
+// log a warning when secretKeyRef metadata cannot be resolved, instead of
+// silently discarding the unresolved keys.
+func TestComponentFor_WarnsOnUnresolvedSecrets(t *testing.T) {
+	dir := t.TempDir()
+	home := t.TempDir()
+
+	y := "apiVersion: dapr.io/v1alpha1\nkind: Component\nmetadata:\n  name: secretbacked\n" +
+		"spec:\n  type: state.postgresql\n  version: v1\n  metadata:\n" +
+		"  - name: connectionString\n    secretKeyRef:\n      name: pgconn\n      key: pgconn\n" +
+		"auth:\n  secretStore: missing-secrets\n"
+	p := filepath.Join(dir, "secretbacked.yaml")
+	require.NoError(t, os.WriteFile(p, []byte(y), 0o644))
+	abs, err := filepath.Abs(p)
+	require.NoError(t, err)
+
+	reg := LoadRegistry(home)
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "secretbacked", Type: "state.postgresql", Source: SourceAuto, Path: abs}))
+	var id string
+	for _, e := range reg.List() {
+		id = e.ID
+	}
+	require.NotEmpty(t, id)
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	_, ok := rc.componentFor(id)
+	require.True(t, ok)
+	require.Contains(t, buf.String(), "unresolved secretKeyRef",
+		"componentFor must warn when secretKeyRef metadata cannot be resolved")
 }
 
 func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
@@ -278,11 +368,15 @@ func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
 	reg := LoadRegistry(home)
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	require.NoError(t, rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"}))
 	err := rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), `a connection named "dup" already exists`)
+	// The API maps duplicates to 409 via errors.Is, so the friendly wrap must
+	// preserve the sentinel.
+	require.ErrorIs(t, err, os.ErrExist,
+		"AddStore duplicate error must keep os.ErrExist in the chain")
 }

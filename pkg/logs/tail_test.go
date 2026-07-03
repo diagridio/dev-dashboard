@@ -45,6 +45,55 @@ func TestTailBackfillLimit(t *testing.T) {
 	require.Equal(t, "d", recv(t, ch))
 }
 
+func TestTailRecoversAfterTruncation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.log")
+	require.NoError(t, os.WriteFile(path, []byte("old1\nold2\n"), 0o600))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch, err := Tail(ctx, path, 10, 20*time.Millisecond)
+	require.NoError(t, err)
+
+	require.Equal(t, "old1", recv(t, ch))
+	require.Equal(t, "old2", recv(t, ch))
+
+	// Simulate copytruncate-style rotation: truncate in place, then write new content.
+	require.NoError(t, os.Truncate(path, 0))
+	require.NoError(t, os.WriteFile(path, []byte("new1\n"), 0o600))
+
+	require.Equal(t, "new1", recv(t, ch))
+}
+
+func TestTailTruncationClearsPartialLine(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "app.log")
+	require.NoError(t, os.WriteFile(path, []byte("old1\n"), 0o600))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ch, err := Tail(ctx, path, 10, 20*time.Millisecond)
+	require.NoError(t, err)
+
+	require.Equal(t, "old1", recv(t, ch))
+
+	// Append a partial line (no trailing newline) and give the poll loop time
+	// to pick it up into its carry buffer.
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+	require.NoError(t, err)
+	_, err = f.WriteString("half")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	time.Sleep(200 * time.Millisecond)
+
+	// Truncate mid-partial-line, then write fresh content.
+	require.NoError(t, os.Truncate(path, 0))
+	require.NoError(t, os.WriteFile(path, []byte("fresh\n"), 0o600))
+
+	// The stale partial line must not be glued onto the new content.
+	require.Equal(t, "fresh", recv(t, ch))
+}
+
 func TestTailMissingFile(t *testing.T) {
 	_, err := Tail(context.Background(), "/no/such/file.log", 1, time.Second)
 	require.Error(t, err)
