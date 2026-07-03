@@ -17,18 +17,46 @@ const (
 // dcpSessionDir extracts the Aspire DCP session directory from a dcp process
 // command line by reading its `--kubeconfig <dir>/kubeconfig` flag. The session
 // directory is the parent of the kubeconfig file. Returns ("", false) when the
-// flag is absent.
+// flag is absent or has no value.
+//
+// cmd comes from gopsutil's Cmdline, which (on darwin via `ps -o command`) joins
+// argv with single spaces and no quoting, so a path containing spaces is
+// indistinguishable from separate arguments. We therefore take the flag value up
+// to the next ` --` flag boundary (or end of string) rather than the next space,
+// so paths like "/Users/First Last/..." survive. Residual limitation: a path
+// that itself contains " --" is still truncated at that point.
 func dcpSessionDir(cmd string) (string, bool) {
-	fields := strings.Fields(cmd)
-	for i, f := range fields {
-		switch {
-		case f == "--kubeconfig" && i+1 < len(fields):
-			return filepath.Dir(fields[i+1]), true
-		case strings.HasPrefix(f, "--kubeconfig="):
-			return filepath.Dir(strings.TrimPrefix(f, "--kubeconfig=")), true
+	const flag = "--kubeconfig"
+	idx := strings.Index(cmd, flag)
+	// Require a token boundary before the flag so e.g. "--not--kubeconfig" doesn't match.
+	for idx > 0 && cmd[idx-1] != ' ' {
+		next := strings.Index(cmd[idx+1:], flag)
+		if next < 0 {
+			return "", false
 		}
+		idx += 1 + next
 	}
-	return "", false
+	if idx < 0 {
+		return "", false
+	}
+	rest := cmd[idx+len(flag):]
+	switch {
+	case strings.HasPrefix(rest, "="):
+		rest = rest[1:]
+	case strings.HasPrefix(rest, " "):
+		rest = strings.TrimLeft(rest, " ")
+	default:
+		// e.g. "--kubeconfig-other" or flag at end of string with no value.
+		return "", false
+	}
+	if end := strings.Index(rest, " --"); end >= 0 {
+		rest = rest[:end]
+	}
+	value := strings.TrimRight(rest, " ")
+	if value == "" || strings.HasPrefix(value, "--") {
+		return "", false
+	}
+	return filepath.Dir(value), true
 }
 
 // dcpResourceInfo is the subset of the JSON object DCP writes on the
