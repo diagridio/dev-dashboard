@@ -81,7 +81,13 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	}
 	url := fmt.Sprintf("http://%s%s/", addr, urlPath)
 
-	home, _ := os.UserHomeDir()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		// An empty home disables registry persistence in assembleOptions rather
+		// than falling back to a CWD-relative registry path.
+		logger.Warn("home directory unavailable; connection registry will not be persisted", "err", err)
+		home = ""
+	}
 	opts, closers := assembleOptions(ctx, serveDeps{
 		BasePath:       basePath,
 		StateStorePath: stateStore,
@@ -131,13 +137,23 @@ func trimSlash(s string) string {
 	return s
 }
 
+// openBrowser launches the platform browser opener without blocking the
+// caller. The child is reaped in a background goroutine (Start without Wait
+// would leave a zombie until the dashboard exits); the error return reflects
+// only whether the launch succeeded, as before.
 func openBrowser(url string) error {
+	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", url).Start()
+		cmd = exec.Command("open", url)
 	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	default:
-		return exec.Command("xdg-open", url).Start()
+		cmd = exec.Command("xdg-open", url)
 	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() { _ = cmd.Wait() }()
+	return nil
 }

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -32,12 +33,21 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	appsSvc := deps.Apps
 
 	// Load the persisted connection registry and build the lazy connection pool.
-	registry := LoadRegistry(deps.HomeDir)
+	// Without a home directory the registry path would resolve CWD-relative and
+	// silently fork per working directory, so persistence is disabled instead:
+	// a nil registry degrades every registry-backed feature to a no-op (the
+	// reconciler nil-checks it throughout).
+	var registry *ConnRegistry
+	if deps.HomeDir != "" {
+		registry = LoadRegistry(deps.HomeDir)
+	} else {
+		slog.Default().With("component", "registry").Warn("no home directory; connection registry persistence disabled")
+	}
 	pool := newConnPool(deps.Namespace, deps.HTTPClient, appsSvc, nil)
 
 	// Build the reconciler that owns all apps-derived state (resource paths,
 	// detected state stores, active-store election) plus the registry and pool.
-	rc := newReconciler(appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool)
+	rc := newReconciler(ctx, appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool)
 
 	// Seed once synchronously from the boot snapshot so the first request is
 	// correct. Best-effort: an empty/failed list yields an empty derived state.
