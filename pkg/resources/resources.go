@@ -5,11 +5,28 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
 	"sigs.k8s.io/yaml"
 )
+
+// yamlDocSeparator matches a YAML document separator line ("---").
+var yamlDocSeparator = regexp.MustCompile(`(?m)^---\s*$`)
+
+// splitYAMLDocs splits multi-document YAML content on document separator
+// lines, dropping empty or whitespace-only documents.
+func splitYAMLDocs(data []byte) [][]byte {
+	var docs [][]byte
+	for _, doc := range yamlDocSeparator.Split(string(data), -1) {
+		if strings.TrimSpace(doc) == "" {
+			continue
+		}
+		docs = append(docs, []byte(doc))
+	}
+	return docs
+}
 
 // Kind identifies the Dapr resource type.
 type Kind string
@@ -93,14 +110,6 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 			if err != nil {
 				return nil
 			}
-			var rr rawResource
-			if err := yaml.Unmarshal(data, &rr); err != nil {
-				return nil
-			}
-			k, ok := kindFromString(rr.Kind)
-			if !ok || k != kind {
-				return nil
-			}
 			absPath, err := filepath.Abs(path)
 			if err != nil {
 				absPath = path
@@ -109,13 +118,23 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 				return nil
 			}
 			seen[absPath] = true
-			out = append(out, Resource{
-				Name:    rr.Metadata.Name,
-				Kind:    k,
-				Type:    rr.Spec.Type,
-				Version: rr.Spec.Version,
-				Path:    absPath,
-			})
+			for _, doc := range splitYAMLDocs(data) {
+				var rr rawResource
+				if err := yaml.Unmarshal(doc, &rr); err != nil {
+					continue
+				}
+				k, ok := kindFromString(rr.Kind)
+				if !ok || k != kind {
+					continue
+				}
+				out = append(out, Resource{
+					Name:    rr.Metadata.Name,
+					Kind:    k,
+					Type:    rr.Spec.Type,
+					Version: rr.Spec.Version,
+					Path:    absPath,
+				})
+			}
 			return nil
 		})
 	}

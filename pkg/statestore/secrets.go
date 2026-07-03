@@ -51,13 +51,6 @@ func DetectSecretStores(paths []string) ([]SecretStore, error) {
 			if err != nil {
 				return nil
 			}
-			var rc rawSecretStore
-			if err := yaml.Unmarshal(data, &rc); err != nil {
-				return nil
-			}
-			if rc.Kind != "Component" || !strings.HasPrefix(rc.Spec.Type, "secretstores.local.") {
-				return nil
-			}
 			absPath, err := filepath.Abs(path)
 			if err != nil {
 				absPath = path
@@ -66,23 +59,32 @@ func DetectSecretStores(paths []string) ([]SecretStore, error) {
 				return nil
 			}
 			seen[absPath] = true
+			for _, doc := range splitYAMLDocs(data) {
+				var rc rawSecretStore
+				if err := yaml.Unmarshal(doc, &rc); err != nil {
+					continue
+				}
+				if rc.Kind != "Component" || !strings.HasPrefix(rc.Spec.Type, "secretstores.local.") {
+					continue
+				}
 
-			s := SecretStore{Name: rc.Metadata.Name, Type: rc.Spec.Type, NestedSeparator: ":"}
-			for _, m := range rc.Spec.Metadata {
-				switch m.Name {
-				case "secretsFile":
-					sf := m.Value
-					if sf != "" && !filepath.IsAbs(sf) {
-						sf = filepath.Join(filepath.Dir(absPath), sf)
-					}
-					s.SecretsFile = sf
-				case "nestedSeparator":
-					if m.Value != "" {
-						s.NestedSeparator = m.Value
+				s := SecretStore{Name: rc.Metadata.Name, Type: rc.Spec.Type, NestedSeparator: ":"}
+				for _, m := range rc.Spec.Metadata {
+					switch m.Name {
+					case "secretsFile":
+						sf := m.Value
+						if sf != "" && !filepath.IsAbs(sf) {
+							sf = filepath.Join(filepath.Dir(absPath), sf)
+						}
+						s.SecretsFile = sf
+					case "nestedSeparator":
+						if m.Value != "" {
+							s.NestedSeparator = m.Value
+						}
 					}
 				}
+				out = append(out, s)
 			}
-			out = append(out, s)
 			return nil
 		})
 	}

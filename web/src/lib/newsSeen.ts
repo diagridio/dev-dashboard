@@ -1,4 +1,5 @@
 import type { NewsResponse } from '../types/logs'
+import { safeGet, safeSet } from './safeStorage'
 
 const STORAGE_KEY = 'devdash.newsSeen'
 
@@ -15,9 +16,9 @@ export function newsUrls(n: NewsResponse): string[] {
  * Returns the set of URLs that have been marked as seen (from localStorage).
  */
 export function getSeen(): Set<string> {
+  const raw = safeGet(STORAGE_KEY)
+  if (!raw) return new Set()
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return new Set()
     const parsed = JSON.parse(raw)
     if (Array.isArray(parsed)) return new Set<string>(parsed)
   } catch {
@@ -35,7 +36,7 @@ export function markSeen(urls: string[]): void {
   for (const url of urls) {
     existing.add(url)
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing]))
+  safeSet(STORAGE_KEY, JSON.stringify([...existing]))
 }
 
 /**

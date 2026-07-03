@@ -54,6 +54,16 @@ auth:
   secretStore: local-secrets
 `
 
+const secondStateComponent = `
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore2
+spec:
+  type: state.in-memory
+  version: v1
+`
+
 func TestDetect(t *testing.T) {
 	dir := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "redis.yaml"), []byte(redisComponent), 0o600))
@@ -67,6 +77,38 @@ func TestDetect(t *testing.T) {
 	require.Equal(t, "state.redis", got[0].Type)
 	require.Equal(t, "localhost:6379", got[0].Metadata["redisHost"])
 	require.Equal(t, "true", got[0].Metadata["actorStateStore"])
+}
+
+func TestDetectMultiDoc_StateStoreAfterOtherComponent(t *testing.T) {
+	dir := t.TempDir()
+	multi := pubsubComponent + "\n---\n" + redisComponent
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources.yaml"), []byte(multi), 0o600))
+
+	got, err := Detect([]string{dir})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "statestore", got[0].Name)
+	require.Equal(t, "state.redis", got[0].Type)
+	require.Equal(t, "localhost:6379", got[0].Metadata["redisHost"])
+}
+
+func TestDetectMultiDoc_TwoStateStoresInOneFile(t *testing.T) {
+	dir := t.TempDir()
+	multi := redisComponent + "\n---\n" + secondStateComponent
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources.yaml"), []byte(multi), 0o600))
+
+	got, err := Detect([]string{dir})
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+
+	byName := map[string]Component{}
+	for _, c := range got {
+		byName[c.Name] = c
+	}
+	require.Contains(t, byName, "statestore")
+	require.Equal(t, "state.redis", byName["statestore"].Type)
+	require.Contains(t, byName, "statestore2")
+	require.Equal(t, "state.in-memory", byName["statestore2"].Type)
 }
 
 func TestDetectParsesSecretKeyRef(t *testing.T) {
