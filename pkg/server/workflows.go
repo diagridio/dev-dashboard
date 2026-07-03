@@ -185,6 +185,11 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 	return r
 }
 
+// maxListPageSize caps the client-supplied list limit: each listed instance
+// costs extra store round-trips (Keys + BulkGet), so an unbounded limit would
+// let a single request trigger an unbounded N+1 scan.
+const maxListPageSize = 500
+
 func parseListQuery(req *http.Request) workflow.ListQuery {
 	q := workflow.ListQuery{
 		AppID:           req.URL.Query().Get("appId"),
@@ -204,7 +209,13 @@ func parseListQuery(req *http.Request) workflow.ListQuery {
 	}
 	if l := req.URL.Query().Get("limit"); l != "" {
 		if n, err := strconv.Atoi(l); err == nil {
-			q.PageSize = n
+			switch {
+			case n > maxListPageSize:
+				q.PageSize = maxListPageSize
+			case n > 0:
+				q.PageSize = n
+				// n <= 0: leave PageSize at 0 so the service default applies.
+			}
 		}
 	}
 	return q
