@@ -186,6 +186,54 @@ func TestRegistry_UpsertAutoNeverDuplicatesManualEmptyPath(t *testing.T) {
 	require.Len(t, reg.List(), before, "empty-path auto upsert must not duplicate around a manual entry")
 }
 
+func TestRegistry_UpdateRejectsRenameOntoExistingManualName(t *testing.T) {
+	home := t.TempDir()
+	r := LoadRegistry(home)
+	require.NoError(t, r.Add(ConnEntry{Name: "a", Type: "state.redis", Source: SourceManual,
+		Metadata: map[string]string{"redisHost": "hostA"}}))
+	require.NoError(t, r.Add(ConnEntry{Name: "b", Type: "state.postgresql", Source: SourceManual,
+		Metadata: map[string]string{"connectionString": "host=b"}}))
+
+	aID := entryID(SourceManual, "a")
+
+	// Renaming a onto b's name must fail like a duplicate Add does.
+	_, err := r.Update(ConnEntry{ID: aID, Name: "b", Type: "state.redis", Source: SourceManual,
+		Metadata: map[string]string{"redisHost": "hostA"}})
+	require.ErrorIs(t, err, os.ErrExist, "rename onto an existing manual name must be rejected")
+
+	// The registry is unchanged: both entries intact with distinct ids.
+	assertIntact := func(got []ConnEntry) {
+		require.Len(t, got, 2)
+		byName := map[string]ConnEntry{}
+		for _, e := range got {
+			byName[e.Name] = e
+		}
+		require.Equal(t, entryID(SourceManual, "a"), byName["a"].ID)
+		require.Equal(t, "hostA", byName["a"].Metadata["redisHost"])
+		require.Equal(t, entryID(SourceManual, "b"), byName["b"].ID)
+		require.Equal(t, "host=b", byName["b"].Metadata["connectionString"])
+	}
+	assertIntact(r.List())
+	// And the on-disk file is not corrupted either.
+	assertIntact(LoadRegistry(home).List())
+}
+
+func TestRegistry_UpdateRenameToOwnNameSucceeds(t *testing.T) {
+	r := LoadRegistry(t.TempDir())
+	require.NoError(t, r.Add(ConnEntry{Name: "pg", Type: "state.postgresql", Source: SourceManual,
+		Metadata: map[string]string{"connectionString": "host=a"}}))
+
+	pgID := entryID(SourceManual, "pg")
+	// A no-op rename (same name, new metadata) must still succeed.
+	newID, err := r.Update(ConnEntry{ID: pgID, Name: "pg", Type: "state.postgresql", Source: SourceManual,
+		Metadata: map[string]string{"connectionString": "host=b"}})
+	require.NoError(t, err)
+	require.Equal(t, pgID, newID)
+	got := r.List()
+	require.Len(t, got, 1)
+	require.Equal(t, "host=b", got[0].Metadata["connectionString"])
+}
+
 func TestUpdateReturnsNewID(t *testing.T) {
 	r := LoadRegistry(t.TempDir())
 	require.NoError(t, r.Add(ConnEntry{Name: "old", Type: "state.redis", Metadata: map[string]string{"redisHost": "h"}}))
