@@ -17,6 +17,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Components', to: '/components' },
   { label: 'Configurations', to: '/configurations' },
   { label: 'Resiliency', to: '/resiliency' },
+  { label: 'Control Plane', to: '/control-plane' },
   { label: 'Logs', to: '/logs' },
 ]
 

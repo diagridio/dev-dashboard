@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react'
-import { describe, it, expect, beforeEach } from 'vitest'
-import { useLogStream } from './useLogStream'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { useLogStream, usePathLogStream } from './useLogStream'
 
 class FakeES {
   static instances: FakeES[] = []
@@ -12,6 +12,7 @@ class FakeES {
 }
 
 beforeEach(() => { FakeES.instances = []; (globalThis as unknown as { EventSource: unknown }).EventSource = FakeES })
+afterEach(() => vi.unstubAllGlobals())
 
 describe('useLogStream', () => {
   it('buffers messages with parsed level and closes on unmount', () => {
@@ -46,5 +47,21 @@ describe('useLogStream', () => {
     expect(result.current.status).toBe('open')
     act(() => { es.onerror?.() })
     expect(result.current.status).toBe('error')
+  })
+})
+
+describe('usePathLogStream', () => {
+  it('usePathLogStream connects to the given path', () => {
+    const opened: string[] = []
+    class FakeES {
+      onopen: (() => void) | null = null
+      onmessage: ((e: MessageEvent) => void) | null = null
+      onerror: (() => void) | null = null
+      constructor(url: string) { opened.push(url) }
+      close() {}
+    }
+    vi.stubGlobal('EventSource', FakeES as unknown as typeof EventSource)
+    renderHook(() => usePathLogStream('/controlplane/dapr_scheduler/logs'))
+    expect(opened.some((u) => u.includes('/controlplane/dapr_scheduler/logs'))).toBe(true)
   })
 })

@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApps, useApp } from '../hooks/useApps'
-import { useLogStream } from '../hooks/useLogStream'
+import { useLogStream, usePathLogStream } from '../hooks/useLogStream'
 import type { LogLine, LogLevel } from '../types/logs'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { parseLogTime } from '../lib/logtime'
 
 // LogSource is wider than the hook's 'daprd' | 'app'; 'both' composes two streams.
 type LogSource = 'both' | 'daprd' | 'app'
+
+const CP_SERVICES = ['dapr_scheduler', 'dapr_placement', 'dapr_sentry', 'dapr_injector'] as const
+type CpService = (typeof CP_SERVICES)[number]
 
 /** A merged row carries the original LogLine plus its tagged source. */
 interface MergedLine {
@@ -72,6 +75,22 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
 
 const ALL_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
 
+/**
+ * Sizes the time and source columns to the widest value actually present in the
+ * view (monospace, +1 char of breathing room), exposed as the --ltime-w / --lsrc-w
+ * CSS variables consumed by .logrow. `srcLabels` are the source tags shown
+ * ('daprd'/'app', or a container name); `texts` are the log lines whose extracted
+ * timestamps drive the time column. --ltime-w is only set when at least one line
+ * carries a timestamp, so the stylesheet default holds for timestamp-less streams.
+ */
+function logGridVars(srcLabels: string[], texts: string[]): CSSProperties {
+  const srcLen = srcLabels.reduce((m, s) => Math.max(m, s.length), 0)
+  const timeLen = texts.reduce((m, t) => Math.max(m, extractTime(t).length), 0)
+  const vars: Record<string, string> = { '--lsrc-w': `${srcLen + 1}ch` }
+  if (timeLen > 0) vars['--ltime-w'] = `${timeLen + 1}ch`
+  return vars as CSSProperties
+}
+
 interface LogRowProps {
   merged: MergedLine
   search: string
@@ -88,6 +107,29 @@ function LogRow({ merged, search }: LogRowProps) {
       <span className="ltime">{time}</span>
       <span className={`lvl ${level}`}>{level}</span>
       <span className={`lsrc lsrc-${src}`}>{src}</span>
+      <span className="lmsg">
+        <HighlightedText text={line.text} query={search} />
+      </span>
+    </div>
+  )
+}
+
+interface CpLogRowProps {
+  line: LogLine
+  search: string
+  service: CpService
+}
+
+function CpLogRow({ line, search, service }: CpLogRowProps) {
+  const level = line.level ?? 'info'
+  const isError = level === 'error'
+  const time = extractTime(line.text)
+
+  return (
+    <div className={`logrow${isError ? ' error' : ''}`}>
+      <span className="ltime">{time}</span>
+      <span className={`lvl ${level}`}>{level}</span>
+      <span className="lsrc lsrc-cp">{service}</span>
       <span className="lmsg">
         <HighlightedText text={line.text} query={search} />
       </span>
@@ -198,6 +240,7 @@ function LogViewerCore({
           className="logwin"
           ref={scrollRef}
           onScroll={handleScroll}
+          style={logGridVars(source === 'both' ? ['daprd', 'app'] : [source], filtered.map(m => m.line.text))}
         >
           {filtered.map(merged => (
             <LogRow
@@ -221,6 +264,90 @@ function LogViewerCore({
   )
 }
 
+interface CpLogViewerProps {
+  cp: CpService
+  activeLevels: Set<LogLevel>
+  search: string
+  following: boolean
+  onFollowDisengage: () => void
+}
+
+function CpLogViewer({
+  cp,
+  activeLevels,
+  search,
+  following,
+  onFollowDisengage,
+}: CpLogViewerProps) {
+  const { lines, status } = usePathLogStream(`/controlplane/${cp}/logs`)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const filtered = lines.filter(line => {
+    const level = line.level ?? 'info'
+    if (!activeLevels.has(level)) return false
+    if (search && !line.text.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
+  const matchCount = search
+    ? lines.filter(line => line.text.toLowerCase().includes(search.toLowerCase())).length
+    : 0
+
+  const tailBytes = lines.reduce((acc, line) => acc + line.text.length, 0)
+  const tailKB = Math.round(tailBytes / 1024)
+
+  const lineCount = lines.length
+
+  useEffect(() => {
+    if (!following) return
+    const el = scrollRef.current
+    if (!el) return
+    if (el.scrollHeight > 0) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [lineCount, following])
+
+  const SCROLL_THRESHOLD = 24
+
+  function handleScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    if (el.scrollHeight === 0) return
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    if (distFromBottom > SCROLL_THRESHOLD && following) {
+      onFollowDisengage()
+    }
+  }
+
+  return (
+    <div className="card" style={{ padding: 0 }}>
+      <div
+        className="logwin"
+        ref={scrollRef}
+        onScroll={handleScroll}
+        style={logGridVars([cp], filtered.map(l => l.text))}
+      >
+        {filtered.map(line => (
+          <CpLogRow
+            key={line.seq}
+            line={line}
+            search={search}
+            service={cp}
+          />
+        ))}
+      </div>
+      <div className="logfoot">
+        <span className={`beatbtn${status === 'open' ? '' : ' off'}`} style={{ padding: 0, border: 'none', background: 'transparent', display: 'inline-flex' }}>
+          <span className="beat" style={{ width: 7, height: 7 }} />
+        </span>
+        {filtered.length} lines
+        {search && matchCount > 0 && ` · highlighting "${search}"`}
+        {` · tail ${tailKB} KB`}
+      </div>
+    </div>
+  )
+}
+
 function sourceSubtitle(source: LogSource): string {
   if (source === 'daprd') return 'daprd'
   if (source === 'app') return 'application'
@@ -231,6 +358,7 @@ export function Logs() {
   const [searchParams, setSearchParams] = useSearchParams()
   const appId = searchParams.get('app') ?? ''
   const source = (searchParams.get('source') ?? 'both') as LogSource
+  const cp = (searchParams.get('cp') ?? '') as CpService | ''
 
   const [activeLevels, setActiveLevels] = useState<Set<LogLevel>>(new Set(ALL_LEVELS))
   const [search, setSearch] = useState('')
@@ -246,6 +374,8 @@ export function Logs() {
       const next = new URLSearchParams(prev)
       if (id) next.set('app', id)
       else next.delete('app')
+      // Clear cp when switching to an app
+      next.delete('cp')
       return next
     })
   }
@@ -254,6 +384,24 @@ export function Logs() {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       next.set('source', s)
+      return next
+    })
+  }
+
+  function onCpChange(name: CpService) {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.set('cp', name)
+      // Clear app selection when switching to control-plane view
+      next.delete('app')
+      return next
+    })
+  }
+
+  function clearCp() {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      next.delete('cp')
       return next
     })
   }
@@ -274,7 +422,15 @@ export function Logs() {
     setFollowing(f => !f)
   }
 
-  useDocumentTitle(appId ? `Logs — ${appId}` : 'Logs — Dapr Dev Dashboard')
+  const isCpView = cp !== '' && (CP_SERVICES as readonly string[]).includes(cp)
+
+  useDocumentTitle(
+    isCpView
+      ? `Logs — ${cp}`
+      : appId
+        ? `Logs — ${appId}`
+        : 'Logs — Dapr Dev Dashboard',
+  )
 
   const hasPath = app
     ? source === 'app'
@@ -289,7 +445,12 @@ export function Logs() {
       <div className="phead">
         <div>
           <h1>Logs</h1>
-          {appId && (
+          {isCpView && (
+            <div className="sub">
+              Tailing <span className="mono b">{cp}</span> · control-plane
+            </div>
+          )}
+          {!isCpView && appId && (
             <div className="sub">
               Tailing <span className="mono b">{appId}</span> · {sourceSubtitle(source)}
             </div>
@@ -330,6 +491,26 @@ export function Logs() {
           <option value="app">app only</option>
         </select>
 
+        {/* Control-plane service selector — slots alongside the existing source selector */}
+        <select
+          className="select"
+          data-cy="log-cp"
+          value={cp}
+          onChange={e => {
+            const val = e.target.value
+            if (val === '') clearCp()
+            else onCpChange(val as CpService)
+          }}
+          aria-label="Control Plane"
+        >
+          <option value="">— control plane —</option>
+          {CP_SERVICES.map(name => (
+            <option key={name} value={name}>
+              {name}
+            </option>
+          ))}
+        </select>
+
         <div className="lvchips" role="group" aria-label="Levels">
           {ALL_LEVELS.map(level => (
             <button
@@ -367,15 +548,25 @@ export function Logs() {
       </div>
 
       {/* Content area */}
-      {!appId && (
+      {isCpView && (
+        <CpLogViewer
+          cp={cp as CpService}
+          activeLevels={activeLevels}
+          search={search}
+          following={following}
+          onFollowDisengage={() => setFollowing(false)}
+        />
+      )}
+
+      {!isCpView && !appId && (
         <p className="muted">Select an app to view logs.</p>
       )}
 
-      {appId && isLoading && (
+      {!isCpView && appId && isLoading && (
         <p className="muted">Loading…</p>
       )}
 
-      {appId && !isLoading && app && !hasPath && (
+      {!isCpView && appId && !isLoading && app && !hasPath && (
         <div className="card">
           No captured log file — this app streams its logs to the terminal. Redirect{' '}
           <code className="mono">dapr run</code> output to a file, or use a{' '}
@@ -383,7 +574,7 @@ export function Logs() {
         </div>
       )}
 
-      {appId && !isLoading && app && hasPath && (
+      {!isCpView && appId && !isLoading && app && hasPath && (
         <LogViewerCore
           appId={appId}
           source={source}

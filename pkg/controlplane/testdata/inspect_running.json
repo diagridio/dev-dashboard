@@ -1,0 +1,7 @@
+[
+  {
+    "State": { "Status": "running", "Health": { "Status": "healthy" } },
+    "NetworkSettings": { "Ports": { "50006/tcp": [{ "HostPort": "50006" }] } },
+    "LogPath": "/var/lib/docker/containers/abc/abc-json.log"
+  }
+]

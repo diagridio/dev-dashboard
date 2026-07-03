@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/controlplane"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
@@ -55,13 +56,14 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
 
 	return server.Options{
-		BasePath:  deps.BasePath,
-		DistFS:    dist,
-		Version:   version.Get(),
-		Apps:      decorated,
-		Backend:   rc,
-		Stores:    rc,
-		Resources: resources.New(rc.Paths),
-		News:      newsSvc,
+		BasePath:     deps.BasePath,
+		DistFS:       dist,
+		Version:      version.Get(),
+		Apps:         decorated,
+		Backend:      rc,
+		Stores:       rc,
+		Resources:    resources.New(rc.Paths),
+		News:         newsSvc,
+		ControlPlane: controlplane.New(),
 	}, []func() error{rc.Close}
 }
