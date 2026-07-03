@@ -163,6 +163,31 @@ func TestWorkflowBulkPurgeReconcilesFailed(t *testing.T) {
 	require.Contains(t, body, `"error":"could not resolve target"`)
 }
 
+func TestWorkflowBulkPurgeMalformedBody(t *testing.T) {
+	rem := &fakeRemover{}
+	backend := &fakeBackend{svc: fakeWF{}, rem: rem, targets: fakeResolver{}}
+	h := workflowsRouter(backend, nil)
+
+	// Malformed JSON → 400, nothing purged.
+	res, body := postJSON(t, h, "/purge", `{"ids": [`)
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+	require.Contains(t, body, `"error":"invalid JSON body"`)
+	require.Empty(t, rem.calls)
+
+	// Mis-typed field (ids must be an array) → 400, nothing purged.
+	res, body = postJSON(t, h, "/purge", `{"ids":"x"}`)
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+	require.Contains(t, body, `"error":"invalid JSON body"`)
+	require.Empty(t, rem.calls)
+
+	// Empty body → 400: the frontend always sends a JSON body, so an empty
+	// body is a client bug, not a valid "purge nothing" request.
+	res, body = postJSON(t, h, "/purge", ``)
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+	require.Contains(t, body, `"error":"invalid JSON body"`)
+	require.Empty(t, rem.calls)
+}
+
 func TestWorkflowUnknownStore(t *testing.T) {
 	h := workflowsRouter(newFakeBackend(fakeWF{}), nil)
 

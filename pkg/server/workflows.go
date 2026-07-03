@@ -164,7 +164,10 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 			return
 		}
 		var body removeBody
-		_ = json.NewDecoder(req.Body).Decode(&body)
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+			return
+		}
 		var tgts []workflow.RemoveTarget
 		var failed []workflow.RemoveResult
 		for _, ref := range body.IDs {
