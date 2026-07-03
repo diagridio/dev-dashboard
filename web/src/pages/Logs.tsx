@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApps, useApp } from '../hooks/useApps'
 import { useLogStream, usePathLogStream } from '../hooks/useLogStream'
@@ -74,6 +74,22 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
 }
 
 const ALL_LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
+
+/**
+ * Sizes the time and source columns to the widest value actually present in the
+ * view (monospace, +1 char of breathing room), exposed as the --ltime-w / --lsrc-w
+ * CSS variables consumed by .logrow. `srcLabels` are the source tags shown
+ * ('daprd'/'app', or a container name); `texts` are the log lines whose extracted
+ * timestamps drive the time column. --ltime-w is only set when at least one line
+ * carries a timestamp, so the stylesheet default holds for timestamp-less streams.
+ */
+function logGridVars(srcLabels: string[], texts: string[]): CSSProperties {
+  const srcLen = srcLabels.reduce((m, s) => Math.max(m, s.length), 0)
+  const timeLen = texts.reduce((m, t) => Math.max(m, extractTime(t).length), 0)
+  const vars: Record<string, string> = { '--lsrc-w': `${srcLen + 1}ch` }
+  if (timeLen > 0) vars['--ltime-w'] = `${timeLen + 1}ch`
+  return vars as CSSProperties
+}
 
 interface LogRowProps {
   merged: MergedLine
@@ -224,6 +240,7 @@ function LogViewerCore({
           className="logwin"
           ref={scrollRef}
           onScroll={handleScroll}
+          style={logGridVars(source === 'both' ? ['daprd', 'app'] : [source], filtered.map(m => m.line.text))}
         >
           {filtered.map(merged => (
             <LogRow
@@ -308,6 +325,7 @@ function CpLogViewer({
         className="logwin"
         ref={scrollRef}
         onScroll={handleScroll}
+        style={logGridVars([cp], filtered.map(l => l.text))}
       >
         {filtered.map(line => (
           <CpLogRow
