@@ -62,21 +62,21 @@ export function StepPolicies({ state, dispatch }: { state: ResiliencyState; disp
       </div>
 
       {open?.kind === 'timeout' && (
-        <TimeoutDialog open editing={!!open.editName}
+        <TimeoutDialog open editing={!!open.editName} existingNames={Object.keys(pol.timeouts)}
           initialName={open.editName ?? nextName('timeout', pol.timeouts)}
           initialDuration={open.editName ? pol.timeouts[open.editName] : undefined}
           onClose={() => setOpen(null)}
           onSave={(name, duration) => { renameThenUpsert(open.editName, name, 'RENAME_TIMEOUT', { type: 'UPSERT_TIMEOUT', name, duration }); setOpen(null) }} />
       )}
       {open?.kind === 'retry' && (
-        <RetryDialog open editing={!!open.editName}
+        <RetryDialog open editing={!!open.editName} existingNames={Object.keys(pol.retries)}
           initialName={open.editName ?? nextName('retry', pol.retries)}
           initialPolicy={open.editName ? pol.retries[open.editName] : undefined}
           onClose={() => setOpen(null)}
           onSave={(name, policy) => { renameThenUpsert(open.editName, name, 'RENAME_RETRY', { type: 'UPSERT_RETRY', name, policy }); setOpen(null) }} />
       )}
       {open?.kind === 'cb' && (
-        <CircuitBreakerDialog open editing={!!open.editName}
+        <CircuitBreakerDialog open editing={!!open.editName} existingNames={Object.keys(pol.circuitBreakers)}
           initialName={open.editName ?? nextName('circuitBreaker', pol.circuitBreakers)}
           initialPolicy={open.editName ? pol.circuitBreakers[open.editName] : undefined}
           onClose={() => setOpen(null)}

@@ -73,6 +73,72 @@ describe('CircuitBreakerDialog defaults', () => {
   })
 })
 
+describe('duplicate name guard', () => {
+  it('TimeoutDialog blocks saving a name that duplicates an existing timeout', () => {
+    render(<TimeoutDialog open initialName="timeout2" existingNames={['timeout1']} onClose={vi.fn()} onSave={vi.fn()} />)
+    const save = screen.getByRole('button', { name: /save/i })
+    expect(save).toBeEnabled()
+    fireEvent.change(screen.getByLabelText(/timeout name/i), { target: { value: 'timeout1' } })
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(save).toBeDisabled()
+  })
+  it('TimeoutDialog allows keeping the same name while editing but blocks renaming onto another', () => {
+    render(<TimeoutDialog open editing initialName="timeout1" initialDuration="30s" existingNames={['timeout1', 'timeout2']} onClose={vi.fn()} onSave={vi.fn()} />)
+    const save = screen.getByRole('button', { name: /save/i })
+    expect(save).toBeEnabled() // unchanged name is the record being edited
+    fireEvent.change(screen.getByLabelText(/timeout name/i), { target: { value: 'timeout2' } })
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(save).toBeDisabled()
+  })
+  it('RetryDialog blocks saving a duplicate retry name', () => {
+    render(<RetryDialog open initialName="retry2" existingNames={['retry1']} onClose={vi.fn()} onSave={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/retry name/i), { target: { value: 'retry1' } })
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
+  })
+  it('CircuitBreakerDialog blocks saving a duplicate circuit breaker name', () => {
+    render(<CircuitBreakerDialog open initialName="circuitBreaker2" existingNames={['circuitBreaker1']} onClose={vi.fn()} onSave={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/circuit breaker name/i), { target: { value: 'circuitBreaker1' } })
+    expect(screen.getByText(/already exists/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
+  })
+})
+
+describe('RetryDialog required durations', () => {
+  it('disables Save when Duration is empty for a constant policy', () => {
+    render(<RetryDialog open initialName="retry1" onClose={vi.fn()} onSave={vi.fn()} />)
+    const save = screen.getByRole('button', { name: /save/i })
+    fireEvent.change(screen.getByLabelText(/^duration/i), { target: { value: '' } })
+    expect(save).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/^duration/i), { target: { value: '5s' } })
+    expect(save).toBeEnabled()
+  })
+  it('disables Save when Max interval is empty for an exponential policy', () => {
+    render(<RetryDialog open initialName="retry1" onClose={vi.fn()} onSave={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/retry policy type/i), { target: { value: 'exponential' } })
+    const save = screen.getByRole('button', { name: /save/i })
+    fireEvent.change(screen.getByLabelText(/max interval/i), { target: { value: '' } })
+    expect(save).toBeDisabled()
+    fireEvent.change(screen.getByLabelText(/max interval/i), { target: { value: '60s' } })
+    expect(save).toBeEnabled()
+  })
+})
+
+describe('RetryDialog reserved DaprBuiltIn prefix', () => {
+  it('rejects a custom retry named with the DaprBuiltIn prefix', () => {
+    render(<RetryDialog open initialName="retry1" onClose={vi.fn()} onSave={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/retry name/i), { target: { value: 'DaprBuiltInFoo' } })
+    expect(screen.getByText(/reserved/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
+  })
+  it('is case-sensitive, matching isDefaultPolicyName', () => {
+    render(<RetryDialog open initialName="retry1" onClose={vi.fn()} onSave={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/retry name/i), { target: { value: 'daprBuiltInFoo' } })
+    expect(screen.queryByText(/reserved/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeEnabled()
+  })
+})
+
 describe('RetryDialog edit + lock + keep-duration', () => {
   it('locks the name when lockName is set', () => {
     render(<RetryDialog open initialName="DaprBuiltInServiceRetries" lockName onClose={vi.fn()} onSave={vi.fn()} />)

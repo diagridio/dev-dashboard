@@ -2,8 +2,16 @@ import { useState } from 'react'
 import { Modal } from '../../components/Modal'
 import { Field, TextInput, NumberInput, SelectInput } from '../../components/form'
 import { validateResourceName, validateGoDuration, validateStatusCodes, integerError } from '../../lib/validation'
+import { isDefaultPolicyName } from './defaultPolicies'
 import type { RetryPolicy, CircuitBreakerPolicy } from '../../types/resiliency'
 export { NamedList } from './NamedList'
+
+/** Saving a name that already exists upserts over that record — block it, unless it is the record being edited. */
+function duplicateNameError(name: string, existingNames: string[] | undefined, editing: boolean | undefined, initialName: string, what: string): string | null {
+  if (!existingNames?.includes(name)) return null
+  if (editing && name === initialName) return null
+  return `A ${what} with this name already exists`
+}
 
 function DialogShell({ open, title, onClose, onSave, canSave, children }: {
   open: boolean; title: string; onClose: () => void; onSave: () => void; canSave: boolean; children: React.ReactNode
@@ -19,12 +27,14 @@ function DialogShell({ open, title, onClose, onSave, canSave, children }: {
   )
 }
 
-export function TimeoutDialog({ open, initialName, initialDuration, editing, onClose, onSave }: {
-  open: boolean; initialName: string; initialDuration?: string; editing?: boolean; onClose: () => void; onSave: (name: string, duration: string) => void
+export function TimeoutDialog({ open, initialName, initialDuration, editing, existingNames, onClose, onSave }: {
+  open: boolean; initialName: string; initialDuration?: string; editing?: boolean; existingNames?: string[]
+  onClose: () => void; onSave: (name: string, duration: string) => void
 }) {
   const [name, setName] = useState(initialName)
   const [duration, setDuration] = useState(initialDuration ?? '5s')
-  const nameErr = name === '' ? 'Name is required' : validateResourceName(name)
+  const nameErr = name === '' ? 'Name is required'
+    : (validateResourceName(name) ?? duplicateNameError(name, existingNames, editing, initialName, 'timeout policy'))
   const durOk = duration !== '' && validateGoDuration(duration).valid
   return (
     <DialogShell open={open} title={editing ? 'Edit timeout policy' : 'Add timeout policy'} onClose={onClose} canSave={!nameErr && durOk}
@@ -39,9 +49,9 @@ export function TimeoutDialog({ open, initialName, initialDuration, editing, onC
   )
 }
 
-export function RetryDialog({ open, initialName, initialPolicy, editing, lockName, keepDurationForExponential, onClose, onSave }: {
+export function RetryDialog({ open, initialName, initialPolicy, editing, lockName, keepDurationForExponential, existingNames, onClose, onSave }: {
   open: boolean; initialName: string; initialPolicy?: RetryPolicy; editing?: boolean; lockName?: boolean; keepDurationForExponential?: boolean
-  onClose: () => void; onSave: (name: string, policy: RetryPolicy) => void
+  existingNames?: string[]; onClose: () => void; onSave: (name: string, policy: RetryPolicy) => void
 }) {
   const [name, setName] = useState(initialName)
   const [policy, setPolicy] = useState<'constant' | 'exponential'>(initialPolicy?.policy ?? 'constant')
@@ -50,9 +60,14 @@ export function RetryDialog({ open, initialName, initialPolicy, editing, lockNam
   const [maxRetries, setMaxRetries] = useState(initialPolicy?.maxRetries?.toString() ?? '-1')
   const [http, setHttp] = useState(initialPolicy?.matching?.httpStatusCodes ?? '')
   const [grpc, setGrpc] = useState(initialPolicy?.matching?.grpcStatusCodes ?? '')
-  const nameErr = name === '' ? 'Name is required' : validateResourceName(name)
+  // Custom retries must not use the reserved DaprBuiltIn prefix: isDefaultPolicyName filters
+  // such names out of every list (invisible/unremovable) while they still land in the YAML.
+  const reservedErr = !lockName && isDefaultPolicyName(name)
+    ? 'Names starting with "DaprBuiltIn" are reserved for built-in overrides' : null
+  const nameErr = name === '' ? 'Name is required'
+    : (validateResourceName(name) ?? reservedErr ?? duplicateNameError(name, existingNames, editing, initialName, 'retry policy'))
   const durField = policy === 'constant' ? duration : maxInterval
-  const durOk = validateGoDuration(durField).valid
+  const durOk = durField !== '' && validateGoDuration(durField).valid
   const numOk = integerError(maxRetries) === null
   const codesOk = validateStatusCodes(http) === null && validateStatusCodes(grpc) === null
   const canSave = !nameErr && durOk && numOk && codesOk
@@ -85,11 +100,11 @@ export function RetryDialog({ open, initialName, initialPolicy, editing, lockNam
           onChange={(v) => setPolicy(v === 'exponential' ? 'exponential' : 'constant')} />
       </Field>
       {policy === 'constant' ? (
-        <Field label="Duration" required error={durOk ? null : validateGoDuration(duration).error}>
+        <Field label="Duration" required error={duration === '' ? null : (durOk ? null : validateGoDuration(duration).error)}>
           <TextInput aria-label="Duration" placeholder="5s" value={duration} onChange={setDuration} />
         </Field>
       ) : (
-        <Field label="Max interval" required error={durOk ? null : validateGoDuration(maxInterval).error}>
+        <Field label="Max interval" required error={maxInterval === '' ? null : (durOk ? null : validateGoDuration(maxInterval).error)}>
           <TextInput aria-label="Max interval" placeholder="60s" value={maxInterval} onChange={setMaxInterval} />
         </Field>
       )}
@@ -106,15 +121,17 @@ export function RetryDialog({ open, initialName, initialPolicy, editing, lockNam
   )
 }
 
-export function CircuitBreakerDialog({ open, initialName, initialPolicy, editing, onClose, onSave }: {
-  open: boolean; initialName: string; initialPolicy?: CircuitBreakerPolicy; editing?: boolean; onClose: () => void; onSave: (name: string, policy: CircuitBreakerPolicy) => void
+export function CircuitBreakerDialog({ open, initialName, initialPolicy, editing, existingNames, onClose, onSave }: {
+  open: boolean; initialName: string; initialPolicy?: CircuitBreakerPolicy; editing?: boolean; existingNames?: string[]
+  onClose: () => void; onSave: (name: string, policy: CircuitBreakerPolicy) => void
 }) {
   const [name, setName] = useState(initialName)
   const [maxRequests, setMaxRequests] = useState(initialPolicy?.maxRequests?.toString() ?? '1')
   const [timeoutDur, setTimeoutDur] = useState(initialPolicy?.timeout ?? '45s')
   const [trip, setTrip] = useState(initialPolicy?.trip ?? 'consecutiveFailures >= 5')
   const [intervalDur, setIntervalDur] = useState(initialPolicy?.interval ?? '8s')
-  const nameErr = name === '' ? 'Name is required' : validateResourceName(name)
+  const nameErr = name === '' ? 'Name is required'
+    : (validateResourceName(name) ?? duplicateNameError(name, existingNames, editing, initialName, 'circuit breaker policy'))
   const numOk = integerError(maxRequests) === null
   const toOk = validateGoDuration(timeoutDur).valid
   const ivOk = validateGoDuration(intervalDur).valid

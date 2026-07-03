@@ -2,9 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { initialState, reducer, canContinue, assembleResiliency, nextName } from './reducer'
 
 describe('nextName', () => {
-  it('produces sequential names by count of existing keys', () => {
+  it('produces sequential names when no gaps exist', () => {
     expect(nextName('retry', {})).toBe('retry1')
     expect(nextName('retry', { retry1: {}, retry2: {} })).toBe('retry3')
+  })
+  it('suggests the first free slot after deletions instead of colliding', () => {
+    // deleting timeout1 from {timeout1, timeout2} must not suggest the existing timeout2
+    expect(nextName('timeout', { timeout2: '10s' })).toBe('timeout1')
+    expect(nextName('timeout', { timeout1: '5s', timeout3: '10s' })).toBe('timeout2')
+  })
+  it('ignores non-numeric and foreign keys when scanning for a free slot', () => {
+    expect(nextName('retry', { important: {}, DaprBuiltInServiceRetries: {} })).toBe('retry1')
   })
 })
 
