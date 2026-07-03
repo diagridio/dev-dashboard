@@ -60,28 +60,28 @@ function ServiceCard({
 }) {
   const isK8s = svc.status === 'kubernetes-only'
   return (
-    <div className={isK8s ? 'card faint' : 'card'} style={{ padding: '14px 16px' }}>
+    <div className={isK8s ? 'card faint cp-card' : 'card cp-card'}>
       <div className="b">{svc.name}</div>
       {isK8s ? (
         <div className="sub">Kubernetes only</div>
       ) : (
         <>
-          <div style={{ marginTop: 8 }}>
+          <div className="cp-status">
             <span className="health">
               <span className={svc.healthy ? 'led ok' : 'led bad'} />
               {svc.status}
             </span>
           </div>
-          <div className="mono faint" style={{ marginTop: 6, fontSize: 12 }}>
+          <div className="mono faint cp-field-ports">
             {svc.ports.length ? svc.ports.join(', ') : '—'}
           </div>
-          <div className="mono" style={{ marginTop: 4, fontSize: 12 }}>
+          <div className="mono cp-field">
             {svc.memoryHuman || '—'}
           </div>
-          <div className="mono faint" style={{ marginTop: 4, fontSize: 12, wordBreak: 'break-all' }}>
+          <div className="mono faint cp-field cp-logpath">
             {svc.logPath || '—'}
           </div>
-          <div style={{ marginTop: 8 }}>
+          <div className="cp-status">
             <Link className="celllink" to={`/logs?cp=${encodeURIComponent(svc.name)}`}>
               View logs
             </Link>

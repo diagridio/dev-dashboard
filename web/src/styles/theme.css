@@ -478,3 +478,10 @@ details[open] .caret { transform: rotate(90deg); }
 .wizard-body { min-height: 120px; }
 .stepnav { display: flex; justify-content: space-between; gap: 10px; }
 .stepnav .spacer { flex: 1; }
+
+/* ---- Control Plane page — ServiceCard structural classes ---- */
+.cp-card { padding: 14px 16px; }
+.cp-status { margin-top: 8px; }
+.cp-field { margin-top: 4px; font-size: 12px; }
+.cp-field-ports { margin-top: 6px; font-size: 12px; }
+.cp-logpath { word-break: break-all; }
