@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/diagridio/dev-dashboard/pkg/controlplane"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -48,7 +49,7 @@ func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, 
 				return
 			}
 			if err := stores.AddStore(body.Name, body.Type, body.Metadata); err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+				writeJSON(w, storeErrStatus(err), map[string]string{"error": err.Error()})
 				return
 			}
 			writeJSON(w, http.StatusCreated, map[string]string{"name": body.Name})
@@ -70,7 +71,7 @@ func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, 
 			}
 			newID, err := stores.UpdateStore(id, body.Name, body.Type, body.Metadata)
 			if err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+				writeJSON(w, storeErrStatus(err), map[string]string{"error": err.Error()})
 				return
 			}
 			writeJSON(w, http.StatusOK, map[string]string{"id": newID})
@@ -81,7 +82,7 @@ func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, 
 				return
 			}
 			if err := stores.DeleteStore(chi.URLParam(req, "id")); err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+				writeJSON(w, storeErrStatus(err), map[string]string{"error": err.Error()})
 				return
 			}
 			w.WriteHeader(http.StatusNoContent)
@@ -108,6 +109,23 @@ var (
 	ErrUnsupportedStoreType = errors.New("unsupported state store type")
 	ErrStoreValidation      = errors.New("invalid store request")
 )
+
+// storeErrStatus maps registry mutation failures to HTTP status codes by
+// sentinel (errors.Is, never message text): a duplicate name (os.ErrExist) is
+// a 409 conflict, a missing id (os.ErrNotExist) is a 404, and anything else —
+// e.g. a registry file write failure — is a server error, not the client's
+// fault. Request validation failures are rejected with 400 before the registry
+// is called, so they never reach this mapping.
+func storeErrStatus(err error) int {
+	switch {
+	case errors.Is(err, os.ErrExist):
+		return http.StatusConflict
+	case errors.Is(err, os.ErrNotExist):
+		return http.StatusNotFound
+	default:
+		return http.StatusInternalServerError
+	}
+}
 
 // storeBody is the POST/PUT request body for a manual connection.
 type storeBody struct {
