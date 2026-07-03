@@ -68,6 +68,12 @@ func TestListRunningService(t *testing.T) {
 	if !res.Available {
 		t.Fatal("Available = false, want true")
 	}
+	if !res.Reachable {
+		t.Error("Reachable = false, want true")
+	}
+	if !res.ControlPlanePresent {
+		t.Error("ControlPlanePresent = false, want true (containers found)")
+	}
 	// 2 live + 2 k8s-only placeholders
 	if len(res.Services) != 4 {
 		t.Fatalf("len(Services) = %d, want 4", len(res.Services))
@@ -115,6 +121,59 @@ func TestLogStreamEmitsLines(t *testing.T) {
 	last := f.streamCalls[len(f.streamCalls)-1]
 	if last[0] != "logs" {
 		t.Errorf("stream args = %v, want logs ...", last)
+	}
+}
+
+func TestListUnreachableDaemon(t *testing.T) {
+	f := &fakeRunner{
+		errs: map[string]error{
+			"info": errors.New("cannot connect to docker daemon"),
+		},
+	}
+	m := newManager(RuntimeDocker, f)
+	res, err := m.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if !res.Available {
+		t.Error("Available = false, want true (runtime is installed)")
+	}
+	if res.Reachable {
+		t.Error("Reachable = true, want false (daemon unreachable)")
+	}
+	if len(res.Services) != 0 {
+		t.Errorf("len(Services) = %d, want 0 when daemon unreachable", len(res.Services))
+	}
+}
+
+func TestListReachableButNoContainers(t *testing.T) {
+	stats, _ := os.ReadFile("testdata/stats.json")
+	f := &fakeRunner{
+		outputs: map[string][]byte{
+			"stats --no-stream": stats,
+		},
+		errs: map[string]error{
+			"inspect dapr_scheduler": errors.New("no such container"),
+			"inspect dapr_placement": errors.New("no such container"),
+		},
+	}
+	m := newManager(RuntimeDocker, f)
+	res, err := m.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if !res.Available {
+		t.Error("Available = false, want true")
+	}
+	if !res.Reachable {
+		t.Error("Reachable = false, want true")
+	}
+	if res.ControlPlanePresent {
+		t.Error("ControlPlanePresent = true, want false (no containers)")
+	}
+	// still returns 4 services (2 live + 2 k8s placeholders)
+	if len(res.Services) != 4 {
+		t.Fatalf("len(Services) = %d, want 4", len(res.Services))
 	}
 }
 

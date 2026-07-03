@@ -14,6 +14,8 @@ export interface ControlPlaneService {
 export interface ControlPlaneList {
   runtime: string
   available: boolean
+  reachable: boolean
+  controlPlanePresent: boolean
   services: ControlPlaneService[]
 }
 

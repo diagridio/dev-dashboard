@@ -33,9 +33,21 @@ describe('ControlPlane', () => {
     expect(await screen.findByText(/no container runtime/i)).toBeInTheDocument()
   })
 
+  it('shows daemon-down state when runtime installed but daemon unreachable', async () => {
+    mockList({ runtime: 'docker', available: true, reachable: false, controlPlanePresent: false, services: [] })
+    renderPage()
+    expect(await screen.findByText(/docker or podman is installed but not running/i)).toBeInTheDocument()
+  })
+
+  it('shows no-containers state when daemon reachable but no control-plane containers', async () => {
+    mockList({ runtime: 'docker', available: true, reachable: true, controlPlanePresent: false, services: [] })
+    renderPage()
+    expect(await screen.findByText(/no dapr control plane found/i)).toBeInTheDocument()
+  })
+
   it('renders a running service with a Restart action', async () => {
     mockList({
-      runtime: 'docker', available: true,
+      runtime: 'docker', available: true, reachable: true, controlPlanePresent: true,
       services: [{ name: 'dapr_scheduler', status: 'running', healthy: true, ports: ['50006/tcp'], memoryBytes: 1, memoryHuman: '12MiB', logPath: '/x.log', actionable: true }],
     })
     renderPage()
@@ -46,7 +58,7 @@ describe('ControlPlane', () => {
 
   it('renders k8s-only services without actions', async () => {
     mockList({
-      runtime: 'docker', available: true,
+      runtime: 'docker', available: true, reachable: true, controlPlanePresent: true,
       services: [{ name: 'dapr_sentry', status: 'kubernetes-only', healthy: false, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: false }],
     })
     renderPage()

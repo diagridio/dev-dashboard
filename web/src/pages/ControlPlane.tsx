@@ -33,6 +33,28 @@ export function ControlPlane() {
     )
   }
 
+  if (data.available && !data.reachable) {
+    return (
+      <div className="page">
+        {header}
+        <p className="muted">
+          Docker or Podman is installed but not running. Start it to manage the control plane.
+        </p>
+      </div>
+    )
+  }
+
+  if (data.available && data.reachable && !data.controlPlanePresent) {
+    return (
+      <div className="page">
+        {header}
+        <p className="muted">
+          No Dapr control plane found. Run <span className="mono">dapr init</span> to start it.
+        </p>
+      </div>
+    )
+  }
+
   const runAction = (name: string, act: ControlPlaneAction) => {
     if (window.confirm(`Run "${data.runtime} ${act} ${name}"?`)) {
       action.mutate({ name, action: act })

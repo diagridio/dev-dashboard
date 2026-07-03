@@ -15,9 +15,11 @@ var (
 
 // ListResult is the payload of GET /api/controlplane.
 type ListResult struct {
-	Runtime   RuntimeKind `json:"runtime"`
-	Available bool        `json:"available"`
-	Services  []Service   `json:"services"`
+	Runtime             RuntimeKind `json:"runtime"`
+	Available           bool        `json:"available"`
+	Reachable           bool        `json:"reachable"`           // runtime daemon responded
+	ControlPlanePresent bool        `json:"controlPlanePresent"` // >=1 live container exists
+	Services            []Service   `json:"services"`
 }
 
 // Manager lists and controls the local control-plane services.
@@ -49,12 +51,18 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 	if m.runtime == RuntimeNone {
 		return ListResult{Runtime: RuntimeNone, Available: false}, nil
 	}
+	// Probe whether the daemon is reachable before attempting container operations.
+	if _, err := m.run.run(ctx, "info"); err != nil {
+		return ListResult{Runtime: m.runtime, Available: true, Reachable: false}, nil
+	}
 	mem := m.memory(ctx)
 	services := make([]Service, 0, len(LiveServiceNames)+len(K8sOnlyServiceNames))
+	present := false
 	for _, name := range LiveServiceNames {
 		svc := Service{Name: name, Status: StatusStopped, Actionable: true}
 		out, err := m.run.run(ctx, "inspect", name)
 		if err == nil {
+			present = true
 			if info, perr := parseInspect(out); perr == nil {
 				svc.Status = info.State
 				svc.Healthy = info.Healthy
@@ -71,7 +79,7 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 	for _, name := range K8sOnlyServiceNames {
 		services = append(services, Service{Name: name, Status: StatusK8sOnly, Actionable: false})
 	}
-	return ListResult{Runtime: m.runtime, Available: true, Services: services}, nil
+	return ListResult{Runtime: m.runtime, Available: true, Reachable: true, ControlPlanePresent: present, Services: services}, nil
 }
 
 // memory fetches a single stats snapshot; failures degrade to empty (no memory shown).
