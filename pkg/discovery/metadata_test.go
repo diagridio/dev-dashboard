@@ -63,3 +63,29 @@ func TestFetchMetadata(t *testing.T) {
 	require.Equal(t, "go run ./cmd/order", md.AppCommand)
 	require.Equal(t, "dapr.yaml", md.RunTemplate)
 }
+
+func TestFetchMetadataRunTemplateFallsBackToPathBasename(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"order","extended":{"runTemplateName":"","runTemplatePath":"/home/dev/myapp/dapr.yaml"}}`))
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+
+	md, err := FetchMetadata(context.Background(), &http.Client{Timeout: 2 * time.Second}, port)
+	require.NoError(t, err)
+	require.Equal(t, "dapr.yaml", md.RunTemplate)
+}
+
+func TestFetchMetadataRunTemplateEmptyWhenNeitherFieldSet(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"order","extended":{}}`))
+	}))
+	t.Cleanup(srv.Close)
+	u, _ := url.Parse(srv.URL)
+	port, _ := strconv.Atoi(u.Port())
+
+	md, err := FetchMetadata(context.Background(), &http.Client{Timeout: 2 * time.Second}, port)
+	require.NoError(t, err)
+	require.Equal(t, "", md.RunTemplate)
+}
