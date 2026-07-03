@@ -32,6 +32,7 @@ const connectTimeout = 15 * time.Second
 // retains connections for the session.
 type reconciler struct {
 	// immutable after construction
+	baseCtx        context.Context // process-lifetime context; cancelled on shutdown so in-flight dials abort
 	apps           discovery.Service
 	namespace      string
 	homeDir        string
@@ -51,9 +52,15 @@ type reconciler struct {
 }
 
 // newReconciler builds a reconciler. The registry and pool are injected (the
-// pool already carries the opener used for connections).
-func newReconciler(apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client, registry *ConnRegistry, pool *connPool) *reconciler {
+// pool already carries the opener used for connections). ctx is the
+// process-lifetime base context: store-open contexts derive from it so that
+// shutdown (Ctrl-C) aborts in-flight dials instead of blocking on them.
+func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client, registry *ConnRegistry, pool *connPool) *reconciler {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	return &reconciler{
+		baseCtx:        ctx,
 		apps:           apps,
 		namespace:      namespace,
 		homeDir:        homeDir,
@@ -82,8 +89,14 @@ func identity(c *statestore.Component) string {
 func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	log := slog.Default().With("component", "reconciler")
 	resPaths, scanPaths, loaded, appPaths := derivePaths(apps, rc.homeDir, rc.stateStorePath)
-	detected, _ := statestore.Detect(scanPaths)
-	secretStores, _ := statestore.DetectSecretStores(scanPaths)
+	detected, err := statestore.Detect(scanPaths)
+	if err != nil {
+		log.Warn("state-store detection failed", "err", err)
+	}
+	secretStores, err := statestore.DetectSecretStores(scanPaths)
+	if err != nil {
+		log.Warn("secret-store detection failed", "err", err)
+	}
 	for i := range detected {
 		resolved, unresolved := statestore.ResolveSecrets(detected[i], secretStores)
 		detected[i].Metadata = resolved
@@ -113,8 +126,9 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 
 	// Pre-warm the elected active store through the pool. The pool retains it;
 	// it is never closed when the active store later changes.
+	// The open context derives from baseCtx so shutdown aborts in-flight dials.
 	if active := newReg.active(); active != nil && rc.pool != nil {
-		octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+		octx, cancel := context.WithTimeout(rc.baseCtx, connectTimeout)
 		defer cancel()
 		if _, err := rc.pool.openOrGet(octx, *active); err != nil {
 			log.Warn("pre-warm active store failed", "store", active.Name, "err", err)
@@ -140,6 +154,7 @@ func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 	if rc.registry == nil {
 		return statestore.Component{}, false
 	}
+	log := slog.Default().With("component", "reconciler")
 	for _, e := range rc.registry.List() {
 		if e.ID != id {
 			continue
@@ -148,11 +163,20 @@ func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 		case SourceManual:
 			return statestore.Component{Name: e.Name, Type: e.Type, Metadata: e.Metadata}, true
 		default: // auto
-			detected, _ := statestore.Detect([]string{e.Path})
+			detected, err := statestore.Detect([]string{e.Path})
+			if err != nil {
+				log.Warn("state-store detection failed", "path", e.Path, "err", err)
+			}
 			for i := range detected {
 				if detected[i].Path == e.Path || detected[i].Name == e.Name {
-					secretStores, _ := statestore.DetectSecretStores([]string{e.Path})
-					resolved, _ := statestore.ResolveSecrets(detected[i], secretStores)
+					secretStores, err := statestore.DetectSecretStores([]string{e.Path})
+					if err != nil {
+						log.Warn("secret-store detection failed", "path", e.Path, "err", err)
+					}
+					resolved, unresolved := statestore.ResolveSecrets(detected[i], secretStores)
+					if len(unresolved) > 0 {
+						log.Warn("unresolved secretKeyRef metadata", "store", detected[i].Name, "keys", unresolved)
+					}
 					detected[i].Metadata = resolved
 					return detected[i], true
 				}
@@ -264,7 +288,8 @@ func (rc *reconciler) ServiceFor(id string) (workflow.Service, server.WorkflowRe
 		comp = c
 	}
 
-	octx, cancel := context.WithTimeout(context.Background(), connectTimeout)
+	// Derive from baseCtx so shutdown aborts an in-flight dial here too.
+	octx, cancel := context.WithTimeout(rc.baseCtx, connectTimeout)
 	defer cancel()
 	e, err := rc.pool.openOrGet(octx, comp)
 	if err != nil {
