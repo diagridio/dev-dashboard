@@ -4,15 +4,12 @@ import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
 import { ResourcesSidebar } from './components/ResourcesSidebar'
 import { getTheme, type Theme } from './lib/prefs'
+import { safeGet } from './lib/safeStorage'
 
 const SIDEBAR_COLLAPSED_KEY = 'devdash.sidebarCollapsed'
 
 function getInitialCollapsed(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true'
-  } catch {
-    return false
-  }
+  return safeGet(SIDEBAR_COLLAPSED_KEY) === 'true'
 }
 
 export function App() {

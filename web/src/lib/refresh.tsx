@@ -1,4 +1,5 @@
 import { createContext, use, useState, type ReactNode } from 'react'
+import { safeGet, safeSet } from './safeStorage'
 
 const REFRESH_MS_KEY = 'devdash.refreshMs'
 const REFRESH_PAUSED_KEY = 'devdash.refreshPaused'
@@ -12,7 +13,7 @@ export interface RefreshCtx {
 }
 
 function readIntervalMs(): number {
-  const raw = localStorage.getItem(REFRESH_MS_KEY)
+  const raw = safeGet(REFRESH_MS_KEY)
   if (raw !== null) {
     const parsed = parseInt(raw, 10)
     if (!isNaN(parsed)) return parsed
@@ -21,7 +22,7 @@ function readIntervalMs(): number {
 }
 
 function readPaused(): boolean {
-  return localStorage.getItem(REFRESH_PAUSED_KEY) === 'true'
+  return safeGet(REFRESH_PAUSED_KEY) === 'true'
 }
 
 export const RefreshContext = createContext<RefreshCtx | null>(null)
@@ -31,12 +32,12 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
   const [paused, setPausedState] = useState<boolean>(readPaused)
 
   function setInterval(ms: number) {
-    localStorage.setItem(REFRESH_MS_KEY, String(ms))
+    safeSet(REFRESH_MS_KEY, String(ms))
     setIntervalMs(ms)
   }
 
   function setPaused(value: boolean) {
-    localStorage.setItem(REFRESH_PAUSED_KEY, String(value))
+    safeSet(REFRESH_PAUSED_KEY, String(value))
     setPausedState(value)
   }
 
