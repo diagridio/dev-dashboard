@@ -133,10 +133,12 @@ via ldflags (`dev-dashboard --version`).
   class vocabulary and design tokens in `web/src/styles/theme.css` — don't hardcode colors or
   reinvent primitives. See [`web/STYLEGUIDE.md`](web/STYLEGUIDE.md).
 - **Read-only product surface:** the dashboard never starts/stops apps and never edits app or
-  component state. The mutating operations are limited to workflow terminate/purge and managing
-  the user's own saved state-store connections (the `connections.yaml` registry under
-  `~/.dapr/dev-dashboard/`, written `0600`). Don't add other side-effecting behavior without an
-  explicit ask.
+  component state. The mutating operations are limited to workflow terminate/purge, managing the
+  user's own saved state-store connections (the `connections.yaml` registry under
+  `~/.dapr/dev-dashboard/`, written `0600`), and control-plane lifecycle actions
+  (start/restart/stop of the known `dapr_*` control-plane containers via the resolved
+  container runtime, allowlisted to those container names). Don't add other side-effecting
+  behavior without an explicit ask.
 - Commit/push only when asked; the project uses Conventional Commit prefixes (`feat:`, `refactor:`,
   `docs:`) — match the existing `git log` style.
 
