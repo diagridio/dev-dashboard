@@ -74,6 +74,12 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 			svc.MemoryBytes = ms.Bytes
 			svc.MemoryHuman = ms.Human
 		}
+		// Never emit a nil Ports slice: a nil []string marshals to JSON null,
+		// which breaks the frontend's svc.ports.length. A stopped/absent
+		// container has no port bindings, so this is the common case.
+		if svc.Ports == nil {
+			svc.Ports = []string{}
+		}
 		services = append(services, svc)
 	}
 	for _, name := range K8sOnlyServiceNames {

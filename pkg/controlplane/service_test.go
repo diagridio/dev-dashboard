@@ -175,6 +175,14 @@ func TestListReachableButNoContainers(t *testing.T) {
 	if len(res.Services) != 4 {
 		t.Fatalf("len(Services) = %d, want 4", len(res.Services))
 	}
+	// A stopped/absent container has no port bindings; Ports must be a non-nil
+	// empty slice so it marshals to JSON [] (not null) and never breaks the
+	// frontend's svc.ports.length.
+	for _, svc := range res.Services[:len(LiveServiceNames)] {
+		if svc.Ports == nil {
+			t.Errorf("%s: Ports is nil, want non-nil empty slice", svc.Name)
+		}
+	}
 }
 
 func TestDoValidation(t *testing.T) {
