@@ -3,9 +3,12 @@
 package server
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -110,6 +113,55 @@ func TestStateStores_Delete(t *testing.T) {
 	res, _ := doReq(t, h, req)
 	require.Equal(t, http.StatusNoContent, res.StatusCode)
 	require.Equal(t, []string{"abc123def456"}, reg.deleted)
+}
+
+// TestStateStores_MutationErrorStatusCodes pins the error-class → HTTP status
+// mapping for the three store mutators: duplicates (os.ErrExist, possibly
+// wrapped) are 409, missing ids (os.ErrNotExist) are 404, and anything else —
+// e.g. a registry file write failure — is a server-side 500, never a 400.
+func TestStateStores_MutationErrorStatusCodes(t *testing.T) {
+	cases := []struct {
+		name       string
+		err        error
+		wantStatus int
+	}{
+		{name: "duplicate is 409", err: os.ErrExist, wantStatus: http.StatusConflict},
+		{name: "wrapped duplicate is 409", err: fmt.Errorf("a connection named %q already exists: %w", "pg", os.ErrExist), wantStatus: http.StatusConflict},
+		{name: "missing id is 404", err: os.ErrNotExist, wantStatus: http.StatusNotFound},
+		{name: "wrapped missing id is 404", err: fmt.Errorf("no connection with id %q: %w", "abc", os.ErrNotExist), wantStatus: http.StatusNotFound},
+		{name: "io failure is 500", err: errors.New("disk full"), wantStatus: http.StatusInternalServerError},
+	}
+
+	const validBody = `{"name":"pg","type":"state.postgresql","metadata":{"connectionString":"host=a"}}`
+
+	for _, tc := range cases {
+		t.Run("add: "+tc.name, func(t *testing.T) {
+			reg := &mutableStoreRegistry{addErr: tc.err}
+			h := newAPI(reg)
+			res, body := postJSON(t, h, "/statestores", validBody)
+			require.Equal(t, tc.wantStatus, res.StatusCode, body)
+			// Error shape stays {"error": "..."} regardless of status.
+			require.Contains(t, body, `"error"`)
+			require.Len(t, reg.added, 0)
+		})
+		t.Run("update: "+tc.name, func(t *testing.T) {
+			reg := &mutableStoreRegistry{updateErr: tc.err}
+			h := newAPI(reg)
+			res, body := putJSON(t, h, "/statestores/abc123def456", validBody)
+			require.Equal(t, tc.wantStatus, res.StatusCode, body)
+			require.Contains(t, body, `"error"`)
+			require.Len(t, reg.updated, 0)
+		})
+		t.Run("delete: "+tc.name, func(t *testing.T) {
+			reg := &mutableStoreRegistry{deleteErr: tc.err}
+			h := newAPI(reg)
+			req, _ := http.NewRequest(http.MethodDelete, "/statestores/abc123def456", nil)
+			res, body := doReq(t, h, req)
+			require.Equal(t, tc.wantStatus, res.StatusCode, body)
+			require.Contains(t, body, `"error"`)
+			require.Len(t, reg.deleted, 0)
+		})
+	}
 }
 
 func TestStateStores_PutUpdates(t *testing.T) {
