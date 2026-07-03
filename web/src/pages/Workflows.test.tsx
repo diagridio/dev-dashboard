@@ -681,6 +681,32 @@ describe('Workflows page — store selector', () => {
     expect(link).toHaveAttribute('href', '/workflows/order/abc?store=statestore-b')
   })
 
+  it('bulk removal sends ?store=<id> for the selected (non-active) store', async () => {
+    window.localStorage.setItem('devdash.workflowStore', 'statestore-b')
+    let capturedStore: string | null = null
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({ items: [{ appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }] }),
+      ),
+      http.post('/api/workflows/purge', ({ request }) => {
+        capturedStore = new URL(request.url).searchParams.get('store')
+        return HttpResponse.json([{ instanceId: 'abc', mechanism: 'force', ok: true }])
+      }),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'abc' })
+    const checkboxes = document.querySelectorAll('tbody .cbx:not(.on)')
+    await userEvent.click(checkboxes[0])
+    await waitFor(() => expect(screen.getByText('1 selected')).toBeInTheDocument())
+    await userEvent.click(document.querySelector('[data-cy="bulk-remove"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    await userEvent.click(document.querySelector('[data-cy="confirm-remove"]') as HTMLElement)
+    // The purge request must target the store the page is scoped to,
+    // not fall back to the server's active store.
+    await waitFor(() => expect(capturedStore).toBe('statestore-b'))
+  })
+
   it('collapses duplicate-path stores (same name+type+connection) into one option, showing the active one', async () => {
     const dupPaths = [
       { id: 'redis-p1', name: 'redis', type: 'state.redis', source: 'auto', path: '/c/redis-a.yaml', active: false, connection: 'localhost:6379' },
