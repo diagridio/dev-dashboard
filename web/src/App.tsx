@@ -26,7 +26,6 @@ export function App() {
         <ResourcesSidebar
           collapsed={collapsed}
           onCollapsedChange={setCollapsed}
-          hasNew={hasNew}
           onHasNewChange={setHasNew}
         />
         <main className="body">

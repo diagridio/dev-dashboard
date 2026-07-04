@@ -149,11 +149,10 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
 interface ResourcesSidebarProps {
   collapsed: boolean
   onCollapsedChange: (v: boolean) => void
-  hasNew: boolean
   onHasNewChange: (v: boolean) => void
 }
 
-export function ResourcesSidebar({ collapsed, onCollapsedChange, hasNew, onHasNewChange }: ResourcesSidebarProps) {
+export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange }: ResourcesSidebarProps) {
   const [seen, setSeen] = useState<Set<string>>(() => getSeen())
   const { data: news } = useNews()
   const { data: versionData } = useVersion()

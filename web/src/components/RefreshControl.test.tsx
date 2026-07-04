@@ -40,13 +40,15 @@ describe('RefreshControl (compact)', () => {
     expect(btn.className).not.toContain('off')
   })
 
-  it('toggles to the resumed/paused state when clicked', () => {
+  it('toggles to the paused state when clicked, keeping a constant toggle label', () => {
     renderWithProvider()
     fireEvent.click(screen.getByRole('button', { name: /pause auto-refresh/i }))
-    const resumeBtn = screen.getByRole('button', { name: /resume auto-refresh/i })
-    expect(resumeBtn).toHaveAttribute('aria-pressed', 'true')
-    expect(resumeBtn).toHaveAttribute('title', expect.stringContaining('paused'))
-    expect(resumeBtn.className).toContain('off')
+    // Toggle-button pattern: the accessible name stays "Pause auto-refresh";
+    // aria-pressed=true means the pause is engaged.
+    const btn = screen.getByRole('button', { name: /pause auto-refresh/i })
+    expect(btn).toHaveAttribute('aria-pressed', 'true')
+    expect(btn).toHaveAttribute('title', expect.stringContaining('paused'))
+    expect(btn.className).toContain('off')
   })
 
   it('updates the title interval when a different interval is selected', () => {
@@ -77,8 +79,8 @@ describe('RefreshControl (compact)', () => {
       target: { value: '0' },
     })
     fireEvent.click(screen.getByRole('button', { name: /pause auto-refresh/i }))
-    // aria-label still reflects paused, but the title reports the effective "off" state.
-    const btn = screen.getByRole('button', { name: /resume auto-refresh/i })
+    // aria-pressed reflects the paused toggle; the title reports the effective "off" state.
+    const btn = screen.getByRole('button', { name: /pause auto-refresh/i })
     expect(btn).toHaveAttribute('aria-pressed', 'true')
     expect(btn.className).toContain('off')
     expect(btn).toHaveAttribute('title', 'Auto-refresh off')

@@ -24,7 +24,6 @@ function SidebarWrapper({ initialCollapsed = false }: { initialCollapsed?: boole
       <ResourcesSidebar
         collapsed={collapsed}
         onCollapsedChange={setCollapsed}
-        hasNew={hasNew}
         onHasNewChange={setHasNew}
       />
     </div>
@@ -344,7 +343,6 @@ describe('ResourcesSidebar onHasNewChange contract', () => {
           <ResourcesSidebar
             collapsed={false}
             onCollapsedChange={() => undefined}
-            hasNew={false}
             onHasNewChange={onHasNewChange}
           />
         </div>
