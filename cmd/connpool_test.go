@@ -237,6 +237,41 @@ func TestConnPool_EvictDuringStoreAssignment_NoLeakNoRace(t *testing.T) {
 	}
 }
 
+// failingCloseStore is a statestore.Store whose Close returns a fixed error.
+type failingCloseStore struct {
+	poolStore
+	closeErr error
+}
+
+func (s failingCloseStore) Close() error { return s.closeErr }
+
+// TestConnPool_CloseJoinsAllErrors verifies that Close reports EVERY close
+// error, not just the last one: with two cached stores whose Close both fail,
+// the returned error must match both via errors.Is (errors.Join semantics).
+func TestConnPool_CloseJoinsAllErrors(t *testing.T) {
+	errA := errors.New("close A failed")
+	errB := errors.New("close B failed")
+	var closes int32
+	open := func(_ context.Context, c statestore.Component) (statestore.Store, error) {
+		e := errA
+		if c.Name == "B" {
+			e = errB
+		}
+		return failingCloseStore{poolStore: poolStore{closes: &closes}, closeErr: e}, nil
+	}
+	p := newConnPool("default", &http.Client{}, nil, open)
+
+	_, err := p.openOrGet(context.Background(), compA())
+	require.NoError(t, err)
+	_, err = p.openOrGet(context.Background(), compB())
+	require.NoError(t, err)
+
+	err = p.Close()
+	require.Error(t, err)
+	require.ErrorIs(t, err, errA, "Close must keep the first close error")
+	require.ErrorIs(t, err, errB, "Close must keep the second close error")
+}
+
 // TestConnPool_OpenOrGetAfterCloseErrors verifies Fix 2: after Close() no new
 // connection is opened and openOrGet returns an error.
 func TestConnPool_OpenOrGetAfterCloseErrors(t *testing.T) {

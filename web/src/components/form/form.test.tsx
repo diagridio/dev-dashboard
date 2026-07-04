@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import { Field, TextInput, NumberInput, SelectInput, Toggle } from './index'
+import { Field, TextInput, NumberInput, SelectInput, Toggle, DialogShell, duplicateNameError } from './index'
 
 describe('Field', () => {
   it('renders label, required marker, and error', () => {
@@ -38,6 +38,33 @@ describe('Toggle', () => {
     render(<Toggle checked={false} onChange={onChange} label="on" />)
     fireEvent.click(screen.getByLabelText('on'))
     expect(onChange).toHaveBeenCalledWith(true)
+  })
+})
+
+describe('DialogShell', () => {
+  it('renders title + children, gates Save on canSave, and fires callbacks', () => {
+    const onSave = vi.fn(); const onClose = vi.fn()
+    const { rerender } = render(
+      <DialogShell open title="Add thing" canSave={false} onSave={onSave} onClose={onClose}>body</DialogShell>,
+    )
+    expect(screen.getByText('Add thing')).toBeInTheDocument()
+    expect(screen.getByText('body')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
+    rerender(<DialogShell open title="Add thing" canSave onSave={onSave} onClose={onClose}>body</DialogShell>)
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(onSave).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(onClose).toHaveBeenCalled()
+  })
+})
+
+describe('duplicateNameError', () => {
+  it('blocks an existing name unless it is the record being edited', () => {
+    expect(duplicateNameError('a', ['a', 'b'], undefined, undefined, 'thing')).toMatch(/already exists/)
+    expect(duplicateNameError('c', ['a', 'b'], undefined, undefined, 'thing')).toBeNull()
+    expect(duplicateNameError('a', ['a', 'b'], true, 'a', 'thing')).toBeNull()
+    expect(duplicateNameError('b', ['a', 'b'], true, 'a', 'thing')).toMatch(/already exists/)
+    expect(duplicateNameError('a', undefined, undefined, undefined, 'thing')).toBeNull()
   })
 })
 

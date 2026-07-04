@@ -1,31 +1,9 @@
 import { useState } from 'react'
-import { Modal } from '../../components/Modal'
-import { Field, TextInput, NumberInput, SelectInput } from '../../components/form'
+import { Field, TextInput, NumberInput, SelectInput, DialogShell, duplicateNameError } from '../../components/form'
 import { validateResourceName, validateGoDuration, validateStatusCodes, integerError } from '../../lib/validation'
 import { isDefaultPolicyName } from './defaultPolicies'
 import type { RetryPolicy, CircuitBreakerPolicy } from '../../types/resiliency'
 export { NamedList } from './NamedList'
-
-/** Saving a name that already exists upserts over that record — block it, unless it is the record being edited. */
-function duplicateNameError(name: string, existingNames: string[] | undefined, editing: boolean | undefined, initialName: string, what: string): string | null {
-  if (!existingNames?.includes(name)) return null
-  if (editing && name === initialName) return null
-  return `A ${what} with this name already exists`
-}
-
-function DialogShell({ open, title, onClose, onSave, canSave, children }: {
-  open: boolean; title: string; onClose: () => void; onSave: () => void; canSave: boolean; children: React.ReactNode
-}) {
-  return (
-    <Modal open={open} title={title} onClose={onClose}>
-      {children}
-      <div className="modal-actions">
-        <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn ghost" disabled={!canSave} onClick={onSave}>Save</button>
-      </div>
-    </Modal>
-  )
-}
 
 export function TimeoutDialog({ open, initialName, initialDuration, editing, existingNames, onClose, onSave }: {
   open: boolean; initialName: string; initialDuration?: string; editing?: boolean; existingNames?: string[]

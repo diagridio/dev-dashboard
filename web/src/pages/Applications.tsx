@@ -1,30 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useApps } from '../hooks/useApps'
-import type { AppSummary, HealthStatus } from '../types/api'
-
-// Maps a health status to its LED modifier class.
-function ledClass(health: HealthStatus): string {
-  switch (health) {
-    case 'healthy':
-      return 'ok'
-    case 'starting':
-      return 'warn'
-    case 'unhealthy':
-      return 'bad'
-    default:
-      return 'warn'
-  }
-}
-
-// Picks a language swatch color from the runtime string (mock A palette).
-function runtimeSwatch(runtime: string): string {
-  const r = runtime.toLowerCase()
-  if (r.includes('go')) return '#00ADD8'
-  if (r.includes('python') || r.includes('py')) return '#3776AB'
-  if (r.includes('node') || r.includes('js')) return '#539E43'
-  if (r.includes('.net') || r.includes('dotnet')) return '#8330FF'
-  return 'var(--faint)'
-}
+import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
+import type { AppSummary } from '../types/api'
 
 const PAGE_HEADER = (
   <div className="phead">

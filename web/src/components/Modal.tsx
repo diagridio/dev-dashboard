@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
+import { useModalFocus } from '../hooks/useModalFocus'
 
 interface Props {
   open: boolean
@@ -10,18 +11,7 @@ interface Props {
 export function Modal({ open, title, onClose, children }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    const t = setTimeout(() => dialogRef.current?.focus(), 0)
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      clearTimeout(t)
-    }
-  }, [open, onClose])
+  useModalFocus(open, onClose, dialogRef)
 
   if (!open) return null
 

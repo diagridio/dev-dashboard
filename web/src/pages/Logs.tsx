@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApps, useApp } from '../hooks/useApps'
-import { useLogStream, usePathLogStream } from '../hooks/useLogStream'
+import { useLogStream, usePathLogStream, type LogStreamStatus } from '../hooks/useLogStream'
+import { useFollowScroll } from '../hooks/useFollowScroll'
 import type { LogLine, LogLevel } from '../types/logs'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { parseLogTime } from '../lib/logtime'
@@ -93,6 +94,64 @@ function logGridVars(srcLabels: string[], texts: string[]): CSSProperties {
   return vars as CSSProperties
 }
 
+/** Level + search filter shared by both viewers. */
+function lineMatches(line: LogLine, activeLevels: Set<LogLevel>, search: string): boolean {
+  const level = line.level ?? 'info'
+  if (!activeLevels.has(level)) return false
+  if (search && !line.text.toLowerCase().includes(search.toLowerCase())) return false
+  return true
+}
+
+/** Search match count over the FULL buffer (not the filtered view). */
+function countMatches(lines: LogLine[], search: string): number {
+  if (!search) return 0
+  return lines.filter(line => line.text.toLowerCase().includes(search.toLowerCase())).length
+}
+
+/** Approximate tail size in KB: sum of full-buffer line text lengths (not filtered view). */
+function tailSizeKB(lines: LogLine[]): number {
+  return Math.round(lines.reduce((acc, line) => acc + line.text.length, 0) / 1024)
+}
+
+/**
+ * Collapse the statuses of the active streams into a single dot state.
+ * Worst-first: terminal 'closed' beats transient 'error', then 'connecting'
+ * and 'idle'; the dot shows live only when EVERY active stream is open.
+ */
+function combineStatuses(statuses: LogStreamStatus[]): LogStreamStatus {
+  for (const s of ['closed', 'error', 'connecting', 'idle'] as const) {
+    if (statuses.includes(s)) return s
+  }
+  return 'open'
+}
+
+interface LogFootProps {
+  status: LogStreamStatus
+  lineCount: number
+  search: string
+  matchCount: number
+  tailKB: number
+}
+
+/** Shared footer: live-status dot + line count + highlight summary + tail size. */
+function LogFoot({ status, lineCount, search, matchCount, tailKB }: LogFootProps) {
+  return (
+    <div className="logfoot">
+      <span
+        className={`beatbtn${status === 'open' ? '' : ' off'}`}
+        data-status={status}
+        title={`stream ${status}`}
+        style={{ padding: 0, border: 'none', background: 'transparent', display: 'inline-flex' }}
+      >
+        <span className="beat" style={{ width: 7, height: 7 }} />
+      </span>
+      {lineCount} lines
+      {search && matchCount > 0 && ` · highlighting "${search}"`}
+      {` · tail ${tailKB} KB`}
+    </div>
+  )
+}
+
 interface LogRowProps {
   merged: MergedLine
   search: string
@@ -145,9 +204,6 @@ interface LogViewerCoreProps {
   activeLevels: Set<LogLevel>
   search: string
   following: boolean
-  onToggleLevel: (level: LogLevel) => void
-  onSearchChange: (s: string) => void
-  onFollowToggle: () => void
   onFollowDisengage: () => void
 }
 
@@ -159,9 +215,6 @@ function LogViewerCore({
   activeLevels,
   search,
   following,
-  onToggleLevel,
-  onSearchChange,
-  onFollowToggle,
   onFollowDisengage,
 }: LogViewerCoreProps) {
   // Always call both hooks — pass undefined appId for the unused stream so no EventSource opens
@@ -194,75 +247,47 @@ function LogViewerCore({
     return all
   }, [source, daprdResult.lines, appResult.lines])
 
-  const mergedLen = merged.length
+  const handleScroll = useFollowScroll(scrollRef, merged.length, following, onFollowDisengage)
 
-  // Auto-scroll to bottom when new lines arrive and follow is on
-  useEffect(() => {
-    if (!following) return
-    const el = scrollRef.current
-    if (!el) return
-    if (el.scrollHeight > 0) {
-      el.scrollTop = el.scrollHeight
-    }
-  }, [mergedLen, following])
+  const filtered = merged.filter(({ line }) => lineMatches(line, activeLevels, search))
 
-  const SCROLL_THRESHOLD = 24
+  const bufferLines = merged.map(m => m.line)
+  const matchCount = countMatches(bufferLines, search)
+  const tailKB = tailSizeKB(bufferLines)
 
-  function handleScroll() {
-    const el = scrollRef.current
-    if (!el) return
-    if (el.scrollHeight === 0) return
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    if (distFromBottom > SCROLL_THRESHOLD && following) {
-      // User scrolled away from the bottom — pause following
-      onFollowDisengage()
-    }
-  }
-
-  const filtered = merged.filter(({ line }) => {
-    const level = line.level ?? 'info'
-    if (!activeLevels.has(level)) return false
-    if (search && !line.text.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
-
-  const matchCount = search
-    ? merged.filter(({ line }) => line.text.toLowerCase().includes(search.toLowerCase())).length
-    : 0
-
-  // Approximate tail size: sum of full buffer line text byte lengths (not filtered view)
-  const tailBytes = merged.reduce((acc, { line }) => acc + line.text.length, 0)
-  const tailKB = Math.round(tailBytes / 1024)
+  // Only the streams the source actually uses count toward the dot
+  const status = combineStatuses(
+    source === 'daprd'
+      ? [daprdResult.status]
+      : source === 'app'
+        ? [appResult.status]
+        : [daprdResult.status, appResult.status],
+  )
 
   return (
-    <>
-      {/* Log pane */}
-      <div className="card" style={{ padding: 0 }}>
-        <div
-          className="logwin"
-          ref={scrollRef}
-          onScroll={handleScroll}
-          style={logGridVars(source === 'both' ? ['daprd', 'app'] : [source], filtered.map(m => m.line.text))}
-        >
-          {filtered.map(merged => (
-            <LogRow
-              key={`${merged.src}-${merged.line.seq}`}
-              merged={merged}
-              search={search}
-            />
-          ))}
-        </div>
-        <div className="logfoot">
-          <span
-            className="beat"
-            style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--done-fg)', display: 'inline-block' }}
+    <div className="card" style={{ padding: 0 }}>
+      <div
+        className="logwin"
+        ref={scrollRef}
+        onScroll={handleScroll}
+        style={logGridVars(source === 'both' ? ['daprd', 'app'] : [source], filtered.map(m => m.line.text))}
+      >
+        {filtered.map(merged => (
+          <LogRow
+            key={`${merged.src}-${merged.line.seq}`}
+            merged={merged}
+            search={search}
           />
-          {filtered.length} lines
-          {search && matchCount > 0 && ` · highlighting "${search}"`}
-          {` · tail ${tailKB} KB`}
-        </div>
+        ))}
       </div>
-    </>
+      <LogFoot
+        status={status}
+        lineCount={filtered.length}
+        search={search}
+        matchCount={matchCount}
+        tailKB={tailKB}
+      />
+    </div>
   )
 }
 
@@ -284,42 +309,11 @@ function CpLogViewer({
   const { lines, status } = usePathLogStream(`/controlplane/${cp}/logs`)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const filtered = lines.filter(line => {
-    const level = line.level ?? 'info'
-    if (!activeLevels.has(level)) return false
-    if (search && !line.text.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+  const handleScroll = useFollowScroll(scrollRef, lines.length, following, onFollowDisengage)
 
-  const matchCount = search
-    ? lines.filter(line => line.text.toLowerCase().includes(search.toLowerCase())).length
-    : 0
-
-  const tailBytes = lines.reduce((acc, line) => acc + line.text.length, 0)
-  const tailKB = Math.round(tailBytes / 1024)
-
-  const lineCount = lines.length
-
-  useEffect(() => {
-    if (!following) return
-    const el = scrollRef.current
-    if (!el) return
-    if (el.scrollHeight > 0) {
-      el.scrollTop = el.scrollHeight
-    }
-  }, [lineCount, following])
-
-  const SCROLL_THRESHOLD = 24
-
-  function handleScroll() {
-    const el = scrollRef.current
-    if (!el) return
-    if (el.scrollHeight === 0) return
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    if (distFromBottom > SCROLL_THRESHOLD && following) {
-      onFollowDisengage()
-    }
-  }
+  const filtered = lines.filter(line => lineMatches(line, activeLevels, search))
+  const matchCount = countMatches(lines, search)
+  const tailKB = tailSizeKB(lines)
 
   return (
     <div className="card" style={{ padding: 0 }}>
@@ -338,14 +332,13 @@ function CpLogViewer({
           />
         ))}
       </div>
-      <div className="logfoot">
-        <span className={`beatbtn${status === 'open' ? '' : ' off'}`} style={{ padding: 0, border: 'none', background: 'transparent', display: 'inline-flex' }}>
-          <span className="beat" style={{ width: 7, height: 7 }} />
-        </span>
-        {filtered.length} lines
-        {search && matchCount > 0 && ` · highlighting "${search}"`}
-        {` · tail ${tailKB} KB`}
-      </div>
+      <LogFoot
+        status={status}
+        lineCount={filtered.length}
+        search={search}
+        matchCount={matchCount}
+        tailKB={tailKB}
+      />
     </div>
   )
 }
@@ -586,9 +579,6 @@ export function Logs() {
           activeLevels={activeLevels}
           search={search}
           following={following}
-          onToggleLevel={toggleLevel}
-          onSearchChange={setSearch}
-          onFollowToggle={handleFollowToggle}
           onFollowDisengage={() => setFollowing(false)}
         />
       )}

@@ -149,6 +149,12 @@ function fieldSatisfied(state: ComponentBuilderState, f: MetadataField): boolean
   return (state.values[f.name] ?? '').trim() !== ''
 }
 
+/** Namespace is optional: blank means "omit from the YAML", anything else must be a valid resource name. */
+export function namespaceError(namespace: string): string | null {
+  const ns = namespace.trim()
+  return ns === '' ? null : validateResourceName(ns)
+}
+
 export function canContinue(state: ComponentBuilderState): boolean {
   switch (state.activeStep) {
     case 0:
@@ -157,6 +163,7 @@ export function canContinue(state: ComponentBuilderState): boolean {
       return true // auth profile optional
     case 2: {
       if (validateResourceName(state.name) !== null) return false
+      if (namespaceError(state.namespace) !== null) return false
       const required = configureFields(state).filter((f) => f.required)
       return required.every((f) => fieldSatisfied(state, f))
     }
@@ -168,7 +175,10 @@ export function canContinue(state: ComponentBuilderState): boolean {
 export function assembleComponentSpec(state: ComponentBuilderState): ComponentSpec {
   const spec = defaultComponentSpec()
   spec.metadata.name = state.name
+  // Mirror assembleResiliency: omit blank namespace and empty scopes instead of emitting defaults.
   if (state.namespace.trim() !== '') spec.metadata.namespace = state.namespace
+  else delete spec.metadata.namespace
+  if (!spec.scopes?.length) delete spec.scopes
   spec.spec.type = state.schema ? `${state.schema.type}.${state.schema.name}` : ''
   spec.spec.version = state.version
   const byName = new Map(configureFields(state).map((f) => [f.name, f]))

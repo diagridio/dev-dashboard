@@ -35,7 +35,7 @@ export function RefreshControl() {
       <button
         className={`beatbtn${live ? '' : ' off'}`}
         data-cy="refresh-pause"
-        aria-label={paused ? 'Resume auto-refresh' : 'Pause auto-refresh'}
+        aria-label="Pause auto-refresh"
         aria-pressed={paused}
         title={title}
         onClick={() => setPaused(!paused)}

@@ -47,6 +47,38 @@ describe('useRefreshInterval — setInterval', () => {
   })
 })
 
+describe('useRefreshInterval — stored value validation', () => {
+  it('falls back to default when stored value is not an interval option (too large)', () => {
+    localStorage.setItem('devdash.refreshMs', '250000')
+    const { result } = renderHook(() => useRefreshInterval(), { wrapper })
+    expect(result.current.intervalMs).toBe(3000)
+  })
+
+  it('falls back to default when stored value is negative', () => {
+    localStorage.setItem('devdash.refreshMs', '-5')
+    const { result } = renderHook(() => useRefreshInterval(), { wrapper })
+    expect(result.current.intervalMs).toBe(3000)
+  })
+
+  it('falls back to default when stored value is garbage', () => {
+    localStorage.setItem('devdash.refreshMs', 'garbage')
+    const { result } = renderHook(() => useRefreshInterval(), { wrapper })
+    expect(result.current.intervalMs).toBe(3000)
+  })
+
+  it('honors a stored valid option (1s)', () => {
+    localStorage.setItem('devdash.refreshMs', '1000')
+    const { result } = renderHook(() => useRefreshInterval(), { wrapper })
+    expect(result.current.intervalMs).toBe(1000)
+  })
+
+  it('honors a stored valid option (Off = 0)', () => {
+    localStorage.setItem('devdash.refreshMs', '0')
+    const { result } = renderHook(() => useRefreshInterval(), { wrapper })
+    expect(result.current.intervalMs).toBe(0)
+  })
+})
+
 describe('useRefreshInterval — setPaused', () => {
   it('updates paused when setPaused is called', () => {
     const { result } = renderHook(() => useRefreshInterval(), { wrapper })
