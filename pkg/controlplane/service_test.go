@@ -185,6 +185,85 @@ func TestListReachableButNoContainers(t *testing.T) {
 	}
 }
 
+func TestListIncludesComposeControlPlane(t *testing.T) {
+	inspect, err := os.ReadFile("testdata/compose_cp_inspect.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats, _ := os.ReadFile("testdata/stats.json")
+	f := &fakeRunner{
+		outputs: map[string][]byte{
+			"ps -aq":           []byte("p1\ns0\nx1\n"),
+			"inspect p1":       inspect,
+			"stats --no-stream": stats,
+		},
+	}
+	m := newManager(RuntimeDocker, f)
+	res, err := m.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var compose []Service
+	for _, s := range res.Services {
+		if s.ComposeProject != "" {
+			compose = append(compose, s)
+		}
+	}
+	if len(compose) != 2 {
+		t.Fatalf("want placement + scheduler, got %+v", compose)
+	}
+	if compose[0].Name != "saga-placement-1" || !compose[0].Actionable || compose[0].ComposeProject != "saga" {
+		t.Fatalf("placement: %+v", compose[0])
+	}
+	if compose[1].Name != "saga-scheduler-0-1" {
+		t.Fatalf("scheduler: %+v", compose[1])
+	}
+	// postgres-db must NOT be listed (not a control-plane command).
+}
+
+func TestDoAllowsDiscoveredComposeNames(t *testing.T) {
+	inspect, err := os.ReadFile("testdata/compose_cp_inspect.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stats, _ := os.ReadFile("testdata/stats.json")
+	f := &fakeRunner{
+		outputs: map[string][]byte{
+			"ps -aq":           []byte("p1\ns0\nx1\n"),
+			"inspect p1":       inspect,
+			"stats --no-stream": stats,
+		},
+	}
+	m := newManager(RuntimeDocker, f)
+	// Call List first to populate the allowlist.
+	if _, err := m.List(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	// Discovered compose name must be allowed.
+	if err := m.Do(context.Background(), "restart", "saga-placement-1"); err != nil {
+		t.Errorf("restart saga-placement-1: got %v, want nil", err)
+	}
+	// Non-CP compose container must be rejected.
+	if err := m.Do(context.Background(), "restart", "saga-postgres-db-1"); !errors.Is(err, ErrUnknownService) {
+		t.Errorf("saga-postgres-db-1: got %v, want ErrUnknownService", err)
+	}
+	// Fixed dapr_* names must still work.
+	if err := m.Do(context.Background(), "restart", "dapr_placement"); err != nil {
+		t.Errorf("restart dapr_placement: got %v, want nil", err)
+	}
+}
+
+func TestDoRejectsComposeNamesBeforeList(t *testing.T) {
+	f := &fakeRunner{
+		outputs: map[string][]byte{},
+	}
+	m := newManager(RuntimeDocker, f)
+	// No List call — compose names must be rejected.
+	if err := m.Do(context.Background(), "restart", "saga-placement-1"); !errors.Is(err, ErrUnknownService) {
+		t.Errorf("before List: got %v, want ErrUnknownService", err)
+	}
+}
+
 func TestDoValidation(t *testing.T) {
 	f := &fakeRunner{outputs: map[string][]byte{}}
 	m := newManager(RuntimeDocker, f)

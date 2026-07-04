@@ -23,14 +23,15 @@ const (
 
 // Service is one control-plane service row returned by GET /api/controlplane.
 type Service struct {
-	Name        string        `json:"name"`
-	Status      ServiceStatus `json:"status"`
-	Healthy     bool          `json:"healthy"`
-	Ports       []string      `json:"ports"`
-	MemoryBytes uint64        `json:"memoryBytes"`
-	MemoryHuman string        `json:"memoryHuman"`
-	LogPath     string        `json:"logPath"`
-	Actionable  bool          `json:"actionable"`
+	Name           string        `json:"name"`
+	Status         ServiceStatus `json:"status"`
+	Healthy        bool          `json:"healthy"`
+	Ports          []string      `json:"ports"`
+	MemoryBytes    uint64        `json:"memoryBytes"`
+	MemoryHuman    string        `json:"memoryHuman"`
+	LogPath        string        `json:"logPath"`
+	Actionable     bool          `json:"actionable"`
+	ComposeProject string        `json:"composeProject,omitempty"`
 }
 
 // LiveServiceNames are the self-hosted control-plane containers this dashboard manages.

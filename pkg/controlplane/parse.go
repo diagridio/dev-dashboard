@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"math"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,12 +19,19 @@ type inspectData struct {
 
 // rawInspect mirrors the subset of `<runtime> inspect` we consume.
 type rawInspect struct {
+	ID   string `json:"Id"`
+	Name string `json:"Name"`
 	State struct {
 		Status string `json:"Status"`
 		Health struct {
 			Status string `json:"Status"`
 		} `json:"Health"`
 	} `json:"State"`
+	Config struct {
+		Labels     map[string]string `json:"Labels"`
+		Entrypoint []string          `json:"Entrypoint"`
+		Cmd        []string          `json:"Cmd"`
+	} `json:"Config"`
 	NetworkSettings struct {
 		Ports map[string]any `json:"Ports"`
 	} `json:"NetworkSettings"`
@@ -53,6 +61,61 @@ func parseInspect(data []byte) (inspectData, error) {
 	}
 	sort.Strings(out.Ports)
 	return out, nil
+}
+
+// parseComposeControlPlane extracts compose-managed placement/scheduler
+// containers from a batched inspect payload.
+func parseComposeControlPlane(data []byte) ([]Service, error) {
+	var arr []rawInspect
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return nil, err
+	}
+	var out []Service
+	for _, c := range arr {
+		project := c.Config.Labels["com.docker.compose.project"]
+		if project == "" || !isControlPlaneCommand(c.Config.Entrypoint, c.Config.Cmd) {
+			continue
+		}
+		svc := Service{
+			Name:           strings.TrimPrefix(c.Name, "/"),
+			ComposeProject: project,
+			Actionable:     true,
+			LogPath:        c.LogPath,
+		}
+		running := c.State.Status == "running"
+		if running {
+			svc.Status = StatusRunning
+		} else {
+			svc.Status = StatusStopped
+		}
+		h := c.State.Health.Status
+		svc.Healthy = running && (h == "" || h == "healthy")
+		for p := range c.NetworkSettings.Ports {
+			svc.Ports = append(svc.Ports, p)
+		}
+		sort.Strings(svc.Ports)
+		if svc.Ports == nil {
+			svc.Ports = []string{}
+		}
+		out = append(out, svc)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// isControlPlaneCommand reports whether argv (entrypoint+cmd) launches the
+// Dapr placement or scheduler binary.
+func isControlPlaneCommand(entrypoint, cmd []string) bool {
+	argv := append(append([]string{}, entrypoint...), cmd...)
+	if len(argv) == 0 {
+		return false
+	}
+	switch path.Base(argv[0]) {
+	case "placement", "scheduler":
+		return true
+	default:
+		return false
+	}
 }
 
 type memStat struct {
