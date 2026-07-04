@@ -25,18 +25,28 @@ function renderAt() {
   )
 }
 
+const baseApp = {
+  appId: 'order',
+  health: 'healthy' as const,
+  runtime: 'go',
+  httpPort: 3500,
+  grpcPort: 50001,
+  appPort: 8080,
+  daprdPid: 48230,
+  appPid: 48213,
+  cliPid: 0,
+  age: '14m',
+  created: '',
+  runTemplate: '',
+}
+
+function mockApps(apps: object[]) {
+  server.use(http.get('/api/apps', () => HttpResponse.json(apps)))
+}
+
 const sampleApps = [
   {
-    appId: 'order',
-    health: 'healthy',
-    runtime: 'go',
-    httpPort: 3500,
-    grpcPort: 50001,
-    appPort: 8080,
-    daprdPid: 48230,
-    appPid: 48213,
-    age: '14m',
-    runTemplate: 'dapr.yaml',
+    ...baseApp,
   },
   {
     appId: 'shipping',
@@ -47,7 +57,9 @@ const sampleApps = [
     appPort: 8090,
     daprdPid: 48231,
     appPid: 0,
+    cliPid: 0,
     age: '3s',
+    created: '',
     runTemplate: 'dapr.yaml',
   },
 ]
@@ -83,5 +95,34 @@ describe('Applications', () => {
     renderAt()
     // The App ID link must use the table text color (class celllink), not a default/visited link color.
     expect(await screen.findByRole('link', { name: 'order' })).toHaveClass('celllink')
+  })
+
+  it('labels compose-discovered apps and shows the publish-port hint when unreachable', async () => {
+    mockApps([
+      {
+        ...baseApp,
+        appId: 'primes-go',
+        source: 'compose',
+        composeProject: 'saga',
+        sidecarReachable: false,
+        health: 'unknown',
+        runTemplate: '',
+      },
+    ])
+    renderAt()
+    const composeCells = await screen.findAllByText('Compose')
+    expect(composeCells.length).toBeGreaterThanOrEqual(1)
+    const hint = screen.getByTitle(/publish the daprd HTTP port/i)
+    expect(hint).toBeInTheDocument()
+  })
+
+  it('does not show the hint for reachable compose apps', async () => {
+    mockApps([
+      { ...baseApp, appId: 'primes-go', source: 'compose', composeProject: 'saga', sidecarReachable: true, runTemplate: '' },
+    ])
+    renderAt()
+    const composeCells = await screen.findAllByText('Compose')
+    expect(composeCells.length).toBeGreaterThanOrEqual(1)
+    expect(screen.queryByTitle(/publish the daprd HTTP port/i)).not.toBeInTheDocument()
   })
 })

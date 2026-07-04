@@ -11,6 +11,12 @@ export interface AppSummary {
   runtime: string
   /** true when the app is .NET Aspire-managed (started by the Aspire host, not a run template) */
   isAspire?: boolean
+  /** discovery source: process table vs docker compose containers */
+  source?: 'standalone' | 'compose'
+  /** compose project name (source === 'compose' only) */
+  composeProject?: string
+  /** false when a compose sidecar's HTTP port is not published to the host */
+  sidecarReachable?: boolean
   httpPort: number
   grpcPort: number
   appPort: number
@@ -35,6 +41,11 @@ export interface AppDetail extends AppSummary {
   command: string
   runtimeVersion: string
   metadataOk: boolean
+  composeService?: string
+  daprdContainerId?: string
+  daprdContainerName?: string
+  appContainerId?: string
+  appContainerName?: string
   enabledFeatures?: string[]
   actors?: { type: string; count: number }[]
   subscriptions?: { pubsubName: string; topic: string; [key: string]: unknown }[]
