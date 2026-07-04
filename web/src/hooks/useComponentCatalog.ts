@@ -1,3 +1,4 @@
+import { useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchJSON } from '../lib/api'
 import type { MetadataBundle, ComponentMetadataSchema, MetadataField } from '../types/metadata'
@@ -31,11 +32,14 @@ export function useComponentCatalog() {
     staleTime: 60 * 60 * 1000, // catalog is static + ETag-cached
   })
 
-  const schemas: ComponentMetadataSchema[] = (query.data?.components ?? []).filter(
-    (c) => c.type === 'state' && SUPPORTED_NAMES.has(c.name),
+  // Memoized on the (ETag-cached, effectively static) query data so consumers'
+  // useMemo/useCallback deps actually hit across re-renders.
+  const schemas: ComponentMetadataSchema[] = useMemo(
+    () => (query.data?.components ?? []).filter((c) => c.type === 'state' && SUPPORTED_NAMES.has(c.name)),
+    [query.data],
   )
 
-  function fieldsFor(type: string): MetadataField[] {
+  const fieldsFor = useCallback((type: string): MetadataField[] => {
     const name = implFor(type)
     const matches = schemas.filter((s) => s.name === name)
     const chosen = matches.find((s) => s.status === 'stable') ?? matches[0]
@@ -45,7 +49,7 @@ export function useComponentCatalog() {
       return [synthetic, ...base]
     }
     return base
-  }
+  }, [schemas])
 
   return { schemas, fieldsFor, isLoading: query.isLoading, isError: query.isError }
 }

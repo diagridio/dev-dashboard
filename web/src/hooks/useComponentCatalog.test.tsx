@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, renderHook } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect } from 'vitest'
 import { server } from '../test/setup'
-import { QueryProvider } from '../lib/query'
+import { QueryProvider, makeQueryClient } from '../lib/query'
 import { useComponentCatalog } from './useComponentCatalog'
 
 const bundle = {
@@ -87,5 +87,19 @@ describe('useComponentCatalog', () => {
     expect(screen.getByTestId('sqlite-sensitive')).toHaveTextContent('no')
     // redis: no connectionString
     expect(screen.getByTestId('redis-has-conn-str')).toHaveTextContent('no')
+  })
+
+  it('keeps schemas and fieldsFor referentially stable across re-renders with the same data', async () => {
+    server.use(http.get('/api/metadata/components', () => HttpResponse.json(bundle)))
+    const client = makeQueryClient()
+    const { result, rerender } = renderHook(() => useComponentCatalog(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => <QueryProvider client={client}>{children}</QueryProvider>,
+    })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    const { schemas, fieldsFor } = result.current
+    rerender()
+    // consumers memoize on these (e.g. useMemo([allFields])) — they must not be rebuilt per render
+    expect(result.current.schemas).toBe(schemas)
+    expect(result.current.fieldsFor).toBe(fieldsFor)
   })
 })

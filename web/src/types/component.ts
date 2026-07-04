@@ -7,8 +7,9 @@ export interface ComponentMetadataItem {
 export interface ComponentSpec {
   apiVersion: string
   kind: string
-  metadata: { name: string; namespace: string; [key: string]: unknown }
-  scopes: string[]
+  // namespace/scopes are deleted before emit when blank/empty (assembleComponentSpec).
+  metadata: { name: string; namespace?: string; [key: string]: unknown }
+  scopes?: string[]
   spec: {
     type: string
     version: string
