@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { WorkflowStatus } from '../types/workflow'
+import { useModalFocus } from '../hooks/useModalFocus'
 
 const TERMINAL: WorkflowStatus[] = ['Completed', 'Failed', 'Terminated']
 
@@ -30,38 +31,11 @@ export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel, initia
 
   // Reset force when dialog opens/closes
   useEffect(() => {
-    if (open) {
-      setForce(initialForce)
-      // Autofocus cancel on next tick
-      setTimeout(() => cancelRef.current?.focus(), 0)
-    }
+    if (open) setForce(initialForce)
   }, [open, initialForce])
 
-  // Escape key handler + focus trap
-  useEffect(() => {
-    if (!open) return
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onCancel()
-      if (e.key === 'Tab') {
-        const dialog = dialogRef.current
-        if (!dialog) return
-        const focusable = dialog.querySelectorAll<HTMLElement>(
-          'button, input, [tabindex]:not([tabindex="-1"])'
-        )
-        const first = focusable[0]
-        const last = focusable[focusable.length - 1]
-        if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault()
-          first?.focus()
-        } else if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault()
-          last?.focus()
-        }
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [open, onCancel])
+  // Escape-to-close, focus trap, initial focus on Cancel, restore on close
+  useModalFocus(open, onCancel, dialogRef, cancelRef)
 
   if (!open) return null
 

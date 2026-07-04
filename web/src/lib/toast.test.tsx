@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, renderHook, screen } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { useToast, Toast } from './toast'
 
@@ -66,6 +66,13 @@ describe('useToast hook', () => {
 
     act(() => { vi.advanceTimersByTime(1400) })
     expect(toastEl).not.toHaveClass('show')
+  })
+
+  it('returns a stable toast identity across re-renders', () => {
+    const { result, rerender } = renderHook(() => useToast())
+    const first = result.current.toast
+    rerender()
+    expect(result.current.toast).toBe(first)
   })
 
   it('toastNode has aria-live="polite"', () => {

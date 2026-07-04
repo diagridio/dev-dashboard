@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 // ---------- tiny toast ----------
 // Shared toast utility used by AppDetail and other pages (e.g. copy-YAML flows).
@@ -29,8 +29,9 @@ export function useToast(): { toast: ToastHandle; toastNode: React.ReactElement 
     [],
   )
 
+  const toast = useMemo(() => ({ show }), [show])
   const toastNode = <Toast msg={msg} />
-  return { toast: { show }, toastNode }
+  return { toast, toastNode }
 }
 
 export function Toast({ msg }: { msg: string | null }) {
