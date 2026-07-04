@@ -57,7 +57,7 @@ func (m *mutableStoreRegistry) DeleteStore(id string) error {
 }
 
 func newAPI(stores StoreRegistry) http.Handler {
-	return apiRouter(version.Info{}, nil, newFakeBackend(fakeWF{}), stores, fakeResources{}, fakeNews{}, nil)
+	return apiRouter(version.Info{}, nil, nil, newFakeBackend(fakeWF{}), stores, fakeResources{}, fakeNews{}, nil)
 }
 
 func doReq(t *testing.T, h http.Handler, req *http.Request) (*http.Response, string) {
