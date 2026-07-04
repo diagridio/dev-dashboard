@@ -40,6 +40,22 @@ describe('useLogStream', () => {
     expect(result.current.lines[1].text).toBe('line3')
   })
 
+  it('revision keeps counting past the buffer cap while lines stay capped', () => {
+    const { result } = renderHook(() => useLogStream('order', 'daprd', { max: 3 }))
+    const es = FakeES.instances[0]
+    act(() => {
+      for (let i = 1; i <= 5; i++) es.onmessage?.({ data: `line${i}` })
+    })
+    // The buffer is capped...
+    expect(result.current.lines).toHaveLength(3)
+    // ...but revision reflects every line ever received, so consumers keying
+    // effects on it (e.g. follow-scroll) still fire after the cap is reached.
+    expect(result.current.revision).toBe(5)
+    act(() => { es.onmessage?.({ data: 'line6' }) })
+    expect(result.current.lines).toHaveLength(3)
+    expect(result.current.revision).toBe(6)
+  })
+
   it('status transitions: connecting → open → error', () => {
     const { result } = renderHook(() => useLogStream('order', 'daprd'))
     expect(result.current.status).toBe('connecting')
