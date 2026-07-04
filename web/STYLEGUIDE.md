@@ -267,7 +267,9 @@ component fails the suite until the doc is updated.
 | Pattern | Pointer |
 |---|---|
 | Status → pill | `components/StatusPill.tsx` — status string → `.pill .s-*` + uppercased label. **Don't hand-map statuses.** |
-| Modal dialog | `components/Modal.tsx` — focus-trapped shell (`.modal-backdrop` + `.card.modal-card`); `components/ConfirmRemoveDialog.tsx` for destructive confirms. |
+| Modal dialog | `components/Modal.tsx` — focus-trapped shell (`.modal-backdrop` + `.card.modal-card`); `components/ConfirmRemoveDialog.tsx` for destructive confirms. Both trap/restore focus via `hooks/useModalFocus.ts` — reuse it, don't hand-roll traps. |
+| Save/cancel form dialog | `components/form/DialogShell.tsx` — titled `Modal` with Save/Cancel footer + `duplicateNameError` name-collision guard; the builder dialogs are the reference usage. |
+| Follow-scroll log pane | `hooks/useFollowScroll.ts` — pin-to-bottom with scroll-away disengage (24px threshold); both Logs viewers use it. |
 | Descriptor-driven form control | `components/MetadataFieldInput.tsx` — one `.inp` control from a component-metadata field descriptor (vs hand-composed forms: see §6). |
 | Hand-composed form fields | `components/form/` primitives (`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`) — see §6. |
 | Multi-step builder shell | `components/wizard/` (`Wizard`, `Stepper`, `StepNav`) — see §6. |
