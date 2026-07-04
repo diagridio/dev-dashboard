@@ -6,6 +6,7 @@ import (
 	"context"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -238,6 +239,174 @@ func TestServiceStatsExcludesChildren(t *testing.T) {
 	topOnly, err := svc.Stats(context.Background(), ListQuery{IncludeChildren: false})
 	require.NoError(t, err)
 	require.Equal(t, 1, topOnly.Total)
+}
+
+// pagingStore wraps fakeStore with real cursor paging on Keys: the token is a
+// numeric offset into the sorted key list. It also counts how many Keys calls
+// used an instance-metadata pattern, so tests can assert how many key-pages a
+// single List call consumed.
+type pagingStore struct {
+	*fakeStore
+	metaKeysCalls int
+}
+
+func (p *pagingStore) Keys(ctx context.Context, pattern, token string, pageSize int) ([]string, string, error) {
+	if strings.HasSuffix(pattern, statestore.KeyDelimiter+statestore.SuffixMetadata) {
+		p.metaKeysCalls++
+	}
+	all, _, err := p.fakeStore.Keys(ctx, pattern, "", 0)
+	if err != nil {
+		return nil, "", err
+	}
+	start := 0
+	if token != "" {
+		start, err = strconv.Atoi(token)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	if start > len(all) {
+		start = len(all)
+	}
+	if pageSize <= 0 || start+pageSize >= len(all) {
+		return all[start:], "", nil
+	}
+	end := start + pageSize
+	return all[start:end], strconv.Itoa(end), nil
+}
+
+// completedEvent finishes a workflow so it decodes as StatusCompleted.
+func completedEvent() *protos.HistoryEvent {
+	return &protos.HistoryEvent{EventId: 1, Timestamp: timestamppb.Now(), EventType: &protos.HistoryEvent_ExecutionCompleted{
+		ExecutionCompleted: &protos.ExecutionCompletedEvent{
+			WorkflowStatus: protos.OrchestrationStatus_ORCHESTRATION_STATUS_COMPLETED,
+			Result:         &wrapperspb.StringValue{Value: `"ok"`},
+		},
+	}}
+}
+
+// A status filter with matches spread across several store key-pages must
+// still yield a full page of matches from a single List call (loop-fill).
+func TestServiceListFilterFillsPageAcrossKeyPages(t *testing.T) {
+	p := &pagingStore{fakeStore: newFakeStore()}
+	// Alternate Completed / Running: inst-0,2,4 Completed; inst-1,3,5 Running.
+	for i := 0; i < 6; i++ {
+		events := []*protos.HistoryEvent{startedEvent("W")}
+		if i%2 == 0 {
+			events = append(events, completedEvent())
+		}
+		seedWorkflow(t, p.fakeStore, "default", "order", "inst-"+itoa(i), "W", events)
+	}
+	svc := New(p, "default")
+
+	// pageSize 3: the first key-page (inst-0..2) holds only 2 Completed
+	// matches, so List must fetch the next key-page to fill the page.
+	res, err := svc.List(context.Background(), ListQuery{
+		Status:          []Status{StatusCompleted},
+		PageSize:        3,
+		IncludeChildren: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 3, "filtered page must be filled across key-pages")
+	for _, it := range res.Items {
+		require.Equal(t, StatusCompleted, it.Status)
+	}
+	// Keys were exhausted while filling, so paging is complete.
+	require.Empty(t, res.NextToken)
+	require.Equal(t, 2, p.metaKeysCalls)
+}
+
+// When the last fetched key-page yields more matches than needed to fill the
+// page, every accumulated match must be returned: the NextToken has already
+// advanced past their keys, so truncating would drop them from paging forever.
+func TestServiceListFilterKeepsOvershootMatches(t *testing.T) {
+	p := &pagingStore{fakeStore: newFakeStore()}
+	// Completed: inst-0,1,3,4,5. Running: inst-2.
+	for i := 0; i < 6; i++ {
+		events := []*protos.HistoryEvent{startedEvent("W")}
+		if i != 2 {
+			events = append(events, completedEvent())
+		}
+		seedWorkflow(t, p.fakeStore, "default", "order", "inst-"+itoa(i), "W", events)
+	}
+	svc := New(p, "default")
+
+	// pageSize 3: key-page 1 (inst-0..2) yields 2 matches, key-page 2
+	// (inst-3..5) yields 3 more — 5 total, token now exhausted.
+	res, err := svc.List(context.Background(), ListQuery{
+		Status:          []Status{StatusCompleted},
+		PageSize:        3,
+		IncludeChildren: true,
+	})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 5, "matches from fully-scanned key-pages must not be truncated away")
+	require.Empty(t, res.NextToken)
+}
+
+// A filter matching nothing must exhaust the keyspace and return empty items
+// with an empty token — not an empty page with a token the client must chase.
+func TestServiceListFilterNoMatchesExhaustsKeys(t *testing.T) {
+	p := &pagingStore{fakeStore: newFakeStore()}
+	for i := 0; i < 5; i++ {
+		seedWorkflow(t, p.fakeStore, "default", "order", "inst-"+itoa(i), "W",
+			[]*protos.HistoryEvent{startedEvent("W")})
+	}
+	svc := New(p, "default")
+
+	res, err := svc.List(context.Background(), ListQuery{
+		Status:          []Status{StatusFailed},
+		PageSize:        2,
+		IncludeChildren: true,
+	})
+	require.NoError(t, err)
+	require.Empty(t, res.Items)
+	require.Empty(t, res.NextToken, "exhausted keyspace must end paging")
+	require.Equal(t, 3, p.metaKeysCalls, "must scan all key-pages before giving up")
+}
+
+// On a huge keyspace where the filter matches nothing, the scan cap must stop
+// the loop early and return a non-empty token so the client can continue.
+func TestServiceListFilterScanCapStopsEarly(t *testing.T) {
+	p := &pagingStore{fakeStore: newFakeStore()}
+	// 30 Running instances; cap for pageSize 2 is 10*2 = 20 keys.
+	for i := 0; i < 30; i++ {
+		seedWorkflow(t, p.fakeStore, "default", "order", "inst-"+pad6(i), "W",
+			[]*protos.HistoryEvent{startedEvent("W")})
+	}
+	svc := New(p, "default")
+
+	res, err := svc.List(context.Background(), ListQuery{
+		Status:          []Status{StatusFailed},
+		PageSize:        2,
+		IncludeChildren: true,
+	})
+	require.NoError(t, err)
+	require.Empty(t, res.Items)
+	require.NotEmpty(t, res.NextToken, "cap hit before exhaustion must return a resume token")
+	require.Equal(t, 10, p.metaKeysCalls, "must stop at the 10x-pageSize scan cap")
+}
+
+// Without filters, List must keep its one-key-page-per-call behavior: a single
+// Keys call, pageSize items, and the store's token passed through.
+func TestServiceListUnfilteredSinglePageUnchanged(t *testing.T) {
+	p := &pagingStore{fakeStore: newFakeStore()}
+	for i := 0; i < 6; i++ {
+		seedWorkflow(t, p.fakeStore, "default", "order", "inst-"+itoa(i), "W",
+			[]*protos.HistoryEvent{startedEvent("W")})
+	}
+	svc := New(p, "default")
+
+	res, err := svc.List(context.Background(), ListQuery{PageSize: 2, IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 2)
+	require.Equal(t, "2", res.NextToken, "store token must pass through unchanged")
+	require.Equal(t, 1, p.metaKeysCalls, "unfiltered list must fetch exactly one key-page")
+
+	// Second page resumes from the returned token.
+	res2, err := svc.List(context.Background(), ListQuery{PageSize: 2, PageToken: res.NextToken, IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res2.Items, 2)
+	require.Equal(t, "4", res2.NextToken)
 }
 
 func TestServiceListEnumeratesAllAppIDsFromStore(t *testing.T) {

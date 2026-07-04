@@ -73,6 +73,16 @@ type Execution struct {
 	History        []HistoryEvent  `json:"history"`
 }
 
+// ListResult is one page of executions plus the cursor for the next page.
+//
+// Limitations of the underlying key-cursor paging:
+//   - Items are sorted by CreatedAt (newest first) within this page only;
+//     the store pages by key order, so there is no global CreatedAt order
+//     across pages.
+//   - A page may hold fewer than the requested pageSize items — down to
+//     zero when a filtered scan hits its per-request cap — while NextToken
+//     is still non-empty. Clients must keep paging until NextToken is empty
+//     rather than treating a short or empty page as the end.
 type ListResult struct {
 	Items     []ExecutionSummary `json:"items"`
 	NextToken string             `json:"nextToken,omitempty"`

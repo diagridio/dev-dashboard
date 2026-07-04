@@ -21,6 +21,15 @@ var (
 
 const defaultPageSize = 50
 
+// Guard rails for the filtered-list loop-fill (see List): a single request
+// never scans more than filteredScanPageMultiple×pageSize metadata keys,
+// capped at maxFilteredScanKeys, so a filter that matches nothing on a huge
+// store cannot trigger an unbounded scan.
+const (
+	filteredScanPageMultiple = 10
+	maxFilteredScanKeys      = 2000
+)
+
 type ListQuery struct {
 	AppID           string
 	Status          []Status
@@ -96,6 +105,16 @@ func (s *service) metaKeys(ctx context.Context, appID, token string, pageSize in
 	return s.store.Keys(ctx, pattern, token, pageSize)
 }
 
+// List returns one page of executions. Paging is driven by the store's
+// metadata-key cursor, while status/search/children filters apply per item —
+// so when a filter is active, List loop-fills: it keeps fetching key-pages
+// until at least pageSize post-filter matches are collected, the keys are
+// exhausted (empty NextToken), or the bounded scan cap is hit. Because
+// NextToken always points past the last fully-scanned key-page, a filtered
+// page returns every match found so far — it may slightly exceed pageSize
+// (never more than 2×) and, only when the scan cap fires, may hold fewer
+// than pageSize items (possibly zero) alongside a non-empty NextToken;
+// clients must treat that as "keep paging".
 func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	if s.store == nil {
 		return ListResult{}, ErrNoStore
@@ -105,39 +124,63 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 		pageSize = defaultPageSize
 	}
 
-	metaKeys, next, err := s.metaKeys(ctx, q.AppID, q.PageToken, pageSize)
-	if err != nil {
-		return ListResult{}, err
+	// Any predicate that can reject an instance makes a key-page under-fill.
+	filtered := len(q.Status) > 0 || q.Search != "" || !q.IncludeChildren
+	maxScan := pageSize * filteredScanPageMultiple
+	if maxScan > maxFilteredScanKeys {
+		maxScan = maxFilteredScanKeys
 	}
 
 	var items []ExecutionSummary
 	seen := make(map[string]struct{})
-	for _, k := range metaKeys {
-		appID, ok := statestore.ParseAppID(k)
-		if !ok {
-			continue
-		}
-		id, ok := statestore.ParseInstanceID(k)
-		if !ok {
-			continue
-		}
-		dedupKey := appID + "/" + id
-		if _, dup := seen[dedupKey]; dup {
-			continue
-		}
-		seen[dedupKey] = struct{}{}
-		ex, err := s.load(ctx, appID, id)
+	token := q.PageToken
+	next := ""
+	scanned := 0
+	for {
+		metaKeys, n, err := s.metaKeys(ctx, q.AppID, token, pageSize)
 		if err != nil {
-			continue
+			return ListResult{}, err
 		}
-		if matches(ex.ExecutionSummary, q) {
-			items = append(items, ex.ExecutionSummary)
+		next = n
+		scanned += len(metaKeys)
+		for _, k := range metaKeys {
+			appID, ok := statestore.ParseAppID(k)
+			if !ok {
+				continue
+			}
+			id, ok := statestore.ParseInstanceID(k)
+			if !ok {
+				continue
+			}
+			dedupKey := appID + "/" + id
+			if _, dup := seen[dedupKey]; dup {
+				continue
+			}
+			seen[dedupKey] = struct{}{}
+			ex, err := s.load(ctx, appID, id)
+			if err != nil {
+				continue
+			}
+			if matches(ex.ExecutionSummary, q) {
+				items = append(items, ex.ExecutionSummary)
+			}
 		}
+		// Unfiltered: preserve one-key-page-per-call semantics.
+		// Filtered: stop once the page is full, keys ran out, or the scan cap
+		// is reached (returning the resume token for the cap case).
+		if !filtered || len(items) >= pageSize || next == "" || scanned >= maxScan {
+			break
+		}
+		token = next
 	}
 	sort.SliceStable(items, func(a, b int) bool {
 		return afterOrZero(items[a].CreatedAt, items[b].CreatedAt)
 	})
-	if len(items) > pageSize {
+	// Truncation is safe only when unfiltered (defensive: a key-page never
+	// exceeds pageSize keys). When filtered, NextToken has already advanced
+	// past every scanned key, so dropping accumulated matches would remove
+	// them from pagination entirely.
+	if !filtered && len(items) > pageSize {
 		items = items[:pageSize]
 	}
 	return ListResult{Items: items, NextToken: next}, nil
