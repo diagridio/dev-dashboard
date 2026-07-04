@@ -313,8 +313,8 @@ export function Workflows() {
   // No-store guidance block — shared between the empty-list case and the 503 no-store case.
   const noStoreGuidance = (
     <div className="page">
-      <p style={{ color: 'var(--fail-fg)', fontWeight: 600 }}>No state store detected</p>
-      <p style={{ color: 'var(--muted)', marginTop: 8 }}>
+      <p className="err b">No state store detected</p>
+      <p className="muted" style={{ marginTop: 8 }}>
         Dapr requires a state store to persist workflow state. Configure one with the{' '}
         <span className="mono">--statestore</span> flag or add a state store component.
       </p>
@@ -334,7 +334,7 @@ export function Workflows() {
       const serverMsg = extracted && extracted !== errStr ? extracted : 'state store unavailable'
       return (
         <div className="page">
-          <p style={{ color: 'var(--fail-fg)', fontWeight: 600 }}>
+          <p className="err b">
             {serverMsg}
           </p>
         </div>
@@ -342,7 +342,7 @@ export function Workflows() {
     }
     return (
       <div className="page">
-        <p style={{ color: 'var(--fail-fg)' }}>Error loading workflows: {errStr}</p>
+        <p className="err">Error loading workflows: {errStr}</p>
       </div>
     )
   }
@@ -532,9 +532,9 @@ export function Workflows() {
         {/* Table */}
         <div className="tablewrap">
           {(isLoading || (!noStores && selectedStore === null)) ? (
-            <p style={{ padding: 20, color: 'var(--muted)' }}>Loading…</p>
+            <p className="muted" style={{ padding: 20 }}>Loading…</p>
           ) : items.length === 0 ? (
-            <p style={{ padding: 20, color: 'var(--muted)' }}>No workflows found</p>
+            <p className="muted" style={{ padding: 20 }}>No workflows found</p>
           ) : (
             <table className="wf">
               <thead>

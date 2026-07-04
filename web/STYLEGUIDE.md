@@ -11,8 +11,9 @@ agree again.
 ## TL;DR for a new page
 
 1. Wrap everything in `<div className="page">`.
-2. Open with a `.phead` (title + optional sub + right-aligned action/live indicator)
-   or a `.crumbs` breadcrumb for detail pages.
+2. Open with a `.phead` (title + optional sub + right-aligned actions/filters)
+   or a `.crumbs` breadcrumb for detail pages. Auto-refresh is **global**
+   (`RefreshControl` in the top nav) — don't add per-page refresh/live controls.
 3. Build the body from existing primitives: `.card` + `table.t` for lists,
    `.panel` + `.kv` for detail sections, `.stats` for summary tiles, `.metagrid`
    for dense key/value headers.
@@ -47,9 +48,13 @@ agree again.
 <p style={{ color: '#637381' }}>…</p>
 ```
 
-The only raw hex values in the codebase are intentional one-offs: language swatch
-colors (`runtimeSwatch` in `Applications.tsx`/`AppDetail.tsx`) and the dark ink on
-mint/bright backgrounds (`#06231a`). If you reach for a hex, it should be that rare.
+The only raw hex values in the codebase are intentional one-offs: the Diagrid logo
+mark (`components/Logo.tsx` — fixed brand fills), the `runtimeSwatch` map of
+language-brand swatch colors (one shared lookup keyed by runtime; external brand
+colors have no theme token), and the dark ink placed on mint/bright backgrounds
+(`#06231a`). If you reach for a hex, it should be that rare — a guard test
+(`src/test/styleguide.test.ts`) fails on any new hex literal outside those
+allowlisted spots.
 
 ### ⚠️ Antipattern: never build a class name from raw data
 
@@ -133,6 +138,26 @@ Syntax-highlight tokens also exist for YAML (`--yk/--ys/--yc`) and JSON
 | `--mono` | Monospace stack |
 | `--sans` | Sans stack (default body font) |
 
+### Implicit scales (radius & padding)
+
+There are no radius/spacing tokens, but the values are a deliberate scale — match
+the tier, don't invent a new value:
+
+| Radius | Tier |
+|---|---|
+| `13px` | Top-level surfaces: `.card`, `.panel` (and the modal card, which composes `.card`) |
+| `12px` | Tiles & framed insets: `.stat`, `.metagrid`, `.logwin`, panels inside `.io` |
+| `10px` | Cards nested *inside* a card/panel (e.g. the event cards in the workflow timeline) |
+| `8–9px` | Controls: `.btn`/`.tbtn` 8px; `.select`/`.search`/`.inp`/`.segs` 9px |
+| `5–7px` | Chips & small badges: `.chip` 7px, `.typechip`/`.copybtn` 6px, `.appref`/`.dprchip` 5px |
+| `999px` | Pills (`.pill`) and round dots/LEDs (50%) |
+
+Padding rhythm: **`11px 14px`** is the row/cell unit — table `th`/`td`, panel
+headers (`.ph`), list items (`.ci`), the pager all use it (values drift by ±2px
+vertically: `.kv` rows are `9px 14px`). Compact controls use **`7px 11px`**
+(`.inp`, `.search`, `.btn` at `7px 13px`). Stick to the 14px horizontal gutter so
+new rows align with existing ones.
+
 ### Mixing a tint
 For selection/hover tints, follow the existing pattern with `color-mix` against a
 token rather than inventing a new color:
@@ -183,7 +208,7 @@ padding). Two header styles:
       <h1>Applications</h1>
       <div className="sub">Dapr apps &amp; sidecars discovered on this machine</div>
     </div>
-    <LiveIndicator />        {/* right-aligned: live dot, actions, etc. */}
+    <div className="ctrlset">…</div>   {/* right-aligned actions/filters (optional) */}
   </div>
 
   <div className="stats">…</div>      {/* optional summary tiles */}
@@ -233,22 +258,24 @@ shows the same header.
 
 ## 5. Component catalog
 
-Reusable React components — prefer these over re-implementing.
+Reusable React components — prefer these over re-implementing. The table is
+pattern-first with one-line pointers (paths relative to `src/`). The pointers
+are kept honest by `src/test/styleguide.test.ts`, which asserts every
+backtick-quoted `components/….tsx` path in this doc exists — deleting a
+component fails the suite until the doc is updated.
 
-| Component | File | Use |
-|---|---|---|
-| `StatusPill` | `components/StatusPill.tsx` | Workflow status → correct `.pill .s-*` class + uppercased label. **Use this; don't hand-map statuses.** |
-| `LiveIndicator` | `components/LiveIndicator.tsx` | The pulsing "live" dot for `.phead`. |
-| `RefreshControl` | `components/RefreshControl.tsx` | Global auto-refresh control, mounted in `TopNav` (top-right). Renders as `.refresh-compact` — a `.beatbtn` pulse/pause toggle (`.beat` dot) plus a `.select.compact` interval dropdown. |
-| `Modal` | `components/Modal.tsx` | Focus-trapped modal shell: `.modal-backdrop` overlay + `.card.modal-card` dialog + `.modal-title`. Wrap dialog content in this; close on backdrop/Escape. |
-| `ConfirmRemoveDialog` | `components/ConfirmRemoveDialog.tsx` | Modal confirm for destructive actions (built on `Modal`). |
-| `MetadataFieldInput` | `components/MetadataFieldInput.tsx` | Renders one form control (`.inp` text or select) from a component-metadata field descriptor. Use for metadata-driven forms; don't hand-build inputs. |
-| `StateStoreConnectionDialog` | `components/StateStoreConnectionDialog.tsx` | Add/edit a state-store connection — a `Modal` with `.field` rows driven by `MetadataFieldInput`. |
-| `StateStoreConnectionsPanel` | `components/StateStoreConnectionsPanel.tsx` | The list/add/edit/delete connections panel mounted on the Components page. |
-| `ThemeToggle` | `components/ThemeToggle.tsx` | Light/dark switch (lives in `TopNav`). |
-| `useToast()` | `lib/toast.tsx` | Transient confirmation (e.g. "Instance ID copied"). |
-| `copyText()` | `lib/clipboard.ts` | Clipboard write; pair with a toast. |
-| `highlightJson` / YAML | `lib/json-highlight.tsx`, `lib/yaml-highlight.tsx` | Render `<pre className="json">` / `<pre className="code">` with token colors. |
+| Pattern | Pointer |
+|---|---|
+| Status → pill | `components/StatusPill.tsx` — status string → `.pill .s-*` + uppercased label. **Don't hand-map statuses.** |
+| Modal dialog | `components/Modal.tsx` — focus-trapped shell (`.modal-backdrop` + `.card.modal-card`); `components/ConfirmRemoveDialog.tsx` for destructive confirms. |
+| Descriptor-driven form control | `components/MetadataFieldInput.tsx` — one `.inp` control from a component-metadata field descriptor (vs hand-composed forms: see §6). |
+| Hand-composed form fields | `components/form/` primitives (`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`) — see §6. |
+| Multi-step builder shell | `components/wizard/` (`Wizard`, `Stepper`, `StepNav`) — see §6. |
+| YAML output step | `components/YamlPreview.tsx` — highlighted preview + Copy/Download — see §6. |
+| Connection manager | `components/StateStoreConnectionDialog.tsx` (a `Modal` of `.field` rows driven by `MetadataFieldInput`) + `components/StateStoreConnectionsPanel.tsx`. |
+| Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh — never mount a per-page one) and `components/ThemeToggle.tsx`. |
+| Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. |
+| Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx` → `<pre className="json">` / `<pre className="code">`. |
 
 ### CSS primitives (class → what it is)
 
@@ -285,7 +312,7 @@ Reusable React components — prefer these over re-implementing.
   mono badges for types, app refs, Dapr tags. `.appref.link` adds a hover
   affordance (border/colour change, **no arrow**). **There is no `.chip.link`** —
   a chip that navigates renders as a plain `.chip` wrapped in a `<Link>` (internal
-  navigation, no `↗`); see §6. The old `.chip.link` appended an `↗` that read as an
+  navigation, no `↗`); see §7. The old `.chip.link` appended an `↗` that read as an
   *external* link, which these never are, so it was removed.
 - `.lang .sw` — language label with a color swatch.
 - `.kebab` — the `⋯` row-actions glyph.
@@ -316,9 +343,84 @@ Reusable React components — prefer these over re-implementing.
 - `<pre className="code">` + YAML highlighter for component/config YAML.
 - `<pre className="evbody pre">` patterns for workflow event payloads.
 
+**Workflow event timeline** — a self-contained vocabulary in `theme.css`
+(the workflows section). Reuse it for anything event-feed-shaped; don't fork it:
+- `.timeline` > `.ev` rows — each row is a 3-col grid: timestamp (`.t`), rail
+  (`.rail` vertical line + `.node` dot, colored by kind via `.n-start` /
+  `.n-sched` / `.n-done` / `.n-fail` / `.n-timer` / `.n-end` / `.n-endfail`),
+  and the event card.
+- The card is `details.evd` (collapsible; `.caret`) or `.evd.evstatic` (flat).
+  Header cells — `.evtype`, `.evname` / `.evnamecell`, `.evtag`, `.evanchor` —
+  are pinned to explicit columns of a shared grid so they align vertically
+  across every row, even when a cell is absent.
+- Payloads go in `.evbody` (`.lbl` / `.lblrow` captions + bounded `pre`).
+- Related-event pairing: `a.pairchip` / `span.pairchip` (`.pending` dashed),
+  with `.ev.pair-hover` / `.ev.pair-selected` highlight states; `.retrybadge`
+  flags retries.
+
+**Control Plane cards** — `.cp-*`: structural classes for labelled fields in a
+service card: `.cp-card` (padding), `.cp-field` (stack), `.cp-label` (the
+standard mono/uppercase label), `.cp-value`, `.cp-logpath` (break-all). This is
+the model for page-scoped structural CSS: short page prefix as namespace,
+structure only, every color still a token.
+
 ---
 
-## 6. Recurring patterns
+## 6. Builders & wizards
+
+The YAML builders (component & resiliency) share one wizard shell and one form
+vocabulary. Any new "compose a thing step by step, preview YAML, download it"
+flow should be assembled from these — not hand-rolled.
+
+### Wizard shell — `components/wizard/`
+
+- **`Wizard`** — the whole shell: a `Stepper`, the active step's content in
+  `.wizard-body`, and a `StepNav`. It is fully controlled — you own the state
+  and pass `steps` (`{ label, content }`), `activeStep`, `canContinue`, and
+  `onBack` / `onContinue` / `onFinish`; the wizard renders, it doesn't decide.
+- **`Stepper`** — the step-pill breadcrumb: `.stepper` > `.step` pills
+  (`.active` = current, `.done` = completed, mint) separated by `.step-arrow`
+  `→` glyphs. Display-only; steps aren't clickable.
+- **`StepNav`** — the Back / Continue / Finish row (`.stepnav`; a `.spacer`
+  keeps the primary action right-aligned when Back is absent). All wizard
+  actions are `.btn.ghost`. Gate progression by passing `canContinue={false}`
+  — disable the button, don't hide it.
+
+The matching CSS is the wizard section of `theme.css` (`.wizard`, `.stepper` /
+`.step`, `.wizard-body` — a min-height so the pane doesn't jump between steps —
+and `.stepnav`).
+
+### Form primitives — `components/form/`
+
+`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle` — thin wrappers
+over the `.field` / `.inp` / `.select` / `.childtoggle` classes with a
+`value`/`onChange` string API. `Field` owns the muted label, the `.req`
+required asterisk, and the inline `.field-err` line; put exactly one control
+inside it. `NumberInput` deliberately keeps its value as a **string** so the
+field can be empty — coerce when you emit.
+
+**Descriptor-driven vs hand-composed:**
+- Have component-metadata **field descriptors** (e.g. the metadata fields of a
+  component type)? Use `MetadataFieldInput` — it derives
+  text/password/number/select/checkbox from the descriptor. Don't hand-build
+  those inputs.
+- Designing the form **yourself** (builder steps, settings, filters-as-form)?
+  Use the `components/form/` primitives inside `Field`s.
+- Break long forms into groups with **`.section-label`** — the muted uppercase
+  divider with a top border (defined alongside the `.field` rules in
+  `theme.css`).
+
+### YAML preview & download
+
+`YamlPreview` (`components/YamlPreview.tsx`) is the standard final step: the
+emitted YAML as a highlighted `<pre className="code">`, plus right-aligned
+**Copy** (clipboard + toast) and **Download** (`downloadText()` from
+`lib/download.ts`, client-side blob download) actions. Don't re-implement
+copy/download buttons per builder.
+
+---
+
+## 7. Recurring patterns
 
 - **In-table entity links:** use `.celllink` (not a bare `<a>`) so links render in
   `--text`, not browser blue/purple, and only underline on hover. Stop propagation
@@ -344,7 +446,7 @@ Reusable React components — prefer these over re-implementing.
 
 ---
 
-## 7. Responsiveness & accessibility
+## 8. Responsiveness & accessibility
 
 - **Breakpoints in use:** 760px (sidebar collapses; `.twocol`/`.md` → 1 col),
   820px (`.md`), 720px (`.io`), 640px (`.metagrid` → 2 col). Reuse these; multi-col
@@ -361,7 +463,7 @@ Reusable React components — prefer these over re-implementing.
 
 ---
 
-## 8. When to add new CSS
+## 9. When to add new CSS
 
 Default to **composing existing classes**. Add to `theme.css` only when:
 
@@ -374,6 +476,17 @@ When you do add CSS:
 - Verify it in **both** light and dark before committing.
 - Prefer a small composable class (like `.mono`, `.tabnum`) over a one-off rule.
 
+### Per-component CSS variables — structural geometry only
+
+Some components coordinate geometry through a component-scoped custom property:
+the log row exposes `--ltime-w` / `--lsrc-w` (column widths computed in JS from
+the widest visible timestamp/source and set inline on the container), and the
+event timeline uses `--ev-head` / `--ev-head-top` (header height/offset shared
+by the rail, the node dot, and the card header so they stay aligned). That is
+the sanctioned pattern: a locally-named variable for **structural geometry**
+(widths, heights, offsets) that JS must compute or several rules must share.
+Never use this mechanism for colors — colors only come from theme tokens.
+
 ### About inline `style={{…}}`
 Inline styles are used sparingly and deliberately — for genuine one-offs (a single
 swatch color, a `marginBottom` nudge, an icon background). That's fine. But if you
@@ -383,7 +496,7 @@ already provides (e.g. re-specifying the whole `.ph` rule inline as
 
 ---
 
-## 9. Quick checklist before you commit a new page
+## 10. Quick checklist before you commit a new page
 
 - [ ] Root is `.page`; header is `.phead` or `.crumbs`.
 - [ ] Loading, empty, and error states are handled.
@@ -392,6 +505,7 @@ already provides (e.g. re-specifying the whole `.ph` rule inline as
       bare data word that could collide with a global class (see §1 antipattern).
 - [ ] Labels are mono/uppercase/muted via existing classes; every number/time/
       duration/GUID value is mono, and table cells use `td.mono.tabnum`.
-- [ ] Used `StatusPill` / `LiveIndicator` / `RefreshControl` / toast where relevant.
+- [ ] Used `StatusPill` / toast where relevant. No per-page refresh or live
+      indicator — auto-refresh is global (`RefreshControl` in the top nav).
 - [ ] Wide tables wrapped in `.tablewrap`; grids collapse on narrow screens.
 - [ ] Checked it in **both** light and dark themes.
