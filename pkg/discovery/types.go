@@ -16,6 +16,14 @@ type Instance struct {
 	Health          Health         `json:"health"`
 	Runtime         string         `json:"runtime"`            // e.g. "go", "python", "node", "dotnet", "java", "unknown"
 	IsAspire        bool           `json:"isAspire,omitempty"` // true when the app is .NET Aspire-managed
+	Source             string `json:"source"`                       // "standalone" | "compose"
+	ComposeProject     string `json:"composeProject,omitempty"`
+	ComposeService     string `json:"composeService,omitempty"`
+	DaprdContainerID   string `json:"daprdContainerId,omitempty"`
+	DaprdContainerName string `json:"daprdContainerName,omitempty"`
+	AppContainerID     string `json:"appContainerId,omitempty"`
+	AppContainerName   string `json:"appContainerName,omitempty"`
+	SidecarReachable   bool   `json:"sidecarReachable"`
 	HTTPPort        int            `json:"httpPort"`
 	GRPCPort        int            `json:"grpcPort"`
 	AppPort         int            `json:"appPort"`

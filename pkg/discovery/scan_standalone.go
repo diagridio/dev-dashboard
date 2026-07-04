@@ -21,17 +21,19 @@ func StandaloneScanner() Scanner {
 		for _, o := range outputs {
 			created, _ := time.ParseInLocation(createdLayout, o.Created, time.Local)
 			results = append(results, ScanResult{
-				AppID:         o.AppID,
-				HTTPPort:      o.HTTPPort,
-				GRPCPort:      o.GRPCPort,
-				AppPort:       o.AppPort,
-				DaprdPID:      o.DaprdPID,
-				CLIPID:        o.CliPID,
-				Created:       created,
-				RunTemplate:   o.RunTemplateName,
-				ResourcePaths: o.ResourcePaths,
-				ConfigPath:    "",
-				Command:       o.Command,
+				AppID:            o.AppID,
+				HTTPPort:         o.HTTPPort,
+				GRPCPort:         o.GRPCPort,
+				AppPort:          o.AppPort,
+				DaprdPID:         o.DaprdPID,
+				CLIPID:           o.CliPID,
+				Created:          created,
+				RunTemplate:      o.RunTemplateName,
+				ResourcePaths:    o.ResourcePaths,
+				ConfigPath:       "",
+				Command:          o.Command,
+				Source:           SourceStandalone,
+				SidecarReachable: true,
 			})
 		}
 		return results, nil
