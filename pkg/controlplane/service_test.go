@@ -193,8 +193,8 @@ func TestListIncludesComposeControlPlane(t *testing.T) {
 	stats, _ := os.ReadFile("testdata/stats.json")
 	f := &fakeRunner{
 		outputs: map[string][]byte{
-			"ps -aq":           []byte("p1\ns0\nx1\n"),
-			"inspect p1":       inspect,
+			"ps -aq":            []byte("p1\ns0\nx1\n"),
+			"inspect p1":        inspect,
 			"stats --no-stream": stats,
 		},
 	}
@@ -229,8 +229,8 @@ func TestDoAllowsDiscoveredComposeNames(t *testing.T) {
 	stats, _ := os.ReadFile("testdata/stats.json")
 	f := &fakeRunner{
 		outputs: map[string][]byte{
-			"ps -aq":           []byte("p1\ns0\nx1\n"),
-			"inspect p1":       inspect,
+			"ps -aq":            []byte("p1\ns0\nx1\n"),
+			"inspect p1":        inspect,
 			"stats --no-stream": stats,
 		},
 	}

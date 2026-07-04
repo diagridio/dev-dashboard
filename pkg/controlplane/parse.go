@@ -19,8 +19,8 @@ type inspectData struct {
 
 // rawInspect mirrors the subset of `<runtime> inspect` we consume.
 type rawInspect struct {
-	ID   string `json:"Id"`
-	Name string `json:"Name"`
+	ID    string `json:"Id"`
+	Name  string `json:"Name"`
 	State struct {
 		Status string `json:"Status"`
 		Health struct {

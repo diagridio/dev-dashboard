@@ -19,18 +19,18 @@ import (
 
 // Options configures the HTTP router.
 type Options struct {
-	BasePath     string // "" or e.g. "/dashboard"
-	DistFS       fs.FS  // embedded SPA assets (contains index.html)
-	Version      version.Info
-	Apps         discovery.Service
+	BasePath string // "" or e.g. "/dashboard"
+	DistFS   fs.FS  // embedded SPA assets (contains index.html)
+	Version  version.Info
+	Apps     discovery.Service
 	// ContainerLogs streams container logs for compose-discovered apps.
 	// nil disables container log streaming (404 for those apps).
 	ContainerLogs func(ctx context.Context, containerID string) (<-chan string, error)
-	Backend      WorkflowBackend
-	Stores       StoreRegistry
-	Resources    resources.Service
-	News         news.Service
-	ControlPlane controlplane.Manager
+	Backend       WorkflowBackend
+	Stores        StoreRegistry
+	Resources     resources.Service
+	News          news.Service
+	ControlPlane  controlplane.Manager
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.

@@ -261,15 +261,15 @@ func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 	return statestore.Component{}, false
 }
 
+// ptr returns a pointer to c (used to convert a value to *Component for identity).
+func ptr(c statestore.Component) *statestore.Component { return &c }
+
 // Stores satisfies server.StoreRegistry. It returns ALL registry entries (auto
 // ∪ manual) with Source set and the elected active store flagged. The list
 // opens NO DB connections: for each entry it builds the component (auto: read +
 // resolve its YAML; manual: inline metadata) and computes the secrets-free
 // ConnInfo — a file read, never a connect. A missing YAML yields an empty
 // Connection (unreachable), not an error.
-// ptr returns a pointer to c (used to convert a value to *Component for identity).
-func ptr(c statestore.Component) *statestore.Component { return &c }
-
 func (rc *reconciler) Stores() []server.StoreInfo {
 	if rc.registry == nil {
 		return []server.StoreInfo{}
