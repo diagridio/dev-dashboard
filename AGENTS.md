@@ -1,6 +1,7 @@
 # AGENT.md
 
 Guidance for AI agents working in this repository. For end-user/maintainer docs, see [README.md](README.md).
+For how the system fits together and where to extend it, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## What this is
 
@@ -21,9 +22,10 @@ cmd/               cobra root + subcommands (serve, update, workflow); no domain
                    reconciler.go, derive.go, connpool.go): the connections.yaml-backed store
                    list, lazy per-store connection pool, and secretKeyRef resolution.
 pkg/               domain packages — each is isolated, none import cmd/
-  discovery/       standalone.List() + /v1.0/metadata sidecar enrichment
-  workflow/        list / history / terminate / purge
-  statestore/      redis / postgres / sqlite client
+  discovery/       standalone.List() + /v1.0/metadata + /v1.0/healthz enrichment
+  workflow/        list / stats / history / terminate / purge (reads the state store)
+  statestore/      redis / postgres / sqlite client + Detect + secret resolution
+  controlplane/    docker/podman detection, inspect, lifecycle actions, log stream
   metadata/        embedded component-metadata catalog (drives the add/edit connection forms)
   resources/       component + configuration YAML loader
   logs/            file tail → SSE
@@ -142,5 +144,6 @@ via ldflags (`dev-dashboard --version`).
 - Commit/push only when asked; the project uses Conventional Commit prefixes (`feat:`, `refactor:`,
   `docs:`) — match the existing `git log` style.
 
-For full design rationale, see
+For how the system fits together and where each extension point lives, see
+[ARCHITECTURE.md](ARCHITECTURE.md). For the original design rationale, see
 [`docs/superpowers/specs/2026-06-25-dev-dashboard-design.md`](docs/superpowers/specs/2026-06-25-dev-dashboard-design.md).

@@ -15,8 +15,10 @@ Design goals:
 - **Single self-contained binary** — no runtime dependencies (the React frontend is embedded
   via `go:embed`; there is no Node.js at runtime).
 - **Read-only over your apps** — it never starts or stops them. The only mutating actions are
-  workflow terminate/purge and managing your own saved state-store connections (persisted to a
-  local config file, see [Use cases](#use-cases)); it never edits app or component state.
+  workflow terminate/purge, managing your own saved state-store connections (persisted to a
+  local config file, see [Use cases](#use-cases)), and control-plane lifecycle actions
+  (start/restart/stop of the self-hosted `dapr_scheduler` / `dapr_placement` containers); it
+  never edits app or component state.
 - **Degrade gracefully** — keep working when a sidecar or state store is unavailable.
 - **Minimal, high-density UI** with light and dark themes, optimized for desktop widths.
 
@@ -369,23 +371,30 @@ make release-snapshot   # build a local snapshot into dist/ without publishing
 The dashboard is a **single Go binary** that embeds a React SPA and talks to your local Dapr
 sidecars and state store.
 
+> **For the full architecture** — how discovery, state-store election, the reconciler, the
+> HTTP layer, and the SPA fit together, plus a guide to extending each part — see
+> [ARCHITECTURE.md](ARCHITECTURE.md). The summary below is the quick tour.
+
 ```
 ┌───────────────────────────────────────────────────────┐
 │  dev-dashboard (single Go binary)                     │
 │                                                       │
-│  cmd/           cobra root, flags, default `serve`    │
-│  pkg/server     chi router + go:embed SPA             │
-│  pkg/discovery  standalone.List() + /v1.0/metadata    │
-│  pkg/workflow   list / history / purge                │
-│  pkg/statestore client (redis / postgres / sqlite)    │
-│  pkg/metadata   component metadata catalog            │
-│  pkg/resources  component + configuration YAML loader │
-│  pkg/logs       file tail → SSE                       │
-│  web/           React + Vite SPA → dist/ (embedded)   │
+│  cmd/            cobra root, flags, serve boot,       │
+│                  connection registry + reconciler     │
+│  pkg/server      chi router + go:embed SPA            │
+│  pkg/discovery   standalone.List() + /v1.0/metadata   │
+│  pkg/workflow    list / history / purge               │
+│  pkg/statestore  client (redis / postgres / sqlite)   │
+│  pkg/controlplane docker/podman inspect + lifecycle   │
+│  pkg/metadata    component metadata catalog           │
+│  pkg/resources   component + configuration YAML loader│
+│  pkg/logs        file tail → SSE                      │
+│  web/            React + Vite SPA → dist/ (embedded)  │
 └───────────────────────────────────────────────────────┘
-        │ HTTP /v1.0/metadata, /healthz       │ files / TCP
-        ▼                                     ▼
-   running daprd sidecars        ~/.dapr, resource paths, state store backend
+   │ HTTP /v1.0/*   │ files / TCP        │ docker/podman
+   ▼                ▼                    ▼
+ running daprd   ~/.dapr, resource paths,   control-plane
+ sidecars        state store backend        containers
 ```
 
 **Components**
@@ -409,7 +418,9 @@ sidecars and state store.
   `dapr list`). `standalone.List()` reads the local process table and is the source of truth
   for existence/ports/PIDs; the **`/v1.0/metadata`** call per sidecar is enrichment (runtime
   version, components, actors, subscriptions, extended metadata) and degrades gracefully when
-  a sidecar is down. A background **`/v1.0/healthz`** poller drives the health badge.
+  a sidecar is down. A **`/v1.0/healthz`** check per sidecar drives the health badge — computed
+  on demand during each `/api/apps` fetch (no separate background poller), so its refresh cadence
+  follows the UI's autorefresh interval.
 - **Workflows** are read from the detected **state store backend** (Redis / PostgreSQL /
   SQLite); a client is built from the auto-detected component YAML. Purge uses the official
   Dapr workflow API when reachable, with direct state-store key deletion as an explicit force
@@ -424,6 +435,10 @@ sidecars and state store.
   `--resources-path` directories read from daprd args.
 - **Logs** are tailed from `~/.dapr/logs/*` and the `appLogPath`/`daprdLogPath` reported in
   extended metadata, then streamed to the SPA over SSE.
+- **Control plane** is inspected through the resolved container runtime (`docker`, else
+  `podman`): `dapr_scheduler` / `dapr_placement` are the self-hosted containers the dashboard
+  can start/restart/stop (allowlisted to those names), while `dapr_sentry` / `dapr_injector`
+  are shown as kubernetes-only. Container logs stream over SSE via `docker logs -f`.
 - **News** (optional) — the Resources sidebar pulls the Diagrid product feed, proxied and
   cached behind the backend's own `GET /api/news` endpoint so the SPA only ever talks to its
   own origin.
@@ -432,5 +447,6 @@ sidecars and state store.
 the server mounts as a `chi` sub-router, and the SPA is an embedded `fs.FS`, so the whole
 thing can later be re-mounted under a `diagrid dashboard` subcommand.
 
-For the full design, see
+For the full architecture and extension guide, see [ARCHITECTURE.md](ARCHITECTURE.md); for the
+original design rationale, see
 [`docs/superpowers/specs/2026-06-25-dev-dashboard-design.md`](docs/superpowers/specs/2026-06-25-dev-dashboard-design.md).
