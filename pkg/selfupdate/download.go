@@ -35,8 +35,15 @@ func verifyChecksum(archive []byte, name, checksumsTxt string) error {
 // errNotFound is returned by httpGet when the server responds 404.
 var errNotFound = errors.New("not found")
 
+// maxDownloadBytes caps how much of a response body httpGet buffers, so a
+// misbehaving or malicious release server cannot exhaust memory. 200 MiB is
+// far above any real release asset. var (not const) so tests can shrink it.
+var maxDownloadBytes int64 = 200 << 20
+
 // httpGet fetches url and returns the response body, mapping a 404 to
-// errNotFound and any other non-200 status to an error.
+// errNotFound and any other non-200 status to an error. Bodies larger than
+// maxDownloadBytes are rejected with an error (callers wrap it with download
+// context, e.g. "download <asset>: …").
 func httpGet(ctx context.Context, client *http.Client, url string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -53,5 +60,14 @@ func httpGet(ctx context.Context, client *http.Client, url string) ([]byte, erro
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s: status %s", url, resp.Status)
 	}
-	return io.ReadAll(resp.Body)
+	// Read one byte past the cap so an exactly-at-cap body still succeeds and
+	// an oversized one is detected without buffering it all.
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > maxDownloadBytes {
+		return nil, fmt.Errorf("GET %s: response exceeds %d byte limit", url, maxDownloadBytes)
+	}
+	return body, nil
 }

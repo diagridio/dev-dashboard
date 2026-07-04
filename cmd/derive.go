@@ -76,8 +76,16 @@ func appsFingerprint(apps []discovery.Instance) string {
 	sort.Strings(paths)
 	sort.Strings(stores)
 
+	// Sentinel bytes keep the encoding unambiguous: every item is terminated by
+	// 0x00 and every group boundary is a bare 0x01, so a group separator can
+	// never hash like a real item (a string item is always followed by 0x00).
+	// Fingerprints are compared only in-memory within one process run (rc.fp),
+	// never persisted, so changing the encoding is safe.
 	h := sha256.New()
-	for _, group := range [][]string{ids, {"|paths|"}, paths, {"|stores|"}, stores} {
+	for gi, group := range [][]string{ids, paths, stores} {
+		if gi > 0 {
+			h.Write([]byte{1})
+		}
 		for _, s := range group {
 			h.Write([]byte(s))
 			h.Write([]byte{0})

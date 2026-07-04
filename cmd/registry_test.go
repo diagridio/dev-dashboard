@@ -93,6 +93,32 @@ func TestRegistry_UpsertAutoDedupsByNormalizedPath(t *testing.T) {
 	require.Equal(t, "state.sqlite", got[0].Type)
 }
 
+func TestRegistry_UpsertAutoIdenticalEntrySkipsSave(t *testing.T) {
+	home := t.TempDir()
+	r := LoadRegistry(home)
+	e := ConnEntry{Name: "s", Type: "state.redis", Source: SourceAuto, Path: "/a/b/statestore.yaml"}
+	require.NoError(t, r.UpsertAuto(e))
+
+	// Plant sentinel bytes in the file: if the identical upsert below rewrites
+	// it, the sentinel disappears. (The registry never re-reads the file, so the
+	// sentinel is invisible to it.)
+	sentinel := []byte("# sentinel: must survive a no-op upsert\n")
+	require.NoError(t, os.WriteFile(registryPath(home), sentinel, 0o600))
+
+	require.NoError(t, r.UpsertAuto(e), "re-upserting an identical entry must succeed")
+	got, err := os.ReadFile(registryPath(home))
+	require.NoError(t, err)
+	require.Equal(t, sentinel, got, "an unchanged upsert must not rewrite the registry file")
+
+	// A genuinely changed entry still persists.
+	e.Type = "state.sqlite"
+	require.NoError(t, r.UpsertAuto(e))
+	got, err = os.ReadFile(registryPath(home))
+	require.NoError(t, err)
+	require.NotEqual(t, sentinel, got, "a changed upsert must rewrite the registry file")
+	require.Equal(t, "state.sqlite", LoadRegistry(home).List()[0].Type)
+}
+
 func TestRegistry_UpsertAutoNeverOverwritesManual(t *testing.T) {
 	home := t.TempDir()
 	r := LoadRegistry(home)

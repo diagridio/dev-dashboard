@@ -3,6 +3,7 @@
 package selfupdate
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
@@ -53,6 +54,31 @@ func TestHTTPGetServerError(t *testing.T) {
 	_, err := httpGet(context.Background(), srv.Client(), srv.URL+"/any")
 	require.Error(t, err)
 	require.NotErrorIs(t, err, errNotFound)
+}
+
+func TestHTTPGetOversizedBodyErrors(t *testing.T) {
+	prev := maxDownloadBytes
+	maxDownloadBytes = 16 // shrink the cap so the test stays tiny
+	t.Cleanup(func() { maxDownloadBytes = prev })
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(bytes.Repeat([]byte("x"), 64)) // 64 > 16-byte cap
+	}))
+	defer srv.Close()
+
+	_, err := httpGet(context.Background(), srv.Client(), srv.URL+"/big")
+	require.Error(t, err, "a body larger than the cap must error, not be truncated silently")
+	require.NotErrorIs(t, err, errNotFound)
+	require.Contains(t, err.Error(), "exceeds", "the error must say the size cap was exceeded")
+
+	// A body exactly at the cap still succeeds.
+	srvOK := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write(bytes.Repeat([]byte("y"), 16))
+	}))
+	defer srvOK.Close()
+	body, err := httpGet(context.Background(), srvOK.Client(), srvOK.URL+"/fit")
+	require.NoError(t, err)
+	require.Len(t, body, 16)
 }
 
 func TestResolveLatestEmptyTag(t *testing.T) {

@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -147,6 +149,72 @@ func (rc *reconciler) activeComponent() *statestore.Component {
 	return rc.electedReg.active()
 }
 
+// autoDetection is a per-call memo of Detect/DetectSecretStores results over a
+// set of auto-entry paths, so Stores() walks the YAML files once per call
+// instead of once per auto entry. It is built, used, and discarded within a
+// single call — no cross-request caching.
+type autoDetection struct {
+	components   []statestore.Component
+	secretStores []statestore.SecretStore
+}
+
+// detectAuto runs component + secret-store detection over paths once.
+func detectAuto(paths []string, log *slog.Logger) *autoDetection {
+	detected, err := statestore.Detect(paths)
+	if err != nil {
+		log.Warn("state-store detection failed", "paths", paths, "err", err)
+	}
+	secretStores, err := statestore.DetectSecretStores(paths)
+	if err != nil {
+		log.Warn("secret-store detection failed", "paths", paths, "err", err)
+	}
+	return &autoDetection{components: detected, secretStores: secretStores}
+}
+
+// componentForEntry builds the statestore.Component for a registry entry.
+// Manual entries use their inline metadata; auto entries are matched against
+// det (a detection covering the entry's path — pass nil to detect just this
+// entry's path) and 2a-resolved. A missing/unreadable YAML yields a bare
+// component (connect will error).
+func (rc *reconciler) componentForEntry(e ConnEntry, det *autoDetection) statestore.Component {
+	if e.Source == SourceManual {
+		return statestore.Component{Name: e.Name, Type: e.Type, Metadata: e.Metadata}
+	}
+	log := slog.Default().With("component", "reconciler")
+	if det == nil {
+		det = detectAuto([]string{e.Path}, log)
+	}
+	for i := range det.components {
+		c := det.components[i]
+		if c.Path != e.Path && !(c.Name == e.Name && underScanPath(c.Path, e.Path)) {
+			continue
+		}
+		resolved, unresolved := statestore.ResolveSecrets(c, det.secretStores)
+		if len(unresolved) > 0 {
+			log.Warn("unresolved secretKeyRef metadata", "store", c.Name, "keys", unresolved)
+		}
+		c.Metadata = resolved
+		return c
+	}
+	// YAML missing/unreadable: return a bare component (connect will error).
+	return statestore.Component{Name: e.Name, Type: e.Type, Path: e.Path}
+}
+
+// underScanPath reports whether compPath (always absolute — Detect abs-olutes
+// it) was found by walking scanPath. It keeps name-fallback matches scoped to
+// the entry's own path when a shared detection covers several entries' paths.
+func underScanPath(compPath, scanPath string) bool {
+	abs, err := filepath.Abs(scanPath)
+	if err != nil {
+		abs = scanPath
+	}
+	if compPath == scanPath || compPath == abs {
+		return true
+	}
+	rel, err := filepath.Rel(abs, compPath)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // componentFor resolves a registry entry id to a built statestore.Component.
 // auto entries are re-read from their YAML path and 2a-resolved; manual entries
 // use their inline metadata. ok=false means no registry entry with that id.
@@ -154,35 +222,9 @@ func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 	if rc.registry == nil {
 		return statestore.Component{}, false
 	}
-	log := slog.Default().With("component", "reconciler")
 	for _, e := range rc.registry.List() {
-		if e.ID != id {
-			continue
-		}
-		switch e.Source {
-		case SourceManual:
-			return statestore.Component{Name: e.Name, Type: e.Type, Metadata: e.Metadata}, true
-		default: // auto
-			detected, err := statestore.Detect([]string{e.Path})
-			if err != nil {
-				log.Warn("state-store detection failed", "path", e.Path, "err", err)
-			}
-			for i := range detected {
-				if detected[i].Path == e.Path || detected[i].Name == e.Name {
-					secretStores, err := statestore.DetectSecretStores([]string{e.Path})
-					if err != nil {
-						log.Warn("secret-store detection failed", "path", e.Path, "err", err)
-					}
-					resolved, unresolved := statestore.ResolveSecrets(detected[i], secretStores)
-					if len(unresolved) > 0 {
-						log.Warn("unresolved secretKeyRef metadata", "store", detected[i].Name, "keys", unresolved)
-					}
-					detected[i].Metadata = resolved
-					return detected[i], true
-				}
-			}
-			// YAML missing/unreadable: return a bare component (connect will error).
-			return statestore.Component{Name: e.Name, Type: e.Type, Path: e.Path}, true
+		if e.ID == id {
+			return rc.componentForEntry(e, nil), true
 		}
 	}
 	return statestore.Component{}, false
@@ -200,9 +242,24 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 	}
 	activeID := identity(rc.activeComponent())
 	entries := rc.registry.List()
+	// Detect all auto-entry paths in one pass and share the result across
+	// entries; without this every entry re-walked its YAML path (and the old
+	// componentFor(e.ID) re-scanned the whole registry per entry: O(n²)).
+	var det *autoDetection
+	var autoPaths []string
+	seen := map[string]bool{}
+	for _, e := range entries {
+		if e.Source != SourceManual && !seen[e.Path] {
+			seen[e.Path] = true
+			autoPaths = append(autoPaths, e.Path)
+		}
+	}
+	if len(autoPaths) > 0 {
+		det = detectAuto(autoPaths, slog.Default().With("component", "reconciler"))
+	}
 	out := make([]server.StoreInfo, 0, len(entries))
 	for _, e := range entries {
-		comp, _ := rc.componentFor(e.ID)
+		comp := rc.componentForEntry(e, det)
 		out = append(out, server.StoreInfo{
 			ID:         e.ID,
 			Name:       e.Name,

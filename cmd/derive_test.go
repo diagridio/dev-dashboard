@@ -67,3 +67,31 @@ func TestAppsFingerprint_StableAndChangeSensitive(t *testing.T) {
 	}
 	require.NotEqual(t, appsFingerprint(a), appsFingerprint(d))
 }
+
+// TestAppsFingerprint_GroupSeparatorNotConfusableWithItems covers the
+// separator-collision case: under the old scheme the group separators
+// ("|paths|" / "|stores|") were hashed exactly like real items, so an app with
+// a resource path literally named "|stores|" fingerprinted identically to an
+// app with a state store named "|stores|". Group boundaries must be encoded
+// unambiguously so these two inputs produce distinct fingerprints.
+func TestAppsFingerprint_GroupSeparatorNotConfusableWithItems(t *testing.T) {
+	pathItem := []discovery.Instance{
+		{AppID: "x", ResourcePaths: []string{"|stores|"}},
+	}
+	storeItem := []discovery.Instance{
+		{AppID: "x", Components: []discovery.Component{{Name: "|stores|", Type: "state.redis"}}},
+	}
+	require.NotEqual(t, appsFingerprint(pathItem), appsFingerprint(storeItem),
+		"a path item must never hash like a group boundary + store item")
+
+	// Same trick on the ids/paths boundary: an app ID literally "|paths|" must
+	// not collide with a path item "|paths|".
+	idItem := []discovery.Instance{
+		{AppID: "x"}, {AppID: "|paths|"},
+	}
+	pathNamedItem := []discovery.Instance{
+		{AppID: "x", ResourcePaths: []string{"|paths|"}},
+	}
+	require.NotEqual(t, appsFingerprint(idItem), appsFingerprint(pathNamedItem),
+		"an id item must never hash like a group boundary + path item")
+}
