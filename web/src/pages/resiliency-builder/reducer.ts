@@ -45,6 +45,21 @@ export function nextName(prefix: string, existing: Record<string, unknown>): str
   }
 }
 
+/** Dispatch a dialog save for a possibly-renamed record: when editing under a new name,
+ * first dispatch `oldNameAction` for the previous name — RENAME_* for policies (cascades
+ * into target refs), plain REMOVE_* for targets (nothing references target names) — then
+ * the upsert. */
+export function upsertWithRename(
+  dispatch: (a: Action) => void,
+  editName: string | undefined,
+  name: string,
+  oldNameAction: (from: string, to: string) => Action,
+  upsert: Action,
+): void {
+  if (editName && editName !== name) dispatch(oldNameAction(editName, name))
+  dispatch(upsert)
+}
+
 function withoutKey<T>(map: Record<string, T>, key: string): Record<string, T> {
   const next = { ...map }
   delete next[key]

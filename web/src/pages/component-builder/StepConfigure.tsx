@@ -2,7 +2,7 @@ import { Field, TextInput, Toggle, SelectInput } from '../../components/form'
 import { MetadataFieldInput } from '../../components/MetadataFieldInput'
 import { validateResourceName } from '../../lib/validation'
 import { activeFields } from '../../hooks/useComponentSchemas'
-import type { Action, ComponentBuilderState } from './reducer'
+import { namespaceError, type Action, type ComponentBuilderState } from './reducer'
 import type { MetadataField } from '../../types/metadata'
 
 interface Props {
@@ -23,7 +23,7 @@ export function StepConfigure({ state, dispatch }: Props) {
       <Field label="Name" htmlFor="c-name" required error={nameError}>
         <TextInput id="c-name" value={state.name} onChange={(v) => dispatch({ type: 'SET_NAME', name: v })} />
       </Field>
-      <Field label="Namespace" htmlFor="c-ns">
+      <Field label="Namespace" htmlFor="c-ns" error={namespaceError(state.namespace)}>
         <TextInput id="c-ns" value={state.namespace} onChange={(v) => dispatch({ type: 'SET_NAMESPACE', namespace: v })} />
       </Field>
 

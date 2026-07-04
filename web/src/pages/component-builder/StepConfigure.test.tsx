@@ -23,6 +23,17 @@ describe('StepConfigure', () => {
     expect(dispatch).toHaveBeenCalledWith({ type: 'SET_NAME', name: 'Bad Name' })
   })
 
+  it('shows a validation error for an invalid namespace but not for an empty one', () => {
+    let s = configureState()
+    s = reducer(s, { type: 'SET_NAMESPACE', namespace: 'bad ns' })
+    const { rerender } = render(<StepConfigure state={s} dispatch={vi.fn()} />)
+    expect(screen.getByText(/cannot contain spaces/i)).toBeInTheDocument()
+    s = reducer(s, { type: 'SET_NAMESPACE', namespace: '' })
+    rerender(<StepConfigure state={s} dispatch={vi.fn()} />)
+    expect(screen.queryByText(/cannot contain spaces/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/required/i)).not.toBeInTheDocument()
+  })
+
   it('renders the required field and dispatches SET_VALUE', () => {
     const dispatch = vi.fn()
     render(<StepConfigure state={configureState()} dispatch={dispatch} />)

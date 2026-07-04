@@ -41,6 +41,20 @@ describe('reducer / canContinue', () => {
     s = reducer(s, { type: 'SET_SECRET', field: 'redisHost', ref: { name: 'sec', key: 'host' } })
     expect(canContinue(s)).toBe(true)
   })
+
+  it('step 2 blocks an invalid namespace but allows an empty one', () => {
+    let s = withSchema()
+    s = reducer(s, { type: 'NEXT' }) // 1 -> 2
+    s = reducer(s, { type: 'SET_NAME', name: 'order-store' })
+    s = reducer(s, { type: 'SET_VALUE', field: 'redisHost', value: 'localhost:6379' })
+    expect(canContinue(s)).toBe(true) // default namespace is valid
+    s = reducer(s, { type: 'SET_NAMESPACE', namespace: 'bad ns' })
+    expect(canContinue(s)).toBe(false)
+    s = reducer(s, { type: 'SET_NAMESPACE', namespace: '1abc' })
+    expect(canContinue(s)).toBe(false)
+    s = reducer(s, { type: 'SET_NAMESPACE', namespace: '' })
+    expect(canContinue(s)).toBe(true) // empty namespace is omitted from the YAML
+  })
 })
 
 describe('assembleComponentSpec', () => {
@@ -54,6 +68,26 @@ describe('assembleComponentSpec', () => {
     expect(spec.spec.version).toBe('v1')
     expect(spec.metadata.name).toBe('order-store')
     expect(spec.spec.metadata).toEqual([{ name: 'redisHost', value: 'localhost:6379' }])
+  })
+
+  it('keeps the default namespace and emits a custom one', () => {
+    let s = withSchema()
+    s = reducer(s, { type: 'NEXT' })
+    s = reducer(s, { type: 'SET_NAME', name: 'order-store' })
+    expect(assembleComponentSpec(s).metadata).toEqual({ name: 'order-store', namespace: 'default' })
+    s = reducer(s, { type: 'SET_NAMESPACE', namespace: 'prod' })
+    expect(assembleComponentSpec(s).metadata).toEqual({ name: 'order-store', namespace: 'prod' })
+  })
+
+  it('omits namespace when blank and scopes when empty (parity with assembleResiliency)', () => {
+    let s = withSchema()
+    s = reducer(s, { type: 'NEXT' })
+    s = reducer(s, { type: 'SET_NAME', name: 'order-store' })
+    s = reducer(s, { type: 'SET_NAMESPACE', namespace: '   ' })
+    const spec = assembleComponentSpec(s)
+    expect(spec.metadata).toEqual({ name: 'order-store' })
+    expect('namespace' in spec.metadata).toBe(false)
+    expect('scopes' in spec).toBe(false)
   })
 
   it('emits secretKeyRef (never value) when use-secret is on', () => {

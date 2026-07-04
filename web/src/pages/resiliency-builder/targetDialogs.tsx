@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { Modal } from '../../components/Modal'
-import { Field, TextInput, NumberInput, SelectInput } from '../../components/form'
+import { Field, TextInput, NumberInput, SelectInput, DialogShell, duplicateNameError } from '../../components/form'
 import { validateResourceName, integerError } from '../../lib/validation'
 import type { AppTarget, ActorTarget, ComponentTarget } from '../../types/resiliency'
 
@@ -12,27 +11,6 @@ export interface PolicyNames {
 
 function opts(names: string[]) {
   return names.map((n) => ({ label: n, value: n }))
-}
-
-/** Saving a name that already exists upserts over that target — block it, unless it is the record being edited. */
-function duplicateNameError(name: string, existingNames: string[] | undefined, editing: boolean | undefined, initialName: string | undefined, what: string): string | null {
-  if (!existingNames?.includes(name)) return null
-  if (editing && name === initialName) return null
-  return `A ${what} with this name already exists`
-}
-
-function Shell({ open, title, onClose, onSave, canSave, children }: {
-  open: boolean; title: string; onClose: () => void; onSave: () => void; canSave: boolean; children: React.ReactNode
-}) {
-  return (
-    <Modal open={open} title={title} onClose={onClose}>
-      {children}
-      <div className="modal-actions">
-        <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn ghost" disabled={!canSave} onClick={onSave}>Save</button>
-      </div>
-    </Modal>
-  )
 }
 
 function PolicyPickers({ policies, timeout, retry, cb, setTimeout, setRetry, setCb }: {
@@ -68,12 +46,12 @@ export function AppTargetDialog({ open, policies, initialName, initialTarget, ed
     onSave(name, t)
   }
   return (
-    <Shell open={open} title={editing ? 'Edit app target' : 'Add app target'} onClose={onClose} canSave={nameOk && anyPolicy} onSave={save}>
+    <DialogShell open={open} title={editing ? 'Edit app target' : 'Add app target'} onClose={onClose} canSave={nameOk && anyPolicy} onSave={save}>
       <Field label="App ID" required error={name === '' ? null : nameErr}>
         <TextInput aria-label="App ID" value={name} onChange={setName} />
       </Field>
       <PolicyPickers policies={policies} timeout={timeoutRef} retry={retry} cb={cb} setTimeout={setTimeoutRef} setRetry={setRetry} setCb={setCb} />
-    </Shell>
+    </DialogShell>
   )
 }
 
@@ -103,7 +81,7 @@ export function ActorTargetDialog({ open, policies, initialName, initialTarget, 
     onSave(name, t)
   }
   return (
-    <Shell open={open} title={editing ? 'Edit actor target' : 'Add actor target'} onClose={onClose} canSave={nameOk && anyPolicy && cacheOk} onSave={save}>
+    <DialogShell open={open} title={editing ? 'Edit actor target' : 'Add actor target'} onClose={onClose} canSave={nameOk && anyPolicy && cacheOk} onSave={save}>
       <Field label="Actor type" required error={name === '' ? null : nameErr}>
         <TextInput aria-label="Actor type" value={name} onChange={setName} />
       </Field>
@@ -120,7 +98,7 @@ export function ActorTargetDialog({ open, policies, initialName, initialTarget, 
           </Field>
         </>
       )}
-    </Shell>
+    </DialogShell>
   )
 }
 
@@ -154,7 +132,7 @@ export function ComponentTargetDialog({ open, policies, initialName, initialTarg
     onSave(name, t)
   }
   return (
-    <Shell open={open} title={editing ? 'Edit component target' : 'Add component target'} onClose={onClose} canSave={nameOk && anyPolicy} onSave={save}>
+    <DialogShell open={open} title={editing ? 'Edit component target' : 'Add component target'} onClose={onClose} canSave={nameOk && anyPolicy} onSave={save}>
       <Field label="Component name" required error={name === '' ? null : nameErr}>
         <TextInput aria-label="Component name" value={name} onChange={setName} />
       </Field>
@@ -164,6 +142,6 @@ export function ComponentTargetDialog({ open, policies, initialName, initialTarg
           onChange={(v) => setDirection(v === 'inbound' ? 'inbound' : v === 'both' ? 'both' : 'outbound')} />
       </Field>
       <PolicyPickers policies={policies} timeout={timeoutRef} retry={retry} cb={cb} setTimeout={setTimeoutRef} setRetry={setRetry} setCb={setCb} />
-    </Shell>
+    </DialogShell>
   )
 }
