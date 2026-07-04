@@ -143,14 +143,14 @@ func (p *connPool) Close() error {
 	p.slots = make(map[string]*poolSlot)
 	p.mu.Unlock()
 
-	var err error
+	var errs []error
 	for _, slot := range slots {
 		<-slot.done
 		if slot.store != nil {
 			if e := slot.store.Close(); e != nil {
-				err = e
+				errs = append(errs, e)
 			}
 		}
 	}
-	return err
+	return errors.Join(errs...)
 }

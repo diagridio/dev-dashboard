@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -132,11 +133,19 @@ func (r *ConnRegistry) UpsertAuto(e ConnEntry) error {
 	}
 	for i := range r.entries {
 		if r.entries[i].Source == SourceAuto && normPath(r.entries[i].Path) == key {
-			r.entries[i].ID = e.ID
-			r.entries[i].Name = e.Name
-			r.entries[i].Type = e.Type
-			r.entries[i].Path = e.Path
-			r.entries[i].Metadata = e.Metadata
+			cur := &r.entries[i]
+			// Skip the disk write when nothing changed: every fingerprint-change
+			// reconcile upserts each detected store, and rewriting an identical
+			// file only churns the disk and widens the corruption window.
+			if cur.ID == e.ID && cur.Name == e.Name && cur.Type == e.Type &&
+				cur.Path == e.Path && maps.Equal(cur.Metadata, e.Metadata) {
+				return nil
+			}
+			cur.ID = e.ID
+			cur.Name = e.Name
+			cur.Type = e.Type
+			cur.Path = e.Path
+			cur.Metadata = e.Metadata
 			return r.save()
 		}
 	}
