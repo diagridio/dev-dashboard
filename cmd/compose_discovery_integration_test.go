@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
+	miniredisServer "github.com/alicebob/miniredis/v2/server"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 )
 
@@ -84,12 +85,23 @@ func (noDialTransport) RoundTrip(*http.Request) (*http.Response, error) {
 }
 
 // httpClientNoDial returns an http.Client whose transport errors immediately.
-func httpClientNoDial(_ *testing.T) *http.Client {
+func httpClientNoDial() *http.Client {
 	return &http.Client{Transport: noDialTransport{}}
 }
 
 func TestComposeStoreElectionWithTranslation(t *testing.T) {
 	mr := miniredis.RunT(t)
+	// components-contrib Redis state store calls "INFO replication" during Init;
+	// miniredis v2 does not implement the replication section. Install a pre-hook
+	// that returns a minimal valid response so the store's getConnectedSlaves()
+	// succeeds without real Redis.
+	mr.Server().SetPreHook(func(c *miniredisServer.Peer, cmd string, args ...string) bool {
+		if cmd == "INFO" && len(args) == 1 && strings.EqualFold(args[0], "replication") {
+			c.WriteBulk("# Replication\r\nrole:master\r\nconnected_slaves:0\r\n")
+			return true
+		}
+		return false
+	})
 	hostPort := mr.Port() // string
 
 	dir := t.TempDir()
@@ -114,7 +126,7 @@ spec:
 		ps:      []byte("sc1\nrd1\n"),
 		inspect: inspect,
 	})
-	apps := discovery.New(src.Scanner(), httpClientNoDial(t)) // enrichment fails fast; scan data suffices
+	apps := discovery.New(src.Scanner(), httpClientNoDial()) // enrichment fails fast; scan data suffices
 
 	pool := newConnPool("default", nil, apps, nil)
 	registry := LoadRegistry(t.TempDir())
@@ -135,10 +147,15 @@ spec:
 	if !strings.HasSuffix(translated.Metadata["redisHost"], hostPort) {
 		t.Fatalf("expected translation to miniredis port %s, got %q", hostPort, translated.Metadata["redisHost"])
 	}
-	// The pre-warm in reconcile already connected through the pool; a working
-	// ServiceFor("") proves the translated address actually dials.
+	// ServiceFor("") must return a live service backed by the translated address.
+	// We verify this by calling AppIDs — unreachableService always returns
+	// ErrStoreUnreachable, whereas a real connection to miniredis returns nil
+	// (empty slice is fine; miniredis has no workflow keys).
 	svc, _, _, ok := rc.ServiceFor("")
 	if !ok || svc == nil {
 		t.Fatal("ServiceFor must resolve the elected store")
+	}
+	if _, err := svc.AppIDs(context.Background()); err != nil {
+		t.Fatalf("AppIDs on live store must succeed (got %v); translation may have failed (wanted miniredis port %s)", err, hostPort)
 	}
 }

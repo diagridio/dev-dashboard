@@ -383,6 +383,11 @@ func (rc *reconciler) ServiceFor(id string) (workflow.Service, server.WorkflowRe
 		comp = c
 	}
 
+	// Apply compose address translation (no-op for non-compose stores) so the
+	// pool key matches the pre-warmed translated entry and the dial uses the
+	// host-reachable address rather than the in-container service name.
+	comp = rc.translate(comp)
+
 	// Derive from baseCtx so shutdown aborts an in-flight dial here too.
 	octx, cancel := context.WithTimeout(rc.baseCtx, connectTimeout)
 	defer cancel()
