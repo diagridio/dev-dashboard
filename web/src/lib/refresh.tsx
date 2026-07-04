@@ -5,6 +5,12 @@ const REFRESH_MS_KEY = 'devdash.refreshMs'
 const REFRESH_PAUSED_KEY = 'devdash.refreshPaused'
 const DEFAULT_INTERVAL_MS = 3000
 
+// The interval values offered by RefreshControl's picker (must stay in sync
+// with its INTERVAL_OPTIONS). A stored value outside this set — e.g. tampered
+// localStorage — would flow into refetchInterval and leave the select without
+// a matching option, so readIntervalMs rejects anything not listed here.
+const VALID_INTERVAL_MS = new Set([1000, 3000, 5000, 10000, 0])
+
 export interface RefreshCtx {
   intervalMs: number
   paused: boolean
@@ -16,7 +22,7 @@ function readIntervalMs(): number {
   const raw = safeGet(REFRESH_MS_KEY)
   if (raw !== null) {
     const parsed = parseInt(raw, 10)
-    if (!isNaN(parsed)) return parsed
+    if (!isNaN(parsed) && VALID_INTERVAL_MS.has(parsed)) return parsed
   }
   return DEFAULT_INTERVAL_MS
 }
