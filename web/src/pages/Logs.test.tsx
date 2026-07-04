@@ -543,6 +543,37 @@ describe('Logs', () => {
     expect(screen.getByRole('button', { name: /^Follow$/i })).toHaveAttribute('aria-pressed', 'false')
   })
 
+  // Follow must keep pinning at the line cap: once the buffer is full, each
+  // new line drops the oldest so lines.length stops changing — an effect keyed
+  // on length alone silently stops scrolling while "Following" stays lit.
+  it('F4 — follow still pins to bottom after the 2000-line cap is reached', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=daprd')
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+    expect(screen.getByRole('button', { name: /Following/i })).toHaveClass('on')
+
+    const logwin = document.querySelector('.logwin') as HTMLDivElement
+    Object.defineProperty(logwin, 'scrollHeight', { value: 500, configurable: true })
+    Object.defineProperty(logwin, 'scrollTop', { value: 0, configurable: true, writable: true })
+    Object.defineProperty(logwin, 'clientHeight', { value: 200, configurable: true })
+
+    // Fill exactly to the cap (one batched render), then reset the pin marker.
+    act(() => {
+      for (let i = 0; i < 2000; i++) {
+        FakeES.instances[0].onmessage?.({ data: `level=info line-${i}` })
+      }
+    })
+    logwin.scrollTop = 0
+
+    // One more line while at the cap: length stays 2000, but follow must re-pin.
+    act(() => { FakeES.instances[0].onmessage?.({ data: 'level=info past-cap' }) })
+    expect(logwin.scrollTop).toBe(500)
+  })
+
   // New F2: single-source mode opens exactly ONE EventSource
   it('F2-new — source=daprd opens exactly ONE EventSource (daprd only)', async () => {
     server.use(

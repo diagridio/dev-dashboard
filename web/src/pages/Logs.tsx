@@ -247,7 +247,14 @@ function LogViewerCore({
     return all
   }, [source, daprdResult.lines, appResult.lines])
 
-  const handleScroll = useFollowScroll(scrollRef, merged.length, following, onFollowDisengage)
+  // Key on the streams' revisions, not merged.length: at the line cap the
+  // length stops changing (drop-one-append-one) and follow would silently die.
+  const handleScroll = useFollowScroll(
+    scrollRef,
+    daprdResult.revision + appResult.revision,
+    following,
+    onFollowDisengage,
+  )
 
   const filtered = merged.filter(({ line }) => lineMatches(line, activeLevels, search))
 
@@ -306,10 +313,11 @@ function CpLogViewer({
   following,
   onFollowDisengage,
 }: CpLogViewerProps) {
-  const { lines, status } = usePathLogStream(`/controlplane/${cp}/logs`)
+  const { lines, revision, status } = usePathLogStream(`/controlplane/${cp}/logs`)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const handleScroll = useFollowScroll(scrollRef, lines.length, following, onFollowDisengage)
+  // revision, not lines.length — see LogViewerCore's note on the line cap.
+  const handleScroll = useFollowScroll(scrollRef, revision, following, onFollowDisengage)
 
   const filtered = lines.filter(line => lineMatches(line, activeLevels, search))
   const matchCount = countMatches(lines, search)

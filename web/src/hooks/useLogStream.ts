@@ -12,6 +12,12 @@ export type LogStreamStatus = 'idle' | 'connecting' | 'open' | 'error' | 'closed
 
 interface UseLogStreamResult {
   lines: LogLine[]
+  /**
+   * Total lines ever received on this stream — monotonic, unaffected by the
+   * buffer cap. Key follow-scroll effects on this, not lines.length: at the
+   * cap, drop-one-append-one keeps the length constant forever.
+   */
+  revision: number
   status: LogStreamStatus
   clear: () => void
 }
@@ -29,6 +35,7 @@ export function usePathLogStream(
   opts?: { max?: number },
 ): UseLogStreamResult {
   const [lines, setLines] = useState<LogLine[]>([])
+  const [revision, setRevision] = useState(0)
   const [status, setStatus] = useState<LogStreamStatus>('idle')
   const seqRef = useRef(0)
   // Keep max current via a ref so changes don't tear down the EventSource connection
@@ -65,6 +72,7 @@ export function usePathLogStream(
         const next = [...prev, line]
         return next.length > cap ? next.slice(next.length - cap) : next
       })
+      setRevision(r => r + 1)
     }
 
     es.onerror = () => {
@@ -78,7 +86,7 @@ export function usePathLogStream(
     }
   }, [path])
 
-  return { lines, status, clear }
+  return { lines, revision, status, clear }
 }
 
 /**
