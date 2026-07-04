@@ -204,8 +204,16 @@ func TestEnrichComposeUnreachableSkipsHTTP(t *testing.T) {
 		calls++
 	}))
 	defer srv.Close()
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
 	scan := func() ([]ScanResult, error) {
-		return []ScanResult{{AppID: "x", Source: SourceCompose, SidecarReachable: false, HTTPPort: 0}}, nil
+		return []ScanResult{{AppID: "x", Source: SourceCompose, SidecarReachable: false, HTTPPort: port}}, nil
 	}
 	svc := New(scan, srv.Client())
 	apps, err := svc.List(context.Background())
@@ -235,7 +243,10 @@ func TestEnrichComposeCarriesContainerFields(t *testing.T) {
 		}}, nil
 	}
 	svc := New(scan, http.DefaultClient)
-	apps, _ := svc.List(context.Background())
+	apps, err := svc.List(context.Background())
+	if err != nil || len(apps) != 1 {
+		t.Fatalf("List failed: %v (apps: %v)", err, apps)
+	}
 	in := apps[0]
 	if in.ComposeProject != "saga" || in.DaprdContainerID != "aaa" || in.AppContainerName != "saga-primes-go-1" {
 		t.Fatalf("container fields lost: %+v", in)
