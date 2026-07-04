@@ -7,6 +7,7 @@ class FakeES {
   url: string; onmessage: ((e: { data: string }) => void) | null = null
   onerror: (() => void) | null = null; onopen: (() => void) | null = null
   closed = false
+  readyState = 0 // EventSource.CONNECTING
   constructor(url: string) { this.url = url; FakeES.instances.push(this) }
   close() { this.closed = true }
 }
@@ -47,6 +48,24 @@ describe('useLogStream', () => {
     expect(result.current.status).toBe('open')
     act(() => { es.onerror?.() })
     expect(result.current.status).toBe('error')
+  })
+
+  it('onerror while reconnecting (readyState CONNECTING) → transient "error"', () => {
+    const { result } = renderHook(() => useLogStream('order', 'daprd'))
+    const es = FakeES.instances[0]
+    act(() => { es.onopen?.() })
+    es.readyState = 0 // EventSource.CONNECTING — browser is auto-reconnecting
+    act(() => { es.onerror?.() })
+    expect(result.current.status).toBe('error')
+  })
+
+  it('onerror with readyState CLOSED → terminal "closed"', () => {
+    const { result } = renderHook(() => useLogStream('order', 'daprd'))
+    const es = FakeES.instances[0]
+    act(() => { es.onopen?.() })
+    es.readyState = 2 // EventSource.CLOSED — server ended the stream permanently
+    act(() => { es.onerror?.() })
+    expect(result.current.status).toBe('closed')
   })
 })
 

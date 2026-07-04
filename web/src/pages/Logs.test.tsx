@@ -16,6 +16,7 @@ class FakeES {
   onerror: (() => void) | null = null
   onopen: (() => void) | null = null
   closed = false
+  readyState = 0 // EventSource.CONNECTING
   constructor(url: string) {
     this.url = url
     FakeES.instances.push(this)
@@ -661,6 +662,83 @@ describe('Logs', () => {
     const followBtnOn = screen.getByRole('button', { name: /Following/i })
     expect(followBtnOn).toHaveClass('on')
     expect(followBtnOn).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  // Status dot: the app-log footer dot must reflect the real stream status,
+  // not a hardcoded green — same treatment as the control-plane viewer.
+  it('status dot — off while connecting, on when open, off again on error', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=daprd')
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+    const es = FakeES.instances[0]
+
+    // Connecting → dot is off
+    const dot = () => document.querySelector('.logfoot .beatbtn') as HTMLElement
+    await waitFor(() => expect(dot()).not.toBeNull())
+    expect(dot().classList.contains('off')).toBe(true)
+
+    // Open → dot is on
+    act(() => { es.onopen?.() })
+    expect(dot().classList.contains('off')).toBe(false)
+
+    // Transient error (reconnecting) → dot off, surfaced as "error"
+    es.readyState = 0
+    act(() => { es.onerror?.() })
+    expect(dot().classList.contains('off')).toBe(true)
+    expect(dot().dataset.status).toBe('error')
+  })
+
+  it('status dot — surfaces terminal "closed" when the server ends the stream', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=daprd')
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+    const es = FakeES.instances[0]
+
+    act(() => { es.onopen?.() })
+    es.readyState = 2 // EventSource.CLOSED
+    act(() => { es.onerror?.() })
+
+    const dot = document.querySelector('.logfoot .beatbtn') as HTMLElement
+    expect(dot.classList.contains('off')).toBe(true)
+    expect(dot.dataset.status).toBe('closed')
+  })
+
+  it('status dot — source=both is on only when BOTH streams are open', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+
+    renderAt('/logs?app=order&source=both')
+
+    await waitFor(() => expect(FakeES.instances).toHaveLength(2))
+    const [first, second] = FakeES.instances
+
+    const dot = () => document.querySelector('.logfoot .beatbtn') as HTMLElement
+    await waitFor(() => expect(dot()).not.toBeNull())
+
+    // Only one stream open → still not fully live
+    act(() => { first.onopen?.() })
+    expect(dot().classList.contains('off')).toBe(true)
+
+    // Both open → on
+    act(() => { second.onopen?.() })
+    expect(dot().classList.contains('off')).toBe(false)
+
+    // One stream errors → off again
+    act(() => { second.onerror?.() })
+    expect(dot().classList.contains('off')).toBe(true)
+    expect(dot().dataset.status).toBe('error')
   })
 
   // F5: logfoot tail size

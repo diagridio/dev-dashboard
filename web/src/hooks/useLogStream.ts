@@ -3,13 +3,22 @@ import { apiUrl } from '../lib/api'
 import { parseLogLevel } from '../lib/loglevel'
 import type { LogLine } from '../types/logs'
 
-type Status = 'idle' | 'connecting' | 'open' | 'error'
+/**
+ * 'error' is transient — the browser's EventSource is auto-reconnecting.
+ * 'closed' is terminal — the server ended the stream (readyState CLOSED)
+ * and no reconnect will happen.
+ */
+export type LogStreamStatus = 'idle' | 'connecting' | 'open' | 'error' | 'closed'
 
 interface UseLogStreamResult {
   lines: LogLine[]
-  status: Status
+  status: LogStreamStatus
   clear: () => void
 }
+
+// EventSource.CLOSED — referenced as a literal because tests stub
+// globalThis.EventSource with fakes that don't carry the static constants.
+const ES_CLOSED = 2
 
 /**
  * Streams an arbitrary API path via EventSource.
@@ -20,7 +29,7 @@ export function usePathLogStream(
   opts?: { max?: number },
 ): UseLogStreamResult {
   const [lines, setLines] = useState<LogLine[]>([])
-  const [status, setStatus] = useState<Status>('idle')
+  const [status, setStatus] = useState<LogStreamStatus>('idle')
   const seqRef = useRef(0)
   // Keep max current via a ref so changes don't tear down the EventSource connection
   const maxRef = useRef(opts?.max ?? 2000)
@@ -39,8 +48,7 @@ export function usePathLogStream(
     setLines([])
 
     // Use the global EventSource constructor so tests can stub it via globalThis.EventSource
-    const ESConstructor = (globalThis as unknown as { EventSource: new (url: string) => EventSource }).EventSource
-    const es = new ESConstructor(apiUrl(path))
+    const es = new globalThis.EventSource(apiUrl(path))
 
     es.onopen = () => {
       setStatus('open')
@@ -60,7 +68,9 @@ export function usePathLogStream(
     }
 
     es.onerror = () => {
-      setStatus('error')
+      // CLOSED means the server ended the stream permanently (no auto-reconnect);
+      // anything else is a transient error while the browser reconnects.
+      setStatus(es.readyState === ES_CLOSED ? 'closed' : 'error')
     }
 
     return () => {
