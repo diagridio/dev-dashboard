@@ -1,32 +1,9 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
-import type { AppDetail as AppDetailType, HealthStatus } from '../types/api'
+import type { AppDetail as AppDetailType } from '../types/api'
 import { copyText } from '../lib/clipboard'
+import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
 import { useToast } from '../lib/toast'
-
-// ---------- helpers ----------
-
-function ledClass(health: HealthStatus): string {
-  switch (health) {
-    case 'healthy':
-      return 'ok'
-    case 'starting':
-      return 'warn'
-    case 'unhealthy':
-      return 'bad'
-    default:
-      return 'warn'
-  }
-}
-
-function runtimeSwatch(runtime: string): string {
-  const r = runtime.toLowerCase()
-  if (r.includes('go')) return '#00ADD8'
-  if (r.includes('python') || r.includes('py')) return '#3776AB'
-  if (r.includes('node') || r.includes('js')) return '#539E43'
-  if (r.includes('.net') || r.includes('dotnet')) return '#8330FF'
-  return 'var(--faint)'
-}
 
 // ---------- content ----------
 
