@@ -9,7 +9,7 @@
     "noUnusedLocals": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom", "node"]
   },
   "include": ["src"]
 }
