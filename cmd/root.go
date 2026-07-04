@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/logging"
 	"github.com/diagridio/dev-dashboard/pkg/metadata"
@@ -88,13 +89,19 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 		logger.Warn("home directory unavailable; connection registry will not be persisted", "err", err)
 		home = ""
 	}
+	_, crtRunner := containerruntime.Detect()
+	composeSrc := discovery.NewComposeSource(crtRunner)
 	opts, closers := assembleOptions(ctx, serveDeps{
 		BasePath:       basePath,
 		StateStorePath: stateStore,
 		Namespace:      namespace,
-		Apps:           discovery.New(discovery.StandaloneScanner(), &http.Client{Timeout: 2 * time.Second}),
-		HomeDir:        home,
-		HTTPClient:     &http.Client{Timeout: 10 * time.Second},
+		Apps: discovery.New(
+			discovery.Merge(discovery.StandaloneScanner(), composeSrc.Scanner()),
+			&http.Client{Timeout: 2 * time.Second}),
+		HomeDir:       home,
+		HTTPClient:    &http.Client{Timeout: 10 * time.Second},
+		ComposeEnv:    composeSrc.Env,
+		ContainerLogs: containerLogStream(crtRunner),
 	}, dist)
 	for _, close := range closers {
 		close := close
