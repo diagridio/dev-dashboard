@@ -18,7 +18,7 @@ type fakeRunner struct {
 	streamCalls [][]string
 }
 
-func (f *fakeRunner) run(_ context.Context, args ...string) ([]byte, error) {
+func (f *fakeRunner) Run(_ context.Context, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, args)
 	key := args[0]
 	if len(args) > 1 {
@@ -27,7 +27,7 @@ func (f *fakeRunner) run(_ context.Context, args ...string) ([]byte, error) {
 	return f.outputs[key], f.errs[key]
 }
 
-func (f *fakeRunner) stream(_ context.Context, args ...string) (<-chan string, error) {
+func (f *fakeRunner) Stream(_ context.Context, args ...string) (<-chan string, error) {
 	f.streamCalls = append(f.streamCalls, args)
 	ch := make(chan string)
 	go func() {

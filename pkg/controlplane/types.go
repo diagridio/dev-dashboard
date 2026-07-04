@@ -1,12 +1,14 @@
 package controlplane
 
+import "github.com/diagridio/dev-dashboard/pkg/containerruntime"
+
 // RuntimeKind identifies the resolved container runtime.
-type RuntimeKind string
+type RuntimeKind = containerruntime.Kind
 
 const (
-	RuntimeDocker RuntimeKind = "docker"
-	RuntimePodman RuntimeKind = "podman"
-	RuntimeNone   RuntimeKind = ""
+	RuntimeDocker = containerruntime.Docker
+	RuntimePodman = containerruntime.Podman
+	RuntimeNone   = containerruntime.None
 )
 
 // ServiceStatus is the coarse lifecycle state shown in the UI.
