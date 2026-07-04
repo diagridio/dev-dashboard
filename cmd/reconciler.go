@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -43,6 +44,8 @@ type reconciler struct {
 	registry       *ConnRegistry
 	pool           *connPool
 	degraded       storeEntry
+	// composeEnv returns the compose endpoint/mount context (nil = no compose).
+	composeEnv func() discovery.ComposeEnv
 
 	reconciling atomic.Bool // single-flight guard for background reconciles
 
@@ -57,7 +60,8 @@ type reconciler struct {
 // pool already carries the opener used for connections). ctx is the
 // process-lifetime base context: store-open contexts derive from it so that
 // shutdown (Ctrl-C) aborts in-flight dials instead of blocking on them.
-func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client, registry *ConnRegistry, pool *connPool) *reconciler {
+// composeEnv returns the compose endpoint/mount context; nil disables translation.
+func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client, registry *ConnRegistry, pool *connPool, composeEnv func() discovery.ComposeEnv) *reconciler {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -70,8 +74,35 @@ func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeD
 		client:         client,
 		registry:       registry,
 		pool:           pool,
+		composeEnv:     composeEnv,
 		degraded:       buildStoreEntry(nil, namespace, client, apps),
 	}
+}
+
+// translate rewrites a compose-project store's connection metadata to
+// host-reachable addresses. Non-compose stores (or no compose context) pass
+// through unchanged. Applied at connect/display time only — never persisted.
+func (rc *reconciler) translate(c statestore.Component) statestore.Component {
+	if rc.composeEnv == nil || c.Path == "" {
+		return c
+	}
+	env := rc.composeEnv()
+	projName, ok := env.ProjectForPath(c.Path)
+	if !ok {
+		return c
+	}
+	proj := env.Projects[projName]
+	hosts := func(host string, port int) (string, bool) {
+		hp, ok := proj.ServicePorts[host][port]
+		if !ok {
+			return "", false
+		}
+		return "localhost:" + strconv.Itoa(hp), true
+	}
+	paths := func(p string) (string, bool) {
+		return discovery.TranslateMountPath(proj.Mounts, p)
+	}
+	return statestore.Translate(c, hosts, paths)
 }
 
 // identity returns a secrets-free key for connection identity.
@@ -132,7 +163,7 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	if active := newReg.active(); active != nil && rc.pool != nil {
 		octx, cancel := context.WithTimeout(rc.baseCtx, connectTimeout)
 		defer cancel()
-		if _, err := rc.pool.openOrGet(octx, *active); err != nil {
+		if _, err := rc.pool.openOrGet(octx, rc.translate(*active)); err != nil {
 			log.Warn("pre-warm active store failed", "store", active.Name, "err", err)
 		}
 	}
@@ -178,7 +209,7 @@ func detectAuto(paths []string, log *slog.Logger) *autoDetection {
 // component (connect will error).
 func (rc *reconciler) componentForEntry(e ConnEntry, det *autoDetection) statestore.Component {
 	if e.Source == SourceManual {
-		return statestore.Component{Name: e.Name, Type: e.Type, Metadata: e.Metadata}
+		return rc.translate(statestore.Component{Name: e.Name, Type: e.Type, Metadata: e.Metadata})
 	}
 	log := slog.Default().With("component", "reconciler")
 	if det == nil {
@@ -194,7 +225,7 @@ func (rc *reconciler) componentForEntry(e ConnEntry, det *autoDetection) statest
 			log.Warn("unresolved secretKeyRef metadata", "store", c.Name, "keys", unresolved)
 		}
 		c.Metadata = resolved
-		return c
+		return rc.translate(c)
 	}
 	// YAML missing/unreadable: return a bare component (connect will error).
 	return statestore.Component{Name: e.Name, Type: e.Type, Path: e.Path}
@@ -236,11 +267,17 @@ func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 // resolve its YAML; manual: inline metadata) and computes the secrets-free
 // ConnInfo — a file read, never a connect. A missing YAML yields an empty
 // Connection (unreachable), not an error.
+// ptr returns a pointer to c (used to convert a value to *Component for identity).
+func ptr(c statestore.Component) *statestore.Component { return &c }
+
 func (rc *reconciler) Stores() []server.StoreInfo {
 	if rc.registry == nil {
 		return []server.StoreInfo{}
 	}
-	activeID := identity(rc.activeComponent())
+	var activeID string
+	if active := rc.activeComponent(); active != nil {
+		activeID = identity(ptr(rc.translate(*active)))
+	}
 	entries := rc.registry.List()
 	// Detect all auto-entry paths in one pass and share the result across
 	// entries; without this every entry re-walked its YAML path (and the old
