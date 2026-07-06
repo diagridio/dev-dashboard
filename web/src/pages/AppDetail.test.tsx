@@ -98,6 +98,55 @@ describe('AppDetail', () => {
     await waitFor(() => expect(screen.getByText(/metadata unavailable/i)).toBeInTheDocument())
   })
 
+  it('shows container identities instead of PIDs for compose apps', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'primes-go',
+          health: 'healthy',
+          runtime: 'go',
+          httpPort: 3500,
+          grpcPort: 50001,
+          appPort: 8080,
+          metadataOk: true,
+          source: 'compose',
+          composeProject: 'saga',
+          composeService: 'primes-go-dapr',
+          sidecarReachable: true,
+          daprdContainerId: 'aaa111bbb222',
+          daprdContainerName: 'saga-primes-go-dapr-1',
+          appContainerId: 'ccc333ddd444',
+          appContainerName: 'saga-primes-go-1',
+        }),
+      ),
+    )
+    renderDetail()
+    expect(await screen.findByText('saga-primes-go-1')).toBeInTheDocument()
+    expect(screen.getByText('saga-primes-go-dapr-1')).toBeInTheDocument()
+    expect(screen.getByText(/compose project/i)).toBeInTheDocument()
+    expect(screen.getByText('saga')).toBeInTheDocument()
+    expect(screen.queryByText('App PID')).not.toBeInTheDocument()
+    expect(screen.queryByText('daprd PID')).not.toBeInTheDocument()
+  })
+
+  it('shows the publish-port hint for unreachable compose apps', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'x',
+          health: 'unhealthy',
+          runtime: 'go',
+          httpPort: 3500,
+          metadataOk: false,
+          source: 'compose',
+          sidecarReachable: false,
+        }),
+      ),
+    )
+    renderDetail()
+    expect(await screen.findByText(/publish the daprd HTTP port/i)).toBeInTheDocument()
+  })
+
   it('renders metadata section with component chips and enabled features', async () => {
     server.use(
       http.get('/api/apps/order', () =>

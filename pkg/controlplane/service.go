@@ -3,8 +3,10 @@ package controlplane
 import (
 	"context"
 	"errors"
-	"os"
-	"os/exec"
+	"strings"
+	"sync"
+
+	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
 )
 
 var (
@@ -31,19 +33,19 @@ type Manager interface {
 
 type manager struct {
 	runtime RuntimeKind
-	run     runner
+	run     containerruntime.Runner
+
+	mu           sync.Mutex
+	composeNames map[string]bool // compose CP containers found by the last List
 }
 
 // New resolves the container runtime from the environment and PATH.
 func New() Manager {
-	kind := resolveRuntime(os.Getenv("DASH_CONTAINER_RUNTIME"), exec.LookPath)
-	if kind == RuntimeNone {
-		return newManager(RuntimeNone, nil)
-	}
-	return newManager(kind, newExecRunner(kind))
+	kind, run := containerruntime.Detect()
+	return newManager(kind, run)
 }
 
-func newManager(kind RuntimeKind, run runner) *manager {
+func newManager(kind RuntimeKind, run containerruntime.Runner) *manager {
 	return &manager{runtime: kind, run: run}
 }
 
@@ -52,15 +54,17 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 		return ListResult{Runtime: RuntimeNone, Available: false}, nil
 	}
 	// Probe whether the daemon is reachable before attempting container operations.
-	if _, err := m.run.run(ctx, "info"); err != nil {
+	if _, err := m.run.Run(ctx, "info"); err != nil {
 		return ListResult{Runtime: m.runtime, Available: true, Reachable: false}, nil
 	}
-	mem := m.memory(ctx)
-	services := make([]Service, 0, len(LiveServiceNames)+len(K8sOnlyServiceNames))
+	composeSvcs := m.composeControlPlane(ctx)
+	statNames := append(append([]string{}, LiveServiceNames...), serviceNames(composeSvcs)...)
+	mem := m.memory(ctx, statNames)
+	services := make([]Service, 0, len(LiveServiceNames)+len(K8sOnlyServiceNames)+len(composeSvcs))
 	present := false
 	for _, name := range LiveServiceNames {
 		svc := Service{Name: name, Status: StatusStopped, Actionable: true}
-		out, err := m.run.run(ctx, "inspect", name)
+		out, err := m.run.Run(ctx, "inspect", name)
 		if err == nil {
 			present = true
 			if info, perr := parseInspect(out); perr == nil {
@@ -85,6 +89,17 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 	for _, name := range K8sOnlyServiceNames {
 		services = append(services, Service{Name: name, Status: StatusK8sOnly, Actionable: false})
 	}
+	for i := range composeSvcs {
+		if ms, ok := mem[composeSvcs[i].Name]; ok {
+			composeSvcs[i].MemoryBytes = ms.Bytes
+			composeSvcs[i].MemoryHuman = ms.Human
+		}
+		if composeSvcs[i].Status == StatusRunning {
+			present = true
+		}
+		services = append(services, composeSvcs[i])
+	}
+	m.setComposeNames(serviceNames(composeSvcs))
 	return ListResult{Runtime: m.runtime, Available: true, Reachable: true, ControlPlanePresent: present, Services: services}, nil
 }
 
@@ -92,35 +107,81 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 // The args are passed as: "stats", "--no-stream", "--format", "{{json .}}", names...
 // so that execRunner invokes: docker stats --no-stream --format '{{json .}}' <names>.
 // The fakeRunner in tests keys on args[0]+" "+args[1], i.e. "stats --no-stream".
-func (m *manager) memory(ctx context.Context) map[string]memStat {
-	args := append([]string{"stats", "--no-stream", "--format", "{{json .}}"}, LiveServiceNames...)
-	out, err := m.run.run(ctx, args...)
+func (m *manager) memory(ctx context.Context, names []string) map[string]memStat {
+	args := append([]string{"stats", "--no-stream", "--format", "{{json .}}"}, names...)
+	out, err := m.run.Run(ctx, args...)
 	if err != nil {
 		return map[string]memStat{}
 	}
 	return parseStats(out)
 }
 
+// composeControlPlane finds compose-run placement/scheduler containers.
+// Failures degrade to none (the fixed dapr_* services still render).
+func (m *manager) composeControlPlane(ctx context.Context) []Service {
+	out, err := m.run.Run(ctx, "ps", "-aq", "--filter", "label=com.docker.compose.project")
+	if err != nil {
+		return nil
+	}
+	ids := strings.Fields(string(out))
+	if len(ids) == 0 {
+		return nil
+	}
+	raw, err := m.run.Run(ctx, append([]string{"inspect"}, ids...)...)
+	if err != nil {
+		return nil
+	}
+	svcs, err := parseComposeControlPlane(raw)
+	if err != nil {
+		return nil
+	}
+	return svcs
+}
+
+func serviceNames(svcs []Service) []string {
+	out := make([]string, len(svcs))
+	for i, s := range svcs {
+		out[i] = s.Name
+	}
+	return out
+}
+
+func (m *manager) setComposeNames(names []string) {
+	set := make(map[string]bool, len(names))
+	for _, n := range names {
+		set[n] = true
+	}
+	m.mu.Lock()
+	m.composeNames = set
+	m.mu.Unlock()
+}
+
+func (m *manager) isComposeName(name string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.composeNames[name]
+}
+
 func (m *manager) Do(ctx context.Context, action, name string) error {
 	if !ValidAction(action) {
 		return ErrInvalidAction
 	}
-	if !IsLiveName(name) {
+	if !IsLiveName(name) && !m.isComposeName(name) {
 		return ErrUnknownService
 	}
 	if m.runtime == RuntimeNone {
 		return ErrRuntimeUnavailable
 	}
-	_, err := m.run.run(ctx, action, name)
+	_, err := m.run.Run(ctx, action, name)
 	return err
 }
 
 func (m *manager) LogStream(ctx context.Context, name string) (<-chan string, error) {
-	if !IsLiveName(name) {
+	if !IsLiveName(name) && !m.isComposeName(name) {
 		return nil, ErrUnknownService
 	}
 	if m.runtime == RuntimeNone {
 		return nil, ErrRuntimeUnavailable
 	}
-	return m.run.stream(ctx, "logs", "-f", "--tail", "200", name)
+	return m.run.Stream(ctx, "logs", "-f", "--tail", "200", name)
 }

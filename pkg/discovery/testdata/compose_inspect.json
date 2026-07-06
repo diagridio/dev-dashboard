@@ -1,0 +1,48 @@
+[
+  {
+    "Id": "aaa111",
+    "Name": "/saga-primes-go-dapr-1",
+    "State": { "Status": "running", "StartedAt": "2026-07-04T09:00:00.000000000Z" },
+    "Config": {
+      "Image": "daprio/daprd:1.15.0",
+      "Labels": {
+        "com.docker.compose.project": "saga",
+        "com.docker.compose.service": "primes-go-dapr",
+        "com.docker.compose.project.config_files": "/Users/dev/saga/docker-compose.yml"
+      },
+      "Entrypoint": null,
+      "Cmd": ["./daprd", "-app-id", "primes-go", "-app-channel-address", "primes-go", "-app-port", "8080", "-dapr-http-port", "3500", "-dapr-grpc-port", "50001", "-resources-path", "/components", "-config", "/dapr_config/config.yml"]
+    },
+    "NetworkSettings": { "Ports": { "3500/tcp": [ { "HostIp": "0.0.0.0", "HostPort": "3500" } ], "50001/tcp": null } },
+    "Mounts": [
+      { "Type": "bind", "Source": "/Users/dev/saga/components", "Destination": "/components" },
+      { "Type": "bind", "Source": "/Users/dev/saga/dapr_config", "Destination": "/dapr_config" }
+    ]
+  },
+  {
+    "Id": "bbb222",
+    "Name": "/saga-primes-go-1",
+    "State": { "Status": "running", "StartedAt": "2026-07-04T08:59:58.000000000Z" },
+    "Config": {
+      "Image": "saga-primes-go",
+      "Labels": { "com.docker.compose.project": "saga", "com.docker.compose.service": "primes-go" },
+      "Entrypoint": ["/app/server"],
+      "Cmd": null
+    },
+    "NetworkSettings": { "Ports": { "8080/tcp": [ { "HostIp": "0.0.0.0", "HostPort": "8081" } ] } },
+    "Mounts": []
+  },
+  {
+    "Id": "ccc333",
+    "Name": "/saga-postgres-db-1",
+    "State": { "Status": "running", "StartedAt": "2026-07-04T08:59:50.000000000Z" },
+    "Config": {
+      "Image": "postgres:16.2-alpine",
+      "Labels": { "com.docker.compose.project": "saga", "com.docker.compose.service": "postgres-db" },
+      "Entrypoint": ["docker-entrypoint.sh"],
+      "Cmd": ["postgres"]
+    },
+    "NetworkSettings": { "Ports": { "5432/tcp": [ { "HostIp": "0.0.0.0", "HostPort": "5432" } ] } },
+    "Mounts": [ { "Type": "volume", "Source": "saga_postgres-data", "Destination": "/var/lib/postgresql/data" } ]
+  }
+]

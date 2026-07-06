@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/workflow"
@@ -93,7 +94,7 @@ func TestReconciler_ServiceForRouting(t *testing.T) {
 
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Seed an elected active store directly (no apps needed for this routing test).
@@ -131,7 +132,7 @@ func TestReconciler_NoActiveNoStoresDegraded(t *testing.T) {
 	reg := LoadRegistry(home)
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// No elected store and empty name -> degraded entry, ok=true.
@@ -149,7 +150,7 @@ func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
 
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Elect "autostore" active so the active flag is exercised.
@@ -220,7 +221,7 @@ func TestReconciler_ServiceForUnreachableByID(t *testing.T) {
 	require.NotEmpty(t, id)
 
 	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	svc, _, _, ok := rc.ServiceFor(id)
@@ -236,7 +237,7 @@ func TestReconciler_ServiceForUnreachableActive(t *testing.T) {
 
 	reg := LoadRegistry(home)
 	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Elect an active store; the pool's opener will fail to connect to it.
@@ -255,7 +256,7 @@ func TestReconciler_ServiceForNoStoreStillErrNoStore(t *testing.T) {
 	home := t.TempDir()
 	reg := LoadRegistry(home)
 	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// No elected store and empty id -> degraded/ErrNoStore (genuinely no store).
@@ -269,7 +270,7 @@ func TestReconciler_ServiceForUnknownID(t *testing.T) {
 	home := t.TempDir()
 	reg := LoadRegistry(home)
 	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	_, _, _, ok := rc.ServiceFor("nosuchid")
@@ -303,7 +304,7 @@ func TestReconciler_BaseCtxCancelAbortsPreWarm(t *testing.T) {
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
 	reg := LoadRegistry(home)
 	// stateStorePath = compPath so reconcile detects and elects it, then pre-warms.
-	rc := newReconciler(ctx, nil, "default", home, compPath, &http.Client{}, reg, pool)
+	rc := newReconciler(ctx, nil, "default", home, compPath, &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	done := make(chan struct{})
@@ -354,7 +355,7 @@ func TestComponentFor_WarnsOnUnresolvedSecrets(t *testing.T) {
 
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	_, ok := rc.componentFor(id)
@@ -368,7 +369,7 @@ func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
 	reg := LoadRegistry(home)
 	o := &fakeOpener{}
 	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	require.NoError(t, rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"}))
@@ -379,4 +380,44 @@ func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
 	// preserve the sentinel.
 	require.ErrorIs(t, err, os.ErrExist,
 		"AddStore duplicate error must keep os.ErrExist in the chain")
+}
+
+func TestReconcilerTranslatesComposeStore(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+  - name: redisHost
+    value: redis:6379`
+	if err := os.WriteFile(filepath.Join(dir, "statestore.yaml"), []byte(yaml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	composeEnv := func() discovery.ComposeEnv {
+		return discovery.ComposeEnv{
+			Projects: map[string]discovery.ComposeProject{
+				"saga": {ServicePorts: map[string]map[int]int{"redis": {6379: 16379}}},
+			},
+			PathProject: map[string]string{dir: "saga"},
+		}
+	}
+	rc := newReconciler(context.Background(), nil, "default", "", "", nil, nil, nil, composeEnv)
+	c := statestore.Component{
+		Name: "statestore", Type: "state.redis", Path: filepath.Join(dir, "statestore.yaml"),
+		Metadata: map[string]string{"redisHost": "redis:6379"},
+	}
+	got := rc.translate(c)
+	if got.Metadata["redisHost"] != "localhost:16379" {
+		t.Fatalf("redisHost: %q", got.Metadata["redisHost"])
+	}
+	// A store outside any compose project is untouched.
+	foreign := statestore.Component{Name: "s", Type: "state.redis",
+		Path: "/elsewhere/s.yaml", Metadata: map[string]string{"redisHost": "redis:6379"}}
+	if rc.translate(foreign).Metadata["redisHost"] != "redis:6379" {
+		t.Fatal("foreign store must be untouched")
+	}
 }

@@ -77,4 +77,22 @@ describe('ControlPlane', () => {
     expect(screen.getByText(/kubernetes only/i)).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
+
+  it('groups compose-run control-plane services under their project', async () => {
+    mockList({
+      runtime: 'docker',
+      available: true,
+      reachable: true,
+      controlPlanePresent: true,
+      services: [
+        { name: 'dapr_placement', status: 'running', healthy: true, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true },
+        { name: 'saga-placement-1', status: 'running', healthy: true, ports: ['50005/tcp'], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true, composeProject: 'saga' },
+        { name: 'saga-scheduler-0-1', status: 'running', healthy: true, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true, composeProject: 'saga' },
+      ],
+    })
+    renderPage()
+    expect(await screen.findByText('saga-placement-1')).toBeInTheDocument()
+    expect(screen.getByText(/compose · saga/i)).toBeInTheDocument()
+    expect(screen.getByText('dapr_placement')).toBeInTheDocument()
+  })
 })

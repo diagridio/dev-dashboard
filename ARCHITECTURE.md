@@ -71,10 +71,12 @@ cmd/                    cobra root + subcommands; process wiring; NO domain logi
   update.go             `update` subcommand → pkg/selfupdate
   workflow.go           store-election precedence (newStoreRegistry)
 pkg/                    domain packages — each isolated, none import cmd/
-  discovery/            standalone.List() + /v1.0/metadata + /v1.0/healthz enrichment
+  discovery/            standalone.List() + /v1.0/metadata + /v1.0/healthz enrichment;
+                        also scans compose containers via ComposeSource (scan_compose.go)
   statestore/           Store client (redis/postgres/sqlite), Detect, secret resolution
   workflow/             list / stats / history / terminate / purge (reads the store)
   controlplane/         docker/podman detection, inspect, lifecycle actions, log stream
+  containerruntime/     docker/podman resolution + exec runner (shared by controlplane & discovery)
   resources/            component + configuration YAML loader
   logs/                 file tail → line channel
   news/                 Diagrid product-feed proxy (cache + singleflight)
@@ -288,6 +290,8 @@ CLI PIDs, created time, run-template, resource paths, and command. Each result i
   to find the backing file; for Aspire/DCP apps, parse the DCP session directory to locate
   the per-resource log files.
 
+A second scanner, `ComposeSource` (`scan_compose.go`), discovers Dapr apps running under **docker compose**: it lists compose-labelled containers (`ps -q --filter label=com.docker.compose.project`), batch-inspects them, and treats any container whose argv invokes `daprd` as a sidecar — app id and ports come from the daprd flags, host-reachable ports from the published port bindings, and resource/config paths from the bind-mount table (host side). The paired app container is matched by compose service name (`-app-channel-address`, falling back to the app id). Sidecars without a published HTTP port are listed but marked `sidecarReachable=false` and skip health/metadata probes (the UI shows a publish-port hint). Both scanners are combined with `Merge` (one failing source never hides the other) and the compose scan is cached for ~2s behind a ~3s exec timeout. The scanner also exposes a per-project **endpoint map** (`ComposeEnv`) — compose service → published host ports, plus mount tables — which the reconciler uses to **translate** detected state-store addresses (e.g. `postgres-db:5432` → `localhost:5432`) at connect time via `statestore.Translate`; translation is in-memory only, never persisted. Compose app logs stream from `docker logs -f` (`Options.ContainerLogs`) instead of file tailing.
+
 Derived fields include a human-friendly `Age` and an inferred runtime language.
 **To add a per-app field:** add it to `Instance` (`types.go`), populate it in `enrich`
 (`service.go`) from either the scan result or the parsed metadata, and it serializes
@@ -321,7 +325,10 @@ else `podman`, else none. `List()` probes reachability, then `docker inspect` +
 `docker stats` each known container: `dapr_scheduler` and `dapr_placement` are the
 **actionable** self-hosted containers (`LiveServiceNames`); `dapr_sentry` and
 `dapr_injector` are surfaced as **kubernetes-only** (not actionable). It returns status,
-health, port bindings, memory, and log path per service. `Do(name, action)` runs a
+health, port bindings, memory, and log path per service. `List()` additionally detects
+compose containers whose command is `placement`/`scheduler`, surfaces them with a
+`composeProject`, and `Do`/`LogStream` accept the compose names discovered by the most
+recent `List` (still never arbitrary names). `Do(name, action)` runs a
 lifecycle verb **allowlisted** to `start`/`stop`/`restart` on the actionable names only
 (`ValidAction` + `IsLiveName`). `LogStream` runs `docker logs -f --tail 200` and demuxes
 stdout+stderr onto one channel for the SSE handler. **To add an action:** extend
@@ -450,6 +457,7 @@ styleguide.
 | New CLI flag | declare + register in `cmd/root.go`, thread through `runServe` → `assembleOptions` |
 | New CLI subcommand | add `cmd/<name>.go`, register in `NewRootCmd` |
 | New SPA page | page + hook + type + route + nav entry (see §7) |
+| Support a new discovery source | implement a discovery.Scanner + add it to Merge in cmd/root.go |
 
 ---
 

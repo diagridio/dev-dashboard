@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +18,7 @@ import (
 )
 
 // apiRouter builds the JSON API surface served under /api.
-func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, stores StoreRegistry, res resources.Service, newsSvc news.Service, cp controlplane.Manager) http.Handler {
+func apiRouter(v version.Info, apps discovery.Service, containerLogs func(context.Context, string) (<-chan string, error), backend WorkflowBackend, stores StoreRegistry, res resources.Service, newsSvc news.Service, cp controlplane.Manager) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -88,7 +89,7 @@ func apiRouter(v version.Info, apps discovery.Service, backend WorkflowBackend, 
 			w.WriteHeader(http.StatusNoContent)
 		})
 	})
-	r.Mount("/apps", appsRouter(apps))
+	r.Mount("/apps", appsRouter(apps, containerLogs))
 	r.Mount("/actors", actorsRouter(apps))
 	r.Mount("/subscriptions", subscriptionsRouter(apps))
 	r.Mount("/workflows", workflowsRouter(backend, stores))

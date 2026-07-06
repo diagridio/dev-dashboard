@@ -41,7 +41,7 @@ func newFakeApps() *fakeApps {
 }
 
 func TestAppsListReturnsAllInstances(t *testing.T) {
-	h := appsRouter(newFakeApps())
+	h := appsRouter(newFakeApps(), nil)
 	res, body := get(t, h, "/")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Equal(t, "application/json", res.Header.Get("Content-Type"))
@@ -54,7 +54,7 @@ func TestAppsListReturnsAllInstances(t *testing.T) {
 }
 
 func TestAppsDetailReturnsInstance(t *testing.T) {
-	h := appsRouter(newFakeApps())
+	h := appsRouter(newFakeApps(), nil)
 	res, body := get(t, h, "/checkout")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -65,13 +65,13 @@ func TestAppsDetailReturnsInstance(t *testing.T) {
 }
 
 func TestAppsDetailReturns404ForUnknownApp(t *testing.T) {
-	h := appsRouter(newFakeApps())
+	h := appsRouter(newFakeApps(), nil)
 	res, _ := get(t, h, "/does-not-exist")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
 func TestAppsLogsReturns404WhenNoLogPath(t *testing.T) {
-	h := appsRouter(&fakeApps{instances: []discovery.Instance{{AppID: "order"}}})
+	h := appsRouter(&fakeApps{instances: []discovery.Instance{{AppID: "order"}}}, nil)
 	res, _ := get(t, h, "/order/logs")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, act, fireEvent } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, delay } from 'msw'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
@@ -29,6 +29,9 @@ class FakeES {
 beforeEach(() => {
   FakeES.instances = []
   ;(globalThis as unknown as { EventSource: unknown }).EventSource = FakeES
+  // The Logs page polls /api/controlplane for the CP service selector; give
+  // every test a static-services default (tests can server.use() to override).
+  server.use(http.get('/api/controlplane', () => HttpResponse.json(CP_LIST_BASE)))
 })
 
 const ORDER_SUMMARY = {
@@ -55,6 +58,58 @@ const ORDER_DETAIL = {
   command: '',
   runtimeVersion: '1.14.0',
   metadataOk: true,
+}
+
+// Compose-discovered app: no log files on disk — logs stream from containers.
+const COMPOSE_SUMMARY = {
+  ...ORDER_SUMMARY,
+  appId: 'primes-go',
+  source: 'compose',
+  composeProject: 'saga',
+  composeService: 'primes-go-dapr',
+  daprdPid: 0,
+  appPid: 0,
+  cliPid: 0,
+  runTemplate: '',
+}
+
+const COMPOSE_DETAIL = {
+  ...COMPOSE_SUMMARY,
+  resourcePaths: [],
+  configPath: '',
+  appLogPath: '',
+  daprdLogPath: '',
+  command: '',
+  runtimeVersion: '1.17.5',
+  metadataOk: true,
+  daprdContainerId: 'aaaa1111bbbb',
+  daprdContainerName: 'saga-primes-go-dapr-1',
+  appContainerId: 'cccc2222dddd',
+  appContainerName: 'saga-primes-go-1',
+}
+
+// Minimal /api/controlplane payload: statics only, no compose services.
+const CP_LIST_BASE = {
+  runtime: 'docker',
+  available: true,
+  reachable: true,
+  controlPlanePresent: true,
+  services: [
+    { name: 'dapr_scheduler', status: 'running', healthy: true, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true },
+    { name: 'dapr_placement', status: 'running', healthy: true, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true },
+    { name: 'dapr_sentry', status: 'kubernetes-only', healthy: false, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: false },
+    { name: 'dapr_injector', status: 'kubernetes-only', healthy: false, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: false },
+  ],
+}
+
+// Same list plus compose-managed placement/scheduler containers.
+const CP_LIST_COMPOSE = {
+  ...CP_LIST_BASE,
+  services: [
+    ...CP_LIST_BASE.services,
+    { name: 'saga-placement-1', status: 'running', healthy: true, ports: ['50005/tcp'], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true, composeProject: 'saga' },
+    { name: 'saga-scheduler-0-1', status: 'running', healthy: true, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true, composeProject: 'saga' },
+  ],
 }
 
 function renderAt(initialEntry = '/logs?app=order&source=daprd') {
@@ -273,6 +328,57 @@ describe('Logs', () => {
       expect(screen.getByText(/No captured log file/)).toBeInTheDocument(),
     )
 
+    expect(FakeES.instances).toHaveLength(0)
+  })
+
+  // ── Compose apps: logs stream from containers, not files ──────────────────
+
+  it('compose — app with container IDs but no log files streams daprd logs', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([COMPOSE_SUMMARY])),
+      http.get('/api/apps/primes-go', () => HttpResponse.json(COMPOSE_DETAIL)),
+    )
+
+    renderAt('/logs?app=primes-go&source=daprd')
+
+    // The stream must open despite appLogPath/daprdLogPath being empty
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+    expect(FakeES.instances[0].url).toContain('source=daprd')
+    expect(screen.queryByText(/No captured log file/)).toBeNull()
+
+    act(() => {
+      FakeES.instances[0].onmessage?.({ data: 'level=info compose daprd line' })
+    })
+    expect(await screen.findByText(/compose daprd line/)).toBeInTheDocument()
+  })
+
+  it('compose — source=both opens both container streams', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([COMPOSE_SUMMARY])),
+      http.get('/api/apps/primes-go', () => HttpResponse.json(COMPOSE_DETAIL)),
+    )
+
+    renderAt('/logs?app=primes-go&source=both')
+
+    await waitFor(() => expect(FakeES.instances).toHaveLength(2))
+    const urls = FakeES.instances.map(es => es.url)
+    expect(urls.some(u => u.includes('source=daprd'))).toBe(true)
+    expect(urls.some(u => u.includes('source=app'))).toBe(true)
+  })
+
+  it('compose — unpaired app (no app container) in app-only mode shows empty state', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([COMPOSE_SUMMARY])),
+      http.get('/api/apps/primes-go', () =>
+        HttpResponse.json({ ...COMPOSE_DETAIL, appContainerId: '', appContainerName: '' }),
+      ),
+    )
+
+    renderAt('/logs?app=primes-go&source=app')
+
+    await waitFor(() =>
+      expect(screen.getByText(/No captured log file/)).toBeInTheDocument(),
+    )
     expect(FakeES.instances).toHaveLength(0)
   })
 
@@ -770,6 +876,90 @@ describe('Logs', () => {
     act(() => { second.onerror?.() })
     expect(dot().classList.contains('off')).toBe(true)
     expect(dot().dataset.status).toBe('error')
+  })
+
+  // ── Control-plane selector: compose services come from /api/controlplane ──
+
+  it('CP — compose control-plane services appear in the selector', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([])),
+      http.get('/api/controlplane', () => HttpResponse.json(CP_LIST_COMPOSE)),
+    )
+
+    renderAt('/logs')
+
+    // Static entries render immediately; compose ones arrive with the fetch.
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'saga-placement-1' })).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('option', { name: 'saga-scheduler-0-1' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'dapr_placement' })).toBeInTheDocument()
+
+    // Statics must not be duplicated by the fetched list.
+    const cpSelect = screen.getByRole('combobox', { name: /Control Plane/i })
+    const names = Array.from(cpSelect.querySelectorAll('option')).map(o => o.textContent)
+    expect(names.filter(n => n === 'dapr_placement')).toHaveLength(1)
+  })
+
+  it('CP — ?cp=<compose service> streams its container logs', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([])),
+      http.get('/api/controlplane', () => HttpResponse.json(CP_LIST_COMPOSE)),
+    )
+
+    renderAt('/logs?cp=saga-placement-1')
+
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+    expect(FakeES.instances[0].url).toContain('/controlplane/saga-placement-1/logs')
+
+    // Subtitle names the service
+    expect(document.querySelector('.sub')?.textContent).toContain('saga-placement-1')
+
+    act(() => {
+      FakeES.instances[0].onmessage?.({ data: 'level=info placement raft leader' })
+    })
+    expect(await screen.findByText(/placement raft leader/)).toBeInTheDocument()
+  })
+
+  it('CP — while the CP list is still loading, a ?cp= deep link shows loading, not "Select an app"', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([])),
+      http.get('/api/controlplane', async () => {
+        await delay(250)
+        return HttpResponse.json(CP_LIST_COMPOSE)
+      }),
+    )
+
+    renderAt('/logs?cp=saga-placement-1')
+
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Logs' })).toBeInTheDocument(),
+    )
+    // The compose name can't be validated until the fetch lands — but the page
+    // must not claim "Select an app" while a cp target is pending.
+    expect(screen.queryByText(/Select an app/)).toBeNull()
+
+    // Once the list arrives the CP stream mounts.
+    await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
+    expect(FakeES.instances[0].url).toContain('/controlplane/saga-placement-1/logs')
+  })
+
+  it('CP — a garbage ?cp= value opens no stream and falls back to no selection', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([])),
+      http.get('/api/controlplane', () => HttpResponse.json(CP_LIST_COMPOSE)),
+    )
+
+    renderAt('/logs?cp=garbage-name')
+
+    // Give the CP list time to load — the value must still be rejected.
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'saga-placement-1' })).toBeInTheDocument(),
+    )
+    expect(FakeES.instances).toHaveLength(0)
+    const cpSelect = screen.getByRole('combobox', { name: /Control Plane/i }) as HTMLSelectElement
+    expect(cpSelect.value).toBe('')
+    expect(screen.getByText(/Select an app/)).toBeInTheDocument()
   })
 
   // F5: logfoot tail size

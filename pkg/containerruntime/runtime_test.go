@@ -1,6 +1,6 @@
 //go:build unit
 
-package controlplane
+package containerruntime
 
 import (
 	"context"
@@ -11,36 +11,46 @@ import (
 	"time"
 )
 
-func fakeLook(present map[string]bool) lookPathFunc {
-	return func(bin string) (string, error) {
-		if present[bin] {
-			return "/usr/bin/" + bin, nil
+func TestResolve(t *testing.T) {
+	found := func(string) (string, error) { return "/usr/bin/x", nil }
+	notFound := func(string) (string, error) { return "", errors.New("not found") }
+	onlyPodman := func(bin string) (string, error) {
+		if bin == "podman" {
+			return "/usr/bin/podman", nil
 		}
 		return "", errors.New("not found")
 	}
+
+	if got := Resolve("docker", notFound); got != Docker {
+		t.Fatalf("env override docker: got %q", got)
+	}
+	if got := Resolve("podman", notFound); got != Podman {
+		t.Fatalf("env override podman: got %q", got)
+	}
+	if got := Resolve("", found); got != Docker {
+		t.Fatalf("docker preferred: got %q", got)
+	}
+	if got := Resolve("", onlyPodman); got != Podman {
+		t.Fatalf("podman fallback: got %q", got)
+	}
+	if got := Resolve("", notFound); got != None {
+		t.Fatalf("none: got %q", got)
+	}
+	if got := Resolve("nonsense", notFound); got != None {
+		t.Fatalf("invalid env ignored: got %q", got)
+	}
 }
 
-func TestResolveRuntime(t *testing.T) {
-	both := fakeLook(map[string]bool{"docker": true, "podman": true})
-	onlyPodman := fakeLook(map[string]bool{"podman": true})
-	none := fakeLook(map[string]bool{})
-
-	if got := resolveRuntime("", both); got != RuntimeDocker {
-		t.Errorf("both present: got %q, want docker", got)
+func TestDetectNilRunnerWhenNone(t *testing.T) {
+	// When Detect returns Kind==None, the Runner must be nil.
+	// We can't force the environment in a unit test, but we can at least
+	// verify Detect returns a consistent pair by checking type assertions.
+	kind, run := Detect()
+	if kind == None && run != nil {
+		t.Fatalf("Detect: kind=None but runner is non-nil")
 	}
-	if got := resolveRuntime("", onlyPodman); got != RuntimePodman {
-		t.Errorf("only podman: got %q, want podman", got)
-	}
-	if got := resolveRuntime("", none); got != RuntimeNone {
-		t.Errorf("none present: got %q, want empty", got)
-	}
-	// Env override wins, even when the other runtime is on PATH.
-	if got := resolveRuntime("podman", both); got != RuntimePodman {
-		t.Errorf("env override: got %q, want podman", got)
-	}
-	// Invalid env override is ignored and falls back to PATH probing.
-	if got := resolveRuntime("nerdctl", both); got != RuntimeDocker {
-		t.Errorf("invalid env override: got %q, want docker", got)
+	if kind != None && run == nil {
+		t.Fatalf("Detect: kind=%q but runner is nil", kind)
 	}
 }
 
@@ -67,9 +77,9 @@ func collect(t *testing.T, ch <-chan string, timeout time.Duration) []string {
 // stream, along with CLI errors like "no such container".
 func TestExecRunnerStreamCapturesStderr(t *testing.T) {
 	r := &execRunner{bin: "sh"}
-	ch, err := r.stream(context.Background(), "-c", "echo out; echo err 1>&2")
+	ch, err := r.Stream(context.Background(), "-c", "echo out; echo err 1>&2")
 	if err != nil {
-		t.Fatalf("stream: %v", err)
+		t.Fatalf("Stream: %v", err)
 	}
 	got := collect(t, ch, 5*time.Second)
 	joined := strings.Join(got, "\n")
@@ -86,9 +96,9 @@ func TestExecRunnerStreamCapturesStderr(t *testing.T) {
 func TestExecRunnerStreamCancelEndsStream(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &execRunner{bin: "sh"}
-	ch, err := r.stream(ctx, "-c", "echo first; sleep 30")
+	ch, err := r.Stream(ctx, "-c", "echo first; sleep 30")
 	if err != nil {
-		t.Fatalf("stream: %v", err)
+		t.Fatalf("Stream: %v", err)
 	}
 	select {
 	case line := <-ch:
@@ -109,9 +119,9 @@ func TestExecRunnerStreamCancelEndsStream(t *testing.T) {
 func TestExecRunnerStreamCancelWithSurvivingGrandchild(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &execRunner{bin: "sh"}
-	ch, err := r.stream(ctx, "-c", "echo first; sleep 30 & wait")
+	ch, err := r.Stream(ctx, "-c", "echo first; sleep 30 & wait")
 	if err != nil {
-		t.Fatalf("stream: %v", err)
+		t.Fatalf("Stream: %v", err)
 	}
 	select {
 	case line := <-ch:
@@ -130,9 +140,9 @@ func TestExecRunnerStreamCancelWithSurvivingGrandchild(t *testing.T) {
 func TestExecRunnerStreamSurfacesScannerError(t *testing.T) {
 	r := &execRunner{bin: "sh"}
 	// Print a single line larger than the 1 MiB scanner cap.
-	ch, err := r.stream(context.Background(), "-c", `head -c 2097152 /dev/zero | tr '\0' 'a'; echo`)
+	ch, err := r.Stream(context.Background(), "-c", `head -c 2097152 /dev/zero | tr '\0' 'a'; echo`)
 	if err != nil {
-		t.Fatalf("stream: %v", err)
+		t.Fatalf("Stream: %v", err)
 	}
 	got := collect(t, ch, 10*time.Second)
 	if len(got) == 0 || !strings.HasPrefix(got[len(got)-1], "[stream error:") {
@@ -140,13 +150,13 @@ func TestExecRunnerStreamSurfacesScannerError(t *testing.T) {
 	}
 }
 
-// run must include the command's stderr in the returned error, not just
+// Run must include the command's stderr in the returned error, not just
 // "exit status 1", so the API surfaces why an action failed.
 func TestExecRunnerRunErrorIncludesStderr(t *testing.T) {
 	r := &execRunner{bin: "sh"}
-	_, err := r.run(context.Background(), "-c", "echo boom 1>&2; exit 1")
+	_, err := r.Run(context.Background(), "-c", "echo boom 1>&2; exit 1")
 	if err == nil {
-		t.Fatal("run: got nil error, want failure")
+		t.Fatal("Run: got nil error, want failure")
 	}
 	if !strings.Contains(err.Error(), "boom") {
 		t.Errorf("error = %q, want stderr detail %q included", err, "boom")
@@ -157,12 +167,12 @@ func TestExecRunnerRunErrorIncludesStderr(t *testing.T) {
 	}
 }
 
-// run without stderr output keeps the plain error.
+// Run without stderr output keeps the plain error.
 func TestExecRunnerRunErrorNoStderr(t *testing.T) {
 	r := &execRunner{bin: "sh"}
-	_, err := r.run(context.Background(), "-c", "exit 3")
+	_, err := r.Run(context.Background(), "-c", "exit 3")
 	if err == nil {
-		t.Fatal("run: got nil error, want failure")
+		t.Fatal("Run: got nil error, want failure")
 	}
 	if got := err.Error(); got != "exit status 3" {
 		t.Errorf("error = %q, want %q", got, "exit status 3")

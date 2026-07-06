@@ -61,14 +61,34 @@ export function ControlPlane() {
     }
   }
 
+  const initServices = data.services.filter((s) => !s.composeProject)
+  const composeProjects = [...new Set(data.services.filter((s) => s.composeProject).map((s) => s.composeProject!))]
+
   return (
     <div className="page">
       {header}
       <div className="cards">
-        {data.services.map((svc) => (
+        {initServices.map((svc) => (
           <ServiceCard key={svc.name} svc={svc} onAction={runAction} />
         ))}
       </div>
+      {composeProjects.map((project) => (
+        <div key={project}>
+          <div className="sec-title">
+            compose · {project}{' '}
+            <span className="faint" style={{ textTransform: 'none', letterSpacing: 0 }}>
+              — docker compose managed
+            </span>
+          </div>
+          <div className="cards">
+            {data.services
+              .filter((s) => s.composeProject === project)
+              .map((svc) => (
+                <ServiceCard key={svc.name} svc={svc} onAction={runAction} />
+              ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }

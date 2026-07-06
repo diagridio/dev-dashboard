@@ -20,3 +20,26 @@ func InferRuntime(appCommand string) string {
 		return "unknown"
 	}
 }
+
+// InferRuntimeFromImage guesses the app's language from its container image
+// name (best-effort; conservative — a bespoke image name yields "unknown").
+func InferRuntimeFromImage(image string) string {
+	c := strings.ToLower(image)
+	switch {
+	case c == "":
+		return "unknown"
+	case strings.Contains(c, "golang"):
+		return "go"
+	case strings.Contains(c, "python"):
+		return "python"
+	case strings.Contains(c, "node"):
+		return "node"
+	case strings.Contains(c, "dotnet"), strings.Contains(c, "aspnet"):
+		return "dotnet"
+	case strings.Contains(c, "openjdk"), strings.Contains(c, "temurin"),
+		strings.Contains(c, "java"), strings.Contains(c, "jre"), strings.Contains(c, "jdk"):
+		return "java"
+	default:
+		return "unknown"
+	}
+}

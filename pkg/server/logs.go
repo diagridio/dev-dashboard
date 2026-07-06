@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -28,7 +29,7 @@ func normalizeLine(line, format string) string {
 	return ansiRE.ReplaceAllString(line, "")
 }
 
-func logsHandler(svc discovery.Service) http.HandlerFunc {
+func logsHandler(svc discovery.Service, containerLogs func(context.Context, string) (<-chan string, error)) http.HandlerFunc {
 	log := slog.Default().With("component", "server")
 	return func(w http.ResponseWriter, req *http.Request) {
 		appID := chi.URLParam(req, "appId")
@@ -42,31 +43,52 @@ func logsHandler(svc discovery.Service) http.HandlerFunc {
 			return
 		}
 		source := "daprd"
-		path := in.DaprdLogPath
 		if req.URL.Query().Get("source") == "app" {
 			source = "app"
-			path = in.AppLogPath
 		}
-		format := in.DaprdLogFormat
-		if source == "app" {
-			format = in.AppLogFormat
-		}
-		if path == "" {
-			log.Warn("log stream source unavailable", "app", appID, "source", source, "path", path)
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no log file for this app/source"})
-			return
-		}
+
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "streaming unsupported"})
 			return
 		}
-		ch, err := logs.Tail(req.Context(), path, 200, 500*time.Millisecond)
-		if err != nil {
-			log.Warn("log stream source unavailable", "app", appID, "source", source, "path", path, "err", err)
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
+
+		var ch <-chan string
+		format := ""
+		if in.Source == discovery.SourceCompose {
+			id := in.DaprdContainerID
+			if source == "app" {
+				id = in.AppContainerID
+			}
+			if id == "" || containerLogs == nil {
+				log.Warn("container log source unavailable", "app", appID, "source", source)
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "no container logs for this app/source"})
+				return
+			}
+			ch, err = containerLogs(req.Context(), id)
+			if err != nil {
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
+		} else {
+			path := in.DaprdLogPath
+			format = in.DaprdLogFormat
+			if source == "app" {
+				path, format = in.AppLogPath, in.AppLogFormat
+			}
+			if path == "" {
+				log.Warn("log stream source unavailable", "app", appID, "source", source, "path", path)
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "no log file for this app/source"})
+				return
+			}
+			ch, err = logs.Tail(req.Context(), path, 200, 500*time.Millisecond)
+			if err != nil {
+				log.Warn("log stream source unavailable", "app", appID, "source", source, "path", path, "err", err)
+				writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				return
+			}
 		}
+
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Connection", "keep-alive")

@@ -40,10 +40,10 @@ export function Applications() {
   // Total components loaded across every running app; '—' when none report any.
   const componentsTotal = apps.reduce((n, a) => n + (a.components?.length ?? 0), 0)
   const componentsLoaded = componentsTotal > 0 ? componentsTotal : '—'
-  // Prefer a real run-template name; else label Aspire-managed apps; else '—'.
+  // Prefer a real run-template name; else label Aspire-managed apps; else label compose; else '—'.
   const runTemplate =
     apps.find((a) => a.runTemplate)?.runTemplate ||
-    (apps.some((a) => a.isAspire) ? 'Aspire' : '—')
+    (apps.some((a) => a.isAspire) ? 'Aspire' : apps.some((a) => a.source === 'compose') ? 'Compose' : '—')
 
   return (
     <div className="page">
@@ -106,11 +106,17 @@ export function Applications() {
 function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
   const num = (v: number) =>
     v ? <td className="mono tabnum">{v}</td> : <td className="mono tabnum faint">—</td>
+  const sourceLabel = app.runTemplate || (app.isAspire ? 'Aspire' : app.source === 'compose' ? 'Compose' : '—')
+  const unreachable = app.source === 'compose' && app.sidecarReachable === false
   return (
     <tr onClick={onOpen}>
       <td>
-        <span className="health">
+        <span
+          className="health"
+          title={unreachable ? 'publish the daprd HTTP port (e.g. 3500:3500) to enable health & metadata' : undefined}
+        >
           <span className={`led ${ledClass(app.health)}`} /> {app.health}
+          {unreachable && ' ⓘ'}
         </span>
       </td>
       <td className="b">
@@ -130,7 +136,9 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       {num(app.daprdPid)}
       {num(app.appPid)}
       <td className="muted mono tabnum">{app.age}</td>
-      <td className="mono muted">{app.runTemplate || (app.isAspire ? 'Aspire' : '—')}</td>
+      <td className="mono muted" title={app.composeProject ? `compose project: ${app.composeProject}` : undefined}>
+        {sourceLabel}
+      </td>
       <td className="kebab">⋯</td>
     </tr>
   )
