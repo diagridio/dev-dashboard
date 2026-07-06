@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useApps, useApp } from '../hooks/useApps'
+import { useControlPlane } from '../hooks/useControlPlane'
 import { useLogStream, usePathLogStream, type LogStreamStatus } from '../hooks/useLogStream'
 import { useFollowScroll } from '../hooks/useFollowScroll'
 import type { LogLine, LogLevel } from '../types/logs'
@@ -12,8 +13,9 @@ import { parseEnum } from '../lib/parseEnum'
 const LOG_SOURCES = ['both', 'daprd', 'app'] as const
 type LogSource = (typeof LOG_SOURCES)[number]
 
+// Static fallback so the selector renders before /api/controlplane answers;
+// compose-managed placement/scheduler containers are merged in from the API.
 const CP_SERVICES = ['dapr_scheduler', 'dapr_placement', 'dapr_sentry', 'dapr_injector'] as const
-type CpService = (typeof CP_SERVICES)[number]
 
 /** A merged row carries the original LogLine plus its tagged source. */
 interface MergedLine {
@@ -178,7 +180,7 @@ function LogRow({ merged, search }: LogRowProps) {
 interface CpLogRowProps {
   line: LogLine
   search: string
-  service: CpService
+  service: string
 }
 
 function CpLogRow({ line, search, service }: CpLogRowProps) {
@@ -299,7 +301,7 @@ function LogViewerCore({
 }
 
 interface CpLogViewerProps {
-  cp: CpService
+  cp: string
   activeLevels: Set<LogLevel>
   search: string
   following: boolean
@@ -363,7 +365,22 @@ export function Logs() {
   // URL params are free-form — validate against the closed sets so
   // ?source=garbage / ?cp=garbage fall back instead of leaking into the UI.
   const source = parseEnum<LogSource>(searchParams.get('source'), LOG_SOURCES, 'both')
-  const cp = parseEnum<CpService | ''>(searchParams.get('cp'), CP_SERVICES, '')
+
+  // CP services = static dapr_* names + whatever /api/controlplane reports
+  // (compose-managed placement/scheduler containers), deduped. The ?cp= param
+  // is validated against this list; until the fetch lands a compose name is
+  // simply "not yet valid" and no stream opens.
+  const { data: cpList, isError: cpListError } = useControlPlane()
+  const cpNames = useMemo(() => {
+    const fetched = (cpList?.services ?? []).filter(s => s.actionable).map(s => s.name)
+    return [...new Set<string>([...CP_SERVICES, ...fetched])]
+  }, [cpList])
+  const cpParam = searchParams.get('cp') ?? ''
+  const cp = cpNames.includes(cpParam) ? cpParam : ''
+  // A cp target that isn't (yet) in the list is pending until the fetch
+  // settles — /api/controlplane shells out to docker and can take seconds, and
+  // we must not claim "Select an app" for a valid compose deep link meanwhile.
+  const cpPending = cpParam !== '' && cp === '' && cpList === undefined && !cpListError
 
   const [activeLevels, setActiveLevels] = useState<Set<LogLevel>>(new Set(ALL_LEVELS))
   const [search, setSearch] = useState('')
@@ -393,7 +410,7 @@ export function Logs() {
     })
   }
 
-  function onCpChange(name: CpService) {
+  function onCpChange(name: string) {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       next.set('cp', name)
@@ -438,12 +455,16 @@ export function Logs() {
         : 'Logs — Dapr Dev Dashboard',
   )
 
+  // A source is streamable from a captured log file (standalone/aspire) or from
+  // the app's container (compose discovery — no file on disk).
+  const canStreamDaprd = !!(app?.daprdLogPath || app?.daprdContainerId)
+  const canStreamApp = !!(app?.appLogPath || app?.appContainerId)
   const hasPath = app
     ? source === 'app'
-      ? !!app.appLogPath
+      ? canStreamApp
       : source === 'daprd'
-        ? !!app.daprdLogPath
-        : !!(app.appLogPath || app.daprdLogPath)
+        ? canStreamDaprd
+        : canStreamDaprd || canStreamApp
     : false
 
   return (
@@ -505,12 +526,12 @@ export function Logs() {
           onChange={e => {
             const val = e.target.value
             if (val === '') clearCp()
-            else onCpChange(val as CpService)
+            else onCpChange(val)
           }}
           aria-label="Control Plane"
         >
           <option value="">— control plane —</option>
-          {CP_SERVICES.map(name => (
+          {cpNames.map(name => (
             <option key={name} value={name}>
               {name}
             </option>
@@ -556,7 +577,7 @@ export function Logs() {
       {/* Content area */}
       {isCpView && (
         <CpLogViewer
-          cp={cp as CpService}
+          cp={cp}
           activeLevels={activeLevels}
           search={search}
           following={following}
@@ -564,7 +585,11 @@ export function Logs() {
         />
       )}
 
-      {!isCpView && !appId && (
+      {!isCpView && !appId && cpPending && (
+        <p className="muted">Loading…</p>
+      )}
+
+      {!isCpView && !appId && !cpPending && (
         <p className="muted">Select an app to view logs.</p>
       )}
 
@@ -593,8 +618,9 @@ export function Logs() {
 
       <p className="hint">
         Logs are read from run-template files (<span className="mono">~/.dapr/logs/…</span>), .NET Aspire
-        captured output, or a redirected <span className="mono">dapr run</span> stdout file. Level chips &amp;
-        search filter live; search matches are highlighted.
+        captured output, a redirected <span className="mono">dapr run</span> stdout file, or — for
+        compose-discovered apps — streamed from their containers. Level chips &amp; search filter live;
+        search matches are highlighted.
       </p>
     </div>
   )
