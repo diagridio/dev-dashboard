@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/go-chi/chi/v5"
@@ -29,13 +30,14 @@ type StoreRegistry interface {
 // StoreInfo describes one registry connection. ID is the stable, URL-safe key
 // the API/selection address it by; Name is the human-facing label.
 type StoreInfo struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Type       string `json:"type"`
-	Source     string `json:"source"` // "auto" | "manual"
-	Path       string `json:"path"`
-	Active     bool   `json:"active"`
-	Connection string `json:"connection"` // secrets-free host/db summary for display
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Type       string    `json:"type"`
+	Source     string    `json:"source"` // "auto" | "manual"
+	Path       string    `json:"path"`
+	Active     bool      `json:"active"`
+	Connection string    `json:"connection"` // secrets-free host/db summary for display
+	UpdatedAt  time.Time `json:"updatedAt"`  // last added/updated; drives panel recency order
 }
 
 // TargetResolver resolves an (appID, instanceID) pair into a RemoveTarget.

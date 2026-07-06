@@ -382,6 +382,69 @@ func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
 		"AddStore duplicate error must keep os.ErrExist in the chain")
 }
 
+func TestReconciler_StoresOrderingAndDismissedFilter(t *testing.T) {
+	dir := t.TempDir()
+	home := t.TempDir()
+
+	autoPath := seedAutoComponentYAML(t, dir, "autostore", filepath.Join(dir, "auto.db"))
+	reg := LoadRegistry(home)
+	reg.now = tickClock(time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC))
+
+	// Insertion order: autostore (oldest), then manual m1, m2 (newest).
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
+	require.NoError(t, reg.Add(ConnEntry{Name: "m1", Type: "state.postgresql", Source: SourceManual,
+		Metadata: map[string]string{"connectionString": "host=h1 dbname=d1"}}))
+	require.NoError(t, reg.Add(ConnEntry{Name: "m2", Type: "state.postgresql", Source: SourceManual,
+		Metadata: map[string]string{"connectionString": "host=h2 dbname=d2"}}))
+
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	// No active store: pure recency order, newest first.
+	names := func() []string {
+		var out []string
+		for _, i := range rc.Stores() {
+			out = append(out, i.Name)
+		}
+		return out
+	}
+	require.Equal(t, []string{"m2", "m1", "autostore"}, names(), "newest updatedAt first")
+	for _, i := range rc.Stores() {
+		require.False(t, i.UpdatedAt.IsZero(), "Stores must expose updatedAt")
+	}
+
+	// Elect autostore active: it is pinned first despite being oldest.
+	active := statestore.Component{Name: "autostore", Type: "state.sqlite", Path: autoPath,
+		Metadata: map[string]string{"connectionString": filepath.Join(dir, "auto.db")}}
+	rc.mu.Lock()
+	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil, nil)
+	rc.mu.Unlock()
+	require.Equal(t, []string{"autostore", "m2", "m1"}, names(), "active store is pinned first")
+
+	// A dismissed entry disappears from Stores() (but stays in the registry).
+	rc.mu.Lock()
+	rc.electedReg = newStoreRegistry(nil, nil, nil)
+	rc.mu.Unlock()
+	autoID := rc.Stores()[2].ID
+	require.NoError(t, reg.Delete(autoID))
+	require.Equal(t, []string{"m2", "m1"}, names(), "dismissed entries are hidden")
+	require.Len(t, reg.List(), 3, "the tombstoned entry is still persisted")
+}
+
+func TestSortStores_ZeroTimestampsLast(t *testing.T) {
+	// Entries from registry files written before updatedAt existed load with a
+	// zero timestamp and must sort after stamped entries.
+	out := []server.StoreInfo{
+		{Name: "legacy"},
+		{Name: "recent", UpdatedAt: time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC)},
+	}
+	sortStores(out)
+	require.Equal(t, "recent", out[0].Name)
+	require.Equal(t, "legacy", out[1].Name)
+}
+
 func TestReconcilerTranslatesComposeStore(t *testing.T) {
 	dir := t.TempDir()
 	yaml := `apiVersion: dapr.io/v1alpha1
