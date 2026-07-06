@@ -14,7 +14,7 @@ const (
 type Instance struct {
 	AppID              string         `json:"appId"`
 	Health             Health         `json:"health"`
-	Runtime            string         `json:"runtime"`            // e.g. "go", "python", "node", "dotnet", "java", "unknown"
+	Runtime            string         `json:"runtime"`            // e.g. "go", "python", "node", "dotnet", "java", "rust", "unknown"
 	IsAspire           bool           `json:"isAspire,omitempty"` // true when the app is .NET Aspire-managed
 	Source             string         `json:"source"`             // "standalone" | "compose"
 	ComposeProject     string         `json:"composeProject,omitempty"`
