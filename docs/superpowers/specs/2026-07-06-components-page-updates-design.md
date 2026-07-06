@@ -42,6 +42,7 @@ Four improvements to the Components page:
 
 - The Delete button renders for **all** rows, not only `source === 'manual'`.
 - The existing confirm dialog is reused. For auto-discovered rows the copy additionally notes the connection may reappear when discovery re-detects it. This transient removal is the accepted behavior (decided against a persisted "dismissed" tombstone).
+- Reappearance timing: reconciliation is fingerprint-gated (`maybeReconcile` in `cmd/reconciler.go`), so the routine UI refresh poll does **not** re-add deleted entries. A deleted auto entry only returns when a reconcile actually runs and the store is still detected — i.e., on dashboard restart (boot seed reconcile) or when the set of running apps changes.
 - No backend changes: `DELETE /api/statestores/{id}` and `ConnRegistry.Delete` already handle any source. Deleting the active store is allowed; the reconciler re-elects on its next cycle.
 - Connection details remain read-only in this panel.
 
