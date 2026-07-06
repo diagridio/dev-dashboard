@@ -35,6 +35,7 @@ type ConnEntry struct {
 	Path      string            `json:"path,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 	UpdatedAt time.Time         `json:"updatedAt,omitempty"`
+	Dismissed bool              `json:"dismissed,omitempty"`
 }
 
 // entryID derives a deterministic, stable, URL-safe id for an entry. key is the
@@ -215,24 +216,49 @@ func (r *ConnRegistry) Update(e ConnEntry) (string, error) {
 	return "", os.ErrNotExist
 }
 
-// Delete removes any entry (manual or auto) by ID. An absent id is a no-op.
+// Delete removes a manual entry by ID. An auto entry is kept but marked
+// dismissed — a durable tombstone: UpsertAuto preserves the flag so discovery
+// never resurrects it; only Undismiss (the store being elected active again)
+// brings it back. An absent id is a no-op.
 func (r *ConnRegistry) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := r.entries[:0]
-	removed := false
+	changed := false
 	for _, e := range r.entries {
 		if e.ID == id {
-			removed = true
-			continue
+			changed = true
+			if e.Source == SourceManual {
+				continue // manual: remove outright
+			}
+			e.Dismissed = true // auto: durable tombstone
 		}
 		out = append(out, e)
 	}
 	r.entries = out
-	if !removed {
+	if !changed {
 		return nil
 	}
 	return r.save()
+}
+
+// Undismiss clears the tombstone on the auto entry matching path (used when
+// that store is elected active again: running apps are using it, so it must
+// reappear). Clearing counts as activity, so updatedAt is bumped. A path with
+// no dismissed entry is a no-op.
+func (r *ConnRegistry) Undismiss(path string) error {
+	key := normPath(path)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.entries {
+		e := &r.entries[i]
+		if e.Source != SourceManual && e.Dismissed && normPath(e.Path) == key {
+			e.Dismissed = false
+			e.UpdatedAt = r.timeNow()
+			return r.save()
+		}
+	}
+	return nil
 }
 
 // save marshals the registry and writes it 0600 (parent dir 0700). The write is

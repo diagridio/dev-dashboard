@@ -275,10 +275,16 @@ func TestRegistry_SaveLeavesNoTempLitter(t *testing.T) {
 	require.Equal(t, "connections.yaml", ents[0].Name())
 
 	// And the atomically-written content still round-trips through LoadRegistry.
+	// The deleted auto entry survives as a dismissed tombstone alongside pg.
 	got := LoadRegistry(home).List()
-	require.Len(t, got, 1)
-	require.Equal(t, "pg", got[0].Name)
-	require.Equal(t, "host=a", got[0].Metadata["connectionString"])
+	require.Len(t, got, 2)
+	byName := map[string]ConnEntry{}
+	for _, e := range got {
+		byName[e.Name] = e
+	}
+	require.Equal(t, "host=a", byName["pg"].Metadata["connectionString"])
+	require.False(t, byName["pg"].Dismissed)
+	require.True(t, byName["s"].Dismissed, "the deleted auto entry is tombstoned, not removed")
 }
 
 func TestRegistry_UpdateRenameToOwnNameSucceeds(t *testing.T) {
@@ -358,4 +364,49 @@ func TestRegistry_UpdatedAtStampedAndBumped(t *testing.T) {
 	// updatedAt survives a reload from disk.
 	r2 := LoadRegistry(home)
 	require.False(t, entryByName(t, r2, "s").UpdatedAt.IsZero(), "updatedAt must persist")
+}
+
+func TestRegistry_DeleteDismissesAutoRemovesManual(t *testing.T) {
+	home := t.TempDir()
+	r := LoadRegistry(home)
+	require.NoError(t, r.UpsertAuto(ConnEntry{Name: "s", Type: "state.redis", Path: "/a/statestore.yaml"}))
+	require.NoError(t, r.Add(ConnEntry{Name: "pg", Type: "state.postgresql"}))
+	autoID := entryByName(t, r, "s").ID
+	manualID := entryByName(t, r, "pg").ID
+
+	// Manual: removed outright.
+	require.NoError(t, r.Delete(manualID))
+	require.Len(t, r.List(), 1)
+
+	// Auto: kept, marked dismissed — durable across reload.
+	require.NoError(t, r.Delete(autoID))
+	require.Len(t, r.List(), 1, "auto entry is tombstoned, not removed")
+	require.True(t, r.List()[0].Dismissed)
+	require.True(t, LoadRegistry(home).List()[0].Dismissed, "tombstone must persist")
+
+	// UpsertAuto keeps a dismissed entry current but preserves the tombstone.
+	require.NoError(t, r.UpsertAuto(ConnEntry{Name: "s2", Type: "state.sqlite", Path: "/a/statestore.yaml"}))
+	got := r.List()[0]
+	require.Equal(t, "s2", got.Name)
+	require.True(t, got.Dismissed, "upsert must not resurrect a dismissed entry")
+}
+
+func TestRegistry_UndismissByPath(t *testing.T) {
+	home := t.TempDir()
+	r := LoadRegistry(home)
+	r.now = tickClock(time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC))
+	require.NoError(t, r.UpsertAuto(ConnEntry{Name: "s", Type: "state.redis", Path: "/a/statestore.yaml"}))
+	require.NoError(t, r.Delete(r.List()[0].ID))
+	dismissedAt := r.List()[0].UpdatedAt
+	require.True(t, r.List()[0].Dismissed)
+
+	// Non-matching path: no-op.
+	require.NoError(t, r.Undismiss("/other/path.yaml"))
+	require.True(t, r.List()[0].Dismissed)
+
+	// Matching path clears the tombstone, bumps updatedAt, and persists.
+	require.NoError(t, r.Undismiss("/a/statestore.yaml"))
+	require.False(t, r.List()[0].Dismissed)
+	require.True(t, r.List()[0].UpdatedAt.After(dismissedAt), "undismiss counts as recent activity")
+	require.False(t, LoadRegistry(home).List()[0].Dismissed)
 }
