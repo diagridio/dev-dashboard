@@ -254,6 +254,15 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange 
           </a>
           {' · '}v{version}
         </span>
+        <span className="pw">
+          <a
+            href="https://github.com/diagridio/dev-dashboard"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Issues &amp; feedback
+          </a>
+        </span>
       </div>
     </aside>
   )

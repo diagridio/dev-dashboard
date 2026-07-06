@@ -331,6 +331,16 @@ describe('ResourcesSidebar footer', () => {
       expect(sbfoot?.textContent).toContain('Powered by Diagrid · v1.2.3')
     })
   })
+
+  it('renders Issues & feedback link to the GitHub repo', async () => {
+    renderSidebar()
+    const link = await screen.findByRole('link', { name: 'Issues & feedback' })
+    expect(link).toHaveAttribute('href', 'https://github.com/diagridio/dev-dashboard')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    // Lives inside the footer, below the Powered by line
+    expect(link.closest('.sbfoot')).not.toBeNull()
+  })
 })
 
 describe('ResourcesSidebar onHasNewChange contract', () => {
