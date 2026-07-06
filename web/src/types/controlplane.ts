@@ -1,4 +1,4 @@
-export type ServiceStatus = 'running' | 'stopped' | 'kubernetes-only' | 'unknown'
+export type ServiceStatus = 'running' | 'stopped' | 'unknown'
 
 export interface ControlPlaneService {
   name: string

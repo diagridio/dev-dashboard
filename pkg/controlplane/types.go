@@ -17,7 +17,6 @@ type ServiceStatus string
 const (
 	StatusRunning ServiceStatus = "running"
 	StatusStopped ServiceStatus = "stopped"
-	StatusK8sOnly ServiceStatus = "kubernetes-only"
 	StatusUnknown ServiceStatus = "unknown"
 )
 
@@ -36,13 +35,6 @@ type Service struct {
 
 // LiveServiceNames are the self-hosted control-plane containers this dashboard manages.
 var LiveServiceNames = []string{"dapr_scheduler", "dapr_placement"}
-
-// K8sOnlyServiceNames exist only on Kubernetes; shown as disabled placeholders.
-var K8sOnlyServiceNames = []string{"dapr_sentry", "dapr_injector"}
-
-func IsControlPlaneName(name string) bool {
-	return IsLiveName(name) || contains(K8sOnlyServiceNames, name)
-}
 
 func IsLiveName(name string) bool {
 	return contains(LiveServiceNames, name)

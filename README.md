@@ -437,8 +437,8 @@ sidecars and state store.
   extended metadata, then streamed to the SPA over SSE.
 - **Control plane** is inspected through the resolved container runtime (`docker`, else
   `podman`): `dapr_scheduler` / `dapr_placement` are the self-hosted containers the dashboard
-  can start/restart/stop (allowlisted to those names), while `dapr_sentry` / `dapr_injector`
-  are shown as kubernetes-only. Container logs stream over SSE via `docker logs -f`.
+  can start/restart/stop (allowlisted to those names). Container logs stream over SSE via
+  `docker logs -f`.
 - **News** (optional) — the Resources sidebar pulls the Diagrid product feed, proxied and
   cached behind the backend's own `GET /api/news` endpoint so the SPA only ever talks to its
   own origin.

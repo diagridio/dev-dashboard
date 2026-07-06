@@ -60,7 +60,7 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 	composeSvcs := m.composeControlPlane(ctx)
 	statNames := append(append([]string{}, LiveServiceNames...), serviceNames(composeSvcs)...)
 	mem := m.memory(ctx, statNames)
-	services := make([]Service, 0, len(LiveServiceNames)+len(K8sOnlyServiceNames)+len(composeSvcs))
+	services := make([]Service, 0, len(LiveServiceNames)+len(composeSvcs))
 	present := false
 	for _, name := range LiveServiceNames {
 		svc := Service{Name: name, Status: StatusStopped, Actionable: true}
@@ -85,9 +85,6 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 			svc.Ports = []string{}
 		}
 		services = append(services, svc)
-	}
-	for _, name := range K8sOnlyServiceNames {
-		services = append(services, Service{Name: name, Status: StatusK8sOnly, Actionable: false})
 	}
 	for i := range composeSvcs {
 		if ms, ok := mem[composeSvcs[i].Name]; ok {
