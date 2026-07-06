@@ -8,7 +8,7 @@
 Four improvements to the Components page:
 
 1. Rename the "State store connections" panel to "Recent workflow state store connections" and order it by recency, with the active store pinned on top.
-2. Make the connections list editable: every connection gets a remove button (connection details themselves stay read-only).
+2. Make the connections list editable: every connection except the active one gets a remove button, and removal is durable (connection details themselves stay read-only).
 3. Show the component file path in both the connections list and the components list.
 4. Make components with duplicate `metadata.name` values independently selectable by giving each resource a stable unique ID.
 
@@ -38,12 +38,24 @@ Four improvements to the Components page:
 - Panel title becomes **"Recent workflow state store connections"**.
 - Rows render in API order (no client-side sort).
 
-### 2. Remove button for all connections
+### 2. Remove button for all connections (durable tombstone)
 
-- The Delete button renders for **all** rows, not only `source === 'manual'`.
-- The existing confirm dialog is reused. For auto-discovered rows the copy additionally notes the connection may reappear when discovery re-detects it. This transient removal is the accepted behavior (decided against a persisted "dismissed" tombstone).
-- Reappearance timing: reconciliation is fingerprint-gated (`maybeReconcile` in `cmd/reconciler.go`), so the routine UI refresh poll does **not** re-add deleted entries. A deleted auto entry only returns when a reconcile actually runs and the store is still detected — i.e., on dashboard restart (boot seed reconcile) or when the set of running apps changes.
-- No backend changes: `DELETE /api/statestores/{id}` and `ConnRegistry.Delete` already handle any source. Deleting the active store is allowed; the reconciler re-elects on its next cycle.
+Removal is durable: a removed auto-discovered connection stays hidden across reconciles and restarts. It reappears only if it becomes the **active** workflow state store for the running applications. The active store itself cannot be deleted.
+
+**Backend**
+
+- `ConnEntry` gains `Dismissed bool` (`json:"dismissed,omitempty"`), persisted in the registry file. Registry files from before this change load with `Dismissed = false`.
+- `ConnRegistry.Delete(id)` semantics change per source:
+  - Manual entry: removed outright (as today).
+  - Auto entry: kept but marked `Dismissed = true`. Keeping the entry means `UpsertAuto` (keyed by normalized path) keeps updating its name/type on YAML changes without resurrecting it — `UpsertAuto` preserves the `Dismissed` flag.
+- `DELETE /api/statestores/{id}` rejects deleting the currently active store with `409 Conflict` and a clear message; the check compares the entry against the elected active store.
+- `Stores()` excludes dismissed entries from the list.
+- Un-dismissal: at the end of `reconcile()` (`cmd/reconciler.go`), if the newly elected active store corresponds to a dismissed registry entry (matched by normalized path), the flag is cleared and persisted, so the entry reappears in the panel. Reconciles run on boot and whenever the set of running apps changes — exactly the moments a store can become active.
+
+**Frontend (`StateStoreConnectionsPanel.tsx`)**
+
+- The Delete button renders for all rows **except the active one** (hidden on the active row, matching the backend guard).
+- The existing confirm dialog is reused. For auto-discovered rows the copy notes the connection stays hidden unless it becomes the active workflow state store again.
 - Connection details remain read-only in this panel.
 
 ### 3. File path display
@@ -70,15 +82,16 @@ Four improvements to the Components page:
 ## Testing
 
 - **Go**
-  - Registry: `UpdatedAt` set on `Add`/`Update`; bumped on a changed `UpsertAuto`; unchanged on a no-op upsert.
-  - Reconciler: `Stores()` ordering — active first, then recency, then name; zero timestamps sort last.
+  - Registry: `UpdatedAt` set on `Add`/`Update`; bumped on a changed `UpsertAuto`; unchanged on a no-op upsert. `Delete` removes manual entries but marks auto entries dismissed; `UpsertAuto` preserves the `Dismissed` flag on update.
+  - Reconciler: `Stores()` ordering — active first, then recency, then name; zero timestamps sort last. Dismissed entries excluded from `Stores()`; a dismissed entry elected active gets un-dismissed (and persisted) by `reconcile()`.
+  - API: `DELETE /api/statestores/{id}` returns `409 Conflict` for the active store; deletes/dismisses others.
   - Resources: ID is stable and unique across duplicate names; `Get` resolves by ID; `Get` falls back to name; list order is name-then-path.
 - **Web (Vitest/RTL)**
-  - Panel: new title; Delete button present on auto rows; auto-row dialog copy mentions possible reappearance; path rendered when present.
+  - Panel: new title; Delete button present on non-active rows and absent on the active row; auto-row dialog copy explains the store stays hidden unless it becomes the active workflow state store; path rendered when present.
   - ResourceList: duplicate-name entries independently selectable; row click navigates to ID URL; name-based URL still selects a row; path rendered per row.
 
 ## Out of scope
 
 - Capping the "recent" list to N entries.
-- Persisted dismissal (tombstones) for auto-discovered connections.
+- A UI to view or restore dismissed connections (a dismissed store only returns by becoming active; manual re-add creates a separate manual entry).
 - Editing connection details from the panel.
