@@ -2,6 +2,8 @@ package resources
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -41,6 +43,7 @@ var ErrNotFound = errors.New("resource not found")
 
 // Resource describes a single Dapr component or configuration YAML file.
 type Resource struct {
+	ID       string   `json:"id"`
 	Name     string   `json:"name"`
 	Kind     Kind     `json:"kind"`
 	Type     string   `json:"type,omitempty"`
@@ -50,10 +53,20 @@ type Resource struct {
 	LoadedBy []string `json:"loadedBy,omitempty"`
 }
 
+// resourceID derives a stable, URL-safe id for a resource — the entryID
+// pattern from cmd/registry.go applied to the name|type|path identity key.
+// Distinct files always differ in path, so ids never collide across files.
+func resourceID(name, typ, path string) string {
+	h := sha256.Sum256([]byte(name + "|" + typ + "|" + path))
+	return hex.EncodeToString(h[:])[:12]
+}
+
 // Service is the interface for listing and fetching Dapr resources.
 type Service interface {
 	List(ctx context.Context, kind Kind) ([]Resource, error)
-	Get(ctx context.Context, kind Kind, name string) (Resource, error)
+	// Get resolves idOrName as a resource ID first, then as a metadata name
+	// (first match) so pre-ID deep links keep working.
+	Get(ctx context.Context, kind Kind, idOrName string) (Resource, error)
 }
 
 // rawResource is a minimal struct for parsing YAML resource files.
@@ -128,6 +141,7 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 					continue
 				}
 				out = append(out, Resource{
+					ID:      resourceID(rr.Metadata.Name, rr.Spec.Type, absPath),
 					Name:    rr.Metadata.Name,
 					Kind:    k,
 					Type:    rr.Spec.Type,
@@ -140,7 +154,10 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 	}
 
 	sort.Slice(out, func(i, j int) bool {
-		return out[i].Name < out[j].Name
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Path < out[j].Path
 	})
 	return out, nil
 }
@@ -150,21 +167,29 @@ func (s *service) List(ctx context.Context, kind Kind) ([]Resource, error) {
 	return s.scan(kind)
 }
 
-// Get returns the named resource of the given kind, with Raw populated from the file.
-// Returns ErrNotFound if no matching resource exists.
-func (s *service) Get(ctx context.Context, kind Kind, name string) (Resource, error) {
+// Get returns the resource matching idOrName (ID first, then first name
+// match), with Raw populated from the file. Returns ErrNotFound if none match.
+func (s *service) Get(ctx context.Context, kind Kind, idOrName string) (Resource, error) {
 	resources, err := s.scan(kind)
 	if err != nil {
 		return Resource{}, err
 	}
+	withRaw := func(r Resource) (Resource, error) {
+		data, err := os.ReadFile(r.Path)
+		if err != nil {
+			return Resource{}, err
+		}
+		r.Raw = string(data)
+		return r, nil
+	}
 	for _, r := range resources {
-		if r.Name == name {
-			data, err := os.ReadFile(r.Path)
-			if err != nil {
-				return Resource{}, err
-			}
-			r.Raw = string(data)
-			return r, nil
+		if r.ID == idOrName {
+			return withRaw(r)
+		}
+	}
+	for _, r := range resources {
+		if r.Name == idOrName {
+			return withRaw(r)
 		}
 	}
 	return Resource{}, ErrNotFound

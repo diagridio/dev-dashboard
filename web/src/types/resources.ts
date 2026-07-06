@@ -23,6 +23,7 @@ export interface Subscription {
 export type ResourceKind = 'component' | 'configuration'
 
 export interface ResourceSummary {
+  id: string
   name: string
   kind: ResourceKind
   type?: string

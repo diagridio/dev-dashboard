@@ -174,3 +174,14 @@ func TestStateStores_PutUpdates(t *testing.T) {
 	require.Equal(t, "id-pg", reg.updated[0].ID)
 	require.Contains(t, body, `"id":"id-pg"`)
 }
+
+func TestDeleteStatestoreActiveConflict(t *testing.T) {
+	m := &mutableStoreRegistry{deleteErr: ErrActiveStore}
+	h := newAPI(m)
+
+	req := httptest.NewRequest(http.MethodDelete, "/statestores/abc123", nil)
+	res, body := doReq(t, h, req)
+	require.Equal(t, http.StatusConflict, res.StatusCode)
+	require.Contains(t, body, "active workflow state store")
+	require.Empty(t, m.deleted)
+}

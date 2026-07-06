@@ -35,7 +35,7 @@ function renderResourceDetail(kind: 'component' | 'configuration' = 'component',
     [
       {
         path: `/${base}/:name`,
-        element: <ResourceDetail kind={kind} name={name} />,
+        element: <ResourceDetail kind={kind} idOrName={name} />,
       },
       { path: '/apps/:appId', element: <div data-testid="app-detail">app detail</div> },
     ],

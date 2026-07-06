@@ -39,14 +39,17 @@ const LABELS: Record<
 
 export function ResourceList({ kind }: ResourceListProps) {
   const { data: resources, isLoading } = useResources(kind)
-  const { name: selectedName } = useParams<{ name?: string }>()
+  const { name: selectedParam } = useParams<{ name?: string }>()
   const navigate = useNavigate()
   const { title, sub } = LABELS[kind]
   const kindPath = kind === 'component' ? 'components' : 'configurations'
 
-  // Determine effective selected name (from URL or first item)
-  const effectiveName =
-    selectedName ?? (resources && resources.length > 0 ? resources[0].name : undefined)
+  // Resolve the selection: id match first, then name (pre-id deep links),
+  // then default to the first item.
+  const selected =
+    resources?.find((r) => r.id === selectedParam) ??
+    resources?.find((r) => r.name === selectedParam) ??
+    (resources && resources.length > 0 ? resources[0] : undefined)
 
   useDocumentTitle(title)
 
@@ -94,8 +97,8 @@ export function ResourceList({ kind }: ResourceListProps) {
     )
   }
 
-  const handleSelect = (name: string) => {
-    navigate(`/${kindPath}/${name}`)
+  const handleSelect = (id: string) => {
+    navigate(`/${kindPath}/${id}`)
   }
 
   return (
@@ -113,31 +116,38 @@ export function ResourceList({ kind }: ResourceListProps) {
       <div className="md">
         <div className="card complist">
           {resources.map((resource) => {
-            const isSelected = resource.name === effectiveName
+            const isSelected = resource.id === selected?.id
             const ct =
               kind === 'component'
                 ? [resource.type, resource.version].filter(Boolean).join(' · ')
                 : resource.type ?? ''
             return (
               <div
-                key={resource.name}
+                key={resource.id}
                 className={`ci${isSelected ? ' sel' : ''}`}
-                onClick={() => handleSelect(resource.name)}
+                onClick={() => handleSelect(resource.id)}
                 role="button"
                 aria-selected={isSelected}
                 tabIndex={0}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') handleSelect(resource.name)
+                  if (e.key === 'Enter' || e.key === ' ') handleSelect(resource.id)
                 }}
               >
                 <span className="cn">{resource.name}</span>
                 {ct && <span className="ct">{ct}</span>}
+                <span
+                  className="ct"
+                  title={resource.path}
+                  style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                >
+                  {resource.path}
+                </span>
               </div>
             )
           })}
         </div>
-        {effectiveName ? (
-          <ResourceDetail kind={kind} name={effectiveName} />
+        {selected ? (
+          <ResourceDetail kind={kind} idOrName={selected.id} />
         ) : (
           <div className="card">
             <p className="hint" style={{ padding: '14px' }}>

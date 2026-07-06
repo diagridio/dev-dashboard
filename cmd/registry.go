@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"sigs.k8s.io/yaml"
 )
@@ -27,12 +28,14 @@ const (
 // Path (re-read + 2a-resolved on connect, no secrets in the file); manual
 // entries carry inline Metadata (possibly secrets).
 type ConnEntry struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	Type     string            `json:"type"`
-	Source   string            `json:"source"`
-	Path     string            `json:"path,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Type      string            `json:"type"`
+	Source    string            `json:"source"`
+	Path      string            `json:"path,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+	UpdatedAt time.Time         `json:"updatedAt,omitempty"`
+	Dismissed bool              `json:"dismissed,omitempty"`
 }
 
 // entryID derives a deterministic, stable, URL-safe id for an entry. key is the
@@ -61,6 +64,7 @@ type ConnRegistry struct {
 	path    string
 	mu      sync.Mutex
 	entries []ConnEntry
+	now     func() time.Time // test seam; nil means time.Now
 }
 
 // registryPath is the canonical connections.yaml path under the home dir.
@@ -118,6 +122,14 @@ func (r *ConnRegistry) List() []ConnEntry {
 	return out
 }
 
+// timeNow returns the registry clock (a test seam), defaulting to wall time.
+func (r *ConnRegistry) timeNow() time.Time {
+	if r.now == nil {
+		return time.Now().UTC()
+	}
+	return r.now()
+}
+
 // UpsertAuto inserts or refreshes an auto entry keyed by normalized path.
 // It never overwrites a manual entry sharing the same normalized path.
 func (r *ConnRegistry) UpsertAuto(e ConnEntry) error {
@@ -146,9 +158,11 @@ func (r *ConnRegistry) UpsertAuto(e ConnEntry) error {
 			cur.Type = e.Type
 			cur.Path = e.Path
 			cur.Metadata = e.Metadata
+			cur.UpdatedAt = r.timeNow()
 			return r.save()
 		}
 	}
+	e.UpdatedAt = r.timeNow()
 	r.entries = append(r.entries, e)
 	return r.save()
 }
@@ -158,6 +172,7 @@ func (r *ConnRegistry) UpsertAuto(e ConnEntry) error {
 func (r *ConnRegistry) Add(e ConnEntry) error {
 	e.Source = SourceManual
 	e.ID = entryID(SourceManual, e.Name)
+	e.UpdatedAt = r.timeNow()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for i := range r.entries {
@@ -190,6 +205,7 @@ func (r *ConnRegistry) Update(e ConnEntry) (string, error) {
 				}
 			}
 			e.ID = entryID(SourceManual, e.Name)
+			e.UpdatedAt = r.timeNow()
 			r.entries[i] = e
 			if err := r.save(); err != nil {
 				return "", err
@@ -200,24 +216,49 @@ func (r *ConnRegistry) Update(e ConnEntry) (string, error) {
 	return "", os.ErrNotExist
 }
 
-// Delete removes any entry (manual or auto) by ID. An absent id is a no-op.
+// Delete removes a manual entry by ID. An auto entry is kept but marked
+// dismissed — a durable tombstone: UpsertAuto preserves the flag so discovery
+// never resurrects it; only Undismiss (the store being elected active again)
+// brings it back. An absent id is a no-op.
 func (r *ConnRegistry) Delete(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := r.entries[:0]
-	removed := false
+	changed := false
 	for _, e := range r.entries {
 		if e.ID == id {
-			removed = true
-			continue
+			changed = true
+			if e.Source == SourceManual {
+				continue // manual: remove outright
+			}
+			e.Dismissed = true // auto: durable tombstone
 		}
 		out = append(out, e)
 	}
 	r.entries = out
-	if !removed {
+	if !changed {
 		return nil
 	}
 	return r.save()
+}
+
+// Undismiss clears the tombstone on the auto entry matching path (used when
+// that store is elected active again: running apps are using it, so it must
+// reappear). Clearing counts as activity, so updatedAt is bumped. A path with
+// no dismissed entry is a no-op.
+func (r *ConnRegistry) Undismiss(path string) error {
+	key := normPath(path)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.entries {
+		e := &r.entries[i]
+		if e.Source != SourceManual && e.Dismissed && normPath(e.Path) == key {
+			e.Dismissed = false
+			e.UpdatedAt = r.timeNow()
+			return r.save()
+		}
+	}
+	return nil
 }
 
 // save marshals the registry and writes it 0600 (parent dir 0700). The write is

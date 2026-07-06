@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -149,6 +150,8 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 
 	newReg := newStoreRegistry(detected, loaded, appPaths)
 
+	rc.undismissActive(newReg.active())
+
 	rc.mu.Lock()
 	if rc.closed {
 		rc.mu.Unlock()
@@ -168,6 +171,18 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 		}
 	}
 	log.Info("reconciled derived state", "activeStore", identity(newReg.active()), "detected", len(detected))
+}
+
+// undismissActive clears the dismissal tombstone for the elected active store
+// so it reappears in the panel: the user's running apps are actively using it.
+// nil active, pathless components, and a nil registry are no-ops.
+func (rc *reconciler) undismissActive(active *statestore.Component) {
+	if rc.registry == nil || active == nil || active.Path == "" {
+		return
+	}
+	if err := rc.registry.Undismiss(active.Path); err != nil {
+		slog.Default().With("component", "reconciler").Warn("un-dismiss active store failed", "store", active.Name, "err", err)
+	}
 }
 
 // activeComponent returns the elected active component, or nil if none.
@@ -286,7 +301,7 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 	var autoPaths []string
 	seen := map[string]bool{}
 	for _, e := range entries {
-		if e.Source != SourceManual && !seen[e.Path] {
+		if e.Source != SourceManual && !e.Dismissed && !seen[e.Path] {
 			seen[e.Path] = true
 			autoPaths = append(autoPaths, e.Path)
 		}
@@ -296,6 +311,9 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 	}
 	out := make([]server.StoreInfo, 0, len(entries))
 	for _, e := range entries {
+		if e.Dismissed {
+			continue
+		}
 		comp := rc.componentForEntry(e, det)
 		out = append(out, server.StoreInfo{
 			ID:         e.ID,
@@ -305,9 +323,26 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 			Path:       e.Path,
 			Active:     identity(&comp) == activeID && activeID != "",
 			Connection: statestore.ConnInfo(comp),
+			UpdatedAt:  e.UpdatedAt,
 		})
 	}
+	sortStores(out)
 	return out
+}
+
+// sortStores orders panel entries: the active store first, then most recently
+// added/updated, then name as a deterministic tie-break. Zero timestamps
+// (entries written before updatedAt existed) sort last.
+func sortStores(out []server.StoreInfo) {
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Active != out[j].Active {
+			return out[i].Active
+		}
+		if !out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
+			return out[i].UpdatedAt.After(out[j].UpdatedAt)
+		}
+		return out[i].Name < out[j].Name
+	})
 }
 
 // AddStore satisfies server.StoreRegistry: adds a manual connection. The
@@ -343,13 +378,20 @@ func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]stri
 	return newID, nil
 }
 
-// DeleteStore satisfies server.StoreRegistry: removes the entry with the given
-// id and evicts its pooled connection if open.
+// DeleteStore satisfies server.StoreRegistry: removes (manual) or tombstones
+// (auto) the entry with the given id and evicts its pooled connection if open.
+// The elected active store is refused with server.ErrActiveStore — running
+// apps are using it — which the API maps to 409.
 func (rc *reconciler) DeleteStore(id string) error {
 	if rc.registry == nil {
 		return nil
 	}
 	comp, ok := rc.componentFor(id)
+	if ok {
+		if active := rc.activeComponent(); active != nil && identity(&comp) == identity(ptr(rc.translate(*active))) {
+			return server.ErrActiveStore
+		}
+	}
 	if err := rc.registry.Delete(id); err != nil {
 		return err
 	}

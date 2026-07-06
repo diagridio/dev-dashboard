@@ -7,16 +7,16 @@ import type { ResourceKind } from '../types/resources'
 
 export interface ResourceDetailProps {
   kind: ResourceKind
-  name: string
+  idOrName: string
 }
 
 /**
  * ResourceDetail — right-pane component for the master-detail layout.
- * Fetches and renders the detail for a single resource (kind + name).
+ * Fetches and renders the detail for a single resource (kind + id-or-name).
  * Used by ResourceList as the selected-item detail pane.
  */
-export function ResourceDetail({ kind, name }: ResourceDetailProps) {
-  const { data: detail, isLoading, isError } = useResource(kind, name)
+export function ResourceDetail({ kind, idOrName }: ResourceDetailProps) {
+  const { data: detail, isLoading, isError } = useResource(kind, idOrName)
   const { toast, toastNode } = useToast()
 
   if (isLoading) {

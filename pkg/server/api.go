@@ -109,6 +109,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 var (
 	ErrUnsupportedStoreType = errors.New("unsupported state store type")
 	ErrStoreValidation      = errors.New("invalid store request")
+	// ErrActiveStore rejects deleting the elected active store (mapped to 409).
+	ErrActiveStore = errors.New("cannot remove the active workflow state store")
 )
 
 // storeErrStatus maps registry mutation failures to HTTP status codes by
@@ -119,6 +121,8 @@ var (
 // is called, so they never reach this mapping.
 func storeErrStatus(err error) int {
 	switch {
+	case errors.Is(err, ErrActiveStore):
+		return http.StatusConflict
 	case errors.Is(err, os.ErrExist):
 		return http.StatusConflict
 	case errors.Is(err, os.ErrNotExist):

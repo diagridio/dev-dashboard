@@ -67,3 +67,42 @@ func TestResourcesMultiDocFile(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, got.Raw, "state.redis")
 }
+
+func TestResourcesStableIDsAndDuplicateNames(t *testing.T) {
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+	// Two components sharing metadata.name "statestore" in different files.
+	require.NoError(t, os.WriteFile(filepath.Join(dirA, "statestore.yaml"), []byte(compYAML), 0o600))
+	dupYAML := "apiVersion: dapr.io/v1alpha1\nkind: Component\nmetadata:\n  name: statestore\nspec:\n  type: state.sqlite\n  version: v1\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dirB, "statestore.yaml"), []byte(dupYAML), 0o600))
+	svc := New(func() []string { return []string{dirA, dirB} })
+
+	comps, err := svc.List(context.Background(), KindComponent)
+	require.NoError(t, err)
+	require.Len(t, comps, 2, "duplicate names must both be listed")
+	require.NotEmpty(t, comps[0].ID)
+	require.NotEmpty(t, comps[1].ID)
+	require.NotEqual(t, comps[0].ID, comps[1].ID, "distinct files get distinct ids")
+	require.Len(t, comps[0].ID, 12, "id mirrors the registry's 12-char entryID shape")
+	require.Less(t, comps[0].Path, comps[1].Path, "equal names sort by path")
+
+	// IDs are stable across scans.
+	again, err := svc.List(context.Background(), KindComponent)
+	require.NoError(t, err)
+	require.Equal(t, comps[0].ID, again[0].ID)
+
+	// Get by ID returns the exact file, even for the name-collision loser.
+	got, err := svc.Get(context.Background(), KindComponent, comps[1].ID)
+	require.NoError(t, err)
+	require.Equal(t, comps[1].Path, got.Path)
+	require.Contains(t, got.Raw, "state.sqlite")
+
+	// Get by name still works (first match) for old deep links.
+	byName, err := svc.Get(context.Background(), KindComponent, "statestore")
+	require.NoError(t, err)
+	require.Equal(t, comps[0].Path, byName.Path)
+
+	// Unknown id-or-name -> ErrNotFound.
+	_, err = svc.Get(context.Background(), KindComponent, "nosuchthing")
+	require.ErrorIs(t, err, ErrNotFound)
+}

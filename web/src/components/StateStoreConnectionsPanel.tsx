@@ -43,29 +43,36 @@ export function StateStoreConnectionsPanel() {
   return (
     <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <b style={{ fontSize: 13 }}>State store connections</b>
+        <b style={{ fontSize: 13 }}>Recent workflow state store connections</b>
         <button className="btn ghost" onClick={() => setAddOpen(true)}>+ Add connection</button>
       </div>
 
       {(stores ?? []).length === 0 && <p className="hint">No state store connections yet.</p>}
 
       {(stores ?? []).map((s) => (
-        <div
-          key={s.id}
-          className="field-row"
-          style={{ justifyContent: 'space-between', padding: '6px 0', borderTop: '1px solid var(--line-soft)' }}
-        >
-          <span style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
-            <b style={{ fontSize: 12.5 }}>{s.name}</b>
-            <span className="chip">{storeTypeLabel(s.type)}</span>
-            {s.connection && <span className="chip">{s.connection}</span>}
-            <span className="pill">{s.source}</span>
-            {s.active && <span className="pill" style={{ color: 'var(--done-fg)' }}>ACTIVE</span>}
-          </span>
-          {s.source === 'manual' && (
-            <span style={{ display: 'flex', gap: 6 }}>
-              <button className="btn danger" aria-label={`delete ${s.name}`} onClick={() => openDeleteConfirm(s)}>Delete</button>
+        <div key={s.id} style={{ padding: '6px 0', borderTop: '1px solid var(--line-soft)' }}>
+          <div className="field-row" style={{ justifyContent: 'space-between' }}>
+            <span style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+              <b style={{ fontSize: 12.5 }}>{s.name}</b>
+              <span className="chip">{storeTypeLabel(s.type)}</span>
+              {s.connection && <span className="chip">{s.connection}</span>}
+              <span className="pill">{s.source}</span>
+              {s.active && <span className="pill" style={{ color: 'var(--done-fg)' }}>ACTIVE</span>}
             </span>
+            {!s.active && (
+              <span style={{ display: 'flex', gap: 6 }}>
+                <button className="btn danger" aria-label={`delete ${s.name}`} onClick={() => openDeleteConfirm(s)}>Delete</button>
+              </span>
+            )}
+          </div>
+          {s.path && (
+            <div
+              className="mono"
+              title={s.path}
+              style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+            >
+              {s.path}
+            </div>
           )}
         </div>
       ))}
@@ -85,7 +92,10 @@ export function StateStoreConnectionsPanel() {
 
       <Modal open={pendingDelete !== null} title="Delete connection?" onClose={closeDeleteConfirm}>
         <p style={{ margin: '0 0 8px', color: 'var(--muted)', fontSize: 14 }}>
-          Remove the connection <b>{pendingDelete?.name}</b>? This only removes it from the dashboard registry.
+          Remove the connection <b>{pendingDelete?.name}</b>?{' '}
+          {pendingDelete?.source === 'auto'
+            ? 'It will stay hidden unless it becomes the active workflow state store again.'
+            : 'This only removes it from the dashboard registry.'}
         </p>
         {deleteError && <p className="field-err">{deleteError}</p>}
         <div className="modal-actions">
