@@ -32,7 +32,7 @@ export function StateStoreConnectionsPanel() {
     setDeleteError(null)
     try {
       await deleteStore.mutateAsync(pendingDelete.id)
-      toast.show(`Removed ${pendingDelete.name}`)
+      toast.show(`Disconnected ${pendingDelete.name}`)
       closeDeleteConfirm()
     } catch (e) {
       // Keep the modal open so the user sees what failed and can retry/cancel.
@@ -61,7 +61,7 @@ export function StateStoreConnectionsPanel() {
             </span>
             {!s.active && (
               <span style={{ display: 'flex', gap: 6 }}>
-                <button className="btn danger" aria-label={`delete ${s.name}`} onClick={() => openDeleteConfirm(s)}>Delete</button>
+                <button className="btn ghost" aria-label={`disconnect ${s.name}`} onClick={() => openDeleteConfirm(s)}>Disconnect</button>
               </span>
             )}
           </div>
@@ -90,9 +90,9 @@ export function StateStoreConnectionsPanel() {
         />
       )}
 
-      <Modal open={pendingDelete !== null} title="Delete connection?" onClose={closeDeleteConfirm}>
+      <Modal open={pendingDelete !== null} title="Disconnect state store?" onClose={closeDeleteConfirm}>
         <p style={{ margin: '0 0 8px', color: 'var(--muted)', fontSize: 14 }}>
-          Remove the connection <b>{pendingDelete?.name}</b>?{' '}
+          Disconnect <b>{pendingDelete?.name}</b>? The component YAML file on disk is not deleted.{' '}
           {pendingDelete?.source === 'auto'
             ? 'It will stay hidden unless it becomes the active workflow state store again.'
             : 'This only removes it from the dashboard registry.'}
@@ -100,7 +100,7 @@ export function StateStoreConnectionsPanel() {
         {deleteError && <p className="field-err">{deleteError}</p>}
         <div className="modal-actions">
           <button className="btn ghost" onClick={closeDeleteConfirm}>Cancel</button>
-          <button className="btn danger" onClick={handleConfirmDelete}>Delete</button>
+          <button className="btn primary" onClick={handleConfirmDelete}>Disconnect</button>
         </div>
       </Modal>
 
