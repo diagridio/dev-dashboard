@@ -26,10 +26,14 @@ describe('StateStoreConnectionsPanel', () => {
     expect(screen.getByText('orders-pg')).toBeInTheDocument()
     // ACTIVE badge on the active auto store.
     expect(screen.getByText(/active/i)).toBeInTheDocument()
-    // Manual row has delete only (no edit); the active row has neither.
+    // Manual row has disconnect only (no edit); the active row has neither.
     expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /delete orders-pg/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /disconnect orders-pg/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /edit statestore/i })).not.toBeInTheDocument()
+    // Disconnect is non-destructive: ghost styling, not danger.
+    const btn = screen.getByRole('button', { name: /disconnect orders-pg/i })
+    expect(btn.className).toContain('ghost')
+    expect(btn.className).not.toContain('danger')
     // Add button present.
     expect(screen.getByRole('button', { name: /add connection/i })).toBeInTheDocument()
   })
@@ -57,7 +61,7 @@ describe('StateStoreConnectionsPanel', () => {
     expect(screen.getByText('Added orders')).toBeInTheDocument()
   })
 
-  it('shows error feedback and keeps the confirm modal open when delete fails', async () => {
+  it('shows error feedback and keeps the confirm modal open when disconnect fails', async () => {
     server.use(
       http.get('/api/statestores', () => HttpResponse.json(stores)),
       http.delete('/api/statestores/m1', () =>
@@ -66,33 +70,33 @@ describe('StateStoreConnectionsPanel', () => {
     )
     render(<QueryProvider><StateStoreConnectionsPanel /></QueryProvider>)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /delete orders-pg/i })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /delete orders-pg/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /disconnect orders-pg/i })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /disconnect orders-pg/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }))
 
     // Error surfaced to the user, modal still open, no crash / unhandled rejection.
     await waitFor(() => expect(screen.getByText('store is in use')).toBeInTheDocument())
-    expect(screen.getByRole('dialog', { name: /delete connection/i })).toBeInTheDocument()
+    expect(screen.getByRole('dialog', { name: /disconnect state store/i })).toBeInTheDocument()
   })
 
-  it('closes the confirm modal and shows a toast on successful delete', async () => {
+  it('closes the confirm modal and shows a toast on successful disconnect', async () => {
     server.use(
       http.get('/api/statestores', () => HttpResponse.json(stores)),
       http.delete('/api/statestores/m1', () => new HttpResponse(null, { status: 204 })),
     )
     render(<QueryProvider><StateStoreConnectionsPanel /></QueryProvider>)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /delete orders-pg/i })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /delete orders-pg/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /disconnect orders-pg/i })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /disconnect orders-pg/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }))
 
     await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /delete connection/i })).not.toBeInTheDocument(),
+      expect(screen.queryByRole('dialog', { name: /disconnect state store/i })).not.toBeInTheDocument(),
     )
-    expect(screen.getByText('Removed orders-pg')).toBeInTheDocument()
+    expect(screen.getByText('Disconnected orders-pg')).toBeInTheDocument()
   })
 
-  it('renames the panel, shows paths, and offers delete on non-active rows only', async () => {
+  it('renames the panel, shows paths, and offers disconnect on non-active rows only', async () => {
     server.use(http.get('/api/statestores', () => HttpResponse.json(stores)))
     render(<QueryProvider client={makeQueryClient()}><StateStoreConnectionsPanel /></QueryProvider>)
 
@@ -100,9 +104,9 @@ describe('StateStoreConnectionsPanel', () => {
     expect(screen.getByText('Recent workflow state store connections')).toBeInTheDocument()
     // Path shown for the auto (file-backed) row; the manual row has none.
     expect(screen.getByText('/x/a.yaml')).toBeInTheDocument()
-    // The active row has no delete button; the non-active row does.
-    expect(screen.queryByRole('button', { name: /delete statestore/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /delete orders-pg/i })).toBeInTheDocument()
+    // The active row has no disconnect button; the non-active row does.
+    expect(screen.queryByRole('button', { name: /disconnect statestore/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /disconnect orders-pg/i })).toBeInTheDocument()
   })
 
   it('explains durable dismissal when removing an auto-discovered connection', async () => {
@@ -112,10 +116,11 @@ describe('StateStoreConnectionsPanel', () => {
     server.use(http.get('/api/statestores', () => HttpResponse.json(autoInactive)))
     render(<QueryProvider client={makeQueryClient()}><StateStoreConnectionsPanel /></QueryProvider>)
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /delete projstore/i })).toBeInTheDocument())
-    fireEvent.click(screen.getByRole('button', { name: /delete projstore/i }))
+    await waitFor(() => expect(screen.getByRole('button', { name: /disconnect projstore/i })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /disconnect projstore/i }))
     expect(
       screen.getByText(/stay hidden unless it becomes the active workflow state store again/i),
     ).toBeInTheDocument()
+    expect(screen.getByText(/the component yaml file on disk is not deleted/i)).toBeInTheDocument()
   })
 })

@@ -2,8 +2,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect, beforeEach } from 'vitest'
-import { QueryClient } from '@tanstack/react-query'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { QueryClient, focusManager } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
@@ -70,15 +70,21 @@ describe('Workflows', () => {
     expect(screen.getByText('RUNNING')).toBeInTheDocument()
   })
 
-  it('shows the no-store message on 503', async () => {
+  it('degrades gracefully on a no-store 503: banner + chrome, no full-page guidance', async () => {
     server.use(
       http.get('/api/workflows', () =>
         HttpResponse.json({ error: 'no state store detected' }, { status: 503 }),
       ),
     )
     renderAt()
-    await waitFor(() => expect(screen.getByText(/no state store detected/i)).toBeInTheDocument())
-    expect(screen.getByText(/--statestore/)).toBeInTheDocument()
+    const banner = await screen.findByTestId('load-error-banner')
+    expect(banner).toHaveTextContent(/no state store detected/i)
+    expect(banner).toHaveTextContent(/select another state store or check the connection/i)
+    // Page chrome still rendered: store selector and filters are usable.
+    expect(screen.getByTestId('store-select')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Status filter' })).toBeInTheDocument()
+    // The --statestore full-page guidance is only for an empty store list.
+    expect(screen.queryByText(/--statestore/)).toBeNull()
   })
 
   it('shows an empty state when items is an empty array', async () => {
@@ -770,7 +776,7 @@ describe('Workflows page — store selector', () => {
     await waitFor(() => expect(storeSelect.value).toBe('statestore-a')) // the active one
   })
 
-  it('shows the server "could not connect…" message on an unreachable 503 (not the no-store guidance)', async () => {
+  it('shows a banner with the server "could not connect…" message and keeps the store selector usable', async () => {
     server.use(
       http.get('/api/statestores', () => HttpResponse.json(twoStores)),
       http.get('/api/workflows', () =>
@@ -779,10 +785,42 @@ describe('Workflows page — store selector', () => {
       http.get('/api/apps', () => HttpResponse.json([])),
     )
     renderAt()
-    await waitFor(() => expect(screen.getByText(/could not connect to state store/i)).toBeInTheDocument())
-    expect(screen.getByText(/localhost:16379/)).toBeInTheDocument()
+    const banner = await screen.findByTestId('load-error-banner')
+    expect(banner).toHaveTextContent(/could not connect to state store/i)
+    expect(banner).toHaveTextContent(/localhost:16379/)
     // The --statestore guidance is only for the genuine no-store case.
     expect(screen.queryByText(/--statestore/)).toBeNull()
+    // Chrome stays interactive and the table shows the degraded placeholder.
+    expect(screen.getByTestId('store-select')).toBeInTheDocument()
+    expect(screen.getByText(/couldn't load workflows from this store/i)).toBeInTheDocument()
+  })
+
+  it('recovers when the user switches to a reachable store from the degraded state', async () => {
+    // Store b (persisted selection) is unreachable; store a works.
+    window.localStorage.setItem('devdash.workflowStore', 'statestore-b')
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', ({ request }) => {
+        const url = new URL(request.url)
+        if (url.searchParams.get('store') === 'statestore-b') {
+          return HttpResponse.json(
+            { error: 'could not connect to state store "statestore" (localhost:16379)' },
+            { status: 503 },
+          )
+        }
+        return HttpResponse.json({
+          items: [{ appId: 'order', instanceId: 'a1', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }],
+        })
+      }),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
+    renderAt()
+    await screen.findByTestId('load-error-banner')
+    const storeSelect = screen.getByTestId('store-select') as HTMLSelectElement
+    await userEvent.selectOptions(storeSelect, 'statestore-a')
+    // Rows from the reachable store render and the banner clears.
+    expect(await screen.findByRole('link', { name: 'a1' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByTestId('load-error-banner')).toBeNull())
   })
 
   it('instance-row links carry ?store=<id> for the selected store', async () => {
@@ -844,5 +882,66 @@ describe('Workflows page — store selector', () => {
     expect(opt.value).toBe('redis-p2')
     expect(opt.textContent).toMatch(/redis — redis · localhost:6379 \(active\)/)
     await waitFor(() => expect(storeSelect.value).toBe('redis-p2'))
+  })
+})
+
+describe('Workflows page — stale-data error-state gating', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  // setFocused(true) forces the manager for the process lifetime; restore
+  // auto-detection so later tests don't inherit a forced-focused state.
+  afterEach(() => {
+    focusManager.setFocused(undefined)
+  })
+
+  it('hides stale rows, selection bar, and stale nextToken when a background refetch errors', async () => {
+    // First call: returns one row + nextToken so pager shows "1–1 loaded" and Next is enabled.
+    // Subsequent calls: return 503 (simulates store going down while page is open).
+    let callCount = 0
+    server.use(
+      http.get('/api/workflows', () => {
+        callCount++
+        if (callCount === 1) {
+          return HttpResponse.json({
+            items: [{ appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' }],
+            nextToken: 'tok-stale',
+          })
+        }
+        return HttpResponse.json(
+          { error: 'could not connect to state store "statestore" (localhost:16379)' },
+          { status: 503 },
+        )
+      }),
+    )
+
+    renderAt()
+
+    // Wait for the initial successful load: row + enabled Next button.
+    await screen.findByRole('link', { name: 'abc' })
+    expect(screen.getByRole('button', { name: 'Next →' })).not.toBeDisabled()
+
+    // Select the row so we have an active selection before the error hits.
+    const checkboxes = document.querySelectorAll('tbody .cbx:not(.on)')
+    await userEvent.click(checkboxes[0])
+    await waitFor(() => expect(screen.getByText('1 selected')).toBeInTheDocument())
+
+    // Trigger a background refetch via TanStack Query's focusManager
+    // (refetchOnWindowFocus is on by default; setFocused(true) fires the same path
+    // as a real window-focus/visibilitychange event without needing DOM hacks).
+    focusManager.setFocused(true)
+
+    // After the refetch errors the page must gate all stale-data-derived UI:
+    await screen.findByTestId('load-error-banner')
+    // Placeholder replaces the table.
+    expect(screen.getByText(/couldn't load workflows from this store/i)).toBeInTheDocument()
+    // Pager shows "No results" (not "1–1 loaded").
+    await waitFor(() => expect(screen.getByText('No results')).toBeInTheDocument())
+    expect(screen.queryByText(/1–1 loaded/)).toBeNull()
+    // Selection bar is hidden even though selected state was non-empty.
+    expect(screen.queryByText('1 selected')).toBeNull()
+    // Next button is disabled (stale nextToken must not enable it).
+    expect(screen.getByRole('button', { name: 'Next →' })).toBeDisabled()
   })
 })
