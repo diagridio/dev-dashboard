@@ -9,6 +9,7 @@ import { RefreshProvider } from '../lib/refresh'
 import { ResourceList } from './ResourceList'
 
 const COMPONENT_SUMMARY = {
+  id: 'abc123def456',
   name: 'statestore',
   kind: 'component',
   type: 'state.redis',
@@ -23,6 +24,7 @@ const COMPONENT_DETAIL = {
 }
 
 const CONFIG_SUMMARY = {
+  id: 'cfg111cfg111',
   name: 'appconfig',
   kind: 'configuration',
   path: '/configurations/appconfig.yaml',
@@ -103,7 +105,7 @@ describe('ResourceList kind=component', () => {
         }
         return HttpResponse.json([])
       }),
-      http.get('/api/resources/component/statestore', () =>
+      http.get('/api/resources/component/:idOrName', () =>
         HttpResponse.json(COMPONENT_DETAIL),
       ),
     )
@@ -123,7 +125,7 @@ describe('ResourceList kind=component', () => {
         }
         return HttpResponse.json([])
       }),
-      http.get('/api/resources/component/statestore', () =>
+      http.get('/api/resources/component/:idOrName', () =>
         HttpResponse.json(COMPONENT_DETAIL),
       ),
     )
@@ -142,7 +144,7 @@ describe('ResourceList kind=component', () => {
         }
         return HttpResponse.json([])
       }),
-      http.get('/api/resources/component/statestore', () =>
+      http.get('/api/resources/component/:idOrName', () =>
         HttpResponse.json(COMPONENT_DETAIL),
       ),
     )
@@ -180,7 +182,7 @@ describe('ResourceList kind=component', () => {
         }
         return HttpResponse.json([])
       }),
-      http.get('/api/resources/component/statestore', () =>
+      http.get('/api/resources/component/:idOrName', () =>
         HttpResponse.json({ ...COMPONENT_DETAIL, loadedBy: [] }),
       ),
     )
@@ -191,8 +193,9 @@ describe('ResourceList kind=component', () => {
     )
   })
 
-  it('clicking a list item updates the URL to /components/:name', async () => {
+  it('clicking a list item updates the URL to /components/:id', async () => {
     const PUBSUB = {
+      id: 'pub000pub000',
       name: 'pubsub',
       kind: 'component',
       type: 'pubsub.redis',
@@ -208,11 +211,12 @@ describe('ResourceList kind=component', () => {
         }
         return HttpResponse.json([])
       }),
-      http.get('/api/resources/component/statestore', () =>
-        HttpResponse.json(COMPONENT_DETAIL),
-      ),
-      http.get('/api/resources/component/pubsub', () =>
-        HttpResponse.json({ ...PUBSUB, raw: 'kind: Component\n' }),
+      http.get('/api/resources/component/:idOrName', ({ params }) =>
+        HttpResponse.json(
+          params.idOrName === 'pub000pub000'
+            ? { ...PUBSUB, raw: 'kind: Component\n' }
+            : COMPONENT_DETAIL,
+        ),
       ),
     )
     const { router } = renderComponents()
@@ -224,8 +228,8 @@ describe('ResourceList kind=component', () => {
       const sel = document.querySelector('.ci.sel')
       expect(sel?.textContent).toMatch(/pubsub/)
     })
-    // and the router pathname must reflect the navigation
-    expect(router.state.location.pathname).toBe('/components/pubsub')
+    // and the router pathname must reflect the navigation (now uses id)
+    expect(router.state.location.pathname).toBe('/components/pub000pub000')
   })
 })
 
@@ -241,7 +245,7 @@ describe('ResourceList kind=configuration', () => {
         }
         return HttpResponse.json([])
       }),
-      http.get('/api/resources/configuration/appconfig', () =>
+      http.get('/api/resources/configuration/:idOrName', () =>
         HttpResponse.json(CONFIG_DETAIL),
       ),
     )
@@ -258,7 +262,7 @@ describe('ResourceList kind=configuration', () => {
         }
         return HttpResponse.json([])
       }),
-      http.get('/api/resources/configuration/appconfig', () =>
+      http.get('/api/resources/configuration/:idOrName', () =>
         HttpResponse.json(CONFIG_DETAIL),
       ),
     )
@@ -303,7 +307,7 @@ describe('ResourceList kind=configuration', () => {
         }
         return HttpResponse.json([])
       }),
-      http.get('/api/resources/configuration/appconfig', () =>
+      http.get('/api/resources/configuration/:idOrName', () =>
         HttpResponse.json(CONFIG_DETAIL),
       ),
     )
@@ -313,5 +317,68 @@ describe('ResourceList kind=configuration', () => {
       expect(sel).toBeInTheDocument()
       expect(sel?.textContent).toMatch(/appconfig/)
     })
+  })
+})
+
+const DUPLICATE_A = {
+  id: 'aaa111aaa111',
+  name: 'statestore',
+  kind: 'component',
+  type: 'state.redis',
+  version: 'v1',
+  path: '/projA/statestore.yaml',
+}
+
+const DUPLICATE_B = {
+  id: 'bbb222bbb222',
+  name: 'statestore',
+  kind: 'component',
+  type: 'state.sqlite',
+  version: 'v1',
+  path: '/projB/statestore.yaml',
+}
+
+describe('ResourceList unique selection', () => {
+  beforeEach(() => {
+    server.use(http.get('/api/statestores', () => HttpResponse.json([])))
+  })
+
+  it('renders both duplicate-name components with their file paths and selects by id', async () => {
+    server.use(
+      http.get('/api/resources', () => HttpResponse.json([DUPLICATE_A, DUPLICATE_B])),
+      http.get('/api/resources/component/:idOrName', ({ params }) =>
+        HttpResponse.json(
+          params.idOrName === 'bbb222bbb222'
+            ? { ...DUPLICATE_B, raw: 'spec:\n  type: state.sqlite\n' }
+            : { ...DUPLICATE_A, raw: 'spec:\n  type: state.redis\n' },
+        ),
+      ),
+    )
+    renderComponents()
+
+    // Both rows render, each showing its file path.
+    await waitFor(() => expect(screen.getAllByText('statestore')).toHaveLength(2))
+    expect(screen.getByText('/projA/statestore.yaml')).toBeInTheDocument()
+    expect(screen.getByText('/projB/statestore.yaml')).toBeInTheDocument()
+
+    // Clicking the second duplicate selects it (not the first).
+    fireEvent.click(screen.getByText('/projB/statestore.yaml'))
+    await waitFor(() => expect(screen.getByText(/state\.sqlite/)).toBeInTheDocument())
+    expect(screen.getByText('/projB/statestore.yaml').closest('.ci')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('/projA/statestore.yaml').closest('.ci')).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('still selects by name for old deep links', async () => {
+    server.use(
+      http.get('/api/resources', () => HttpResponse.json([DUPLICATE_A, DUPLICATE_B])),
+      http.get('/api/resources/component/:idOrName', () =>
+        HttpResponse.json({ ...DUPLICATE_A, raw: 'spec:\n  type: state.redis\n' }),
+      ),
+    )
+    renderComponents('/components/statestore')
+
+    await waitFor(() => expect(screen.getAllByText('statestore')).toHaveLength(2))
+    expect(screen.getByText('/projA/statestore.yaml').closest('.ci')).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText('/projB/statestore.yaml').closest('.ci')).toHaveAttribute('aria-selected', 'false')
   })
 })
