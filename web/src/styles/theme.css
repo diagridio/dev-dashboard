@@ -69,7 +69,7 @@ body {
 .app[data-theme="dark"] .dglogo { color: #FFFFFF; }
 
 /* ---- Left resources sidebar ---- */
-.sidebar { position: fixed; left: 0; top: 46px; bottom: 0; width: var(--sbw); background: var(--surface); border-right: 1px solid var(--line); z-index: 9; transition: width .18s ease; display: flex; flex-direction: column; overflow: hidden; }
+.sidebar { position: fixed; left: 0; top: var(--topbar-h, 46px); bottom: 0; width: var(--sbw); background: var(--surface); border-right: 1px solid var(--line); z-index: 9; transition: width .18s ease; display: flex; flex-direction: column; overflow: hidden; }
 .sbhead { display: flex; align-items: center; gap: 8px; padding: 12px 12px 6px; color: var(--muted); }
 .sbhead .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; }
 .sbtoggle { margin-left: auto; background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 7px; width: 26px; height: 26px; cursor: pointer; flex: none; display: grid; place-items: center; font-size: 13px; }
