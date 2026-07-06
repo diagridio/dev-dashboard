@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
@@ -15,8 +16,8 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Actors', to: '/actors' },
   { label: 'Subscriptions', to: '/subscriptions' },
   { label: 'Components', to: '/components' },
-  { label: 'Configurations', to: '/configurations' },
   { label: 'Resiliency', to: '/resiliency' },
+  { label: 'Configurations', to: '/configurations' },
   { label: 'Control Plane', to: '/control-plane' },
   { label: 'Logs', to: '/logs' },
 ]
@@ -27,8 +28,27 @@ interface TopNavProps {
 }
 
 export function TopNav({ theme, onThemeChange }: TopNavProps) {
+  const headerRef = useRef<HTMLElement>(null)
+
+  // The nav can wrap onto extra rows on narrow/zoomed windows; the fixed
+  // sidebar reads --topbar-h to start below the topbar's real height.
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const update = () => {
+      document.documentElement.style.setProperty('--topbar-h', `${el.offsetHeight}px`)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => {
+      ro.disconnect()
+      document.documentElement.style.removeProperty('--topbar-h')
+    }
+  }, [])
+
   return (
-    <header className="topbar">
+    <header className="topbar" ref={headerRef}>
       <span className="brand">
         <Logo height={21} />
         <span className="dot">/</span>

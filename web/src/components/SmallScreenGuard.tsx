@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { getTheme } from '../lib/prefs'
 
-const MIN_WIDTH = 1024
+const MIN_WIDTH = 768
 
 export function SmallScreenGuard({ children }: { children: ReactNode }) {
   const [wide, setWide] = useState(

@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { TopNav, NAV_ITEMS } from './TopNav'
 import { RefreshProvider } from '../lib/refresh'
@@ -15,8 +15,8 @@ describe('NAV_ITEMS', () => {
       'Actors',
       'Subscriptions',
       'Components',
-      'Configurations',
       'Resiliency',
+      'Configurations',
       'Control Plane',
       'Logs',
     ])
@@ -30,8 +30,8 @@ describe('NAV_ITEMS', () => {
       '/actors',
       '/subscriptions',
       '/components',
-      '/configurations',
       '/resiliency',
+      '/configurations',
       '/control-plane',
       '/logs',
     ])
@@ -91,5 +91,53 @@ describe('TopNav', () => {
     renderNav()
     const link = screen.getByRole('link', { name: 'Logs' })
     expect(link).toHaveAttribute('href', '/logs')
+  })
+
+  describe('topbar height tracking', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      document.documentElement.style.removeProperty('--topbar-h')
+    })
+
+    it('publishes the topbar height as --topbar-h so the sidebar can start below it', () => {
+      let onResize: (() => void) | undefined
+      const observed: Element[] = []
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(cb: () => void) {
+            onResize = cb
+          }
+          observe(el: Element) {
+            observed.push(el)
+          }
+          unobserve() {}
+          disconnect() {}
+        },
+      )
+      renderNav()
+      const header = document.querySelector('header.topbar')
+      expect(header).not.toBeNull()
+      expect(observed).toContain(header)
+      // Simulate the topbar wrapping to multiple rows (e.g. zoom / narrow window)
+      Object.defineProperty(header, 'offsetHeight', { value: 82, configurable: true })
+      onResize?.()
+      expect(document.documentElement.style.getPropertyValue('--topbar-h')).toBe('82px')
+    })
+
+    it('removes --topbar-h on unmount', () => {
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          observe() {}
+          unobserve() {}
+          disconnect() {}
+        },
+      )
+      const { unmount } = renderNav()
+      expect(document.documentElement.style.getPropertyValue('--topbar-h')).not.toBe('')
+      unmount()
+      expect(document.documentElement.style.getPropertyValue('--topbar-h')).toBe('')
+    })
   })
 })
