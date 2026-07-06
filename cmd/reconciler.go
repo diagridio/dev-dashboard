@@ -364,13 +364,20 @@ func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]stri
 	return newID, nil
 }
 
-// DeleteStore satisfies server.StoreRegistry: removes the entry with the given
-// id and evicts its pooled connection if open.
+// DeleteStore satisfies server.StoreRegistry: removes (manual) or tombstones
+// (auto) the entry with the given id and evicts its pooled connection if open.
+// The elected active store is refused with server.ErrActiveStore — running
+// apps are using it — which the API maps to 409.
 func (rc *reconciler) DeleteStore(id string) error {
 	if rc.registry == nil {
 		return nil
 	}
 	comp, ok := rc.componentFor(id)
+	if ok {
+		if active := rc.activeComponent(); active != nil && identity(&comp) == identity(ptr(rc.translate(*active))) {
+			return server.ErrActiveStore
+		}
+	}
 	if err := rc.registry.Delete(id); err != nil {
 		return err
 	}

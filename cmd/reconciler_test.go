@@ -445,6 +445,38 @@ func TestSortStores_ZeroTimestampsLast(t *testing.T) {
 	require.Equal(t, "legacy", out[1].Name)
 }
 
+func TestReconciler_DeleteStoreRefusesActive(t *testing.T) {
+	dir := t.TempDir()
+	home := t.TempDir()
+
+	autoPath := seedAutoComponentYAML(t, dir, "autostore", filepath.Join(dir, "auto.db"))
+	reg := LoadRegistry(home)
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
+
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	active := statestore.Component{Name: "autostore", Type: "state.sqlite", Path: autoPath,
+		Metadata: map[string]string{"connectionString": filepath.Join(dir, "auto.db")}}
+	rc.mu.Lock()
+	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil, nil)
+	rc.mu.Unlock()
+
+	id := rc.Stores()[0].ID
+	err := rc.DeleteStore(id)
+	require.ErrorIs(t, err, server.ErrActiveStore, "deleting the active store must be refused")
+	require.False(t, reg.List()[0].Dismissed, "the entry must be untouched")
+
+	// Once no longer active, the same delete succeeds (tombstones the entry).
+	rc.mu.Lock()
+	rc.electedReg = newStoreRegistry(nil, nil, nil)
+	rc.mu.Unlock()
+	require.NoError(t, rc.DeleteStore(id))
+	require.True(t, reg.List()[0].Dismissed)
+}
+
 func TestReconcilerTranslatesComposeStore(t *testing.T) {
 	dir := t.TempDir()
 	yaml := `apiVersion: dapr.io/v1alpha1
