@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect } from 'vitest'
 import { server } from '../test/setup'
-import { QueryProvider } from '../lib/query'
+import { makeQueryClient, QueryProvider } from '../lib/query'
 import { StateStoreConnectionsPanel } from './StateStoreConnectionsPanel'
 
 const stores = [
@@ -26,7 +26,7 @@ describe('StateStoreConnectionsPanel', () => {
     expect(screen.getByText('orders-pg')).toBeInTheDocument()
     // ACTIVE badge on the active auto store.
     expect(screen.getByText(/active/i)).toBeInTheDocument()
-    // Manual row has delete only (no edit); auto row has neither.
+    // Manual row has delete only (no edit); the active row has neither.
     expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /delete orders-pg/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /edit statestore/i })).not.toBeInTheDocument()
@@ -90,5 +90,32 @@ describe('StateStoreConnectionsPanel', () => {
       expect(screen.queryByRole('dialog', { name: /delete connection/i })).not.toBeInTheDocument(),
     )
     expect(screen.getByText('Removed orders-pg')).toBeInTheDocument()
+  })
+
+  it('renames the panel, shows paths, and offers delete on non-active rows only', async () => {
+    server.use(http.get('/api/statestores', () => HttpResponse.json(stores)))
+    render(<QueryProvider client={makeQueryClient()}><StateStoreConnectionsPanel /></QueryProvider>)
+
+    await waitFor(() => expect(screen.getByText('statestore')).toBeInTheDocument())
+    expect(screen.getByText('Recent workflow state store connections')).toBeInTheDocument()
+    // Path shown for the auto (file-backed) row; the manual row has none.
+    expect(screen.getByText('/x/a.yaml')).toBeInTheDocument()
+    // The active row has no delete button; the non-active row does.
+    expect(screen.queryByRole('button', { name: /delete statestore/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /delete orders-pg/i })).toBeInTheDocument()
+  })
+
+  it('explains durable dismissal when removing an auto-discovered connection', async () => {
+    const autoInactive = [
+      { id: 'a2', name: 'projstore', type: 'state.sqlite', source: 'auto', path: '/y/b.yaml', active: false, connection: 'b.db' },
+    ]
+    server.use(http.get('/api/statestores', () => HttpResponse.json(autoInactive)))
+    render(<QueryProvider client={makeQueryClient()}><StateStoreConnectionsPanel /></QueryProvider>)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /delete projstore/i })).toBeInTheDocument())
+    fireEvent.click(screen.getByRole('button', { name: /delete projstore/i }))
+    expect(
+      screen.getByText(/stay hidden unless it becomes the active workflow state store again/i),
+    ).toBeInTheDocument()
   })
 })

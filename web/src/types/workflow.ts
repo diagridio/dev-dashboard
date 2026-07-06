@@ -48,4 +48,5 @@ export interface StateStore {
   path: string
   active: boolean
   connection: string
+  updatedAt?: string
 }

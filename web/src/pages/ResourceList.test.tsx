@@ -84,7 +84,7 @@ function renderConfigurations(entry = '/configurations') {
 
 describe('ResourceList kind=component', () => {
   beforeEach(() => {
-    // The State store connections panel fetches this on every component render.
+    // The Recent workflow state store connections panel fetches this on every component render.
     server.use(http.get('/api/statestores', () => HttpResponse.json([])))
   })
 
@@ -93,7 +93,7 @@ describe('ResourceList kind=component', () => {
       http.get('/api/resources', () => HttpResponse.json([])),
     )
     renderComponents()
-    expect(await screen.findByText('State store connections')).toBeInTheDocument()
+    expect(await screen.findByText('Recent workflow state store connections')).toBeInTheDocument()
   })
 
   it('renders component list items with name and type·version', async () => {
@@ -295,7 +295,7 @@ describe('ResourceList kind=configuration', () => {
     renderConfigurations()
     // Give the page a tick to settle, then assert the panel is absent.
     await screen.findByRole('heading', { name: /configurations/i })
-    expect(screen.queryByText('State store connections')).not.toBeInTheDocument()
+    expect(screen.queryByText('Recent workflow state store connections')).not.toBeInTheDocument()
   })
 
   it('preselects a named item via deep-link /configurations/:name', async () => {
