@@ -97,8 +97,6 @@ const CP_LIST_BASE = {
   services: [
     { name: 'dapr_scheduler', status: 'running', healthy: true, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true },
     { name: 'dapr_placement', status: 'running', healthy: true, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true },
-    { name: 'dapr_sentry', status: 'kubernetes-only', healthy: false, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: false },
-    { name: 'dapr_injector', status: 'kubernetes-only', healthy: false, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: false },
   ],
 }
 

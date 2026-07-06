@@ -74,9 +74,8 @@ func TestListRunningService(t *testing.T) {
 	if !res.ControlPlanePresent {
 		t.Error("ControlPlanePresent = false, want true (containers found)")
 	}
-	// 2 live + 2 k8s-only placeholders
-	if len(res.Services) != 4 {
-		t.Fatalf("len(Services) = %d, want 4", len(res.Services))
+	if len(res.Services) != 2 {
+		t.Fatalf("len(Services) = %d, want 2", len(res.Services))
 	}
 	sched := res.Services[0]
 	if sched.Name != "dapr_scheduler" || sched.Status != StatusRunning || !sched.Healthy {
@@ -84,11 +83,6 @@ func TestListRunningService(t *testing.T) {
 	}
 	if sched.MemoryBytes == 0 {
 		t.Error("scheduler MemoryBytes = 0, want > 0")
-	}
-	// last two are k8s-only, non-actionable
-	k8s := res.Services[3]
-	if k8s.Status != StatusK8sOnly || k8s.Actionable {
-		t.Errorf("k8s placeholder = %+v, want kubernetes-only + non-actionable", k8s)
 	}
 }
 
@@ -171,9 +165,8 @@ func TestListReachableButNoContainers(t *testing.T) {
 	if res.ControlPlanePresent {
 		t.Error("ControlPlanePresent = true, want false (no containers)")
 	}
-	// still returns 4 services (2 live + 2 k8s placeholders)
-	if len(res.Services) != 4 {
-		t.Fatalf("len(Services) = %d, want 4", len(res.Services))
+	if len(res.Services) != 2 {
+		t.Fatalf("len(Services) = %d, want 2", len(res.Services))
 	}
 	// A stopped/absent container has no port bindings; Ports must be a non-nil
 	// empty slice so it marshals to JSON [] (not null) and never breaks the

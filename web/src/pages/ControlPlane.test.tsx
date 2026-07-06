@@ -67,17 +67,6 @@ describe('ControlPlane', () => {
     expect(screen.getByRole('button', { name: /^start$/i })).toBeInTheDocument()
   })
 
-  it('renders k8s-only services without actions', async () => {
-    mockList({
-      runtime: 'docker', available: true, reachable: true, controlPlanePresent: true,
-      services: [{ name: 'dapr_sentry', status: 'kubernetes-only', healthy: false, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: false }],
-    })
-    renderPage()
-    expect(await screen.findByText('dapr_sentry')).toBeInTheDocument()
-    expect(screen.getByText(/kubernetes only/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-  })
-
   it('groups compose-run control-plane services under their project', async () => {
     mockList({
       runtime: 'docker',

@@ -323,8 +323,7 @@ components-contrib `state.Store` (+ `KeysLiker`) interface.
 `New()` resolves a container runtime — `DASH_CONTAINER_RUNTIME` override, else `docker`,
 else `podman`, else none. `List()` probes reachability, then `docker inspect` +
 `docker stats` each known container: `dapr_scheduler` and `dapr_placement` are the
-**actionable** self-hosted containers (`LiveServiceNames`); `dapr_sentry` and
-`dapr_injector` are surfaced as **kubernetes-only** (not actionable). It returns status,
+**actionable** self-hosted containers (`LiveServiceNames`). It returns status,
 health, port bindings, memory, and log path per service. `List()` additionally detects
 compose containers whose command is `placement`/`scheduler`, surfaces them with a
 `composeProject`, and `Do`/`LogStream` accept the compose names discovered by the most

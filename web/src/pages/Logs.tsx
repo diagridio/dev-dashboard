@@ -15,7 +15,7 @@ type LogSource = (typeof LOG_SOURCES)[number]
 
 // Static fallback so the selector renders before /api/controlplane answers;
 // compose-managed placement/scheduler containers are merged in from the API.
-const CP_SERVICES = ['dapr_scheduler', 'dapr_placement', 'dapr_sentry', 'dapr_injector'] as const
+const CP_SERVICES = ['dapr_scheduler', 'dapr_placement'] as const
 
 /** A merged row carries the original LogLine plus its tagged source. */
 interface MergedLine {
