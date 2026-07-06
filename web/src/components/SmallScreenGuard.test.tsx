@@ -24,4 +24,18 @@ describe('SmallScreenGuard', () => {
     expect(screen.getByText(/wider screen/i)).toBeInTheDocument()
     expect(screen.queryByText('content')).toBeNull()
   })
+
+  it('uses a 768px minimum width media query', () => {
+    const queries: string[] = []
+    vi.stubGlobal('matchMedia', (query: string) => {
+      queries.push(query)
+      return {
+        matches: true, media: query, onchange: null,
+        addEventListener: vi.fn(), removeEventListener: vi.fn(),
+        addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(),
+      }
+    })
+    render(<SmallScreenGuard><div>content</div></SmallScreenGuard>)
+    expect(queries).toContain('(min-width: 768px)')
+  })
 })
