@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -305,4 +306,56 @@ func TestUpdateReturnsNewID(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, entryID(SourceManual, "renamed"), newID)
 	require.NotEqual(t, oldID, newID)
+}
+
+// tickClock returns a fake clock advancing one second per call.
+func tickClock(start time.Time) func() time.Time {
+	t := start
+	return func() time.Time { t = t.Add(time.Second); return t }
+}
+
+func entryByName(t *testing.T, r *ConnRegistry, name string) ConnEntry {
+	t.Helper()
+	for _, e := range r.List() {
+		if e.Name == name {
+			return e
+		}
+	}
+	t.Fatalf("entry %q not found", name)
+	return ConnEntry{}
+}
+
+func TestRegistry_UpdatedAtStampedAndBumped(t *testing.T) {
+	home := t.TempDir()
+	r := LoadRegistry(home)
+	r.now = tickClock(time.Date(2026, 7, 6, 12, 0, 0, 0, time.UTC))
+
+	// Add stamps a manual entry.
+	require.NoError(t, r.Add(ConnEntry{Name: "pg", Type: "state.postgresql",
+		Metadata: map[string]string{"connectionString": "host=h"}}))
+	manualAt := entryByName(t, r, "pg").UpdatedAt
+	require.False(t, manualAt.IsZero(), "Add must stamp updatedAt")
+
+	// UpsertAuto stamps a new auto entry.
+	require.NoError(t, r.UpsertAuto(ConnEntry{Name: "s", Type: "state.redis", Path: "/a/statestore.yaml"}))
+	autoAt := entryByName(t, r, "s").UpdatedAt
+	require.False(t, autoAt.IsZero(), "UpsertAuto must stamp a new entry")
+
+	// A no-op upsert (identical fields) must NOT bump the timestamp.
+	require.NoError(t, r.UpsertAuto(ConnEntry{Name: "s", Type: "state.redis", Path: "/a/statestore.yaml"}))
+	require.True(t, entryByName(t, r, "s").UpdatedAt.Equal(autoAt), "no-op upsert must not bump updatedAt")
+
+	// A changed upsert must bump it.
+	require.NoError(t, r.UpsertAuto(ConnEntry{Name: "s", Type: "state.sqlite", Path: "/a/statestore.yaml"}))
+	require.True(t, entryByName(t, r, "s").UpdatedAt.After(autoAt), "changed upsert must bump updatedAt")
+
+	// Update bumps the manual entry.
+	_, err := r.Update(ConnEntry{ID: entryByName(t, r, "pg").ID, Name: "pg", Type: "state.postgresql",
+		Metadata: map[string]string{"connectionString": "host=h2"}})
+	require.NoError(t, err)
+	require.True(t, entryByName(t, r, "pg").UpdatedAt.After(manualAt), "Update must bump updatedAt")
+
+	// updatedAt survives a reload from disk.
+	r2 := LoadRegistry(home)
+	require.False(t, entryByName(t, r2, "s").UpdatedAt.IsZero(), "updatedAt must persist")
 }

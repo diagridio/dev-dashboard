@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"sigs.k8s.io/yaml"
 )
@@ -27,12 +28,13 @@ const (
 // Path (re-read + 2a-resolved on connect, no secrets in the file); manual
 // entries carry inline Metadata (possibly secrets).
 type ConnEntry struct {
-	ID       string            `json:"id"`
-	Name     string            `json:"name"`
-	Type     string            `json:"type"`
-	Source   string            `json:"source"`
-	Path     string            `json:"path,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Type      string            `json:"type"`
+	Source    string            `json:"source"`
+	Path      string            `json:"path,omitempty"`
+	Metadata  map[string]string `json:"metadata,omitempty"`
+	UpdatedAt time.Time         `json:"updatedAt,omitempty"`
 }
 
 // entryID derives a deterministic, stable, URL-safe id for an entry. key is the
@@ -61,6 +63,7 @@ type ConnRegistry struct {
 	path    string
 	mu      sync.Mutex
 	entries []ConnEntry
+	now     func() time.Time // test seam; nil means time.Now
 }
 
 // registryPath is the canonical connections.yaml path under the home dir.
@@ -118,6 +121,14 @@ func (r *ConnRegistry) List() []ConnEntry {
 	return out
 }
 
+// timeNow returns the registry clock (a test seam), defaulting to wall time.
+func (r *ConnRegistry) timeNow() time.Time {
+	if r.now == nil {
+		return time.Now().UTC()
+	}
+	return r.now()
+}
+
 // UpsertAuto inserts or refreshes an auto entry keyed by normalized path.
 // It never overwrites a manual entry sharing the same normalized path.
 func (r *ConnRegistry) UpsertAuto(e ConnEntry) error {
@@ -146,9 +157,11 @@ func (r *ConnRegistry) UpsertAuto(e ConnEntry) error {
 			cur.Type = e.Type
 			cur.Path = e.Path
 			cur.Metadata = e.Metadata
+			cur.UpdatedAt = r.timeNow()
 			return r.save()
 		}
 	}
+	e.UpdatedAt = r.timeNow()
 	r.entries = append(r.entries, e)
 	return r.save()
 }
@@ -158,6 +171,7 @@ func (r *ConnRegistry) UpsertAuto(e ConnEntry) error {
 func (r *ConnRegistry) Add(e ConnEntry) error {
 	e.Source = SourceManual
 	e.ID = entryID(SourceManual, e.Name)
+	e.UpdatedAt = r.timeNow()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for i := range r.entries {
@@ -190,6 +204,7 @@ func (r *ConnRegistry) Update(e ConnEntry) (string, error) {
 				}
 			}
 			e.ID = entryID(SourceManual, e.Name)
+			e.UpdatedAt = r.timeNow()
 			r.entries[i] = e
 			if err := r.save(); err != nil {
 				return "", err
