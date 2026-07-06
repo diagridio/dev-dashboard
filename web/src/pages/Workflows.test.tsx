@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { QueryClient, focusManager } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
@@ -888,6 +888,12 @@ describe('Workflows page — store selector', () => {
 describe('Workflows page — stale-data error-state gating', () => {
   beforeEach(() => {
     window.localStorage.clear()
+  })
+
+  // setFocused(true) forces the manager for the process lifetime; restore
+  // auto-detection so later tests don't inherit a forced-focused state.
+  afterEach(() => {
+    focusManager.setFocused(undefined)
   })
 
   it('hides stale rows, selection bar, and stale nextToken when a background refetch errors', async () => {
