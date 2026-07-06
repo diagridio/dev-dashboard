@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, MemoryRouter } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect, beforeEach } from 'vitest'
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient, focusManager } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
@@ -882,5 +882,60 @@ describe('Workflows page — store selector', () => {
     expect(opt.value).toBe('redis-p2')
     expect(opt.textContent).toMatch(/redis — redis · localhost:6379 \(active\)/)
     await waitFor(() => expect(storeSelect.value).toBe('redis-p2'))
+  })
+})
+
+describe('Workflows page — stale-data error-state gating', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('hides stale rows, selection bar, and stale nextToken when a background refetch errors', async () => {
+    // First call: returns one row + nextToken so pager shows "1–1 loaded" and Next is enabled.
+    // Subsequent calls: return 503 (simulates store going down while page is open).
+    let callCount = 0
+    server.use(
+      http.get('/api/workflows', () => {
+        callCount++
+        if (callCount === 1) {
+          return HttpResponse.json({
+            items: [{ appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-26T10:00:00Z' }],
+            nextToken: 'tok-stale',
+          })
+        }
+        return HttpResponse.json(
+          { error: 'could not connect to state store "statestore" (localhost:16379)' },
+          { status: 503 },
+        )
+      }),
+    )
+
+    renderAt()
+
+    // Wait for the initial successful load: row + enabled Next button.
+    await screen.findByRole('link', { name: 'abc' })
+    expect(screen.getByRole('button', { name: 'Next →' })).not.toBeDisabled()
+
+    // Select the row so we have an active selection before the error hits.
+    const checkboxes = document.querySelectorAll('tbody .cbx:not(.on)')
+    await userEvent.click(checkboxes[0])
+    await waitFor(() => expect(screen.getByText('1 selected')).toBeInTheDocument())
+
+    // Trigger a background refetch via TanStack Query's focusManager
+    // (refetchOnWindowFocus is on by default; setFocused(true) fires the same path
+    // as a real window-focus/visibilitychange event without needing DOM hacks).
+    focusManager.setFocused(true)
+
+    // After the refetch errors the page must gate all stale-data-derived UI:
+    await screen.findByTestId('load-error-banner')
+    // Placeholder replaces the table.
+    expect(screen.getByText(/couldn't load workflows from this store/i)).toBeInTheDocument()
+    // Pager shows "No results" (not "1–1 loaded").
+    await waitFor(() => expect(screen.getByText('No results')).toBeInTheDocument())
+    expect(screen.queryByText(/1–1 loaded/)).toBeNull()
+    // Selection bar is hidden even though selected state was non-empty.
+    expect(screen.queryByText('1 selected')).toBeNull()
+    // Next button is disabled (stale nextToken must not enable it).
+    expect(screen.getByRole('button', { name: 'Next →' })).toBeDisabled()
   })
 })

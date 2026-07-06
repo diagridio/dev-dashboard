@@ -211,8 +211,13 @@ export function Workflows() {
     enabled: selectedStore !== null,
   })
 
-  // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows)
-  const items = useMemo<WorkflowSummary[]>(() => dedupeWorkflows(data?.items ?? []), [data?.items])
+  // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows).
+  // When errored, treat as empty so the pager shows "No results" and row-derived UI
+  // (selection bar, Next button) sees no rows — even if TanStack Query retained stale data.
+  const items = useMemo<WorkflowSummary[]>(
+    () => (isError ? [] : dedupeWorkflows(data?.items ?? [])),
+    [isError, data?.items],
+  )
 
   // App IDs for the filter dropdown come from the store (every app-id with
   // workflow data), not the current page of rows — so applying the filter never
@@ -517,8 +522,8 @@ export function Workflows() {
 
       {/* Main card */}
       <div className="card">
-        {/* Selection bar — shown only when rows selected */}
-        {selected.size > 0 && (
+        {/* Selection bar — shown only when rows selected and the list is not in error */}
+        {selected.size > 0 && !isError && (
           <div className="selbar">
             <span className="cnt">{selected.size} selected</span>
             <span className="grow" />
@@ -675,7 +680,7 @@ export function Workflows() {
               ← Prev
             </button>
             <button
-              disabled={!data?.nextToken}
+              disabled={isError || !data?.nextToken}
               onClick={() => {
                 if (!data?.nextToken) return
                 setHistory((h) => [...h, { token: page, offset: pageOffset }])
