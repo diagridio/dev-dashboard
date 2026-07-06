@@ -70,15 +70,21 @@ describe('Workflows', () => {
     expect(screen.getByText('RUNNING')).toBeInTheDocument()
   })
 
-  it('shows the no-store message on 503', async () => {
+  it('degrades gracefully on a no-store 503: banner + chrome, no full-page guidance', async () => {
     server.use(
       http.get('/api/workflows', () =>
         HttpResponse.json({ error: 'no state store detected' }, { status: 503 }),
       ),
     )
     renderAt()
-    await waitFor(() => expect(screen.getByText(/no state store detected/i)).toBeInTheDocument())
-    expect(screen.getByText(/--statestore/)).toBeInTheDocument()
+    const banner = await screen.findByTestId('load-error-banner')
+    expect(banner).toHaveTextContent(/no state store detected/i)
+    expect(banner).toHaveTextContent(/select another state store or check the connection/i)
+    // Page chrome still rendered: store selector and filters are usable.
+    expect(screen.getByTestId('store-select')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Status filter' })).toBeInTheDocument()
+    // The --statestore full-page guidance is only for an empty store list.
+    expect(screen.queryByText(/--statestore/)).toBeNull()
   })
 
   it('shows an empty state when items is an empty array', async () => {
@@ -770,7 +776,7 @@ describe('Workflows page — store selector', () => {
     await waitFor(() => expect(storeSelect.value).toBe('statestore-a')) // the active one
   })
 
-  it('shows the server "could not connect…" message on an unreachable 503 (not the no-store guidance)', async () => {
+  it('shows a banner with the server "could not connect…" message and keeps the store selector usable', async () => {
     server.use(
       http.get('/api/statestores', () => HttpResponse.json(twoStores)),
       http.get('/api/workflows', () =>
@@ -779,10 +785,42 @@ describe('Workflows page — store selector', () => {
       http.get('/api/apps', () => HttpResponse.json([])),
     )
     renderAt()
-    await waitFor(() => expect(screen.getByText(/could not connect to state store/i)).toBeInTheDocument())
-    expect(screen.getByText(/localhost:16379/)).toBeInTheDocument()
+    const banner = await screen.findByTestId('load-error-banner')
+    expect(banner).toHaveTextContent(/could not connect to state store/i)
+    expect(banner).toHaveTextContent(/localhost:16379/)
     // The --statestore guidance is only for the genuine no-store case.
     expect(screen.queryByText(/--statestore/)).toBeNull()
+    // Chrome stays interactive and the table shows the degraded placeholder.
+    expect(screen.getByTestId('store-select')).toBeInTheDocument()
+    expect(screen.getByText(/couldn't load workflows from this store/i)).toBeInTheDocument()
+  })
+
+  it('recovers when the user switches to a reachable store from the degraded state', async () => {
+    // Store b (persisted selection) is unreachable; store a works.
+    window.localStorage.setItem('devdash.workflowStore', 'statestore-b')
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', ({ request }) => {
+        const url = new URL(request.url)
+        if (url.searchParams.get('store') === 'statestore-b') {
+          return HttpResponse.json(
+            { error: 'could not connect to state store "statestore" (localhost:16379)' },
+            { status: 503 },
+          )
+        }
+        return HttpResponse.json({
+          items: [{ appId: 'order', instanceId: 'a1', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }],
+        })
+      }),
+      http.get('/api/apps', () => HttpResponse.json([])),
+    )
+    renderAt()
+    await screen.findByTestId('load-error-banner')
+    const storeSelect = screen.getByTestId('store-select') as HTMLSelectElement
+    await userEvent.selectOptions(storeSelect, 'statestore-a')
+    // Rows from the reachable store render and the banner clears.
+    expect(await screen.findByRole('link', { name: 'a1' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByTestId('load-error-banner')).toBeNull())
   })
 
   it('instance-row links carry ?store=<id> for the selected store', async () => {

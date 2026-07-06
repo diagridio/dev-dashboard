@@ -310,7 +310,8 @@ export function Workflows() {
 
   // --- Error states ---
 
-  // No-store guidance block — shared between the empty-list case and the 503 no-store case.
+  // No-store guidance block — full-page, only when the store list itself is empty
+  // (there is no selector to degrade to in that case).
   const noStoreGuidance = (
     <div className="page">
       <p className="err b">No state store detected</p>
@@ -323,28 +324,20 @@ export function Workflows() {
 
   if (noStores) return noStoreGuidance
 
+  // Any workflow-list load error degrades gracefully: the page chrome (store
+  // selector, filters) stays rendered and usable; the error is shown as a
+  // banner above the filters so the user can switch to a reachable store.
+  let loadError: string | null = null
   if (isError) {
     const errStr = String(error)
     if (errStr.includes('503')) {
-      const isNoStore = errStr.includes('no state store detected')
-      if (isNoStore) return noStoreGuidance
       // The server message follows the "API error 503: <message> for <path>" shape.
       // Fall back to a generic message if the separator isn't present.
       const extracted = errStr.replace(/^.*?503[:\s]+/, '').replace(/\s*for\s+\/\S*$/, '').trim()
-      const serverMsg = extracted && extracted !== errStr ? extracted : 'state store unavailable'
-      return (
-        <div className="page">
-          <p className="err b">
-            {serverMsg}
-          </p>
-        </div>
-      )
+      loadError = extracted && extracted !== errStr ? extracted : 'state store unavailable'
+    } else {
+      loadError = `Error loading workflows: ${errStr}`
     }
-    return (
-      <div className="page">
-        <p className="err">Error loading workflows: {errStr}</p>
-      </div>
-    )
   }
 
   return (
@@ -395,6 +388,24 @@ export function Workflows() {
           )}
         </div>
       </div>
+
+      {/* Load-error banner — page stays usable so the user can switch stores */}
+      {loadError && (
+        <div
+          data-testid="load-error-banner"
+          style={{
+            marginBottom: 12,
+            padding: '8px 12px',
+            borderRadius: 8,
+            border: '1px solid var(--line)',
+            background: 'var(--surface)',
+            color: 'var(--fail-fg)',
+            fontSize: 13,
+          }}
+        >
+          {loadError} — Select another state store or check the connection.
+        </div>
+      )}
 
       {/* Remove status banner */}
       {removeStatus && (
@@ -533,6 +544,8 @@ export function Workflows() {
         <div className="tablewrap">
           {(isLoading || (!noStores && selectedStore === null)) ? (
             <p className="muted" style={{ padding: 20 }}>Loading…</p>
+          ) : isError ? (
+            <p className="muted" style={{ padding: 20 }}>Couldn't load workflows from this store.</p>
           ) : items.length === 0 ? (
             <p className="muted" style={{ padding: 20 }}>No workflows found</p>
           ) : (
