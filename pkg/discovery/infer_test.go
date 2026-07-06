@@ -14,7 +14,9 @@ func TestInferRuntime(t *testing.T) {
 		"npm run start":           "node",
 		"dotnet run":              "dotnet",
 		"java -jar app.jar":       "java",
-		"./target/release/app":    "unknown",
+		"cargo run":               "rust",
+		"./target/release/app":    "rust",
+		"./target/debug/app":      "rust",
 		"":                        "unknown",
 	}
 	for cmd, want := range cases {
@@ -30,6 +32,7 @@ func TestInferRuntimeFromImage(t *testing.T) {
 		"mcr.microsoft.com/dotnet/aspnet:9.0": "dotnet",
 		"eclipse-temurin:21":                  "java",
 		"openjdk:21":                          "java",
+		"rust:1.75-slim":                      "rust",
 		"saga-primes-go":                      "unknown",
 		"":                                    "unknown",
 	}

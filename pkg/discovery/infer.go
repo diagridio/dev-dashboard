@@ -6,6 +6,8 @@ import "strings"
 func InferRuntime(appCommand string) string {
 	c := strings.ToLower(appCommand)
 	switch {
+	case strings.Contains(c, "cargo"), strings.Contains(c, "target/release"), strings.Contains(c, "target/debug"):
+		return "rust"
 	case strings.Contains(c, "go run"), strings.HasPrefix(c, "go "):
 		return "go"
 	case strings.Contains(c, "python"):
@@ -39,6 +41,8 @@ func InferRuntimeFromImage(image string) string {
 	case strings.Contains(c, "openjdk"), strings.Contains(c, "temurin"),
 		strings.Contains(c, "java"), strings.Contains(c, "jre"), strings.Contains(c, "jdk"):
 		return "java"
+	case strings.Contains(c, "rust"):
+		return "rust"
 	default:
 		return "unknown"
 	}

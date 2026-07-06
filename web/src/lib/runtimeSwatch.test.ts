@@ -38,8 +38,16 @@ describe('runtimeSwatch', () => {
     expect(runtimeSwatch('dotnet')).toBe('#8330FF')
   })
 
+  it('maps java runtimes to the Java orange', () => {
+    expect(runtimeSwatch('java 21')).toBe('#ED8B00')
+  })
+
+  it('maps rust runtimes to the Rust orange', () => {
+    expect(runtimeSwatch('rust')).toBe('#CE422B')
+  })
+
   it('falls back to the faint CSS variable for unknown runtimes', () => {
-    expect(runtimeSwatch('rust')).toBe('var(--faint)')
+    expect(runtimeSwatch('unknown')).toBe('var(--faint)')
   })
 
   it('is case-insensitive', () => {

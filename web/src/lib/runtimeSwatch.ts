@@ -22,5 +22,7 @@ export function runtimeSwatch(runtime: string): string {
   if (r.includes('python') || r.includes('py')) return '#3776AB'
   if (r.includes('node') || r.includes('js')) return '#539E43'
   if (r.includes('.net') || r.includes('dotnet')) return '#8330FF'
+  if (r.includes('java')) return '#ED8B00'
+  if (r.includes('rust')) return '#CE422B'
   return 'var(--faint)'
 }
