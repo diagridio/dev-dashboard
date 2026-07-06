@@ -15,8 +15,8 @@ describe('NAV_ITEMS', () => {
       'Actors',
       'Subscriptions',
       'Components',
-      'Configurations',
       'Resiliency',
+      'Configurations',
       'Control Plane',
       'Logs',
     ])
@@ -30,8 +30,8 @@ describe('NAV_ITEMS', () => {
       '/actors',
       '/subscriptions',
       '/components',
-      '/configurations',
       '/resiliency',
+      '/configurations',
       '/control-plane',
       '/logs',
     ])
