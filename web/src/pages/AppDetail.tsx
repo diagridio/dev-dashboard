@@ -17,6 +17,8 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   }
 
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
+  const isCompose = app.source === 'compose'
+  const unreachable = isCompose && app.sidecarReachable === false
 
   return (
     <div className="page">
@@ -46,10 +48,13 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       </div>
 
       {/* Metadata unavailable note */}
-      {!app.metadataOk && (
+      {unreachable ? (
         <div className="hint">
-          metadata unavailable — showing process-scan data only
+          sidecar unreachable — publish the daprd HTTP port (e.g. <span className="mono">3500:3500</span>) in
+          your compose file to enable health &amp; metadata
         </div>
+      ) : (
+        !app.metadataOk && <div className="hint">metadata unavailable — showing process-scan data only</div>
       )}
 
       {/* Two-column: Application + Dapr sidecar */}
@@ -70,11 +75,26 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             <div className="kk">App protocol</div>
             <div className="vv mono"><span className="faint">—</span></div>
 
-            <div className="kk">App PID</div>
-            <div className="vv mono">{appPidDisplay}</div>
+            {isCompose ? (
+              <>
+                <div className="kk">Container</div>
+                <div className="vv mono">{app.appContainerName || <span className="faint">—</span>}</div>
 
-            <div className="kk">CLI PID</div>
-            <div className="vv mono">{app.cliPid || <span className="faint">—</span>}</div>
+                <div className="kk">Container ID</div>
+                <div className="vv mono">{app.appContainerId ? app.appContainerId.slice(0, 12) : <span className="faint">—</span>}</div>
+
+                <div className="kk">Compose project</div>
+                <div className="vv mono">{app.composeProject || <span className="faint">—</span>}</div>
+              </>
+            ) : (
+              <>
+                <div className="kk">App PID</div>
+                <div className="vv mono">{appPidDisplay}</div>
+
+                <div className="kk">CLI PID</div>
+                <div className="vv mono">{app.cliPid || <span className="faint">—</span>}</div>
+              </>
+            )}
 
             <div className="kk">Command</div>
             <div className="vv mono">{app.command || <span className="faint">—</span>}</div>
@@ -100,8 +120,17 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             <div className="kk">Metrics port</div>
             <div className="vv mono"><span className="faint">—</span></div>
 
-            <div className="kk">daprd PID</div>
-            <div className="vv mono">{app.daprdPid || <span className="faint">—</span>}</div>
+            {isCompose ? (
+              <>
+                <div className="kk">Container</div>
+                <div className="vv mono">{app.daprdContainerName || <span className="faint">—</span>}</div>
+              </>
+            ) : (
+              <>
+                <div className="kk">daprd PID</div>
+                <div className="vv mono">{app.daprdPid || <span className="faint">—</span>}</div>
+              </>
+            )}
 
             <div className="kk">Placement</div>
             <div className="vv">

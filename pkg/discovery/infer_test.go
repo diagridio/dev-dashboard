@@ -21,3 +21,21 @@ func TestInferRuntime(t *testing.T) {
 		t.Run(cmd, func(t *testing.T) { require.Equal(t, want, InferRuntime(cmd)) })
 	}
 }
+
+func TestInferRuntimeFromImage(t *testing.T) {
+	tests := map[string]string{
+		"golang:1.24":                         "go",
+		"python:3.12-slim":                    "python",
+		"node:22-alpine":                      "node",
+		"mcr.microsoft.com/dotnet/aspnet:9.0": "dotnet",
+		"eclipse-temurin:21":                  "java",
+		"openjdk:21":                          "java",
+		"saga-primes-go":                      "unknown",
+		"":                                    "unknown",
+	}
+	for image, want := range tests {
+		if got := InferRuntimeFromImage(image); got != want {
+			t.Fatalf("InferRuntimeFromImage(%q) = %q, want %q", image, got, want)
+		}
+	}
+}

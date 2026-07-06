@@ -13,6 +13,11 @@ import (
 
 var ErrNotFound = errors.New("app not found")
 
+const (
+	SourceStandalone = "standalone"
+	SourceCompose    = "compose"
+)
+
 func logger() *slog.Logger { return slog.Default().With("component", "discovery") }
 
 type Scanner func() ([]ScanResult, error)
@@ -29,6 +34,19 @@ type ScanResult struct {
 	ResourcePaths []string
 	ConfigPath    string
 	Command       string
+
+	// Source is SourceStandalone (process table) or SourceCompose (containers).
+	Source             string
+	ComposeProject     string
+	ComposeService     string
+	DaprdContainerID   string
+	DaprdContainerName string
+	AppContainerID     string
+	AppContainerName   string
+	AppImage           string
+	// SidecarReachable is false only for compose sidecars whose HTTP port is
+	// not published to the host (metadata/health enrichment impossible).
+	SidecarReachable bool
 }
 
 type Service interface {
@@ -94,6 +112,22 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		ResourcePaths: r.ResourcePaths, ConfigPath: r.ConfigPath, Command: r.Command,
 		Created: r.Created.Local().Format("15:04:05"), Age: humanAge(r.Created),
 		Runtime: InferRuntime(r.Command), Health: HealthUnknown,
+		Source: r.Source, ComposeProject: r.ComposeProject, ComposeService: r.ComposeService,
+		DaprdContainerID: r.DaprdContainerID, DaprdContainerName: r.DaprdContainerName,
+		AppContainerID: r.AppContainerID, AppContainerName: r.AppContainerName,
+		SidecarReachable: r.SidecarReachable,
+	}
+	if in.Source == "" { // scanners predating the field (and bare test fixtures)
+		in.Source = SourceStandalone
+		in.SidecarReachable = true
+	}
+	if in.Source == SourceCompose && in.Runtime == "unknown" {
+		in.Runtime = InferRuntimeFromImage(r.AppImage)
+	}
+	// An unreachable sidecar (compose, HTTP port unpublished) cannot answer
+	// health or metadata — skip both probes instead of burning their timeouts.
+	if !in.SidecarReachable {
+		return in
 	}
 	in.Health = CheckHealth(ctx, s.client, r.HTTPPort)
 	md, err := FetchMetadata(ctx, s.client, r.HTTPPort)
@@ -110,6 +144,15 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	in.Components = md.Components
 	in.EnabledFeatures = md.EnabledFeatures
 	in.Placement = md.Placement
+	if in.Source == SourceCompose {
+		// Container apps: metadata Extended fields (PIDs, commands, log paths)
+		// describe the container's own view; process probing and file log
+		// sources don't apply. Logs stream from the container runtime instead.
+		if md.RunTemplate != "" {
+			in.RunTemplate = md.RunTemplate
+		}
+		return in
+	}
 	if md.CLIPID != 0 {
 		in.CLIPID = md.CLIPID
 	}

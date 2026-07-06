@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -9,7 +10,7 @@ import (
 )
 
 // appsRouter builds the /apps sub-router backed by the given discovery service.
-func appsRouter(svc discovery.Service) http.Handler {
+func appsRouter(svc discovery.Service, containerLogs func(context.Context, string) (<-chan string, error)) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
@@ -34,7 +35,7 @@ func appsRouter(svc discovery.Service) http.Handler {
 		writeJSON(w, http.StatusOK, in)
 	})
 
-	r.Get("/{appId}/logs", logsHandler(svc))
+	r.Get("/{appId}/logs", logsHandler(svc, containerLogs))
 
 	return r
 }

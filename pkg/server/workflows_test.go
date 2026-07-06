@@ -240,7 +240,7 @@ func TestStateStoresEndpoint(t *testing.T) {
 	stores := fakeStoreRegistry{stores: []StoreInfo{
 		{ID: "statestore-auto", Name: "statestore", Type: "state.redis", Source: "auto", Active: true, Connection: "localhost:6379"},
 	}}
-	h := apiRouter(version.Info{}, nil, newFakeBackend(fakeWF{}), stores, fakeResources{}, fakeNews{}, nil)
+	h := apiRouter(version.Info{}, nil, nil, newFakeBackend(fakeWF{}), stores, fakeResources{}, fakeNews{}, nil)
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"name":"statestore"`)
@@ -251,7 +251,7 @@ func TestStateStoresEndpoint(t *testing.T) {
 }
 
 func TestStateStoresNilRegistry(t *testing.T) {
-	h := apiRouter(version.Info{}, nil, newFakeBackend(fakeWF{}), nil, fakeResources{}, fakeNews{}, nil)
+	h := apiRouter(version.Info{}, nil, nil, newFakeBackend(fakeWF{}), nil, fakeResources{}, fakeNews{}, nil)
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `[]`)

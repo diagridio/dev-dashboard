@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
 	"github.com/diagridio/dev-dashboard/pkg/controlplane"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/news"
@@ -25,6 +26,23 @@ type serveDeps struct {
 	Apps           discovery.Service
 	HomeDir        string
 	HTTPClient     *http.Client // workflow HTTP client (remover/purge)
+	// ComposeEnv returns the compose endpoint/mount context from the last
+	// compose scan; nil when compose discovery is disabled (tests, no runtime).
+	ComposeEnv func() discovery.ComposeEnv
+	// ContainerLogs streams `docker logs -f` for a container id; nil when no
+	// container runtime is available.
+	ContainerLogs func(ctx context.Context, containerID string) (<-chan string, error)
+}
+
+// containerLogStream adapts a runtime Runner into the log-stream dependency.
+// Returns nil (feature disabled) when run is nil.
+func containerLogStream(run containerruntime.Runner) func(context.Context, string) (<-chan string, error) {
+	if run == nil {
+		return nil
+	}
+	return func(ctx context.Context, id string) (<-chan string, error) {
+		return run.Stream(ctx, "logs", "-f", "--tail", "200", id)
+	}
 }
 
 // assembleOptions builds server.Options and the matching store closers from deps.
@@ -47,7 +65,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 
 	// Build the reconciler that owns all apps-derived state (resource paths,
 	// detected state stores, active-store election) plus the registry and pool.
-	rc := newReconciler(ctx, appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool)
+	rc := newReconciler(ctx, appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool, deps.ComposeEnv)
 
 	// Seed once synchronously from the boot snapshot so the first request is
 	// correct. Best-effort: an empty/failed list yields an empty derived state.
@@ -66,14 +84,15 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
 
 	return server.Options{
-		BasePath:     deps.BasePath,
-		DistFS:       dist,
-		Version:      version.Get(),
-		Apps:         decorated,
-		Backend:      rc,
-		Stores:       rc,
-		Resources:    resources.New(rc.Paths),
-		News:         newsSvc,
-		ControlPlane: controlplane.New(),
+		BasePath:      deps.BasePath,
+		DistFS:        dist,
+		Version:       version.Get(),
+		Apps:          decorated,
+		ContainerLogs: deps.ContainerLogs,
+		Backend:       rc,
+		Stores:        rc,
+		Resources:     resources.New(rc.Paths),
+		News:          newsSvc,
+		ControlPlane:  controlplane.New(),
 	}, []func() error{rc.Close}
 }

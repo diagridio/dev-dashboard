@@ -1,0 +1,38 @@
+[
+  {
+    "Id": "p1",
+    "Name": "/saga-placement-1",
+    "State": { "Status": "running", "Health": { "Status": "" } },
+    "Config": {
+      "Labels": { "com.docker.compose.project": "saga", "com.docker.compose.service": "placement" },
+      "Entrypoint": null,
+      "Cmd": ["./placement", "-port", "50005", "-log-level", "warn"]
+    },
+    "NetworkSettings": { "Ports": { "50005/tcp": [ { "HostPort": "50005" } ] } },
+    "LogPath": "/var/lib/docker/containers/p1/p1-json.log"
+  },
+  {
+    "Id": "s0",
+    "Name": "/saga-scheduler-0-1",
+    "State": { "Status": "running", "Health": { "Status": "" } },
+    "Config": {
+      "Labels": { "com.docker.compose.project": "saga", "com.docker.compose.service": "scheduler-0" },
+      "Entrypoint": null,
+      "Cmd": ["./scheduler", "--etcd-data-dir", "/var/run/dapr/scheduler"]
+    },
+    "NetworkSettings": { "Ports": {} },
+    "LogPath": ""
+  },
+  {
+    "Id": "x1",
+    "Name": "/saga-postgres-db-1",
+    "State": { "Status": "running", "Health": { "Status": "healthy" } },
+    "Config": {
+      "Labels": { "com.docker.compose.project": "saga", "com.docker.compose.service": "postgres-db" },
+      "Entrypoint": ["docker-entrypoint.sh"],
+      "Cmd": ["postgres"]
+    },
+    "NetworkSettings": { "Ports": { "5432/tcp": [ { "HostPort": "5432" } ] } },
+    "LogPath": ""
+  }
+]

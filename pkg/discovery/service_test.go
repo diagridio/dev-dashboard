@@ -198,6 +198,67 @@ func TestList_LogsDiscoveredCount(t *testing.T) {
 	}
 }
 
+func TestEnrichComposeUnreachableSkipsHTTP(t *testing.T) {
+	calls := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+	}))
+	defer srv.Close()
+	u, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "x", Source: SourceCompose, SidecarReachable: false, HTTPPort: port}}, nil
+	}
+	svc := New(scan, srv.Client())
+	apps, err := svc.List(context.Background())
+	if err != nil || len(apps) != 1 {
+		t.Fatalf("%v %v", apps, err)
+	}
+	in := apps[0]
+	if calls != 0 {
+		t.Fatalf("unreachable sidecar must not be probed, got %d calls", calls)
+	}
+	if in.Health != HealthUnknown || in.MetadataOK || in.SidecarReachable {
+		t.Fatalf("degraded fields: %+v", in)
+	}
+	if in.Source != SourceCompose {
+		t.Fatalf("source: %+v", in)
+	}
+}
+
+func TestEnrichComposeCarriesContainerFields(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID: "primes-go", Source: SourceCompose, SidecarReachable: false,
+			ComposeProject: "saga", ComposeService: "primes-go-dapr",
+			DaprdContainerID: "aaa", DaprdContainerName: "saga-primes-go-dapr-1",
+			AppContainerID: "bbb", AppContainerName: "saga-primes-go-1",
+			AppImage: "python:3.12-slim",
+		}}, nil
+	}
+	svc := New(scan, http.DefaultClient)
+	apps, err := svc.List(context.Background())
+	if err != nil || len(apps) != 1 {
+		t.Fatalf("List failed: %v (apps: %v)", err, apps)
+	}
+	in := apps[0]
+	if in.ComposeProject != "saga" || in.DaprdContainerID != "aaa" || in.AppContainerName != "saga-primes-go-1" {
+		t.Fatalf("container fields lost: %+v", in)
+	}
+	if in.Runtime != "python" {
+		t.Fatalf("runtime from image: %q", in.Runtime)
+	}
+	if in.IsAspire {
+		t.Fatalf("compose app must never be Aspire: %+v", in)
+	}
+}
+
 func TestHumanAge(t *testing.T) {
 	now := time.Now()
 	t.Run("zero time -> empty", func(t *testing.T) {

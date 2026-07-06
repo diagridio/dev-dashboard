@@ -9,6 +9,8 @@ export interface ControlPlaneService {
   memoryHuman: string
   logPath: string
   actionable: boolean
+  /** compose project name when this service is compose-managed */
+  composeProject?: string
 }
 
 export interface ControlPlaneList {
