@@ -41,8 +41,8 @@ func resourcesRouter(res resources.Service, apps discovery.Service) http.Handler
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component or configuration"})
 			return
 		}
-		name := chi.URLParam(req, "name")
-		got, err := res.Get(req.Context(), kind, name)
+		idOrName := chi.URLParam(req, "name")
+		got, err := res.Get(req.Context(), kind, idOrName)
 		if errors.Is(err, resources.ErrNotFound) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "resource not found"})
 			return
