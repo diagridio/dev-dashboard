@@ -150,6 +150,8 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 
 	newReg := newStoreRegistry(detected, loaded, appPaths)
 
+	rc.undismissActive(newReg.active())
+
 	rc.mu.Lock()
 	if rc.closed {
 		rc.mu.Unlock()
@@ -169,6 +171,18 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 		}
 	}
 	log.Info("reconciled derived state", "activeStore", identity(newReg.active()), "detected", len(detected))
+}
+
+// undismissActive clears the dismissal tombstone for the elected active store
+// so it reappears in the panel: the user's running apps are actively using it.
+// nil active, pathless components, and a nil registry are no-ops.
+func (rc *reconciler) undismissActive(active *statestore.Component) {
+	if rc.registry == nil || active == nil || active.Path == "" {
+		return
+	}
+	if err := rc.registry.Undismiss(active.Path); err != nil {
+		slog.Default().With("component", "reconciler").Warn("un-dismiss active store failed", "store", active.Name, "err", err)
+	}
 }
 
 // activeComponent returns the elected active component, or nil if none.

@@ -516,3 +516,30 @@ spec:
 		t.Fatal("foreign store must be untouched")
 	}
 }
+
+func TestReconciler_UndismissActiveStore(t *testing.T) {
+	dir := t.TempDir()
+	home := t.TempDir()
+
+	autoPath := seedAutoComponentYAML(t, dir, "autostore", filepath.Join(dir, "auto.db"))
+	reg := LoadRegistry(home)
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
+
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	// Tombstone it, then simulate reconcile electing it active.
+	require.NoError(t, rc.DeleteStore(reg.List()[0].ID))
+	require.Empty(t, rc.Stores(), "dismissed store is hidden")
+
+	rc.undismissActive(&statestore.Component{Name: "autostore", Type: "state.sqlite", Path: autoPath})
+	infos := rc.Stores()
+	require.Len(t, infos, 1, "the active store must reappear")
+	require.Equal(t, "autostore", infos[0].Name)
+
+	// nil / pathless components are safe no-ops.
+	rc.undismissActive(nil)
+	rc.undismissActive(&statestore.Component{Name: "manual-ish"})
+}
