@@ -11,20 +11,8 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, afterEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { onlineManager, useMutation } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from './query'
-
-// Build a fresh wrapper for each test so state never leaks.
-function makeWrapper() {
-  const client = makeQueryClient()
-  // Speed up retry delay so tests don't stall.
-  client.setDefaultOptions({ mutations: { networkMode: 'always' } })
-  function Wrapper({ children }: { children: ReactNode }) {
-    return <QueryProvider client={client}>{children}</QueryProvider>
-  }
-  return { client, Wrapper }
-}
 
 afterEach(() => {
   // ConnectionProvider mirrors state into the module-global onlineManager;
@@ -56,13 +44,9 @@ describe('makeQueryClient mutations default', () => {
       { wrapper: Wrapper },
     )
 
-    // Simulate ConnectionProvider marking the backend offline.
+    // Simulate ConnectionProvider marking the backend offline and trigger the mutation.
     act(() => {
       onlineManager.setOnline(false)
-    })
-
-    // Trigger the mutation while offline.
-    act(() => {
       result.current.mutate({})
     })
 

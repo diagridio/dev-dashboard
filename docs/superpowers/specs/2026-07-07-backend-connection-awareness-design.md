@@ -40,7 +40,7 @@ the UI.
 
 ### 1. ConnectionProvider (`web/src/lib/connection.tsx`, new)
 
-A React context provider mounted in `App.tsx` inside the existing
+A React context provider mounted in `main.tsx` inside the existing
 `QueryClientProvider` and `RefreshProvider`. It owns the health poll and
 exposes connection state:
 
