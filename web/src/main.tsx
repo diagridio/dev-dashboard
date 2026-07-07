@@ -6,6 +6,7 @@ import { applyPrefs } from './lib/prefs'
 import { router } from './router'
 import { QueryProvider } from './lib/query'
 import { RefreshProvider } from './lib/refresh'
+import { ConnectionProvider } from './lib/connection'
 import { initTelemetry } from './lib/telemetry'
 
 void initTelemetry()
@@ -15,7 +16,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryProvider>
       <RefreshProvider>
-        <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        <ConnectionProvider>
+          <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        </ConnectionProvider>
       </RefreshProvider>
     </QueryProvider>
   </StrictMode>,
