@@ -1,8 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { TopNav, NAV_ITEMS } from './TopNav'
 import { RefreshProvider } from '../lib/refresh'
+import { trackAction } from '../lib/telemetry'
+
+vi.mock('../lib/telemetry', () => ({ trackAction: vi.fn() }))
 
 const noop = () => {}
 
@@ -91,6 +94,12 @@ describe('TopNav', () => {
     renderNav()
     const link = screen.getByRole('link', { name: 'Logs' })
     expect(link).toHaveAttribute('href', '/logs')
+  })
+
+  it('tracks nav_click with the item label when a nav link is clicked', () => {
+    renderNav()
+    fireEvent.click(screen.getByRole('link', { name: 'Workflows' }))
+    expect(trackAction).toHaveBeenCalledWith('nav_click', { label: 'Workflows' })
   })
 
   describe('topbar height tracking', () => {
