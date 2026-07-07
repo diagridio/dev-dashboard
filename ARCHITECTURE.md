@@ -88,7 +88,7 @@ web/                    React + TypeScript + Vite SPA → web/dist (embedded via
   src/pages/            one component per route (+ component-builder, resiliency-builder)
   src/components/        reusable UI (wizard/, form/ subdirs)
   src/hooks/            TanStack Query data hooks + useLogStream / useFollowScroll
-  src/lib/              api, refresh (polling), query client, helpers
+  src/lib/              api, refresh (polling), connection (backend health), query client, helpers
   src/styles/theme.css  design tokens + component classes
   STYLEGUIDE.md         UI conventions, enforced by src/test/styleguide.test.ts
 scripts/                install.sh, install.ps1, release.sh
@@ -393,7 +393,7 @@ discard handler otherwise); logs are grouped by `component=`
 
 React 19 + TypeScript + Vite, built to `web/dist` and embedded in the binary. `main.tsx`
 mounts the provider stack: `QueryProvider` (TanStack Query) → `RefreshProvider` (global
-polling) → `RouterProvider`. `App.tsx` is the shell (TopNav + collapsible ResourcesSidebar
+polling) → `ConnectionProvider` (backend health) → `RouterProvider`. `App.tsx` is the shell (TopNav + collapsible ResourcesSidebar
 + routed `Outlet`), wrapped by a `SmallScreenGuard` (desktop-width UI) and route-level
 error boundaries.
 
@@ -413,7 +413,13 @@ Every polling query is a TanStack Query hook (`src/hooks/`) that calls `fetchJSO
 (`lib/api.ts`) and takes its `refetchInterval` from the global `RefreshControl`
 (`lib/refresh.tsx`: 1s/3s/5s/10s/Off, persisted). Query keys are conventional
 (`['apps']`, `['apps', id]`, `['workflows']`, `['workflow-stats']`, …); mutations
-invalidate the relevant keys. Pages gate on query errors rather than rendering stale
+invalidate the relevant keys. `ConnectionProvider` (`lib/connection.tsx`) polls
+`GET /api/health` at that same interval (fixed 30s fallback while refresh is paused/Off)
+and mirrors the result into TanStack's `onlineManager`: two consecutive failures flip the
+app offline — pausing every polling query until the next successful probe — and
+`RefreshControl`'s beat dot turns red with a "Backend offline" label. Mutations default to
+`networkMode: 'always'` so an action clicked while the backend is down fails fast through
+its normal error path instead of queueing and firing on recovery. Pages gate on query errors rather than rendering stale
 cache: when the workflow list fails, the Workflows page shows an error banner and clears
 rows, selection, and pagination while the page chrome stays usable. Live logs use SSE via `useLogStream` (a monotonic `revision`
 counter distinct from buffer length, and a `closed`-vs-`error` status) with

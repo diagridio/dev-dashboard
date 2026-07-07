@@ -47,7 +47,9 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   highlight, and a follow toggle.
 
 The UI is built for fast scanning and debugging: deep-linkable views, a global autorefresh
-control, full keyboard operability, and cross-navigation between related entities (app →
+control that doubles as a backend-connection indicator (data polling pauses while the
+backend is unreachable and resumes on recovery), full keyboard operability, and
+cross-navigation between related entities (app →
 component → "loaded by" app, etc.).
 
 ## User instructions (download, install, run)
