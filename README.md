@@ -55,21 +55,29 @@ build via built-in emulation — `install.ps1` handles this automatically).
 
 **Install (one-liner):**
 
-```sh
-# macOS / Linux — installs to ~/.local/bin
-curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
+*macOS / Linux — installs to ~/.local/bin*
 
-# Windows (PowerShell) — installs to %LOCALAPPDATA%\Programs\dev-dashboard
+```sh
+curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
+```
+
+*Windows (PowerShell) — installs to %LOCALAPPDATA%\Programs\dev-dashboard*
+
+```powershell
 iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
 ```
 
-To pin a specific version, set `VERSION` before piping:
+**To pin a specific version, set `VERSION` before piping:**
+
+*macOS / Linux*
 
 ```sh
-# sh
 curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | VERSION=vX.Y.Z sh
+```
 
-# PowerShell
+*Windows*
+
+```powershell
 $env:VERSION='vX.Y.Z'; iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
 ```
 
@@ -118,13 +126,15 @@ refresh cycle.
 
 ### Updating
 
-Update the binary in place from GitHub Releases:
+Update to the latest release (no-op if already current)
 
 ```sh
-# Update to the latest release (no-op if already current)
 dev-dashboard update
+```
 
-# Install a specific version (can downgrade or reinstall)
+Install a specific version (can downgrade or reinstall)
+
+```sh
 dev-dashboard update 1.2.0
 ```
 
