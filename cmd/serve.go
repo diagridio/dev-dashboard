@@ -32,6 +32,9 @@ type serveDeps struct {
 	// ContainerLogs streams `docker logs -f` for a container id; nil when no
 	// container runtime is available.
 	ContainerLogs func(ctx context.Context, containerID string) (<-chan string, error)
+	// TelemetryEnabled reflects DEVDASHBOARD_TELEMETRY_OPTOUT, read once at
+	// process start in runServe.
+	TelemetryEnabled bool
 }
 
 // containerLogStream adapts a runtime Runner into the log-stream dependency.
@@ -84,15 +87,16 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
 
 	return server.Options{
-		BasePath:      deps.BasePath,
-		DistFS:        dist,
-		Version:       version.Get(),
-		Apps:          decorated,
-		ContainerLogs: deps.ContainerLogs,
-		Backend:       rc,
-		Stores:        rc,
-		Resources:     resources.New(rc.Paths),
-		News:          newsSvc,
-		ControlPlane:  controlplane.New(),
+		BasePath:         deps.BasePath,
+		DistFS:           dist,
+		Version:          version.Get(),
+		Apps:             decorated,
+		ContainerLogs:    deps.ContainerLogs,
+		Backend:          rc,
+		Stores:           rc,
+		Resources:        resources.New(rc.Paths),
+		News:             newsSvc,
+		ControlPlane:     controlplane.New(),
+		TelemetryEnabled: deps.TelemetryEnabled,
 	}, []func() error{rc.Close}
 }

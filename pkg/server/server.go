@@ -31,6 +31,8 @@ type Options struct {
 	Resources     resources.Service
 	News          news.Service
 	ControlPlane  controlplane.Manager
+	// TelemetryEnabled controls whether the served SPA loads Datadog RUM.
+	TelemetryEnabled bool
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
