@@ -152,6 +152,13 @@ describe('parseLogTime', () => {
   })
 })
 
+describe('Logs document title', () => {
+  it('sets the document title to Logs (plus suffix) when no app or control-plane filter is active', async () => {
+    renderAt('/logs')
+    await waitFor(() => expect(document.title).toBe('Logs | Diagrid Dev Dashboard'))
+  })
+})
+
 // ─── Logs page tests ─────────────────────────────────────────────────────────
 
 describe('Logs', () => {
