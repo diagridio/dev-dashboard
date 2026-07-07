@@ -11,6 +11,7 @@ import { renderHook, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, afterEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { onlineManager, useMutation } from '@tanstack/react-query'
+import type { ReactNode } from 'react'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from './query'
 
@@ -47,7 +48,7 @@ describe('makeQueryClient mutations default', () => {
     // Simulate ConnectionProvider marking the backend offline and trigger the mutation.
     act(() => {
       onlineManager.setOnline(false)
-      result.current.mutate({})
+      result.current.mutate()
     })
 
     // With networkMode: 'always', the mutation should run immediately and
