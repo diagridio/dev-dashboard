@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { Link, isRouteErrorResponse, useRouteError } from 'react-router-dom'
+import { trackError } from '../lib/telemetry'
 
 /**
  * Route-level error boundary. Rendered by react-router (via `errorElement`)
@@ -12,6 +14,10 @@ export function RouteError() {
     : error instanceof Error
       ? error.message
       : String(error)
+
+  useEffect(() => {
+    trackError(error)
+  }, [error])
 
   return (
     <div className="page">

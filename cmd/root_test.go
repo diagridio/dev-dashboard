@@ -48,3 +48,24 @@ func TestRootCmd_HasVerboseFlag(t *testing.T) {
 		t.Fatalf("expected --verbose default false, got %q", f.DefValue)
 	}
 }
+
+func TestTelemetryEnabled(t *testing.T) {
+	cases := []struct {
+		name string
+		env  string
+		want bool
+	}{
+		{"unset", "", true},
+		{"true lowercase", "true", false},
+		{"true uppercase", "TRUE", false},
+		{"true mixed case", "True", false},
+		{"false value", "false", true},
+		{"other truthy-looking value", "1", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := telemetryEnabled(func(string) string { return tc.env })
+			require.Equal(t, tc.want, got)
+		})
+	}
+}

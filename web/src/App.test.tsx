@@ -1,13 +1,15 @@
 import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
-import { MemoryRouter, Routes, Route, createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { server } from './test/setup'
-import { App } from './App'
 import { Placeholder } from './pages/Placeholder'
 import { routes } from './router'
 import { QueryProvider, makeQueryClient } from './lib/query'
 import { RefreshProvider } from './lib/refresh'
+import { trackAction, trackView } from './lib/telemetry'
+
+vi.mock('./lib/telemetry', () => ({ trackAction: vi.fn(), trackView: vi.fn() }))
 
 // jsdom does not implement matchMedia; stub it so SmallScreenGuard works
 beforeAll(() => {
@@ -28,6 +30,7 @@ beforeEach(() => {
   server.use(
     http.get('/api/version', () => HttpResponse.json({ version: '9.9.9', commit: 'abc1234', date: '2026-01-01' })),
     http.get('/api/health', () => HttpResponse.json({ status: 'ok' })),
+    http.get('/api/apps', () => HttpResponse.json([])),
     http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
     http.get('/api/statestores', () => HttpResponse.json([])),
     http.get('/api/news', () =>
@@ -36,17 +39,14 @@ beforeEach(() => {
   )
 })
 
-// Test App shell by wrapping with MemoryRouter
+// Test App shell via the real route tree so nested-route hooks like useMatches work.
 function renderApp(path = '/') {
   const client = makeQueryClient()
+  const router = createMemoryRouter(routes, { initialEntries: [path], future: { v7_relativeSplatPath: true } })
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <MemoryRouter initialEntries={[path]} future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <Routes>
-            <Route path="/*" element={<App />} />
-          </Routes>
-        </MemoryRouter>
+        <RouterProvider router={router} future={{ v7_startTransition: true }} />
       </RefreshProvider>
     </QueryProvider>,
   )
@@ -105,5 +105,26 @@ describe('route switching', () => {
       </QueryProvider>,
     )
     expect(screen.getAllByText(/Workflows/i).length).toBeGreaterThan(0)
+  })
+})
+
+describe('RUM tracking', () => {
+  it('tracks app_startup and the initial route view on mount', () => {
+    renderApp()
+    expect(trackAction).toHaveBeenCalledWith('app_startup')
+    expect(trackView).toHaveBeenCalledWith('Applications')
+  })
+
+  it('tracks the matching view label when mounted on a different route', () => {
+    const client = makeQueryClient()
+    const router = createMemoryRouter(routes, { initialEntries: ['/workflows'], future: { v7_relativeSplatPath: true } })
+    render(
+      <QueryProvider client={client}>
+        <RefreshProvider>
+          <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        </RefreshProvider>
+      </QueryProvider>,
+    )
+    expect(trackView).toHaveBeenCalledWith('Workflows')
   })
 })

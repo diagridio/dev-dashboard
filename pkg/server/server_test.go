@@ -57,3 +57,15 @@ func TestRouterServesApps(t *testing.T) {
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "appId")
 }
+
+func TestRouterInjectsTelemetryFlag(t *testing.T) {
+	h := NewRouter(Options{
+		DistFS:           fstest.MapFS{"index.html": {Data: []byte("<!doctype html><head></head>")}},
+		Version:          version.Info{Version: "test"},
+		Apps:             newFakeApps(),
+		Backend:          newFakeBackend(fakeWF{}),
+		TelemetryEnabled: true,
+	})
+	_, body := get(t, h, "/")
+	require.Contains(t, body, "window.__DASH_TELEMETRY_ENABLED__=true;")
+}

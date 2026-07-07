@@ -53,3 +53,23 @@ func TestAssembleOptions_NoHomeDir_NoCWDRelativeRegistry(t *testing.T) {
 	require.True(t, os.IsNotExist(err),
 		"no .dapr directory may be created relative to the CWD when the home dir is unknown")
 }
+
+// TestAssembleOptions_TelemetryEnabledPassedThrough verifies that
+// serveDeps.TelemetryEnabled is threaded into server.Options.TelemetryEnabled
+// unchanged.
+func TestAssembleOptions_TelemetryEnabledPassedThrough(t *testing.T) {
+	opts, closers := assembleOptions(context.Background(), serveDeps{
+		Namespace:        "default",
+		Apps:             emptyApps{},
+		HomeDir:          "",
+		HTTPClient:       &http.Client{Timeout: time.Second},
+		TelemetryEnabled: true,
+	}, fstest.MapFS{})
+	t.Cleanup(func() {
+		for _, c := range closers {
+			_ = c()
+		}
+	})
+
+	require.True(t, opts.TelemetryEnabled)
+}

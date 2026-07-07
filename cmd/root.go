@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -91,6 +92,7 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	}
 	_, crtRunner := containerruntime.Detect()
 	composeSrc := discovery.NewComposeSource(crtRunner)
+	telemetry := telemetryEnabled(os.Getenv)
 	opts, closers := assembleOptions(ctx, serveDeps{
 		BasePath:       basePath,
 		StateStorePath: stateStore,
@@ -98,10 +100,11 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 		Apps: discovery.New(
 			discovery.Merge(discovery.StandaloneScanner(), composeSrc.Scanner()),
 			&http.Client{Timeout: 2 * time.Second}),
-		HomeDir:       home,
-		HTTPClient:    &http.Client{Timeout: 10 * time.Second},
-		ComposeEnv:    composeSrc.Env,
-		ContainerLogs: containerLogStream(crtRunner),
+		HomeDir:          home,
+		HTTPClient:       &http.Client{Timeout: 10 * time.Second},
+		ComposeEnv:       composeSrc.Env,
+		ContainerLogs:    containerLogStream(crtRunner),
+		TelemetryEnabled: telemetry,
 	}, dist)
 	for _, close := range closers {
 		close := close
@@ -111,6 +114,11 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	srv := server.New(addr, opts)
 
 	fmt.Printf("dev-dashboard %s → %s\n", version.Get().Version, url)
+	if telemetry {
+		fmt.Println("Anonymous usage telemetry is enabled. We use this data to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
+	} else {
+		fmt.Println("Anonymous usage telemetry is disabled (DEVDASHBOARD_TELEMETRY_OPTOUT=true).")
+	}
 	if !noOpen {
 		go func() { time.Sleep(400 * time.Millisecond); _ = openBrowser(url) }()
 	}
@@ -135,6 +143,13 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 		}
 		return nil
 	}
+}
+
+// telemetryEnabled reports whether RUM telemetry should run, based on the
+// DEVDASHBOARD_TELEMETRY_OPTOUT env var. Read once at process start (via
+// getenv) — restart the dashboard for a changed value to take effect.
+func telemetryEnabled(getenv func(string) string) bool {
+	return !strings.EqualFold(getenv("DEVDASHBOARD_TELEMETRY_OPTOUT"), "true")
 }
 
 func trimSlash(s string) string {

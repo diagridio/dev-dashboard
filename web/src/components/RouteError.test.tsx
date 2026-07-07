@@ -6,6 +6,9 @@ import { server } from '../test/setup'
 import { routes } from '../router'
 import { QueryProvider, makeQueryClient } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
+import { trackError } from '../lib/telemetry'
+
+vi.mock('../lib/telemetry', () => ({ trackError: vi.fn(), trackAction: vi.fn(), trackView: vi.fn() }))
 
 // jsdom does not implement matchMedia; stub it so SmallScreenGuard works
 beforeAll(() => {
@@ -90,5 +93,10 @@ describe('route error boundary', () => {
     renderBombed()
     const back = screen.getByRole('link', { name: /back to applications/i })
     expect(back).toHaveAttribute('href', '/')
+  })
+
+  it('reports the error to telemetry', () => {
+    renderBombed()
+    expect(trackError).toHaveBeenCalledWith(expect.any(Error))
   })
 })

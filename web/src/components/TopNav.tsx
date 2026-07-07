@@ -4,6 +4,7 @@ import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
 import { RefreshControl } from './RefreshControl'
 import type { Theme } from '../lib/prefs'
+import { trackAction } from '../lib/telemetry'
 
 export interface NavItem {
   label: string
@@ -62,6 +63,7 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
             to={item.to}
             end={item.to === '/'}
             className={({ isActive }) => (isActive ? 'active' : undefined)}
+            onClick={() => trackAction('nav_click', { label: item.label })}
           >
             {item.label}
           </NavLink>
