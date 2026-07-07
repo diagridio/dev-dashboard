@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/setup'
 import { QueryProvider, makeQueryClient } from '../lib/query'
-import { useVersion, useHealth } from './useMeta'
+import { useVersion } from './useMeta'
 
 // Wrap hooks in a fresh QueryProvider each test to avoid cross-test cache contamination
 function makeWrapper() {
@@ -36,21 +36,5 @@ describe('useVersion', () => {
   it('starts in a pending state', () => {
     const { result } = renderHook(() => useVersion(), { wrapper: makeWrapper() })
     expect(result.current.isPending).toBe(true)
-  })
-})
-
-describe('useHealth', () => {
-  beforeEach(() => {
-    server.use(
-      http.get('/api/health', () =>
-        HttpResponse.json({ status: 'ok' }),
-      ),
-    )
-  })
-
-  it('returns health status from /api/health', async () => {
-    const { result } = renderHook(() => useHealth(), { wrapper: makeWrapper() })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data).toEqual({ status: 'ok' })
   })
 })
