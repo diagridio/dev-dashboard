@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"io/fs"
 	"net/http"
 	"path"
@@ -9,8 +10,10 @@ import (
 
 // SPAHandler serves static assets from fsys and falls back to index.html for
 // unknown paths so client-side (History-API) routing works. basePath is the
-// optional subpath the app is mounted under ("" for root).
-func SPAHandler(fsys fs.FS, basePath string) http.Handler {
+// optional subpath the app is mounted under ("" for root). telemetryEnabled
+// is injected into the served index.html as window.__DASH_TELEMETRY_ENABLED__
+// so the front-end knows whether to load Datadog RUM.
+func SPAHandler(fsys fs.FS, basePath string, telemetryEnabled bool) http.Handler {
 	basePath = "/" + strings.Trim(basePath, "/")
 	fileServer := http.FileServer(http.FS(fsys))
 
@@ -39,16 +42,22 @@ func SPAHandler(fsys fs.FS, basePath string) http.Handler {
 			http.NotFound(w, r)
 			return
 		}
-		serveIndex(w, r, fsys)
+		serveIndex(w, r, fsys, telemetryEnabled)
 	})
 }
 
-func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS) {
+func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS, telemetryEnabled bool) {
 	data, err := fs.ReadFile(fsys, "index.html")
 	if err != nil {
 		http.Error(w, "index.html not found", http.StatusInternalServerError)
 		return
 	}
+	flag := "false"
+	if telemetryEnabled {
+		flag = "true"
+	}
+	script := []byte("<script>window.__DASH_TELEMETRY_ENABLED__=" + flag + ";</script></head>")
+	data = bytes.Replace(data, []byte("</head>"), script, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusOK)

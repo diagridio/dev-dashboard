@@ -14,7 +14,7 @@ import (
 
 func testFS() fstest.MapFS {
 	return fstest.MapFS{
-		"index.html":    {Data: []byte("<!doctype html><title>shell</title>")},
+		"index.html":    {Data: []byte("<!doctype html><head><title>shell</title></head>")},
 		"assets/app.js": {Data: []byte("console.log(1)")},
 	}
 }
@@ -32,14 +32,14 @@ func get(t *testing.T, h http.Handler, path string) (*http.Response, string) {
 }
 
 func TestSPAServesExistingFile(t *testing.T) {
-	h := SPAHandler(testFS(), "")
+	h := SPAHandler(testFS(), "", true)
 	res, body := get(t, h, "/assets/app.js")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "console.log")
 }
 
 func TestSPAFallsBackToIndex(t *testing.T) {
-	h := SPAHandler(testFS(), "")
+	h := SPAHandler(testFS(), "", true)
 	res, body := get(t, h, "/workflows/order/abc123")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "shell")
@@ -47,14 +47,14 @@ func TestSPAFallsBackToIndex(t *testing.T) {
 }
 
 func TestSPARespectsBasePath(t *testing.T) {
-	h := SPAHandler(testFS(), "/dashboard")
+	h := SPAHandler(testFS(), "/dashboard", true)
 	res, body := get(t, h, "/dashboard/anything")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "shell")
 }
 
 func TestSPADirectoryRequestDoesNotListContents(t *testing.T) {
-	h := SPAHandler(testFS(), "")
+	h := SPAHandler(testFS(), "", true)
 
 	// An embedded directory must not produce an http.FileServer auto-index
 	// (or a redirect toward one); it is a client-route miss → SPA shell.
@@ -67,8 +67,20 @@ func TestSPADirectoryRequestDoesNotListContents(t *testing.T) {
 }
 
 func TestSPAMissingAssetReturns404(t *testing.T) {
-	h := SPAHandler(testFS(), "")
+	h := SPAHandler(testFS(), "", true)
 	res, body := get(t, h, "/assets/missing.js")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 	require.NotContains(t, body, "shell")
+}
+
+func TestSPAInjectsTelemetryEnabledTrue(t *testing.T) {
+	h := SPAHandler(testFS(), "", true)
+	_, body := get(t, h, "/")
+	require.Contains(t, body, "<script>window.__DASH_TELEMETRY_ENABLED__=true;</script>")
+}
+
+func TestSPAInjectsTelemetryEnabledFalse(t *testing.T) {
+	h := SPAHandler(testFS(), "", false)
+	_, body := get(t, h, "/")
+	require.Contains(t, body, "<script>window.__DASH_TELEMETRY_ENABLED__=false;</script>")
 }

@@ -46,7 +46,7 @@ func NewRouter(opts Options) http.Handler {
 
 	mount := func(router chi.Router) {
 		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane))
-		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath))
+		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath, opts.TelemetryEnabled))
 	}
 
 	if base == "" {
