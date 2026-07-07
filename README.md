@@ -175,6 +175,21 @@ dev-dashboard --verbose
 
 Logs are grouped by `component=` (values: `server`, `discovery`, `workflow`, `registry`, `reconciler`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
 
+## Telemetry
+
+The dashboard sends anonymous usage telemetry (via Datadog RUM) to help us understand how
+it's used: application startup, top navigation clicks, Resources-panel clicks, and front-end
+errors. There is no session replay and no dashboard content is collected — page views are
+tracked by a fixed page label (e.g. `Workflows`, `AppDetail`), never the resolved URL, so
+local app/workflow identifiers never leave your machine.
+
+To opt out, set `DEVDASHBOARD_TELEMETRY_OPTOUT=true` before starting the dashboard. This is
+read once at startup, so restart the dashboard for the change to take effect:
+
+```sh
+DEVDASHBOARD_TELEMETRY_OPTOUT=true dev-dashboard
+```
+
 ## Building from source
 
 **Prerequisites:** Go ≥ 1.26 and Node.js 20 (with `npm`). The binary embeds the React SPA via
