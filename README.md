@@ -1,33 +1,25 @@
 # Diagrid Dev Dashboard
 
-A local-first, single-binary CLI that gives Dapr developers a live, dense, minimal-chrome
-view of everything Dapr running on their machine.
+A local dashboard for Dapr developers that offers a live view of everything Dapr running on
+your machine, plus guided builders for authoring Dapr component and resiliency YAML.
 
 ## Goal
 
-The Dapr Dev Dashboard is an observer for local Dapr development. It inspects the
-apps you start with `dapr run` / `dapr run -f` or Aspire and surfaces everything about them — sidecars,
-workflows, actors, subscriptions, components, configurations, and logs.
+The Dapr Dev Dashboard is a companion for local Dapr development. It inspects the
+apps you start with `dapr run` / `dapr run -f`, Aspire or docker compose, and surfaces everything about them — sidecars, workflows, actors, subscriptions, components, resiliency policies, configurations, and logs.
 
-Design goals:
-
-- **Zero-config for the common case** — point it at your machine and it discovers running apps.
-- **Single self-contained binary** — no runtime dependencies (the React frontend is embedded
-  via `go:embed`; there is no Node.js at runtime).
-- **Read-only over your apps** — it never starts or stops them. The only mutating actions are
-  workflow terminate/purge, managing your own saved state-store connections (persisted to a
-  local config file, see [Use cases](#use-cases)), and control-plane lifecycle actions
-  (start/restart/stop of the self-hosted `dapr_scheduler` / `dapr_placement` containers); it
-  never edits app or component state.
-- **Degrade gracefully** — keep working when a sidecar or state store is unavailable.
-- **Minimal, high-density UI** with light and dark themes, optimized for desktop widths.
+It also helps you author Dapr resources. The **Component Builder** walks you through
+picking a component type from the full Dapr catalog, filling in its metadata fields, and
+choosing an authentication profile; the **Resiliency Builder** composes resiliency policies
+(timeouts, retries, circuit breakers) and applies them to targets (apps, actors, components).
+Both wizards end in an editable YAML preview you can copy or download into your project.
 
 ## Use cases
 
 Developers use the dashboard to observe and debug Dapr apps while building locally:
 
 - **See what's running** — a live table of all running apps/sidecars: app id, health,
-  runtime/language, app/HTTP/gRPC ports, daprd + app PIDs, age, and owning run-template.
+  runtime/language, app/HTTP/gRPC ports, daprd + app PIDs, age, and owning run process.
 - **Inspect an application** — drill into a single app for its ports, PIDs, command,
   resource/config paths, runtime metadata, enabled features, and loaded components.
 - **Debug workflows** — browse workflow executions across all apps with status filters and
@@ -39,6 +31,11 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   subscriptions across all apps, each linkable back to the owning application.
 - **Read components & configurations** — read-only YAML viewers, enriched with which apps
   loaded each component.
+- **Build component YAML** — a guided wizard over the full Dapr component catalog: pick a
+  type, fill in its metadata fields (with per-field docs and defaults), choose an
+  authentication profile, then copy or download the generated YAML.
+- **Build resiliency policies** — compose named timeouts, retries, and circuit breakers,
+  apply them to targets (apps, actors, components), and export the resiliency spec as YAML.
 - **Manage state-store connections** — on the Components page, add / edit / remove the state
   stores the dashboard reads workflows from. Auto-detected stores appear automatically; manual
   connections are saved to `~/.dapr/dev-dashboard/connections.yaml` (mode `0600`). When more
@@ -47,8 +44,8 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   highlight, and a follow toggle.
 
 The UI is built for fast scanning and debugging: deep-linkable views, a global autorefresh
-control, keyboard shortcuts, and cross-navigation between related entities (app → component →
-"loaded by" app, etc.).
+control, full keyboard operability, and cross-navigation between related entities (app →
+component → "loaded by" app, etc.).
 
 ## User instructions (download, install, run)
 
@@ -450,3 +447,13 @@ thing can later be re-mounted under a `diagrid dashboard` subcommand.
 For the full architecture and extension guide, see [ARCHITECTURE.md](ARCHITECTURE.md); for the
 original design rationale, see
 [`docs/superpowers/specs/2026-06-25-dev-dashboard-design.md`](docs/superpowers/specs/2026-06-25-dev-dashboard-design.md).
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report issues,
+set up a development environment, and submit pull requests. All commits must be signed off
+per the [Developer Certificate of Origin](https://developercertificate.org/) (`git commit -s`).
+
+## License
+
+Copyright © Diagrid Inc. Licensed under the [Apache License 2.0](LICENSE).
