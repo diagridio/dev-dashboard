@@ -179,4 +179,27 @@ describe('AppDetail', () => {
     // Enabled features should render
     expect(screen.getByText('StateStore')).toBeInTheDocument()
   })
+
+  it('sets the document title to the app id', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'order',
+          health: 'healthy',
+          runtime: 'go',
+          httpPort: 3500,
+          grpcPort: 50001,
+          appPort: 8080,
+          daprdPid: 48230,
+          appPid: 48213,
+          cliPid: 48201,
+          command: 'go run ./cmd/order',
+          runtimeVersion: '1.14.4',
+          metadataOk: true,
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(document.title).toBe('order | Diagrid Dev Dashboard'))
+  })
 })
