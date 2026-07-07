@@ -11,10 +11,10 @@ describe('NAV_ITEMS', () => {
     const labels = NAV_ITEMS.map((i) => i.label)
     expect(labels).toEqual([
       'Applications',
+      'Components',
       'Workflows',
       'Actors',
       'Subscriptions',
-      'Components',
       'Resiliency',
       'Configurations',
       'Control Plane',
@@ -26,10 +26,10 @@ describe('NAV_ITEMS', () => {
     const paths = NAV_ITEMS.map((i) => i.to)
     expect(paths).toEqual([
       '/',
+      '/components',
       '/workflows',
       '/actors',
       '/subscriptions',
-      '/components',
       '/resiliency',
       '/configurations',
       '/control-plane',

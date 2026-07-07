@@ -635,12 +635,18 @@ export function Workflows() {
                         </Link>
                       </td>
                       <td>
-                        {wf.appId}
-                        {appsLoaded && !runningAppIds.has(wf.appId) && (
-                          <span className="typechip" style={{ marginLeft: '6px' }}>
-                            not running
-                          </span>
-                        )}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+                          {wf.appId}
+                          {appsLoaded && (
+                            <span
+                              className={`led ${runningAppIds.has(wf.appId) ? 'ok' : 'bad'}`}
+                              style={{ width: 8, height: 8, borderRadius: '50%', flex: '0 0 auto' }}
+                              role="img"
+                              aria-label={runningAppIds.has(wf.appId) ? 'running' : 'not running'}
+                              title={runningAppIds.has(wf.appId) ? 'running' : 'not running'}
+                            />
+                          )}
+                        </span>
                       </td>
                       <td className="muted mono tabnum dt">
                         <DateTimeCell ts={wf.createdAt} />

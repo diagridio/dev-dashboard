@@ -41,7 +41,7 @@ export function StateStoreConnectionsPanel() {
   }
 
   return (
-    <div className="card" style={{ padding: '14px 16px', marginBottom: 16 }}>
+    <div className="card" style={{ padding: '14px 16px', marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <b style={{ fontSize: 13 }}>Recent workflow state store connections</b>
         <button className="btn ghost" onClick={() => setAddOpen(true)}>+ Add connection</button>

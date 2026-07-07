@@ -305,10 +305,11 @@ describe('Workflows', () => {
       ),
     )
     renderAt()
-    // Row for the running app: no badge.
+    // Row for the running app: green led.
     await screen.findByRole('link', { name: 'i2' })
-    // Row for the stopped app-id shows the badge.
-    expect(await screen.findAllByText('not running')).toHaveLength(1)
+    expect(await screen.findAllByRole('img', { name: 'running' })).toHaveLength(1)
+    // Row for the stopped app-id: red led.
+    expect(await screen.findAllByRole('img', { name: 'not running' })).toHaveLength(1)
   })
 
   it('keeps every store app-id in the filter after one is selected', async () => {

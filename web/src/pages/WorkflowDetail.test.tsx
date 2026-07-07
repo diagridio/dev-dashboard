@@ -87,7 +87,7 @@ describe('WorkflowDetail', () => {
     expect(link).toHaveAttribute('href', '/apps/order')
   })
 
-  it('App ID is plain text with a "not running" chip when the app is not running', async () => {
+  it('App ID is plain text with a "not running" led when the app is not running', async () => {
     server.use(
       // No running apps — "order" is not running.
       http.get('/api/apps', () => HttpResponse.json([])),
@@ -104,8 +104,8 @@ describe('WorkflowDetail', () => {
       ),
     )
     renderDetail()
-    // The "not running" chip appears next to the App ID.
-    await waitFor(() => expect(screen.getByText('not running')).toBeInTheDocument())
+    // The "not running" led appears next to the App ID.
+    await waitFor(() => expect(screen.getByRole('img', { name: 'not running' })).toBeInTheDocument())
     // The App ID is NOT a link to the (non-existent) running app.
     expect(screen.queryByRole('link', { name: 'order' })).not.toBeInTheDocument()
     // The App ID value is still shown as text.

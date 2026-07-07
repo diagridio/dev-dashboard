@@ -65,8 +65,8 @@ export function ResourceList({ kind }: ResourceListProps) {
             <Link className="btn ghost" to="/components/new">+ New component</Link>
           )}
         </div>
-        {kind === 'component' && <StateStoreConnectionsPanel />}
         <p className="muted">Loading…</p>
+        {kind === 'component' && <StateStoreConnectionsPanel />}
       </div>
     )
   }
@@ -84,7 +84,6 @@ export function ResourceList({ kind }: ResourceListProps) {
             <Link className="btn ghost" to="/components/new">+ New component</Link>
           )}
         </div>
-        {kind === 'component' && <StateStoreConnectionsPanel />}
         <div className="md">
           <div className="card complist" />
           <div className="card">
@@ -93,6 +92,7 @@ export function ResourceList({ kind }: ResourceListProps) {
             </p>
           </div>
         </div>
+        {kind === 'component' && <StateStoreConnectionsPanel />}
       </div>
     )
   }
@@ -112,7 +112,6 @@ export function ResourceList({ kind }: ResourceListProps) {
           <Link className="btn ghost" to="/components/new">+ New component</Link>
         )}
       </div>
-      {kind === 'component' && <StateStoreConnectionsPanel />}
       <div className="md">
         <div className="card complist">
           {resources.map((resource) => {
@@ -156,6 +155,7 @@ export function ResourceList({ kind }: ResourceListProps) {
           </div>
         )}
       </div>
+      {kind === 'component' && <StateStoreConnectionsPanel />}
     </div>
   )
 }

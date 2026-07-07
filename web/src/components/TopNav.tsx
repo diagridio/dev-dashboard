@@ -12,10 +12,10 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Applications', to: '/' },
+  { label: 'Components', to: '/components' },
   { label: 'Workflows', to: '/workflows' },
   { label: 'Actors', to: '/actors' },
   { label: 'Subscriptions', to: '/subscriptions' },
-  { label: 'Components', to: '/components' },
   { label: 'Resiliency', to: '/resiliency' },
   { label: 'Configurations', to: '/configurations' },
   { label: 'Control Plane', to: '/control-plane' },

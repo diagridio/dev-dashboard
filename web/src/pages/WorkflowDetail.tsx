@@ -534,18 +534,24 @@ export function WorkflowDetail() {
         <div className="m span2">
           <div className="k">App ID</div>
           <div className="v">
-            {appsLoaded && !runningAppIds.has(execution.appId) ? (
-              <>
-                {execution.appId}
-                <span className="typechip" style={{ marginLeft: '6px' }}>
-                  not running
-                </span>
-              </>
-            ) : (
-              <Link className="celllink" to={`/apps/${execution.appId}`}>
-                {execution.appId}
-              </Link>
-            )}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+              {appsLoaded && !runningAppIds.has(execution.appId) ? (
+                execution.appId
+              ) : (
+                <Link className="celllink" to={`/apps/${execution.appId}`}>
+                  {execution.appId}
+                </Link>
+              )}
+              {appsLoaded && (
+                <span
+                  className={`led ${runningAppIds.has(execution.appId) ? 'ok' : 'bad'}`}
+                  style={{ width: 8, height: 8, borderRadius: '50%', flex: '0 0 auto' }}
+                  role="img"
+                  aria-label={runningAppIds.has(execution.appId) ? 'running' : 'not running'}
+                  title={runningAppIds.has(execution.appId) ? 'running' : 'not running'}
+                />
+              )}
+            </span>
           </div>
         </div>
         <div className="m">

@@ -188,7 +188,7 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .chip.k { color: var(--text); }
 .chip b { color: var(--text); font-weight: 600; }
 .chip .led { width: 7px; height: 7px; border-radius: 50%; background: var(--done-fg); }
-.typechip { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); }
+.typechip { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .appref { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 5px; border: 1px solid var(--line); color: var(--text); }
 .appref.link { cursor: pointer; }
 .appref.link:hover { border-color: var(--accent2); color: var(--link); }
