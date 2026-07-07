@@ -78,9 +78,9 @@ describe('ResourcesSidebar static links', () => {
     expect(link).toHaveAttribute('target', '_blank')
   })
 
-  it('renders Dapr Composer link', () => {
+  it('renders Workflow Composer link', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: /Dapr Composer/ })
+    const link = screen.getByRole('link', { name: /Workflow Composer/ })
     expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-workflow-composer')
     expect(link).toHaveAttribute('target', '_blank')
   })
