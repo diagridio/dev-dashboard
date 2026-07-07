@@ -188,6 +188,14 @@ ids survive restarts). Auto entries carry a `Path` (YAML re-read on connect); ma
 entries carry inline `Metadata`. All writes go through an **atomic temp-file + rename**
 `save()`; `Add`/`Update` reject duplicate manual names.
 
+Every write stamps the entry's `UpdatedAt`. Removing an **auto** entry does not delete it —
+it sets a durable `Dismissed` **tombstone**, so `UpsertAuto` never resurrects a connection
+the user removed, across restarts included. The only thing that clears a tombstone is
+`Undismiss`, called by the reconciler when the dismissed store is elected **active** again
+(a store apps are actively using should reappear). The panel listing hides dismissed
+entries and sorts active-first, then by recency (`sortStores` in `cmd/reconciler.go`).
+Deleting the elected active store is refused outright with `server.ErrActiveStore`.
+
 ### Connection pool (`cmd/connpool.go`)
 
 A lazy, identity-keyed cache of open state-store clients. `openOrGet` single-flights per
@@ -242,9 +250,9 @@ All domain services are passed in via `server.Options` (`BasePath`, `DistFS`, `V
 | * | `/*` | SPA fallback | spa.go |
 
 Errors use a shared `writeJSON(w, status, {"error": ...})` helper. Status mapping is
-sentinel-based (`errors.Is`): e.g. store CRUD maps duplicate → 409, missing → 404, I/O →
-500; control-plane maps invalid action → 400, runtime unavailable → 503, exec failure →
-502.
+sentinel-based (`errors.Is`): e.g. store CRUD maps duplicate → 409, deleting the active
+workflow store (`ErrActiveStore`) → 409, missing → 404, I/O → 500; control-plane maps
+invalid action → 400, runtime unavailable → 503, exec failure → 502.
 
 ### SPA embedding & fallback (`web/embed.go`, `pkg/server/spa.go`)
 
@@ -403,7 +411,9 @@ Every polling query is a TanStack Query hook (`src/hooks/`) that calls `fetchJSO
 (`lib/api.ts`) and takes its `refetchInterval` from the global `RefreshControl`
 (`lib/refresh.tsx`: 1s/3s/5s/10s/Off, persisted). Query keys are conventional
 (`['apps']`, `['apps', id]`, `['workflows']`, `['workflow-stats']`, …); mutations
-invalidate the relevant keys. Live logs use SSE via `useLogStream` (a monotonic `revision`
+invalidate the relevant keys. Pages gate on query errors rather than rendering stale
+cache: when the workflow list fails, the Workflows page shows an error banner and clears
+rows, selection, and pagination while the page chrome stays usable. Live logs use SSE via `useLogStream` (a monotonic `revision`
 counter distinct from buffer length, and a `closed`-vs-`error` status) with
 `useFollowScroll` for pin-to-bottom that survives the line-buffer cap.
 

@@ -36,10 +36,13 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   authentication profile, then copy or download the generated YAML.
 - **Build resiliency policies** — compose named timeouts, retries, and circuit breakers,
   apply them to targets (apps, actors, components), and export the resiliency spec as YAML.
-- **Manage state-store connections** — on the Components page, add / edit / remove the state
-  stores the dashboard reads workflows from. Auto-detected stores appear automatically; manual
-  connections are saved to `~/.dapr/dev-dashboard/connections.yaml` (mode `0600`). When more
-  than one store is known, a selector on the Workflows page lets you switch which one you browse.
+- **Manage state-store connections** — on the Components page, a recent-connections panel
+  (with component file paths) lets you add, edit, and disconnect the state stores the dashboard
+  reads workflows from. Auto-detected stores appear automatically; disconnecting one is durable —
+  it stays hidden across restarts unless it becomes the active store again. The store workflows
+  are currently read from can't be removed. Manual connections are saved to
+  `~/.dapr/dev-dashboard/connections.yaml` (mode `0600`). When more than one store is known, a
+  selector on the Workflows page lets you switch which one you browse.
 - **Tail logs** — per-app daprd + app logs streamed live (SSE) with level coloring, keyword
   highlight, and a follow toggle.
 
@@ -427,7 +430,10 @@ sidecars and state store.
   version, components, actors, subscriptions, extended metadata) and degrades gracefully when
   a sidecar is down. A **`/v1.0/healthz`** check per sidecar drives the health badge — computed
   on demand during each `/api/apps` fetch (no separate background poller), so its refresh cadence
-  follows the UI's autorefresh interval.
+  follows the UI's autorefresh interval. A second scanner discovers Dapr apps running under
+  **docker compose** by inspecting compose-labelled containers (app id and ports from the daprd
+  argv, logs streamed from the container runtime); both sources are merged, so one failing never
+  hides the other.
 - **Workflows** are read from the detected **state store backend** (Redis / PostgreSQL /
   SQLite); a client is built from the auto-detected component YAML. Purge uses the official
   Dapr workflow API when reachable, with direct state-store key deletion as an explicit force
