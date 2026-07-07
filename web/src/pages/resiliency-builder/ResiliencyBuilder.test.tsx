@@ -42,4 +42,9 @@ describe('ResiliencyBuilder', () => {
     expect(yaml).toContain('namespace: default')
     expect(yaml).toContain('DaprBuiltInServiceRetries')
   })
+
+  it('sets the document title to New resiliency policy', async () => {
+    renderBuilder()
+    await waitFor(() => expect(document.title).toBe('New resiliency policy | Diagrid Dev Dashboard'))
+  })
 })
