@@ -30,6 +30,11 @@ the UI.
 - **Pause mechanism:** TanStack Query's built-in `onlineManager` — flipping
   it pauses/resumes every existing query with zero changes to the ~10
   existing data hooks.
+- **Mutations fail fast, not queue:** mutations (workflow purge, control-plane
+  start/stop, store add/update/delete) use `networkMode: 'always'` via the
+  global default in `makeQueryClient()`. This ensures they run immediately and
+  surface an error rather than silently queuing while offline and firing
+  unexpectedly on recovery.
 
 ## Design
 
@@ -84,11 +89,12 @@ for the beat dot:
 - Styling: new `.beatbtn.offline` variant and an offline label style in
   `web/src/styles/theme.css`, using the existing `--fail-fg` token.
 
-### 3. App wiring (`web/src/App.tsx`)
+### 3. App wiring (`web/src/main.tsx`)
 
 Mount `ConnectionProvider` around the routed content so both
 `RefreshControl` (in TopNav) and any future consumers can call
-`useConnection()`. Order: `QueryClientProvider` → `RefreshProvider` →
+`useConnection()`. The providers live in `web/src/main.tsx` (not
+`App.tsx`). Order: `QueryClientProvider` → `RefreshProvider` →
 `ConnectionProvider`.
 
 ## Edge cases

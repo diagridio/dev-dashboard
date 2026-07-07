@@ -6,6 +6,12 @@ export function makeQueryClient() {
       queries: {
         retry: 1,
       },
+      // Mutations must fail fast (not queue) while ConnectionProvider has
+      // flagged the backend offline via onlineManager — a purge or stop
+      // firing minutes later on recovery would be surprising.
+      mutations: {
+        networkMode: 'always',
+      },
     },
   })
 }
