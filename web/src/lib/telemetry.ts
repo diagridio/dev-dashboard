@@ -7,6 +7,17 @@ declare global {
 type Rum = typeof import('@datadog/browser-rum').datadogRum
 
 let rum: Rum | undefined
+const buffered: Array<(r: Rum) => void> = []
+
+/** Runs against the RUM SDK if ready; otherwise buffers until init resolves,
+ * or drops permanently if telemetry is disabled. */
+function runOrBuffer(fn: (r: Rum) => void): void {
+  if (rum) {
+    fn(rum)
+  } else if (window.__DASH_TELEMETRY_ENABLED__ === true) {
+    buffered.push(fn)
+  }
+}
 
 /** Loads and initializes Datadog RUM, but only when the server-injected flag
  * is exactly `true`. When disabled, the SDK is never imported. */
@@ -28,16 +39,21 @@ export async function initTelemetry(): Promise<void> {
     trackViewsManually: true,
   })
   rum = datadogRum
+  for (const fn of buffered) fn(rum)
+  buffered.length = 0
 }
 
+/** Records a user action, once enabled. Buffered until initTelemetry() has resolved. */
 export function trackAction(name: string, context?: Record<string, unknown>): void {
-  rum?.addAction(name, context)
+  runOrBuffer((r) => r.addAction(name, context))
 }
 
+/** Records an error, once enabled. Buffered until initTelemetry() has resolved. */
 export function trackError(error: unknown, context?: Record<string, unknown>): void {
-  rum?.addError(error, context)
+  runOrBuffer((r) => r.addError(error, context))
 }
 
+/** Starts a manually-tracked view, once enabled. Buffered until initTelemetry() has resolved. */
 export function trackView(name: string): void {
-  rum?.startView(name)
+  runOrBuffer((r) => r.startView(name))
 }

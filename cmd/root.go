@@ -115,7 +115,7 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 
 	fmt.Printf("dev-dashboard %s → %s\n", version.Get().Version, url)
 	if telemetry {
-		fmt.Println("Anonymous usage telemetry is enabled. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
+		fmt.Println("Anonymous usage telemetry is enabled. We use this data to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
 	} else {
 		fmt.Println("Anonymous usage telemetry is disabled (DEVDASHBOARD_TELEMETRY_OPTOUT=true).")
 	}

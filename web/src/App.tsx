@@ -26,7 +26,7 @@ export function App() {
   const rumView = [...matches]
     .reverse()
     .map((m) => (m.handle as RouteHandle | undefined)?.rumView)
-    .find((name) => name != null)
+    .find(Boolean)
 
   useEffect(() => {
     trackAction('app_startup')

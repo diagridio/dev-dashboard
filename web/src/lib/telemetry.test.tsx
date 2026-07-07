@@ -73,4 +73,38 @@ describe('initTelemetry', () => {
     trackView('Applications')
     expect(startViewMock).toHaveBeenCalledWith('Applications')
   })
+
+  it('buffers trackAction calls made before initTelemetry resolves and flushes them in order', async () => {
+    window.__DASH_TELEMETRY_ENABLED__ = true
+    const { initTelemetry, trackAction } = await import('./telemetry')
+
+    const initPromise = initTelemetry()
+    trackAction('app_startup')
+    expect(addActionMock).not.toHaveBeenCalled()
+
+    await initPromise
+
+    expect(addActionMock).toHaveBeenCalledWith('app_startup', undefined)
+  })
+
+  it('does not buffer calls when telemetry is disabled, so they never flush', async () => {
+    const { initTelemetry, trackAction } = await import('./telemetry')
+
+    trackAction('nav_click')
+    const initPromise = initTelemetry()
+    trackAction('nav_click')
+    await initPromise
+
+    expect(addActionMock).not.toHaveBeenCalled()
+  })
+
+  it('still calls through directly for trackAction calls made after initTelemetry resolves', async () => {
+    window.__DASH_TELEMETRY_ENABLED__ = true
+    const { initTelemetry, trackAction } = await import('./telemetry')
+    await initTelemetry()
+
+    trackAction('nav_click', { label: 'Applications' })
+
+    expect(addActionMock).toHaveBeenCalledWith('nav_click', { label: 'Applications' })
+  })
 })
