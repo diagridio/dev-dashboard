@@ -81,7 +81,7 @@ describe('styleguide lint guards', () => {
     const hex = /(?<!&)#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b/
     const offenders: string[] = []
     for (const rel of files) {
-      if (allow.has(rel)) continue
+      if (allow.has(rel.split(path.sep).join('/'))) continue
       const lines = readFileSync(path.join(srcDir, rel), 'utf8').split('\n')
       lines.forEach((line, i) => {
         if (hex.test(line)) offenders.push(`${rel}:${i + 1}: ${line.trim()}`)

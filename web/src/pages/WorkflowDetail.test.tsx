@@ -65,6 +65,28 @@ describe('WorkflowDetail', () => {
   })
 
   // -------------------------------------------------------------------------
+  // Document title
+  // -------------------------------------------------------------------------
+  it('sets the document title to Workflow — <instanceId>', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Running',
+          createdAt: '2026-06-26T10:00:00Z',
+          replayCount: 0,
+          input: '{"id":1}',
+          history: [],
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(document.title).toBe('Workflow — abc | Diagrid Dev Dashboard'))
+  })
+
+  // -------------------------------------------------------------------------
   // App ID deeplink + breadcrumbs
   // -------------------------------------------------------------------------
   it('App ID in the metagrid links to the app detail page', async () => {

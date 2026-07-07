@@ -22,6 +22,11 @@ function renderBuilder() {
 }
 
 describe('ComponentBuilder', () => {
+  it('sets the document title to New component', async () => {
+    renderBuilder()
+    await waitFor(() => expect(document.title).toBe('New component | Diagrid Dev Dashboard'))
+  })
+
   it('walks type → (auth) → configure → preview and shows generated YAML', async () => {
     renderBuilder()
     fireEvent.click(await screen.findByRole('button', { name: 'state' })) // pick category

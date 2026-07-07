@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Wizard, type WizardStep } from '../../components/wizard'
 import { YamlPreview } from '../../components/YamlPreview'
 import { dumpYaml } from '../../lib/yaml-emit'
+import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { initialState, reducer, canContinue, assembleResiliency } from './reducer'
 import { StepGeneral } from './StepGeneral'
 import { StepPolicies } from './StepPolicies'
@@ -11,6 +12,8 @@ import { StepTargets } from './StepTargets'
 export function ResiliencyBuilder() {
   const navigate = useNavigate()
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
+
+  useDocumentTitle('New resiliency policy')
 
   const yaml = useMemo(
     () => (state.activeStep === 3 ? dumpYaml(assembleResiliency(state.config)) : ''),

@@ -8,6 +8,7 @@ import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { elapsed, elapsedTenths, formatOffset, formatDateTime, formatDuration } from '../lib/wallclock'
 import { highlightJson } from '../lib/json-highlight'
 import { useToast, type ToastHandle } from '../lib/toast'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
 import { sortHistoryForDisplay, orderHistoryForDisplay, eventAnchorId, type HistoryOrder } from '../lib/eventOrder'
@@ -278,6 +279,9 @@ export function EventRow({
 
 export function WorkflowDetail() {
   const { appId, instanceId } = useParams<{ appId: string; instanceId: string }>()
+
+  useDocumentTitle(`Workflow — ${instanceId ?? ''}`)
+
   const [searchParams] = useSearchParams()
   const store = searchParams.get('store') ?? undefined
   const { data: execution, isLoading, isError } = useWorkflow(appId ?? '', instanceId ?? '', store)

@@ -125,4 +125,10 @@ describe('Applications', () => {
     expect(composeCells.length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByTitle(/publish the daprd HTTP port/i)).not.toBeInTheDocument()
   })
+
+  it('sets the document title to Applications', async () => {
+    mockApps(sampleApps)
+    renderAt()
+    await waitFor(() => expect(document.title).toBe('Applications | Diagrid Dev Dashboard'))
+  })
 })

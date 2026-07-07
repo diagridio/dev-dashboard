@@ -46,6 +46,12 @@ function renderAt(entry = '/workflows', retries = 0) {
 }
 
 describe('Workflows', () => {
+  it('sets the document title to Workflows', async () => {
+    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
+    renderAt()
+    await waitFor(() => expect(document.title).toBe('Workflows | Diagrid Dev Dashboard'))
+  })
+
   it('renders a workflow row with a link to detail on the instance ID', async () => {
     server.use(
       http.get('/api/workflows', () =>

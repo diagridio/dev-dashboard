@@ -4,12 +4,15 @@ import type { AppDetail as AppDetailType } from '../types/api'
 import { copyText } from '../lib/clipboard'
 import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
 import { useToast } from '../lib/toast'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 
 // ---------- content ----------
 
 function AppDetailContent({ app }: { app: AppDetailType }) {
   const navigate = useNavigate()
   const { toast, toastNode } = useToast()
+
+  useDocumentTitle(app.appId)
 
   const copyPath = (path: string) => {
     copyText(path)

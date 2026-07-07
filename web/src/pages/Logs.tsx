@@ -452,7 +452,7 @@ export function Logs() {
       ? `Logs — ${cp}`
       : appId
         ? `Logs — ${appId}`
-        : 'Logs — Dapr Dev Dashboard',
+        : 'Logs',
   )
 
   // A source is streamable from a captured log file (standalone/aspire) or from
