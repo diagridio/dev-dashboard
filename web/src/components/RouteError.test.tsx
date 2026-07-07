@@ -6,6 +6,7 @@ import { server } from '../test/setup'
 import { routes } from '../router'
 import { QueryProvider, makeQueryClient } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
+import { ConnectionContext } from '../lib/connection'
 import { trackError } from '../lib/telemetry'
 
 vi.mock('../lib/telemetry', () => ({ trackError: vi.fn(), trackAction: vi.fn(), trackView: vi.fn() }))
@@ -57,7 +58,9 @@ function renderBombed() {
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        <ConnectionContext value={{ online: true }}>
+          <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        </ConnectionContext>
       </RefreshProvider>
     </QueryProvider>,
   )

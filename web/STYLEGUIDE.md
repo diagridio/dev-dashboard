@@ -275,7 +275,7 @@ component fails the suite until the doc is updated.
 | Multi-step builder shell | `components/wizard/` (`Wizard`, `Stepper`, `StepNav`) — see §6. |
 | YAML output step | `components/YamlPreview.tsx` — highlighted preview + Copy/Download — see §6. |
 | Connection manager | `components/StateStoreConnectionDialog.tsx` (a `Modal` of `.field` rows driven by `MetadataFieldInput`) + `components/StateStoreConnectionsPanel.tsx`. |
-| Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh — never mount a per-page one) and `components/ThemeToggle.tsx`. |
+| Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh, whose dot is also the backend-offline indicator — never mount a per-page one) and `components/ThemeToggle.tsx`. |
 | Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. |
 | Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx` → `<pre className="json">` / `<pre className="code">`. |
 
@@ -338,7 +338,9 @@ component fails the suite until the doc is updated.
 - `.toast` (`.show`) — driven by `useToast`.
 - `.hint` — centered faint helper line under content.
 - `.refresh-compact` — the compact global refresh control in the top nav (`.beatbtn` + `.beat`
-  pulse toggle, `.select.compact` interval dropdown); rendered by `RefreshControl`.
+  pulse toggle, `.select.compact` interval dropdown); rendered by `RefreshControl`. The dot
+  doubles as the backend-connection indicator: `.beatbtn.offline` (red `--fail-fg` pulse) +
+  `.offline-label` when the `/api/health` probe fails.
 
 **Code blocks**
 - `<pre className="json">` + `highlightJson(...)` for JSON.

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { TopNav, NAV_ITEMS } from './TopNav'
 import { RefreshProvider } from '../lib/refresh'
+import { ConnectionContext } from '../lib/connection'
 import { trackAction } from '../lib/telemetry'
 
 vi.mock('../lib/telemetry', () => ({ trackAction: vi.fn() }))
@@ -49,9 +50,11 @@ describe('TopNav', () => {
   function renderNav() {
     return render(
       <RefreshProvider>
-        <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <TopNav theme="light" onThemeChange={noop} />
-        </MemoryRouter>
+        <ConnectionContext value={{ online: true }}>
+          <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <TopNav theme="light" onThemeChange={noop} />
+          </MemoryRouter>
+        </ConnectionContext>
       </RefreshProvider>,
     )
   }

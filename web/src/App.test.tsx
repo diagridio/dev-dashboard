@@ -7,6 +7,7 @@ import { Placeholder } from './pages/Placeholder'
 import { routes } from './router'
 import { QueryProvider, makeQueryClient } from './lib/query'
 import { RefreshProvider } from './lib/refresh'
+import { ConnectionContext } from './lib/connection'
 import { trackAction, trackView } from './lib/telemetry'
 
 vi.mock('./lib/telemetry', () => ({ trackAction: vi.fn(), trackView: vi.fn() }))
@@ -46,7 +47,9 @@ function renderApp(path = '/') {
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        <ConnectionContext value={{ online: true }}>
+          <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        </ConnectionContext>
       </RefreshProvider>
     </QueryProvider>,
   )
@@ -100,7 +103,9 @@ describe('route switching', () => {
     render(
       <QueryProvider client={client}>
         <RefreshProvider>
-          <RouterProvider router={router} future={{ v7_startTransition: true }} />
+          <ConnectionContext value={{ online: true }}>
+            <RouterProvider router={router} future={{ v7_startTransition: true }} />
+          </ConnectionContext>
         </RefreshProvider>
       </QueryProvider>,
     )
@@ -121,7 +126,9 @@ describe('RUM tracking', () => {
     render(
       <QueryProvider client={client}>
         <RefreshProvider>
-          <RouterProvider router={router} future={{ v7_startTransition: true }} />
+          <ConnectionContext value={{ online: true }}>
+            <RouterProvider router={router} future={{ v7_startTransition: true }} />
+          </ConnectionContext>
         </RefreshProvider>
       </QueryProvider>,
     )

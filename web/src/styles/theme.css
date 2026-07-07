@@ -205,6 +205,9 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .beatbtn:focus-visible { outline: 2px solid var(--accent2); outline-offset: 2px; }
 .beatbtn .beat { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-bright); animation: beat 2.4s ease-out infinite; }
 .beatbtn.off .beat { background: var(--muted); animation: none; box-shadow: none; }
+.beatbtn.offline .beat { background: var(--fail-fg); animation: beat-offline 2.4s ease-out infinite; }
+@keyframes beat-offline { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--fail-fg) 50%, transparent); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.offline-label { color: var(--fail-fg); font-size: 12px; white-space: nowrap; }
 .select.compact { padding: 4px 26px 4px 8px; font-size: 12px; border-radius: 8px; background-position: right 8px center; }
 .search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; color: var(--faint); font-size: 13px; min-width: 170px; flex: 1; }
 .search input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; }
