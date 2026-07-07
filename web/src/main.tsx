@@ -6,7 +6,9 @@ import { applyPrefs } from './lib/prefs'
 import { router } from './router'
 import { QueryProvider } from './lib/query'
 import { RefreshProvider } from './lib/refresh'
+import { initTelemetry } from './lib/telemetry'
 
+void initTelemetry()
 applyPrefs()
 
 createRoot(document.getElementById('root')!).render(
