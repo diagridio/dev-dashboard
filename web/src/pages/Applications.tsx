@@ -1,5 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useApps } from '../hooks/useApps'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
 import type { AppSummary } from '../types/api'
 
@@ -15,6 +16,8 @@ const PAGE_HEADER = (
 export function Applications() {
   const navigate = useNavigate()
   const { data: apps, isLoading } = useApps()
+
+  useDocumentTitle('Applications')
 
   if (isLoading) {
     return (
