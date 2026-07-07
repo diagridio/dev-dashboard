@@ -3,6 +3,7 @@ import { useNews } from '../hooks/useNews'
 import { newsUrls, getSeen, markSeen } from '../lib/newsSeen'
 import { useVersion } from '../hooks/useMeta'
 import type { NewsResponse, NewsItem } from '../types/logs'
+import { trackAction } from '../lib/telemetry'
 
 const STORAGE_KEY = 'devdash.sidebarCollapsed'
 
@@ -131,7 +132,10 @@ function NewsSection({ news, onMarkSeen }: NewsSectionProps) {
             href={item.url}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={onMarkSeen}
+            onClick={() => {
+              onMarkSeen()
+              trackAction('resource_click', { section: 'News', label: item.title, kind: key })
+            }}
             className="sblink"
           >
             <span className="col">
@@ -208,6 +212,7 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange 
                 target="_blank"
                 rel="noopener noreferrer"
                 className="sblink"
+                onClick={() => trackAction('resource_click', { section: section.heading, label: link.label })}
               >
                 <span className="txt">{link.label}</span>
                 <span className="ext">↗</span>

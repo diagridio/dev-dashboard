@@ -5,6 +5,9 @@ import { http, HttpResponse } from 'msw'
 import { server } from '../test/setup'
 import { ResourcesSidebar } from './ResourcesSidebar'
 import { QueryProvider, makeQueryClient } from '../lib/query'
+import { trackAction } from '../lib/telemetry'
+
+vi.mock('../lib/telemetry', () => ({ trackAction: vi.fn() }))
 
 // Default news response for most tests: blog + webinar present, report + event absent
 const defaultNews = {
@@ -390,5 +393,23 @@ describe('ResourcesSidebar onHasNewChange contract', () => {
       expect(spy).toHaveBeenCalledWith(false)
     })
     expect(spy).not.toHaveBeenCalledWith(true)
+  })
+})
+
+describe('ResourcesSidebar telemetry', () => {
+  it('tracks resource_click with section and label when a static link is clicked', () => {
+    renderSidebar()
+    fireEvent.click(screen.getByRole('link', { name: /Dapr Docs/ }))
+    expect(trackAction).toHaveBeenCalledWith('resource_click', { section: 'Read', label: 'Dapr Docs' })
+  })
+
+  it('tracks resource_click for a news item, in addition to marking it seen', async () => {
+    renderSidebar()
+    const link = await screen.findByRole('link', { name: /Blog A/ })
+    fireEvent.click(link)
+    expect(trackAction).toHaveBeenCalledWith('resource_click', { section: 'News', label: 'Blog A', kind: 'blog' })
+    await waitFor(() => {
+      expect(localStorage.getItem('devdash.newsSeen')).toBeTruthy()
+    })
   })
 })
