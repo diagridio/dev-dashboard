@@ -204,7 +204,7 @@ Expected: PASS (6 tests).
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/marcduiker/dev/diagrid/dev-dashboard
+cd <repo-root>
 git add web/src/components/RefreshControl.tsx web/src/components/RefreshControl.test.tsx web/src/styles/theme.css
 git commit -m "feat(web): reshape RefreshControl into compact top-nav form" \
   -m "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -274,7 +274,7 @@ Expected: PASS (all existing tests plus the new one).
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/marcduiker/dev/diagrid/dev-dashboard
+cd <repo-root>
 git add web/src/components/TopNav.tsx web/src/components/TopNav.test.tsx
 git commit -m "feat(web): mount compact refresh control in top nav" \
   -m "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
@@ -354,7 +354,7 @@ Expected: tests PASS; `tsc -b && vite build` completes with no unused-import err
 - [ ] **Step 5: Commit**
 
 ```bash
-cd /Users/marcduiker/dev/diagrid/dev-dashboard
+cd <repo-root>
 git add web/src/pages/Workflows.tsx web/src/pages/WorkflowDetail.tsx
 git commit -m "refactor(web): remove in-page refresh controls (now in top nav)" \
   -m "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"

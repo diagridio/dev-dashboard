@@ -3,10 +3,10 @@
 **Date:** 2026-06-28 (reconciled 2026-07-01)
 **Status:** Approved design. Backend catalog endpoint already shipped (see "Backend"). Frontend wizards not yet started; implementation plan in progress.
 
-Port cloudgrid's **Component Builder** and **Resiliency Builder** into `dev-dashboard` as two
+Port Catalyst's **Component Builder** and **Resiliency Builder** into `dev-dashboard` as two
 multi-step wizards that generate Dapr YAML you can copy or download.
 
-- **Source:** `cloudgrid/services/admingrid/web/packages/cloud-ui-shared/components/{component-configurator,resiliency-builder}/` (React 19 + MUI + react-hook-form + Yup + js-yaml + Ace).
+- **Source:** Catalyst's component-configurator and resiliency-builder UI (React 19 + MUI + react-hook-form + Yup + js-yaml + Ace).
 - **Target:** `dev-dashboard` (Go backend + **React 19** frontend in `web/`; upgraded from React 18 on 2026-06-30).
 
 ## Reconciliation notes (2026-07-01)
@@ -23,14 +23,14 @@ Verified against `main` before planning:
 - **Tech approach:** lightweight — match dev-dashboard conventions. Controlled components, manual
   validation. NO MUI, react-hook-form, Yup, Ace, i18n, notistack.
 - **One new dependency approved:** `js-yaml` (emission only, `dump()`).
-- **Schema source:** Go backend embeds `component-metadata-bundle.json` (mirrors cloudgrid), served
+- **Schema source:** Go backend embeds `component-metadata-bundle.json`, served
   at `GET /api/metadata/components`, fetched via TanStack Query.
 - **Output:** copy + download YAML. **Editable** YAML finalizer (not read-only).
 - Scopes/targets are NOT auto-populated from running apps (free-text in v1).
 
 ## Guiding principle
 
-Port cloudgrid's logic, data model, and UX flow; reimplement the UI on dev-dashboard's stack:
+Port the original logic, data model, and UX flow; reimplement the UI on dev-dashboard's stack:
 vanilla-CSS theme tokens (`web/src/styles/theme.css`), controlled components, TanStack Query,
 React Router v6.
 
@@ -119,7 +119,7 @@ respectively).
 ## Shared frontend infrastructure (built once, used by both)
 
 - `components/wizard/`: `Wizard` + `Stepper` (step labels styled with pill/tab classes) + `StepNav`
-  (Back/Continue/Finish). Per-builder typed `useReducer` for wizard state (mirrors cloudgrid reducer
+  (Back/Continue/Finish). Per-builder typed `useReducer` for wizard state (mirrors the original reducer
   shape: activeStep, steps, config object, etc.).
 - **Wizard button styling — monochrome, NOT green (decided 2026-07-01):** the wizard buttons must not
   use the green brand `.btn.primary` (`background: var(--accent2)`). Do NOT change the global
@@ -138,16 +138,16 @@ respectively).
   co-exist.
 - `components/YamlPreview.tsx`: editable finalizer. `<textarea>` styled as `.code`, initialized with
   generated YAML; tracks local edits; "Reset to generated" restores; **Back disabled once manually
-  edited** (matches cloudgrid); Copy (`copyText` + `useToast`) + Download act on the current buffer.
+  edited**; Copy (`copyText` + `useToast`) + Download act on the current buffer.
   (No live syntax highlighting in the editable textarea; `highlightYaml` reserved for read-only
   views.)
 - `lib/yaml-emit.ts`: wraps `js-yaml` `dump()`. Includes `recursivelyRemoveEmptyValues` (ported)
   applied before dump for resiliency.
 - `lib/download.ts`: blob download helper `downloadText(filename, text)`.
-- `lib/validation.ts`: `validateGoDuration` (ported from cloudgrid), `validateDns1123`,
+- `lib/validation.ts`: `validateGoDuration` (ported), `validateDns1123`,
   required/numeric helpers; return error strings shown under fields; gate Continue.
 
-## Types (ported from cloudgrid TS types)
+## Types (ported from the original TS types)
 
 - `types/metadata.ts`: **already exists** — `MetadataField` (name, `type?: 'string'|'number'|'bool'|'duration'`,
   description, required, sensitive, default, example, allowedValues, `url?: {title,url}`),
@@ -162,7 +162,7 @@ respectively).
 - `types/resiliency.ts`: `DaprResiliency` (kind `Resiliency`, spec{policies{timeouts, retries,
   circuitBreakers}, targets{apps, actors, components}}). RetryPolicy{policy `constant|exponential`,
   duration, maxRetries, maxInterval, matching{httpStatusCodes, grpcStatusCodes}}.
-  (NOTE: cloudgrid's source type has the typo `grcpStatusCodes`; the port standardizes on the
+  (NOTE: the original source type has the typo `grcpStatusCodes`; the port standardizes on the
   correct `grpcStatusCodes` — implemented in `types/resiliency.ts`. Do not "correct" it back.)
   CircuitBreakerPolicy{maxRequests, timeout, trip (CEL), interval}.
   AppTarget / ActorTarget (+circuitBreakerScope `type|id|both`, circuitBreakerCacheSize) /
@@ -182,7 +182,7 @@ respectively).
    free-text (not auto-populated).
 4. **Preview** — editable YAML, Copy + Download `<name>.yaml`.
 
-Dropped: cloudgrid's connected-mode "Access & Scopes" step.
+Dropped: the connected-mode "Access & Scopes" step.
 
 **Plan 2 implementation note (from Plan 1 foundation review):** `lib/yaml-emit.ts`
 `recursivelyRemoveEmptyValues` treats arrays as leaves — it does NOT prune empty keys *inside*

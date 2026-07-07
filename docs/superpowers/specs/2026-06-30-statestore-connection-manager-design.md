@@ -10,10 +10,10 @@ Let users add, edit, and delete **manual** state-store connections from the dash
 
 ## Background & reuse decision
 
-A manual state store is simply a Dapr `state.*` component, so this feature reuses cloudgrid's **component builder**. The builder has two halves:
+A manual state store is simply a Dapr `state.*` component, so this feature reuses an existing **component builder** design. The builder has two halves:
 
-- **Backend catalog** — `tools/diagrid-dashboard/pkg/metadata/` (a sibling Go project to dev-dashboard): `metadata.go` + a 754 KB `component-metadata-bundle.json` describing every component type and its metadata fields. **Directly portable.**
-- **Builder UI** — `services/admingrid/web/packages/cloud-ui-shared/components/component-configurator/`: React 19 + MUI + react-hook-form + yup. **Not** portable as-is — its styling *is* MUI, and dev-dashboard is React 18 + vanilla CSS.
+- **Backend catalog** — a `pkg/metadata/` package from an earlier prototype: `metadata.go` + a 754 KB `component-metadata-bundle.json` describing every component type and its metadata fields. **Directly portable.**
+- **Builder UI** — the original React 19 + MUI + react-hook-form + yup implementation. **Not** portable as-is — its styling *is* MUI, and dev-dashboard is React 18 + vanilla CSS.
 
 **Reuse strategy (decided): port the logic, reimplement the UI natively.** We reuse the backend catalog, the metadata-driven data model, the `field.type → control` rendering rules, and the validation approach; we reimplement the form on dev-dashboard's controlled components + `theme.css`. dev-dashboard stays MUI-free.
 
@@ -46,10 +46,10 @@ Save → POST /api/statestores  or  PUT /api/statestores/{id}   ({name, type, me
 
 ### 1. Port the metadata catalog (new `pkg/metadata/`)
 
-- Copy `metadata.go` and `component-metadata-bundle.json` from `tools/diagrid-dashboard/pkg/metadata/`.
+- Copy `metadata.go` and `component-metadata-bundle.json` from the prototype's `pkg/metadata/`.
 - Adapt the HTTP wiring to dev-dashboard's chi router + `writeJSON`/handler conventions: register `GET /metadata/components` inside `apiRouter` (`pkg/server/api.go`), reachable at `/api/metadata/components`. Preserve the bundle processing (`filterDeprecated` → `deduplicateMetadata` → `sortComponents`), the sha256 **ETag**, `If-None-Match` → 304, and `Cache-Control` headers.
 - Call `metadata.Init()` once at startup (where the other services are constructed).
-- Port `update-component-metadata-bundle.sh` → `scripts/` to refresh the bundle from upstream releases (mirrors cloudgrid).
+- Port `update-component-metadata-bundle.sh` → `scripts/` to refresh the bundle from upstream releases.
 - **Tests:** handler test (200 + ETag, 304 on matching `If-None-Match`) and a golden test of the processed bundle shape, following `internal/golden`.
 
 > The frontend only consumes `state.*` entries, but the endpoint serves the whole catalog (cacheable, and reusable by the deferred full builder).

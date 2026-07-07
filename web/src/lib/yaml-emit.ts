@@ -1,6 +1,6 @@
 import { dump } from 'js-yaml'
 
-/** Serialize an object to YAML using js-yaml defaults (matches cloudgrid: no options). */
+/** Serialize an object to YAML using js-yaml defaults (no options). */
 export function dumpYaml(obj: unknown): string {
   return dump(obj)
 }
@@ -16,8 +16,7 @@ function isEmptyContainer(v: unknown): boolean {
  * Deep-clone `input`, then delete keys whose value is null/undefined, an
  * empty/whitespace string, or an empty object/array — recursing into nested
  * objects and pruning branches that become empty. Numbers (incl. 0) and
- * booleans (incl. false) are preserved. Ported from cloudgrid
- * resiliency-builder/utils.ts `recursivelyRemoveEmptyValues`.
+ * booleans (incl. false) are preserved.
  */
 export function recursivelyRemoveEmptyValues<T>(input: T): T {
   const obj = structuredClone(input)

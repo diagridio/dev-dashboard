@@ -11,13 +11,13 @@ Four enhancements to the existing 3-step Resiliency Builder (General → Policie
 1. Default the namespace to `default`.
 2. Show default values as real, editable text in the dialogs (not just placeholders).
 3. Make policy **and** target chips editable by clicking the chip.
-4. Bring back cloudgrid's "override default Dapr policies" feature (the reserved `DaprBuiltIn*` retry policies).
+4. Bring back the original "override default Dapr policies" feature (the reserved `DaprBuiltIn*` retry policies).
 
 These are additive; the data model (`types/resiliency.ts`) and reducer actions are sufficient as-is except where noted.
 
 ## Non-goals (YAGNI)
 
-- The read-only "default policy overrides" **table** on the Targets step (cloudgrid's `DefaultPolicyOverridesContainer`). Redundant — overrides live on the Policies step here.
+- The read-only "default policy overrides" **table** on the Targets step (the original `DefaultPolicyOverridesContainer`). Redundant — overrides live on the Policies step here.
 - The connected-mode cluster/namespace/scope pickers (`ResiliencyAccess`). Still dropped, as in v1.
 
 ---
@@ -33,7 +33,7 @@ These are additive; the data model (`types/resiliency.ts`) and reducer actions a
 
 ## 2. Real default values instead of placeholders
 
-Initial field values sourced from cloudgrid's canonical `ResiliencyDefaults`. Placeholders remain (they now echo the default). Validation is unchanged.
+Initial field values sourced from the canonical `ResiliencyDefaults` presets. Placeholders remain (they now echo the default). Validation is unchanged.
 
 | Dialog | Field | Default |
 |---|---|---|
@@ -80,7 +80,7 @@ All six dialogs gain optional initial-value props and a mode-aware title:
 
 ### Preset data
 
-New `web/src/pages/resiliency-builder/defaultPolicies.ts` exporting `DEFAULT_DAPR_RETRY_POLICIES`, mirroring cloudgrid's `DEFAULT_DAPR_RETRY_POLICIES`:
+New `web/src/pages/resiliency-builder/defaultPolicies.ts` exporting `DEFAULT_DAPR_RETRY_POLICIES`:
 
 | Label | policy | duration | maxInterval | maxRetries |
 |---|---|---|---|---|

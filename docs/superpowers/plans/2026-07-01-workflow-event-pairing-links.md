@@ -84,7 +84,7 @@ func TestDecodeScheduledID(t *testing.T) {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links && go test -tags unit ./pkg/workflow/ -run TestDecodeScheduledID`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links && go test -tags unit ./pkg/workflow/ -run TestDecodeScheduledID`
 Expected: FAIL — compile error `ex.History[…].ScheduledID undefined (type HistoryEvent has no field or method ScheduledID)`.
 
 - [ ] **Step 3: Add the `ScheduledID` field to the type**
@@ -152,7 +152,7 @@ func i32ptr(v int32) *int32 { return &v }
 
 - [ ] **Step 5: Run the test to verify it passes**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links && go test -tags unit ./pkg/workflow/ -run TestDecodeScheduledID`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links && go test -tags unit ./pkg/workflow/ -run TestDecodeScheduledID`
 Expected: PASS (`ok  ...pkg/workflow`).
 
 - [ ] **Step 6: Run the full package tests to check for regressions**
@@ -294,7 +294,7 @@ describe('buildPairIndex', () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/lib/pairing.test.ts`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/lib/pairing.test.ts`
 Expected: FAIL — `Failed to resolve import "./pairing"` (the module does not exist yet).
 
 - [ ] **Step 3: Add `scheduledId` to the API type**
@@ -394,7 +394,7 @@ export function buildPairIndex(ascending: WorkflowHistoryEvent[]): Map<number, P
 
 - [ ] **Step 5: Run the `buildPairIndex` test to verify it passes**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/lib/pairing.test.ts`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/lib/pairing.test.ts`
 Expected: PASS (all cases green).
 
 - [ ] **Step 6: Write the failing test for `formatDuration`**
@@ -432,7 +432,7 @@ import { elapsed, elapsedTenths, formatOffset, formatDateTime, formatDuration } 
 
 - [ ] **Step 7: Run the `formatDuration` test to verify it fails**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/lib/wallclock.test.ts`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/lib/wallclock.test.ts`
 Expected: FAIL — `formatDuration is not a function` / import has no such export.
 
 - [ ] **Step 8: Implement `formatDuration`**
@@ -459,7 +459,7 @@ export function formatDuration(ms: number): string {
 
 - [ ] **Step 9: Run both frontend lib test files to verify they pass**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/lib/pairing.test.ts src/lib/wallclock.test.ts`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/lib/pairing.test.ts src/lib/wallclock.test.ts`
 Expected: PASS.
 
 - [ ] **Step 10: Commit**
@@ -562,7 +562,7 @@ describe('EventRow pair chip', () => {
 
 - [ ] **Step 2: Run the test to verify it fails**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.pairing.test.tsx`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.pairing.test.tsx`
 Expected: FAIL — `EventRow` does not accept a `pair` / `pairHovered` / `onPairHover` prop, and no pair-chip link is rendered.
 
 - [ ] **Step 3: Extend `nodeClass` for the newly-visible sub-orchestration completion**
@@ -748,12 +748,12 @@ span.pairchip.pending { border-style: dashed; color: var(--faint); cursor: defau
 
 - [ ] **Step 8: Run the component test to verify it passes**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.pairing.test.tsx`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.pairing.test.tsx`
 Expected: PASS. (If `@testing-library/react` is not installed, the import in Step 1 will fail to resolve; in that case install it with `npm install -D @testing-library/react` and re-run. Check `web/package.json` first — do not add it if an equivalent render utility is already present.)
 
 - [ ] **Step 9: Run the full frontend test + typecheck + build**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run && npx tsc --noEmit`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run && npx tsc --noEmit`
 Expected: all tests PASS and no type errors. (If the repo has a build script, also run `npm run build` to confirm the production bundle compiles.)
 
 - [ ] **Step 10: Manual verification**

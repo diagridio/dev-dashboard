@@ -16,7 +16,7 @@ Reference workload: a compose file with paired `<app>` + `<app>-dapr` services,
 daprd flags in each sidecar's `command` array, sidecar HTTP ports published to
 the host, components/config bind-mounted into the sidecar, and compose-run
 placement + a 3-node scheduler cluster
-(`/Users/marcduiker/dev/temp/dapr-distributed-saga/docker-compose.yml`).
+(e.g. the `dapr-distributed-saga` sample's `docker-compose.yml`).
 
 ## Goals (agreed scope)
 

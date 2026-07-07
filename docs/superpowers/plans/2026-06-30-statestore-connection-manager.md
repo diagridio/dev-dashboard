@@ -4,7 +4,7 @@
 
 **Goal:** Let users add, edit, and delete manual state-store connections from the dashboard via a metadata-driven form fed by a ported Dapr component catalog, saving to the existing connection registry.
 
-**Architecture:** Port cloudgrid's component-catalog backend (`pkg/metadata`) and serve it at `GET /api/metadata/components`. Reimplement the form natively on dev-dashboard's React 18 + vanilla-CSS stack (no MUI). A "State store connections" panel on the Components page lists `/api/statestores`; an Add/Edit modal renders fields from the catalog and saves via `POST`/`PUT /api/statestores`.
+**Architecture:** Add a component-catalog backend (`pkg/metadata`) and serve it at `GET /api/metadata/components`. Reimplement the form natively on dev-dashboard's React 18 + vanilla-CSS stack (no MUI). A "State store connections" panel on the Components page lists `/api/statestores`; an Add/Edit modal renders fields from the catalog and saves via `POST`/`PUT /api/statestores`.
 
 **Tech Stack:** Go (chi, `//go:embed`, `internal/golden`), React 18 + TypeScript + Vite, TanStack Query v5, MSW + Vitest + Testing Library. No new dependencies.
 
@@ -62,26 +62,23 @@
 **Interfaces:**
 - Produces: `metadata.Init() error`, `metadata.HandleGetComponents(http.ResponseWriter, *http.Request)`. Frontend consumes `GET /api/metadata/components` returning `{schemaVersion, date, components: [...]}`.
 
-- [ ] **Step 1: Copy the bundle and refresh script from the sibling repo**
+- [ ] **Step 1: Fetch the bundle and create the refresh script**
 
 ```bash
 mkdir -p pkg/metadata/testdata
-cp /Users/marcduiker/dev/diagrid/cloudgrid/tools/diagrid-dashboard/pkg/metadata/component-metadata-bundle.json pkg/metadata/component-metadata-bundle.json
-# Refresh script (if present upstream); copy then fix the module path references by hand if needed.
-cp /Users/marcduiker/dev/diagrid/cloudgrid/tools/diagrid-dashboard/scripts/update-component-metadata-bundle.sh scripts/update-component-metadata-bundle.sh 2>/dev/null || true
 ```
 
-If the upstream script does not exist, create `scripts/update-component-metadata-bundle.sh` with this content:
+Create `scripts/update-component-metadata-bundle.sh` with this content, then run it once to fetch the bundle:
 
 ```bash
 #!/usr/bin/env bash
-# Refresh pkg/metadata/component-metadata-bundle.json from the dapr-components-contrib
+# Refresh pkg/metadata/component-metadata-bundle.json from the dapr/components-contrib
 # release asset. Usage: scripts/update-component-metadata-bundle.sh <tag>
-# Example tag: v1.18.0-catalyst.1
+# Example tag: v1.18.1
 set -euo pipefail
 TAG="${1:?usage: update-component-metadata-bundle.sh <tag>}"
 DEST="$(dirname "$0")/../pkg/metadata/component-metadata-bundle.json"
-URL="https://github.com/diagridio/dapr-components-contrib/releases/download/${TAG}/component-metadata-bundle.json"
+URL="https://github.com/dapr/components-contrib/releases/download/${TAG}/component-metadata-bundle.json"
 echo "Downloading ${URL}"
 curl -fsSL "$URL" -o "$DEST"
 echo "Wrote $DEST"

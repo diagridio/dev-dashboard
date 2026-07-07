@@ -1,6 +1,5 @@
 // Go duration: optional units in strict descending order, no repetition.
-// Ported from cloudgrid utils/validateGoDuration.ts. Empty string is valid
-// (required-ness is enforced separately by requiredError).
+// Empty string is valid (required-ness is enforced separately by requiredError).
 const DURATION_RE = /^(\d+h)?(\d+m)?(\d+s)?(\d+ms)?(\d+[uµ]s)?(\d+ns)?$/
 const UNIT_ORDER = ['h', 'm', 's', 'ms', 'us', 'µs', 'ns']
 
@@ -25,7 +24,7 @@ export function validateGoDuration(value: string): { valid: boolean; error?: str
   return { valid: true }
 }
 
-// Ported from cloudgrid ConductorResourceMetadataSchema name rules.
+// Dapr resource-name rules.
 export function validateResourceName(value: string): string | null {
   if (!value) return 'Name is required'
   if (value.includes(' ')) return 'Name cannot contain spaces'

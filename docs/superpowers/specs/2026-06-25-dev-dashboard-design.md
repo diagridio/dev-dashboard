@@ -36,7 +36,7 @@ lifted into the Diagrid CLI (Go).
 | Routing | Client-side **History API** routing; Go server **falls back to `index.html`** for unknown paths. **Base-path-aware** so it can mount under `diagrid dashboard` later. |
 | Code viewer | **Lightweight read-only syntax highlighter** (small bundle). Not Monaco. |
 | UI primitives | **Headless accessible component library** (e.g. Radix/Ark) styled in-house — for dialogs, menus, tabs, tooltips. No heavy design system. |
-| Icons | **MUI Icons Material** (`@mui/icons-material`) for standard UI glyphs, plus a **copy of Catalyst's in-house SVG icon system** (`@diagrid/cloud-ui-shared/components/icons`) for Dapr/Diagrid-specific marks. Matches the Catalyst UI; relies on per-icon tree-shaking to keep the bundle lean. |
+| Icons | **MUI Icons Material** (`@mui/icons-material`) for standard UI glyphs, plus a **copy of Catalyst's in-house SVG icon system** for Dapr/Diagrid-specific marks. Matches the Catalyst UI; relies on per-icon tree-shaking to keep the bundle lean. |
 | Actors / Subscriptions | **Global top-level pages** (aggregated across apps), not per-app detail tabs. |
 | Workflow purge | **Hybrid**: official Dapr purge API when possible, direct state-store deletion as an explicit "force" fallback. |
 | State store discovery | **Auto-detect** from running sidecars' metadata + resource paths; user picks if multiple; `--statestore <path>` override. |
@@ -338,8 +338,7 @@ GET  /*                                           SPA: serve index.html (History
     (`import { KeyboardArrowDown } from '@mui/icons-material'`) so Vite/Rollup tree-shakes to
     only the icons actually used — never the whole package — keeping the embedded bundle
     within budget.
-  - **A copy of Catalyst's in-house SVG icon system** — vendored from cloudgrid's
-    `services/admingrid/web/packages/cloud-ui-shared/components/icons` into the dashboard
+  - **A copy of Catalyst's in-house SVG icon system** — vendored into the dashboard
     (e.g. `web/src/components/icons/`, re-exported from a single `index.ts`). These wrap MUI's
     `SvgIcon` and follow the same `(props: SvgIconProps) => <SvgIcon …/>` pattern, so icons
     inherit `currentColor` and size from context and stay theme-aware.
@@ -492,7 +491,7 @@ binary — no runtime fetch, works offline):
 
 ## 12. Testing
 
-The stack mirrors the Diagrid `cloudgrid` test conventions (scaled down to a local,
+The stack mirrors Diagrid's established test conventions (scaled down to a local,
 non-Kubernetes tool); the prototype already tests its Redis state service with `miniredis`,
 so these tools are proven here. Tests are colocated (`*_test.go` next to code; `*.test.tsx`
 next to components), table-driven where it fits, and use stable `data-cy` selectors in the UI.
@@ -512,7 +511,7 @@ next to components), table-driven where it fits, and use stable `data-cy` select
   the live workflow timeline merge, copy controls, density toggle, and the
   terminate/purge-confirm flows. **MSW** mocks the `/api/*` surface (including SSE/log
   streams and `/api/news`).
-- **Frontend — E2E** (**Cypress**, matching cloudgrid's UI e2e): key journeys —
+- **Frontend — E2E** (**Cypress**): key journeys —
   filter/search workflows, open a detail, terminate/purge with confirmation, browse
   components/configs, tail logs — driven by **fixtures** and intercepts (`cy.intercept`), no
   live backend required.
@@ -532,21 +531,19 @@ docker-compose modes. Local standalone (self-hosted) mode only. The UI is **Engl
 
 ## 14. References
 
-- Deprecated Dapr Dashboard — `/Users/marcduiker/dev/dapr/dashboard/`
+- Deprecated Dapr Dashboard — `https://github.com/dapr/dashboard`
   (feature-parity baseline; Angular + Go, 10 s polling, K8s log streaming).
-- Dapr CLI — `/Users/marcduiker/dev/dapr/cli/`
+- Dapr CLI — `https://github.com/dapr/cli`
   (`pkg/standalone/list.go` discovery, `pkg/metadata/metadata.go`, `~/.dapr` layout,
   `pkg/runfileconfig/` run templates).
-- Diagrid Dev Dashboard prototype —
-  `/Users/marcduiker/dev/diagrid/cloudgrid/tools/diagrid-dashboard`
+- Diagrid Dev Dashboard prototype (internal)
   (Go + chi + React; workflow list/history via state store `KeysLike`, SSE logs,
   sidecar discovery, resource loading; read-only, no purge, no workflow autorefresh).
-- Catalyst UI icon system (source to copy from) —
-  `/Users/marcduiker/dev/diagrid/cloudgrid/services/admingrid/web/packages/cloud-ui-shared/components/icons`
-  (in-house SVG icons wrapping MUI `SvgIcon`; `@mui/icons-material` v7.3.6 is the standard-glyph
-  library declared in `services/admingrid/web/package.json`).
-- Diagrid `cloudgrid` test conventions — `/Users/marcduiker/dev/diagrid/cloudgrid/test`
+- Catalyst UI icon system (source to copy from)
+  (in-house SVG icons wrapping MUI `SvgIcon`; `@mui/icons-material` v7.3.6 is the
+  standard-glyph library).
+- Diagrid's established test conventions
   (testify + `go.uber.org/mock`, `miniredis`, `testcontainers-go`/`go-sqlmock`, `gotestsum`;
   Vitest + Testing Library + MSW + Cypress with `data-cy` selectors; `//go:build` tags). The
-  prototype's `pkg/state/service/service_test.go` already uses `miniredis`. Kubernetes-only
+  prototype's state-service tests already use `miniredis`. Kubernetes-only
   machinery (kind, envtest, Helm, multi-region, OIDC) is intentionally **not** adopted.

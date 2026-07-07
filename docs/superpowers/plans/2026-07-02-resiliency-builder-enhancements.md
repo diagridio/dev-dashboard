@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Enhance the shipped Resiliency Builder: default the namespace to `default`, show real (editable) default values in dialogs, make policy AND target chips editable by clicking them, and add cloudgrid's "override default Dapr policies" feature (the reserved `DaprBuiltIn*` retries).
+**Goal:** Enhance the shipped Resiliency Builder: default the namespace to `default`, show real (editable) default values in dialogs, make policy AND target chips editable by clicking them, and add an "override default Dapr policies" feature (the reserved `DaprBuiltIn*` retries).
 
 **Architecture:** Additive changes to the existing `web/src/pages/resiliency-builder/*` wizard. The `DaprResiliency` type and `useReducer` actions are reused unchanged except the namespace default and the Targets-step gating. Editing reuses the existing `UPSERT_*` actions (rename = `REMOVE_<old>` + `UPSERT_<new>`). A new `defaultPolicies.ts` module holds the built-in retry presets and helpers.
 
@@ -174,7 +174,7 @@ export interface DefaultPolicyPreset {
   maxRetries: number
 }
 
-/** The four reserved Dapr built-in retry policies (mirrors cloudgrid DEFAULT_DAPR_RETRY_POLICIES). */
+/** The four reserved Dapr built-in retry policies. */
 export const DEFAULT_DAPR_RETRY_POLICIES: DefaultPolicyPreset[] = [
   { label: 'DaprBuiltInServiceRetries', policy: 'constant', duration: '1s', maxInterval: '', maxRetries: 3 },
   { label: 'DaprBuiltInActorRetries', policy: 'constant', duration: '1s', maxInterval: '', maxRetries: 3 },

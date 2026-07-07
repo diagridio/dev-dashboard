@@ -15,10 +15,10 @@
 
 - **No new dependencies.** No MUI/react-hook-form/Yup. Controlled components; vanilla CSS theme tokens.
 - **Wizard/dialog buttons use the transparent `.btn.ghost` style** (disabled = light border + faint text); never green `.btn.primary` or filled `.btn.mono`.
-- **`grpcStatusCodes`** spelling (matches `types/resiliency.ts`; cloudgrid's `grcpStatusCodes` typo is NOT used).
+- **`grpcStatusCodes`** spelling (matches `types/resiliency.ts`; the original `grcpStatusCodes` typo is NOT used).
 - **Emit rule:** clean ONLY `spec` with `recursivelyRemoveEmptyValues` before `dumpYaml`; assemble the emit object with `metadata.name` (+ `namespace` only if non-empty); omit empty `scopes`.
 - **Policy/target naming:** sequential defaults `timeout1`/`retry1`/`circuitBreaker1` etc. (count of existing + 1), editable in the dialog.
-- **v1 scope (YAGNI, documented):** DROP cloudgrid's connected-mode `ResiliencyAccess` (cluster/namespace/scope pickers) — step 0 is just the name. DROP the read-only "DaprBuiltIn default-policy overrides" table on the Targets step (advanced; future enhancement). Targets step gates on **≥1 target of any type**.
+- **v1 scope (YAGNI, documented):** DROP the connected-mode `ResiliencyAccess` (cluster/namespace/scope pickers) — step 0 is just the name. DROP the read-only "DaprBuiltIn default-policy overrides" table on the Targets step (advanced; future enhancement). Targets step gates on **≥1 target of any type**.
 - **Reuse** `components/Modal.tsx`, Plan 1 `components/form/*` + `components/wizard/*`, Plan 2 `components/YamlPreview.tsx`, `lib/validation`, `lib/yaml-emit`.
 - **Tests:** Vitest + Testing Library, colocated. Run `npx tsc -b` before every commit. All `npm`/`npx` from `web/`.
 - **On finish or cancel:** navigate to `/resiliency`.
@@ -155,7 +155,7 @@ export function initialState(): ResiliencyState {
   return { config: defaultResiliencyConfig(), activeStep: 0 }
 }
 
-/** `retry1`, `retry2`, ... based on the count of existing keys (matches cloudgrid). */
+/** `retry1`, `retry2`, ... based on the count of existing keys. */
 export function nextName(prefix: string, existing: Record<string, unknown>): string {
   return `${prefix}${Object.keys(existing).length + 1}`
 }

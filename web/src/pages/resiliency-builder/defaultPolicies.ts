@@ -8,7 +8,7 @@ export interface DefaultPolicyPreset {
   maxRetries: number
 }
 
-/** The four reserved Dapr built-in retry policies (mirrors cloudgrid DEFAULT_DAPR_RETRY_POLICIES). */
+/** The four reserved Dapr built-in retry policies. */
 export const DEFAULT_DAPR_RETRY_POLICIES: DefaultPolicyPreset[] = [
   { label: 'DaprBuiltInServiceRetries', policy: 'constant', duration: '1s', maxInterval: '', maxRetries: 3 },
   { label: 'DaprBuiltInActorRetries', policy: 'constant', duration: '1s', maxInterval: '', maxRetries: 3 },

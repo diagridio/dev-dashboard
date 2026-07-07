@@ -116,7 +116,7 @@ describe('EventRow selection', () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.pairing.test.tsx`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.pairing.test.tsx`
 Expected: FAIL — `EventRow` has no `pairSelected`/`isActive`/`onToggleSelect` props (TS error) and the details is not controlled / clicks not intercepted.
 
 - [ ] **Step 3: Extend the `EventRow` prop list**
@@ -285,7 +285,7 @@ In `web/src/styles/theme.css`, immediately AFTER the `.ev.pair-hover::after { ..
 
 - [ ] **Step 8: Run the tests to verify they pass**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.pairing.test.tsx && npx tsc --noEmit`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.pairing.test.tsx && npx tsc --noEmit`
 Expected: PASS (new selection tests + existing chip tests) and no type errors.
 
 - [ ] **Step 9: Commit**
@@ -407,7 +407,7 @@ describe('WorkflowDetail — pair selection', () => {
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.test.tsx`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.test.tsx`
 Expected: FAIL — clicking rows does not add `pair-selected`, and hash navigation does not select.
 
 - [ ] **Step 3: Add selection state**
@@ -496,12 +496,12 @@ Replace the render loop (lines 668-686) so each row receives its selection props
 
 - [ ] **Step 7: Run the integration tests to verify they pass**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.test.tsx`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run src/pages/WorkflowDetail.test.tsx`
 Expected: PASS (new pair-selection block + all existing WorkflowDetail tests).
 
 - [ ] **Step 8: Run the full suite + typecheck**
 
-Run: `cd /Users/marcduiker/dev/diagrid/dev-dashboard/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run && npx tsc --noEmit`
+Run: `cd <repo-root>/.claude/worktrees/spec+workflow-event-pairing-links/web && npx vitest run && npx tsc --noEmit`
 Expected: all tests PASS, no type errors. (If the repo has a build script, also run `npm run build` to confirm the bundle compiles.)
 
 - [ ] **Step 9: Manual verification (written checklist in report; do not launch the app)**

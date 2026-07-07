@@ -4,7 +4,7 @@
 
 **Goal:** Build the reusable, unit-tested foundation (YAML emitter, validators, download helper, data types, controlled form controls, and a presentational wizard shell) that the Component Builder (Plan 2) and Resiliency Builder (Plan 3) are built on.
 
-**Architecture:** Pure modules and presentational components on dev-dashboard's existing stack — vanilla CSS theme tokens, controlled components, TanStack Query. No routing/nav changes in this plan (those ship with each builder that needs them, in Plans 2–3, to avoid wiring routes to not-yet-existent builder pages). Logic is ported faithfully from cloudgrid but reimplemented without MUI/react-hook-form/Yup.
+**Architecture:** Pure modules and presentational components on dev-dashboard's existing stack — vanilla CSS theme tokens, controlled components, TanStack Query. No routing/nav changes in this plan (those ship with each builder that needs them, in Plans 2–3, to avoid wiring routes to not-yet-existent builder pages). Logic is ported faithfully from the original implementation but reimplemented without MUI/react-hook-form/Yup.
 
 **Tech Stack:** React 19, TypeScript, Vite, Vitest + Testing Library, `js-yaml` (new dependency).
 
@@ -102,7 +102,7 @@ Create `web/src/lib/yaml-emit.ts`:
 ```ts
 import { dump } from 'js-yaml'
 
-/** Serialize an object to YAML using js-yaml defaults (matches cloudgrid: no options). */
+/** Serialize an object to YAML using js-yaml defaults (no options). */
 export function dumpYaml(obj: unknown): string {
   return dump(obj)
 }
@@ -118,8 +118,7 @@ function isEmptyContainer(v: unknown): boolean {
  * Deep-clone `input`, then delete keys whose value is null/undefined, an
  * empty/whitespace string, or an empty object/array — recursing into nested
  * objects and pruning branches that become empty. Numbers (incl. 0) and
- * booleans (incl. false) are preserved. Ported from cloudgrid
- * resiliency-builder/utils.ts `recursivelyRemoveEmptyValues`.
+ * booleans (incl. false) are preserved.
  */
 export function recursivelyRemoveEmptyValues<T>(input: T): T {
   const obj = structuredClone(input)
@@ -257,8 +256,7 @@ Expected: FAIL — cannot resolve `./validation`.
 Create `web/src/lib/validation.ts`:
 ```ts
 // Go duration: optional units in strict descending order, no repetition.
-// Ported from cloudgrid utils/validateGoDuration.ts. Empty string is valid
-// (required-ness is enforced separately by requiredError).
+// Empty string is valid (required-ness is enforced separately by requiredError).
 const DURATION_RE = /^(\d+h)?(\d+m)?(\d+s)?(\d+ms)?(\d+[uµ]s)?(\d+ns)?$/
 const UNIT_ORDER = ['h', 'm', 's', 'ms', 'us', 'µs', 'ns']
 
@@ -283,7 +281,7 @@ export function validateGoDuration(value: string): { valid: boolean; error?: str
   return { valid: true }
 }
 
-// Ported from cloudgrid ConductorResourceMetadataSchema name rules.
+// Dapr resource-name rules.
 export function validateResourceName(value: string): string | null {
   if (!value) return 'Name is required'
   if (value.includes(' ')) return 'Name cannot contain spaces'
@@ -544,7 +542,7 @@ export function defaultComponentSpec(): ComponentSpec {
 
 - [ ] **Step 5: Create `types/resiliency.ts`**
 
-Note: cloudgrid's type had a typo `grcpStatusCodes`; this port uses the correct `grpcStatusCodes` consistently.
+Note: the original type had a typo `grcpStatusCodes`; this port uses the correct `grpcStatusCodes` consistently.
 ```ts
 export interface RetryPolicy {
   policy?: 'constant' | 'exponential'
@@ -1111,4 +1109,4 @@ git commit -m "feat(web): add wizard shell (Stepper/StepNav/Wizard) + monochrome
 
 **Type consistency:** `dumpYaml`/`recursivelyRemoveEmptyValues` (Task 1) reused by builders; `validateGoDuration` returns `{valid,error}` and `validateResourceName`/`validateStatusCodes`/`requiredError`/`integerError` return `string|null` (Task 2) — consistent across the plan. `defaultComponentSpec`/`defaultResiliencyConfig` (Task 4) match the types they return. `WizardStep`, `Stepper`, `StepNav`, `Wizard` prop names (Task 6) are consistent between the components and the index re-exports. Form control `onChange` signatures (string for text/number/select, boolean for toggle) are stated in Task 5 interfaces and used consistently.
 
-**Note on grpcStatusCodes:** cloudgrid's type used the typo `grcpStatusCodes`; this port standardizes on `grpcStatusCodes` (Task 4) and Plans 2–3 must use that spelling in the retry-policy form + emit.
+**Note on grpcStatusCodes:** the original type used the typo `grcpStatusCodes`; this port standardizes on `grpcStatusCodes` (Task 4) and Plans 2–3 must use that spelling in the retry-policy form + emit.

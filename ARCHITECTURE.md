@@ -371,8 +371,10 @@ An embedded component-metadata catalog (`//go:embed component-metadata-bundle.js
 processed once at `Init()` (filter deprecated, dedupe, sort) and served from
 `GET /api/metadata/components` with an `ETag` and `If-None-Match` handling (weak validators
 and comma lists supported). It drives the connection add/edit forms: pick a component type
-→ pick an authentication profile → render its metadata fields. **To add a catalog entry:**
-edit/regenerate the bundle JSON; no code change needed.
+→ pick an authentication profile → render its metadata fields. The bundle is the
+`component-metadata-bundle.json` asset published on [dapr/components-contrib](https://github.com/dapr/components-contrib/releases)
+releases; refresh it with `scripts/update-component-metadata-bundle.sh <tag>`. **To add a
+catalog entry:** edit/regenerate the bundle JSON; no code change needed.
 
 ### Self-update / version / logging
 

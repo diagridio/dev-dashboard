@@ -26,10 +26,9 @@ The logging focuses on the flows where things actually go wrong:
 
 ## Library choice
 
-Go standard library **`log/slog`**. This matches the modern pattern in cloudgrid
-(e.g. `services/auditservice` uses `slog` directly) and adds no new dependency.
-We deliberately do **not** adopt cloudgrid's legacy `pkg/util/logger` logrus
-wrapper, which would pull in that module.
+Go standard library **`log/slog`**. This matches the modern pattern in Diagrid's
+newer Go services and adds no new dependency. We deliberately do **not** adopt a
+legacy logrus wrapper, which would pull in an extra module.
 
 ## Flag
 
@@ -73,7 +72,7 @@ func New(verbose bool) *slog.Logger {
   field (nil → `slog.Default()`).
 - **Leaf packages** (`discovery`, `statestore`, `workflow`) obtain their logger
   via `slog.Default().With("component", "<name>")` so every line carries a
-  `component=` scope tag (mirroring cloudgrid's named-logger convention).
+  `component=` scope tag (a named-logger convention).
 
 Tests can swap the default logger (or pass one in) to assert on output.
 
