@@ -1,12 +1,15 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, beforeEach } from 'vitest'
 import { RefreshProvider } from '../lib/refresh'
+import { ConnectionContext } from '../lib/connection'
 import { RefreshControl } from './RefreshControl'
 
-function renderWithProvider() {
+function renderWithProvider(online = true) {
   return render(
     <RefreshProvider>
-      <RefreshControl />
+      <ConnectionContext value={{ online }}>
+        <RefreshControl />
+      </ConnectionContext>
     </RefreshProvider>,
   )
 }
@@ -84,5 +87,41 @@ describe('RefreshControl (compact)', () => {
     expect(btn).toHaveAttribute('aria-pressed', 'true')
     expect(btn.className).toContain('off')
     expect(btn).toHaveAttribute('title', 'Auto-refresh off')
+  })
+})
+
+describe('RefreshControl offline indicator', () => {
+  it('shows the offline dot state, label, and title when the backend is offline', () => {
+    const { container } = renderWithProvider(false)
+    const btn = container.querySelector('button.beatbtn')!
+    // classList (not className.includes): 'offline' contains 'off' as a substring.
+    expect(btn.classList.contains('offline')).toBe(true)
+    expect(btn.classList.contains('off')).toBe(false)
+    expect(screen.getByText('Backend offline')).toBeInTheDocument()
+    expect(btn).toHaveAttribute('title', 'Backend unreachable — retrying…')
+  })
+
+  it('offline styling wins over paused', () => {
+    const { container } = renderWithProvider(false)
+    fireEvent.click(screen.getByRole('button', { name: /pause auto-refresh/i }))
+    const btn = container.querySelector('button.beatbtn')!
+    expect(btn.classList.contains('offline')).toBe(true)
+    expect(btn.classList.contains('off')).toBe(false)
+    expect(btn).toHaveAttribute('title', 'Backend unreachable — retrying…')
+  })
+
+  it('renders no offline label when online', () => {
+    renderWithProvider(true)
+    expect(screen.queryByText('Backend offline')).not.toBeInTheDocument()
+  })
+
+  it('keeps the pause button and interval picker functional while offline', () => {
+    renderWithProvider(false)
+    const btn = screen.getByRole('button', { name: /pause auto-refresh/i })
+    fireEvent.click(btn)
+    expect(btn).toHaveAttribute('aria-pressed', 'true')
+    const sel = screen.getByRole('combobox', { name: /refresh interval/i }) as HTMLSelectElement
+    fireEvent.change(sel, { target: { value: '5000' } })
+    expect(sel.value).toBe('5000')
   })
 })
