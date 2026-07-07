@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useWorkflows, useWorkflowStats, useStateStores, useWorkflowAppIds } from '../hooks/useWorkflows'
 import { useApps } from '../hooks/useApps'
 import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
+import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { dedupeWorkflows } from '../lib/dedupeWorkflows'
@@ -54,6 +55,8 @@ const TERMINAL_STATUSES: WorkflowStatus[] = ['Completed', 'Failed', 'Terminated'
 export function Workflows() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+
+  useDocumentTitle('Workflows')
 
   // Initialize filter state from URL on mount
   const urlStatus = searchParams.get('status') ?? ''
