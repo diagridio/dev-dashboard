@@ -145,7 +145,11 @@ describe('assembleResiliency', () => {
   it('keeps name + default namespace, cleans spec, omits empty scopes', () => {
     let s = reducer(initialState(), { type: 'SET_NAME', name: 'r' })
     s = reducer(s, { type: 'UPSERT_RETRY', name: 'retry1', policy: { policy: 'constant', duration: '5s', maxRetries: 3, maxInterval: '', matching: { httpStatusCodes: '', grpcStatusCodes: '' } } })
-    const out = assembleResiliency(s.config) as any
+    const out = assembleResiliency(s.config) as {
+      metadata: Record<string, unknown>
+      scopes?: unknown
+      spec: { policies: { retries: Record<string, unknown> } }
+    }
     expect(out.metadata).toEqual({ name: 'r', namespace: 'default' })
     expect(out.scopes).toBeUndefined()
     expect(out.spec.policies.retries.retry1).toEqual({ policy: 'constant', duration: '5s', maxRetries: 3 })
@@ -153,7 +157,7 @@ describe('assembleResiliency', () => {
   it('omits namespace when cleared', () => {
     let s = reducer(initialState(), { type: 'SET_NAME', name: 'r' })
     s = reducer(s, { type: 'SET_NAMESPACE', namespace: '' })
-    const out = assembleResiliency(s.config) as any
+    const out = assembleResiliency(s.config) as { metadata: Record<string, unknown> }
     expect(out.metadata).toEqual({ name: 'r' })
   })
 })

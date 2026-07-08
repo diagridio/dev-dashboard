@@ -72,7 +72,7 @@ function tokenize(raw: string): Token[] {
     if (ch === '-' || /\d/.test(ch)) {
       let num = ''
       if (ch === '-') { num += ch; i++ }
-      while (i < raw.length && /[\d.eE+\-]/.test(raw[i])) num += raw[i++]
+      while (i < raw.length && /[\d.eE+-]/.test(raw[i])) num += raw[i++]
       tokens.push({ type: 'number', text: num })
       continue
     }
@@ -103,7 +103,7 @@ function tokenize(raw: string): Token[] {
  * Pure/deterministic; no external dependency.
  */
 export function highlightJson(value: string): React.ReactNode {
-  let displayText = value
+  let displayText: string
   try {
     const parsed = JSON.parse(value)
     displayText = JSON.stringify(parsed, null, 2)
