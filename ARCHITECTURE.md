@@ -365,6 +365,13 @@ background refresh runs; a failed fetch is remembered for a short negative TTL a
 evicts the last-good response. The response exposes one latest blog/report and the next
 upcoming webinar/event, with UTM params appended to diagrid.io links.
 
+### Update check (`pkg/updatecheck`)
+
+Resolves the latest GitHub release (reusing `pkg/selfupdate`'s resolver), compares it to
+the running version with semver, and caches the result. Consumed by the CLI startup notice
+and by `GET /api/update-check` for the web indicator. Fails silent; skipped for `dev`/source
+builds.
+
 ### Metadata (`pkg/metadata`)
 
 An embedded component-metadata catalog (`//go:embed component-metadata-bundle.json`)
