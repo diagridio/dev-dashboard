@@ -21,6 +21,7 @@ export function App() {
   const [theme, setTheme] = useState<Theme>(getTheme)
   const [collapsed, setCollapsed] = useState(getInitialCollapsed)
   const [hasNew, setHasNew] = useState(false)
+  const [updateAvailable, setUpdateAvailable] = useState(false)
   const matches = useMatches()
 
   const rumView = [...matches]
@@ -36,7 +37,9 @@ export function App() {
     if (rumView) trackView(rumView)
   }, [rumView])
 
-  const appClass = ['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : ''].filter(Boolean).join(' ')
+  const appClass = ['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : '', updateAvailable ? 'update-available' : '']
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <SmallScreenGuard>
@@ -46,6 +49,7 @@ export function App() {
           collapsed={collapsed}
           onCollapsedChange={setCollapsed}
           onHasNewChange={setHasNew}
+          onUpdateAvailableChange={setUpdateAvailable}
         />
         <main className="body">
           <Outlet />

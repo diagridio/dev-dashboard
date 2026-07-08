@@ -21,13 +21,20 @@ const defaultNews = {
 function SidebarWrapper({ initialCollapsed = false }: { initialCollapsed?: boolean }) {
   const [collapsed, setCollapsed] = useState(initialCollapsed)
   const [hasNew, setHasNew] = useState(false)
+  const [updateAvailable, setUpdateAvailable] = useState(false)
   return (
     // Wrap in .app so CSS selectors (data-theme, has-new) resolve correctly
-    <div className={['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : ''].filter(Boolean).join(' ')} data-theme="light">
+    <div
+      className={['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : '', updateAvailable ? 'update-available' : '']
+        .filter(Boolean)
+        .join(' ')}
+      data-theme="light"
+    >
       <ResourcesSidebar
         collapsed={collapsed}
         onCollapsedChange={setCollapsed}
         onHasNewChange={setHasNew}
+        onUpdateAvailableChange={setUpdateAvailable}
       />
     </div>
   )
@@ -46,6 +53,11 @@ beforeEach(() => {
   localStorage.clear()
   server.use(http.get('/api/news', () => HttpResponse.json(defaultNews)))
   server.use(http.get('/api/version', () => HttpResponse.json({ version: '1.2.3', commit: 'abc', date: '2026-01-01' })))
+  server.use(
+    http.get('/api/update-check', () =>
+      HttpResponse.json({ current: 'v1.2.3', latest: 'v1.2.3', updateAvailable: false, releaseUrl: '' }),
+    ),
+  )
 })
 
 describe('ResourcesSidebar static links', () => {
@@ -357,6 +369,7 @@ describe('ResourcesSidebar onHasNewChange contract', () => {
             collapsed={false}
             onCollapsedChange={() => undefined}
             onHasNewChange={onHasNewChange}
+            onUpdateAvailableChange={() => undefined}
           />
         </div>
       </QueryProvider>,
@@ -393,6 +406,43 @@ describe('ResourcesSidebar onHasNewChange contract', () => {
       expect(spy).toHaveBeenCalledWith(false)
     })
     expect(spy).not.toHaveBeenCalledWith(true)
+  })
+})
+
+describe('ResourcesSidebar update indicator', () => {
+  const withUpdate = () =>
+    server.use(
+      http.get('/api/update-check', () =>
+        HttpResponse.json({
+          current: 'v1.2.0',
+          latest: 'v1.3.0',
+          updateAvailable: true,
+          releaseUrl: 'https://github.com/diagridio/dev-dashboard/releases/tag/v1.3.0',
+        }),
+      ),
+    )
+
+  it('shows an Update available link in the footer when an update exists', async () => {
+    withUpdate()
+    renderSidebar()
+    const link = await screen.findByRole('link', { name: /Update available/i })
+    expect(link).toHaveAttribute('href', 'https://github.com/diagridio/dev-dashboard/releases/tag/v1.3.0')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('shows no update link when up to date', async () => {
+    // default beforeEach mock has updateAvailable:false
+    renderSidebar()
+    await screen.findByRole('link', { name: 'Diagrid' })
+    expect(screen.queryByRole('link', { name: /Update available/i })).not.toBeInTheDocument()
+  })
+
+  it('renders the collapsed update indicator linking to the release', async () => {
+    withUpdate()
+    renderSidebar({ initialCollapsed: true })
+    const link = await screen.findByRole('link', { name: /version .* is available/i })
+    expect(link).toHaveAttribute('href', 'https://github.com/diagridio/dev-dashboard/releases/tag/v1.3.0')
   })
 })
 

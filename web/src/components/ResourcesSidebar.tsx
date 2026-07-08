@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNews } from '../hooks/useNews'
 import { newsUrls, getSeen, markSeen } from '../lib/newsSeen'
-import { useVersion } from '../hooks/useMeta'
+import { useVersion, useUpdateCheck } from '../hooks/useMeta'
 import type { NewsResponse, NewsItem } from '../types/logs'
 import { trackAction } from '../lib/telemetry'
 
@@ -154,18 +154,25 @@ interface ResourcesSidebarProps {
   collapsed: boolean
   onCollapsedChange: (v: boolean) => void
   onHasNewChange: (v: boolean) => void
+  onUpdateAvailableChange: (v: boolean) => void
 }
 
-export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange }: ResourcesSidebarProps) {
+export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange, onUpdateAvailableChange }: ResourcesSidebarProps) {
   const [seen, setSeen] = useState<Set<string>>(() => getSeen())
   const { data: news } = useNews()
   const { data: versionData } = useVersion()
+  const { data: update } = useUpdateCheck()
 
   // Derive unseen → bubble up has-new to parent
   const unseen = news != null && newsUrls(news).some((url) => !seen.has(url))
   useEffect(() => {
     onHasNewChange(unseen)
   }, [unseen, onHasNewChange])
+
+  const updateAvailable = update?.updateAvailable ?? false
+  useEffect(() => {
+    onUpdateAvailableChange(updateAvailable)
+  }, [updateAvailable, onUpdateAvailableChange])
 
   function toggle() {
     const next = !collapsed
@@ -227,6 +234,18 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange 
 
       {/* Collapsed vertical panel */}
       <div className="sbvert" data-testid="sidebar-collapsed-label">
+        {updateAvailable && update && (
+          <a
+            className="updot"
+            id="update-v"
+            href={update.releaseUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Version ${update.latest} is available — update`}
+            title={`${update.latest} is available — update`}
+            onClick={() => trackAction('update_click', { placement: 'collapsed', latest: update.latest })}
+          />
+        )}
         <button
           className="bellbtn"
           id="bell-v"
@@ -258,6 +277,21 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange 
             Diagrid
           </a>
           {' · '}v{version}
+          {updateAvailable && update && (
+            <>
+              {'  '}
+              <a
+                className="upbadge"
+                href={update.releaseUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`${update.latest} is available`}
+                onClick={() => trackAction('update_click', { placement: 'footer', latest: update.latest })}
+              >
+                <span className="updot" aria-hidden="true" /> Update available <span className="ext">↗</span>
+              </a>
+            </>
+          )}
         </span>
         <span className="pw">
           <a
