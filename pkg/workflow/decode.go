@@ -84,6 +84,9 @@ func decodeEvent(e *protos.HistoryEvent) HistoryEvent {
 		ev.Input = strval(s.GetInput())
 	case e.GetExecutionCompleted() != nil:
 		c := e.GetExecutionCompleted()
+		// A failed run surfaces as an ExecutionCompleted event carrying
+		// FailureDetails (durabletask has no separate ExecutionFailed event); we
+		// key the re-type off its presence, which mirrors the workflow-level status.
 		if fd := c.GetFailureDetails(); fd != nil {
 			ev.Type = "ExecutionFailed"
 			ev.FailureDetails = failureFromProto(fd)
