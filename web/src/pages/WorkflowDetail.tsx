@@ -297,6 +297,41 @@ export function EventRow({
   )
 }
 
+function FailureBanner({ failure, toast }: { failure: WorkflowFailureDetails; toast: ToastHandle }) {
+  const [showStack, setShowStack] = useState(false)
+  return (
+    <div className="failbanner" role="alert">
+      <div className="failbanner-head">
+        <span className="failbanner-icon" aria-hidden="true">⚠</span>
+        <span className="failbanner-type">{failure.errorType || 'Workflow failed'}</span>
+        {failure.stackTrace && (
+          <button className="tbtn" onClick={() => setShowStack((s) => !s)}>
+            {showStack ? 'Hide stack trace' : 'Show stack trace'}
+          </button>
+        )}
+      </div>
+      {failure.message && <div className="failbanner-msg">{failure.message}</div>}
+      {failure.stackTrace && showStack && (
+        <div>
+          <div className="lblrow">
+            <span className="lbl">Stack trace</span>
+            <button
+              className="copybtn"
+              onClick={() => {
+                copyText(failure.stackTrace ?? '')
+                toast.show('Stack trace copied')
+              }}
+            >
+              ⧉ Copy
+            </button>
+          </div>
+          <pre className="json">{failure.stackTrace}</pre>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
@@ -539,6 +574,10 @@ export function WorkflowDetail() {
           </button>
         </div>
       </div>
+
+      {execution.failureDetails && (
+        <FailureBanner failure={execution.failureDetails} toast={toast} />
+      )}
 
       {/* ------------------------------------------------------------------ */}
       {/* Meta grid                                                            */}

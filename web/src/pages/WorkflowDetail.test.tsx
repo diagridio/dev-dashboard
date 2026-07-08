@@ -1211,3 +1211,70 @@ describe('WorkflowDetail — pair selection', () => {
     }
   })
 })
+
+describe('WorkflowDetail — failure banner', () => {
+  beforeEach(() => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([{ appId: 'order', health: 'healthy' }])))
+  })
+
+  it('shows a failure banner with type + message, stack trace hidden until toggled', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Failed',
+          createdAt: '2026-06-26T10:00:00Z',
+          lastUpdatedAt: '2026-06-26T10:00:05Z',
+          replayCount: 0,
+          failureDetails: {
+            errorType: 'System.InvalidOperationException',
+            message: 'boom',
+            stackTrace: 'at Foo()\n at Bar()',
+          },
+          history: [
+            { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'ExecutionStarted', name: 'OrderWorkflow' },
+            // Note: intentionally no failureDetails on this history event — the
+            // event-level failure box (.evfail) is already covered by Task 2's
+            // tests above, and duplicating the same stack trace text here would
+            // collide with this test's "hidden until toggled" assertion (the
+            // per-event box, though visually collapsed via a closed <details>,
+            // is still present in the DOM and matched by queryByText).
+            { sequenceId: 1, timestamp: '2026-06-26T10:00:05Z', type: 'ExecutionFailed' },
+          ],
+        }),
+      ),
+    )
+    renderDetail()
+    const banner = await screen.findByRole('alert')
+    expect(banner).toHaveTextContent('System.InvalidOperationException')
+    expect(banner).toHaveTextContent('boom')
+    // Stack trace hidden initially.
+    expect(screen.queryByText(/at Foo\(\)/)).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /show stack trace/i }))
+    expect(screen.getByText(/at Foo\(\)/)).toBeInTheDocument()
+  })
+
+  it('shows no failure banner for a completed workflow', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-26T10:00:00Z',
+          lastUpdatedAt: '2026-06-26T10:00:05Z',
+          replayCount: 0,
+          history: [
+            { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'ExecutionStarted', name: 'OrderWorkflow' },
+          ],
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('COMPLETED')).toBeInTheDocument())
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
