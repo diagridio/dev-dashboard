@@ -217,7 +217,7 @@ export function EventRow({
                           ⧉ Copy
                         </button>
                       </div>
-                      <pre className="json">{failure.stackTrace}</pre>
+                      <pre className="json stacktrace">{failure.stackTrace}</pre>
                     </div>
                   )}
                 </div>
@@ -325,7 +325,7 @@ function FailureBanner({ failure, toast }: { failure: WorkflowFailureDetails; to
               ⧉ Copy
             </button>
           </div>
-          <pre className="json">{failure.stackTrace}</pre>
+          <pre className="json stacktrace">{failure.stackTrace}</pre>
         </div>
       )}
     </div>

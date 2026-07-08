@@ -453,6 +453,10 @@ details[open] .caret { transform: rotate(90deg); }
 .failbanner-head .tbtn { margin-left: auto; }
 .failbanner-msg { font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .failbanner .lblrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Stack traces wrap (long frames/paths) instead of overflowing the box, while
+   keeping the vertical max-height scroll from pre.json. Scoped to .stacktrace so
+   JSON payloads keep their non-wrapping, horizontally-scrolling layout. */
+pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .retrybadge { font-family: var(--mono); font-size: 10px; color: var(--pend-fg); background: var(--pend-bg); border-radius: 5px; padding: 1px 6px; }
 .err { color: var(--fail-fg); }
 .ev.reveal { animation: fadein .28s ease; }

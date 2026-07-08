@@ -966,6 +966,8 @@ describe('EventRow', () => {
     expect(screen.getByText('card declined')).toBeInTheDocument()
     expect(screen.getByText(/at Charge\(\)/)).toBeInTheDocument()
     expect(screen.getByText('Stack trace')).toBeInTheDocument()
+    // Stack trace uses the wrapping class so long frames stay inside the box.
+    expect(container.querySelector('pre.stacktrace')).not.toBeNull()
   })
 
   it('omits the stack-trace section when a failed event has no stack trace', () => {
@@ -1251,6 +1253,8 @@ describe('WorkflowDetail — failure banner', () => {
     expect(within(banner).queryByText(/at Foo\(\)/)).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: /show stack trace/i }))
     expect(within(banner).getByText(/at Foo\(\)/)).toBeInTheDocument()
+    // Stack trace uses the wrapping class so long frames stay inside the banner.
+    expect(banner.querySelector('pre.stacktrace')).not.toBeNull()
   })
 
   it('shows no failure banner for a completed workflow', async () => {
