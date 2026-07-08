@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -1235,13 +1235,7 @@ describe('WorkflowDetail — failure banner', () => {
           },
           history: [
             { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'ExecutionStarted', name: 'OrderWorkflow' },
-            // Note: intentionally no failureDetails on this history event — the
-            // event-level failure box (.evfail) is already covered by Task 2's
-            // tests above, and duplicating the same stack trace text here would
-            // collide with this test's "hidden until toggled" assertion (the
-            // per-event box, though visually collapsed via a closed <details>,
-            // is still present in the DOM and matched by queryByText).
-            { sequenceId: 1, timestamp: '2026-06-26T10:00:05Z', type: 'ExecutionFailed' },
+            { sequenceId: 1, timestamp: '2026-06-26T10:00:05Z', type: 'ExecutionFailed', failureDetails: { errorType: 'System.InvalidOperationException', message: 'boom', stackTrace: 'at Foo()\n at Bar()' } },
           ],
         }),
       ),
@@ -1250,10 +1244,13 @@ describe('WorkflowDetail — failure banner', () => {
     const banner = await screen.findByRole('alert')
     expect(banner).toHaveTextContent('System.InvalidOperationException')
     expect(banner).toHaveTextContent('boom')
-    // Stack trace hidden initially.
-    expect(screen.queryByText(/at Foo\(\)/)).toBeNull()
+    // Stack trace hidden initially. Scope to the banner: the same stack-trace
+    // text also appears in the per-event .evfail box (Task 2), which is present
+    // in the DOM even while its <details> is collapsed — so a page-wide query
+    // would match that instead. within(banner) asserts the banner's own toggle.
+    expect(within(banner).queryByText(/at Foo\(\)/)).toBeNull()
     await userEvent.click(screen.getByRole('button', { name: /show stack trace/i }))
-    expect(screen.getByText(/at Foo\(\)/)).toBeInTheDocument()
+    expect(within(banner).getByText(/at Foo\(\)/)).toBeInTheDocument()
   })
 
   it('shows no failure banner for a completed workflow', async () => {
