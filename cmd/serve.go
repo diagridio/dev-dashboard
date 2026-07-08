@@ -13,6 +13,7 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
 	"github.com/diagridio/dev-dashboard/pkg/server"
+	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 )
 
@@ -35,6 +36,9 @@ type serveDeps struct {
 	// TelemetryEnabled reflects DEVDASHBOARD_TELEMETRY_OPTOUT, read once at
 	// process start in runServe.
 	TelemetryEnabled bool
+	// UpdateCheck is the shared latest-release checker; also used by runServe to
+	// print the startup notice, so the server reuses its warmed cache.
+	UpdateCheck updatecheck.Service
 }
 
 // containerLogStream adapts a runtime Runner into the log-stream dependency.
@@ -98,5 +102,6 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		News:             newsSvc,
 		ControlPlane:     controlplane.New(),
 		TelemetryEnabled: deps.TelemetryEnabled,
+		UpdateCheck:      deps.UpdateCheck,
 	}, []func() error{rc.Close}
 }

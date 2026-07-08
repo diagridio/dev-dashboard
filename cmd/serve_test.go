@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/stretchr/testify/require"
 )
 
@@ -72,4 +73,20 @@ func TestAssembleOptions_TelemetryEnabledPassedThrough(t *testing.T) {
 	})
 
 	require.True(t, opts.TelemetryEnabled)
+}
+
+// TestAssembleOptionsPropagatesUpdateCheck verifies that serveDeps.UpdateCheck
+// is threaded into server.Options.UpdateCheck unchanged, so runServe's
+// startup-notice service and the server's /api/update-check endpoint share the
+// same warmed cache instance.
+func TestAssembleOptionsPropagatesUpdateCheck(t *testing.T) {
+	uc := updatecheck.New(nil, "https://api.github.com", "diagridio/dev-dashboard", "1.2.0", time.Hour)
+	opts, closers := assembleOptions(context.Background(), serveDeps{
+		Apps:        emptyApps{},
+		UpdateCheck: uc,
+	}, nil)
+	for _, c := range closers {
+		defer func(c func() error) { _ = c() }(c)
+	}
+	require.Same(t, uc, opts.UpdateCheck)
 }
