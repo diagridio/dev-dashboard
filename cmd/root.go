@@ -117,7 +117,7 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	srv := server.New(addr, opts)
 
 	maybeAnnounceUpdate(ctx, updateCheck, version.Get().Version)
-	fmt.Printf("Diagrid Dev Dashboard is running → %s\n", url)
+	fmt.Printf("Diagrid Dev Dashboard is starting → %s\n", url)
 	if telemetry {
 		fmt.Println("We're using anonymous usage telemetry to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
 	} else {

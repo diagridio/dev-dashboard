@@ -5,12 +5,21 @@ package discovery
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestDcpSessionDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		// dcpSessionDir parses POSIX Aspire/DCP command lines and returns
+		// filepath.Dir of the kubeconfig path; on Windows that rewrites the
+		// forward slashes to backslashes, so the expectations below don't hold.
+		// The DCP/lsof log-source resolution only runs meaningfully on
+		// macOS/Linux anyway.
+		t.Skip("POSIX-only: filepath.Dir yields backslashes on Windows")
+	}
 	t.Run("space-separated flag", func(t *testing.T) {
 		cmd := "/x/.nuget/packages/aspire.hosting.orchestration.osx-arm64/13.4.6/tools/dcp run-controllers --kubeconfig /var/folders/4c/T/aspire-dcpZOY2Ea/kubeconfig --monitor 82529"
 		dir, ok := dcpSessionDir(cmd)
