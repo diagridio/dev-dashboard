@@ -63,3 +63,33 @@ func TestServiceNegativeCacheOnError(t *testing.T) {
 	require.False(t, r2.UpdateAvailable)
 	require.Equal(t, int32(1), atomic.LoadInt32(&hits), "failed fetch should be negative-cached, not re-probed")
 }
+
+func TestServicePreservesLastGoodOnLaterFailure(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"tag_name":"v1.3.0"}`))
+			return
+		}
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	// A tiny ttl forces the second Check to re-fetch (positive cache already
+	// expired) rather than serving the cached value, so we exercise the error
+	// path with a non-zero last-good already present.
+	svc := New(srv.Client(), srv.URL, "diagridio/dev-dashboard", "1.2.0", time.Microsecond)
+
+	first := svc.Check(context.Background())
+	require.True(t, first.UpdateAvailable)
+	require.Equal(t, "v1.3.0", first.Latest)
+
+	// Sleep to ensure positive cache expires before second Check.
+	time.Sleep(2 * time.Microsecond)
+
+	// The second fetch fails; the non-zero last-good result must be preserved.
+	second := svc.Check(context.Background())
+	require.Equal(t, first, second)
+	require.GreaterOrEqual(t, atomic.LoadInt32(&calls), int32(2), "second Check should have attempted a re-fetch")
+}
