@@ -64,6 +64,16 @@ func TestServiceNegativeCacheOnError(t *testing.T) {
 	require.Equal(t, int32(1), atomic.LoadInt32(&hits), "failed fetch should be negative-cached, not re-probed")
 }
 
+func TestServiceSkipsNetworkForDevBuild(t *testing.T) {
+	var hits int32
+	srv := latestServer(t, "v1.3.0", &hits)
+	svc := New(srv.Client(), srv.URL, "diagridio/dev-dashboard", "dev", time.Hour)
+
+	r := svc.Check(context.Background())
+	require.False(t, r.UpdateAvailable)
+	require.Equal(t, int32(0), atomic.LoadInt32(&hits), "dev build must not hit the network")
+}
+
 func TestServicePreservesLastGoodOnLaterFailure(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

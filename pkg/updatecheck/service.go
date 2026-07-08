@@ -53,6 +53,14 @@ func New(client *http.Client, apiBase, repo, current string, ttl time.Duration) 
 // error the last-good result is preserved (zero Result if none) and the failure
 // is negatively cached so the endpoint is not re-probed on every request.
 func (s *service) Check(ctx context.Context) Result {
+	// Dev/source builds have no comparable version: skip the network entirely
+	// (mirrors the CLI startup guard so the HTTP endpoint stays silent too).
+	if !IsReleaseVersion(s.current) {
+		return Result{Current: s.current}
+	}
+
+	// The mutex is held across the network call below: the cache is warmed at
+	// startup, so a waiter is bounded by the http.Client's 5s timeout.
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -64,6 +72,8 @@ func (s *service) Check(ctx context.Context) Result {
 		return s.cached
 	}
 
+	// On error the failure is negatively cached, so the endpoint may report
+	// "no update" for up to negTTL before retrying.
 	latest, err := selfupdate.ResolveLatest(ctx, s.client, s.apiBase, s.repo)
 	if err != nil {
 		s.failedAt = time.Now()
