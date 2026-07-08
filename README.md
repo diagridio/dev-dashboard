@@ -6,7 +6,7 @@ your machine, plus guided builders for authoring Dapr component and resiliency Y
 ## Goal
 
 The Dapr Dev Dashboard is a companion for local Dapr development. It inspects the
-apps you start with `dapr run` / `dapr run -f`, Aspire or docker compose, and surfaces everything about them — sidecars, workflows, actors, subscriptions, components, resiliency policies, configurations, and logs.
+apps you start with `dapr run` / `dapr run -f`, Aspire or Docker compose, and surfaces everything about them — sidecars, workflows, actors, subscriptions, components, resiliency policies, configurations, and logs.
 
 It also helps you author Dapr resources. The **Component Builder** walks you through
 picking a component type from the full Dapr catalog, filling in its metadata fields, and
@@ -36,7 +36,7 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   authentication profile, then copy or download the generated YAML.
 - **Build resiliency policies** — compose named timeouts, retries, and circuit breakers,
   apply them to targets (apps, actors, components), and export the resiliency spec as YAML.
-- **Manage state-store connections** — on the Components page, a recent-connections panel
+- **Manage workflow state-store connections** — on the Components page, a recent-connections panel
   (with component file paths) lets you add, edit, and disconnect the state stores the dashboard
   reads workflows from. Auto-detected stores appear automatically; disconnecting one is durable —
   it stays hidden across restarts unless it becomes the active store again. The store workflows
@@ -51,6 +51,22 @@ control that doubles as a backend-connection indicator (data polling pauses whil
 backend is unreachable and resumes on recovery), full keyboard operability, and
 cross-navigation between related entities (app →
 component → "loaded by" app, etc.).
+
+## Non-Goals
+
+The dashboard is a **local development tool**, and only that:
+
+- **Not for Kubernetes.** It is not intended to run inside a Kubernetes cluster. It discovers
+  apps the way `dapr list` does — from the local process table and local container runtime —
+  which has no meaning in-cluster.
+- **Not for production.** It is not intended for production, staging, or any shared/hosted
+  environment. It has no authentication, authorization, or multi-user model, and it reads
+  local files and state stores with the privileges of the user who runs it.
+- **Not a control plane or deployment tool.** It observes and helps you author YAML locally;
+  it does not deploy apps or manage remote Dapr installations.
+
+Run it on your own machine, alongside the apps you start with `dapr run`, Aspire, or docker
+compose.
 
 ## User instructions (download, install, run)
 
