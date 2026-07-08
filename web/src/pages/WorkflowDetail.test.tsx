@@ -947,6 +947,38 @@ describe('EventRow', () => {
       `${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`,
     )
   })
+
+  it('renders a red error box (type + message + copyable stack trace) for a failed event', async () => {
+    const { container } = row({
+      type: 'TaskFailed',
+      sequenceId: 4,
+      timestamp: '2026-06-28T10:00:02.000Z',
+      failureDetails: {
+        errorType: 'ChargeError',
+        message: 'card declined',
+        stackTrace: 'at Charge()\n at Run()',
+      },
+    })
+    // Row is expandable (was a bare static row before).
+    expect(container.querySelector('details')).not.toBeNull()
+    expect(container.querySelector('.evfail')).not.toBeNull()
+    expect(screen.getByText('ChargeError')).toBeInTheDocument()
+    expect(screen.getByText('card declined')).toBeInTheDocument()
+    expect(screen.getByText(/at Charge\(\)/)).toBeInTheDocument()
+    expect(screen.getByText('Stack trace')).toBeInTheDocument()
+  })
+
+  it('omits the stack-trace section when a failed event has no stack trace', () => {
+    const { container } = row({
+      type: 'SubOrchestrationFailed',
+      sequenceId: 5,
+      timestamp: '2026-06-28T10:00:03.000Z',
+      failureDetails: { errorType: 'ChildError', message: 'child boom' },
+    })
+    expect(container.querySelector('.evfail')).not.toBeNull()
+    expect(screen.getByText('child boom')).toBeInTheDocument()
+    expect(screen.queryByText('Stack trace')).toBeNull()
+  })
 })
 
 describe('WorkflowDetail — pair selection', () => {

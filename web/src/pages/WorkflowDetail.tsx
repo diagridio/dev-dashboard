@@ -9,7 +9,7 @@ import { elapsed, elapsedTenths, formatOffset, formatDateTime, formatDuration } 
 import { highlightJson } from '../lib/json-highlight'
 import { useToast, type ToastHandle } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
+import type { WorkflowStatus, WorkflowHistoryEvent, WorkflowFailureDetails } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
 import { sortHistoryForDisplay, orderHistoryForDisplay, eventAnchorId, type HistoryOrder } from '../lib/eventOrder'
 import { buildPairIndex, type PairInfo } from '../lib/pairing'
@@ -153,7 +153,8 @@ export function EventRow({
       <span className="evtag">{eventIdTag}</span>
     ) : null
 
-  const hasDetails = !!(event.input || event.output)
+  const failure: WorkflowFailureDetails | undefined = event.failureDetails
+  const hasDetails = !!(event.input || event.output || failure)
 
   const selectable = !!pair
   const onHeaderClick = (e: ReactMouseEvent) => {
@@ -198,6 +199,29 @@ export function EventRow({
               </button>
             </summary>
             <div className="evbody">
+              {failure && (
+                <div className="evfail">
+                  <span className="evfail-type">{failure.errorType || 'Error'}</span>
+                  {failure.message && <div className="evfail-msg">{failure.message}</div>}
+                  {failure.stackTrace && (
+                    <div>
+                      <div className="lblrow">
+                        <span className="lbl">Stack trace</span>
+                        <button
+                          className="copybtn"
+                          onClick={() => {
+                            copyText(failure.stackTrace ?? '')
+                            toast.show('Stack trace copied')
+                          }}
+                        >
+                          ⧉ Copy
+                        </button>
+                      </div>
+                      <pre className="json">{failure.stackTrace}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
               {event.input && (
                 <div>
                   <div className="lblrow">
