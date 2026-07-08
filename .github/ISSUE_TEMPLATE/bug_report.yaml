@@ -1,0 +1,79 @@
+name: Bug report
+description: Report something that isn't working as expected in the Diagrid Dev Dashboard.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in as much of the
+        information below as you can — it helps us reproduce and fix the issue faster.
+
+  - type: dropdown
+    id: os-type
+    attributes:
+      label: OS type
+      description: Which operating system are you running the dashboard on?
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: dashboard-version
+    attributes:
+      label: Dashboard version
+      description: Output of `dev-dashboard --version`.
+      placeholder: e.g. 1.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: dapr-version
+    attributes:
+      label: Dapr version
+      description: Output of `dapr --version` (runtime and CLI).
+      placeholder: e.g. CLI 1.15.0 / Runtime 1.15.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser-type
+    attributes:
+      label: Browser type
+      description: Which browser were you using when you hit the bug?
+      options:
+        - Chrome
+        - Firefox
+        - Safari
+        - Edge
+        - Vivaldi
+        - Brave
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step instructions to reproduce the behavior. Include what actually happened.
+      placeholder: |
+        1. Start the dashboard with `dev-dashboard`
+        2. Open the Workflows page
+        3. Click on ...
+        4. See error
+    validations:
+      required: true

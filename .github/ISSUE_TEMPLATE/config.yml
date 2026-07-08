@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Dapr Discord
+    url: https://diagrid.ws/dapr-discord
+    about: Ask questions and chat with the Dapr community on Discord.
