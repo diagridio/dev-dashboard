@@ -12,7 +12,113 @@ It also helps you author Dapr resources. The **Component Builder** walks you thr
 picking a component type from the full Dapr catalog, filling in its metadata fields, and
 choosing an authentication profile; the **Resiliency Builder** composes resiliency policies
 (timeouts, retries, circuit breakers) and applies them to targets (apps, actors, components).
-Both wizards end in an editable YAML preview you can copy or download into your project.
+Both wizards end in a YAML preview you can copy or download into your project.
+
+## Installation instructions
+
+The dashboard ships as a standalone binary published on GitHub Releases.
+
+**Install (one-liner):**
+
+*macOS / Linux — installs to ~/.local/bin*
+
+```sh
+curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
+```
+
+*Windows (PowerShell) — installs to %LOCALAPPDATA%\Programs\dev-dashboard*
+
+```powershell
+iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
+```
+
+**To pin a specific version, set `VERSION` before piping:**
+
+*macOS / Linux*
+
+```sh
+curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | VERSION=vX.Y.Z sh
+```
+
+*Windows*
+
+```powershell
+$env:VERSION='vX.Y.Z'; iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
+```
+
+If the install directory is not on your `PATH`, the script prints the export line to add.
+
+**Install with Go (≥ 1.26):**
+
+```sh
+go install github.com/diagridio/dev-dashboard@latest
+```
+
+> **Note:** tagged versions (`@vX.Y.Z`) embed the prebuilt UI, so `go install` ships the
+> full dashboard. `@latest` may resolve to `main`, which carries only a placeholder UI —
+> prefer a tagged version for a working install.
+
+**Manual download:**
+
+Download the archive for your platform from the [GitHub Releases](https://github.com/diagridio/dev-dashboard/releases) page, extract it, and place `dev-dashboard` (or `dev-dashboard.exe`) on your `PATH`. Verify with:
+
+```sh
+dev-dashboard --version
+```
+
+## Run the dashboard
+
+```sh
+# Start on the default port (9090) and open your browser automatically
+dev-dashboard
+```
+
+```sh
+# Start on a custom port
+dev-dashboard --port 8080
+```
+
+```sh
+# Enable diagnostic logging to stderr (server startup, app discovery, state-store connection, log streams, workflow operations)
+dev-dashboard --verbose
+```
+
+No additional setup is needed: the dashboard discovers running Dapr apps the same way
+`dapr list` does, so anything started with `dapr run` / `dapr run -f`, Aspire and Docker compose shows up within one
+refresh cycle.
+
+## Updating the dashboard
+
+Update to the latest release (no-op if already current)
+
+```sh
+dev-dashboard update
+```
+
+Install a specific version (can downgrade or reinstall)
+
+```sh
+dev-dashboard update 1.2.0
+```
+
+`update` downloads the release archive for your platform, verifies its SHA256
+against the release `checksums.txt`, and atomically replaces the running binary.
+Restart any running dashboard to use the new version.
+
+> Installs managed by a package manager (Homebrew/Scoop/winget, when available)
+> should be updated through that package manager instead. If `update` reports a
+> permission error, the binary lives in a location your user can't write — re-run
+> the install one-liner, or move the binary somewhere writable.
+
+## Troubleshooting
+
+If the dashboard does not behave as expected, run it with `--verbose` to print diagnostic logs to stderr:
+
+```sh
+dev-dashboard --verbose
+```
+
+Logs are grouped by `component=` (values: `server`, `discovery`, `workflow`, `registry`, `reconciler`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
 
 ## Use cases
 
@@ -67,146 +173,6 @@ The dashboard is a **local development tool**, and only that:
 
 Run it on your own machine, alongside the apps you start with `dapr run`, Aspire, or docker
 compose.
-
-## User instructions (download, install, run)
-
-The dashboard ships as a standalone binary published on GitHub Releases via GoReleaser.
-macOS and Linux ship amd64 + arm64; Windows ships amd64 only (Windows on ARM runs the x64
-build via built-in emulation — `install.ps1` handles this automatically).
-
-**Install (one-liner):**
-
-*macOS / Linux — installs to ~/.local/bin*
-
-```sh
-curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
-```
-
-*Windows (PowerShell) — installs to %LOCALAPPDATA%\Programs\dev-dashboard*
-
-```powershell
-iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
-```
-
-**To pin a specific version, set `VERSION` before piping:**
-
-*macOS / Linux*
-
-```sh
-curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | VERSION=vX.Y.Z sh
-```
-
-*Windows*
-
-```powershell
-$env:VERSION='vX.Y.Z'; iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
-```
-
-If the install directory is not on your `PATH`, the script prints the export line to add.
-
-**Install with Go (≥ 1.26):**
-
-```sh
-go install github.com/diagridio/dev-dashboard@latest
-```
-
-> **Note:** tagged versions (`@vX.Y.Z`) embed the prebuilt UI, so `go install` ships the
-> full dashboard. `@latest` may resolve to `main`, which carries only a placeholder UI —
-> prefer a tagged version for a working install.
-
-**Manual download:**
-
-Download the archive for your platform from the [GitHub Releases](https://github.com/diagridio/dev-dashboard/releases) page, extract it, and place `dev-dashboard` (or `dev-dashboard.exe`) on your `PATH`. Verify with:
-
-```sh
-dev-dashboard --version
-```
-
-**Run:**
-
-```sh
-# Start on the default port (9090) and open your browser automatically
-dev-dashboard
-
-# Start without opening the browser
-dev-dashboard --no-open
-
-# Start on a custom port
-dev-dashboard --port 8080
-
-# Enable diagnostic logging to stderr (server startup, app discovery, state-store connection, log streams, workflow operations)
-dev-dashboard --verbose
-```
-
-This starts the HTTP server, serves the dashboard at `http://localhost:9090`, and opens your
-browser automatically.
-
-No additional setup is needed: the dashboard discovers running Dapr apps the same way
-`dapr list` does, so anything started with `dapr run` / `dapr run -f` shows up within one
-refresh cycle.
-
-### Updating
-
-Update to the latest release (no-op if already current)
-
-```sh
-dev-dashboard update
-```
-
-Install a specific version (can downgrade or reinstall)
-
-```sh
-dev-dashboard update 1.2.0
-```
-
-`update` downloads the release archive for your platform, verifies its SHA256
-against the release `checksums.txt`, and atomically replaces the running binary.
-Restart any running dashboard to use the new version.
-
-> Installs managed by a package manager (Homebrew/Scoop/winget, when available)
-> should be updated through that package manager instead. If `update` reports a
-> permission error, the binary lives in a location your user can't write — re-run
-> the install one-liner, or move the binary somewhere writable.
-
-### Mounting under a sub-path
-
-The SPA bakes its asset base URL at build time from the `DASH_BASE_PATH` environment
-variable. Released binaries are built for root-mount (`/`).
-
-To run the dashboard under a sub-path, build from source:
-
-```sh
-DASH_BASE_PATH=/dashboard/ make build
-./bin/dev-dashboard --base-path /dashboard
-```
-
-`DASH_BASE_PATH` (used at Vite build time) must equal the `--base-path` flag value, and
-both must end with a trailing slash.
-
-## Troubleshooting
-
-If the dashboard does not behave as expected, run it with `--verbose` to print diagnostic logs to stderr:
-
-```sh
-dev-dashboard --verbose
-```
-
-Logs are grouped by `component=` (values: `server`, `discovery`, `workflow`, `registry`, `reconciler`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
-
-## Telemetry
-
-The dashboard sends anonymous usage telemetry (via Datadog RUM) to help us understand how
-it's used: application startup, top navigation clicks, Resources-panel clicks, and front-end
-errors. There is no session replay and no dashboard content is collected — page views are
-tracked by a fixed page label (e.g. `Workflows`, `AppDetail`), never the resolved URL, so
-local app/workflow identifiers never leave your machine.
-
-To opt out, set `DEVDASHBOARD_TELEMETRY_OPTOUT=true` before starting the dashboard. This is
-read once at startup, so restart the dashboard for the change to take effect:
-
-```sh
-DEVDASHBOARD_TELEMETRY_OPTOUT=true dev-dashboard
-```
 
 ## Building from source
 
