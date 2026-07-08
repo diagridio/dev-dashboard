@@ -5,7 +5,7 @@ your machine, plus guided builders for authoring Dapr component and resiliency Y
 
 ## Goal
 
-The Dapr Dev Dashboard is a companion for local Dapr development. It inspects the
+The Diagrid Dev Dashboard is a companion for local Dapr development. It inspects the
 apps you start with `dapr run` / `dapr run -f`, Aspire or Docker compose, and surfaces everything about them — sidecars, workflows, actors, subscriptions, components, resiliency policies, configurations, and logs.
 
 It also helps you author Dapr resources. The **Component Builder** walks you through
@@ -53,10 +53,6 @@ If the install directory is not on your `PATH`, the script prints the export lin
 ```sh
 go install github.com/diagridio/dev-dashboard@latest
 ```
-
-> **Note:** tagged versions (`@vX.Y.Z`) embed the prebuilt UI, so `go install` ships the
-> full dashboard. `@latest` may resolve to `main`, which carries only a placeholder UI —
-> prefer a tagged version for a working install.
 
 **Manual download:**
 
@@ -109,11 +105,6 @@ dev-dashboard update 1.2.0
 `update` downloads the release archive for your platform, verifies its SHA256
 against the release `checksums.txt`, and atomically replaces the running binary.
 Restart any running dashboard to use the new version.
-
-> Installs managed by a package manager (Homebrew/Scoop/winget, when available)
-> should be updated through that package manager instead. If `update` reports a
-> permission error, the binary lives in a location your user can't write — re-run
-> the install one-liner, or move the binary somewhere writable.
 
 ## Troubleshooting
 
@@ -176,7 +167,7 @@ The dashboard is a **local development tool**, and only that:
 - **Not a control plane or deployment tool.** It observes and helps you author YAML locally;
   it does not deploy apps or manage remote Dapr installations.
 
-Run it on your own machine, alongside the apps you start with `dapr run`, Aspire, or docker
+Run it on your own machine, alongside the apps you start with `dapr run`, Aspire, or Docker
 compose.
 
 ## Building from source
