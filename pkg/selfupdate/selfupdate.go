@@ -65,7 +65,7 @@ func (u *Updater) Run(ctx context.Context, requested string) (Result, error) {
 	var target string
 	if requested == "" {
 		fmt.Fprintln(u.Out, "resolving latest…")
-		v, err := resolveLatest(ctx, u.HTTP, u.APIBase, u.Repo)
+		v, err := ResolveLatest(ctx, u.HTTP, u.APIBase, u.Repo)
 		if err != nil {
 			return Result{}, err
 		}

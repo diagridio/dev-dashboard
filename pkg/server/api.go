@@ -13,12 +13,13 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/metadata"
 	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
+	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/go-chi/chi/v5"
 )
 
 // apiRouter builds the JSON API surface served under /api.
-func apiRouter(v version.Info, apps discovery.Service, containerLogs func(context.Context, string) (<-chan string, error), backend WorkflowBackend, stores StoreRegistry, res resources.Service, newsSvc news.Service, cp controlplane.Manager) http.Handler {
+func apiRouter(v version.Info, apps discovery.Service, containerLogs func(context.Context, string) (<-chan string, error), backend WorkflowBackend, stores StoreRegistry, res resources.Service, newsSvc news.Service, cp controlplane.Manager, uc updatecheck.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -96,6 +97,7 @@ func apiRouter(v version.Info, apps discovery.Service, containerLogs func(contex
 	r.Mount("/resources", resourcesRouter(res, apps))
 	r.Mount("/news", newsRouter(newsSvc))
 	r.Mount("/controlplane", controlPlaneRouter(cp))
+	r.Mount("/update-check", updateCheckRouter(uc))
 	return r
 }
 

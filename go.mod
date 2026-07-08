@@ -4,14 +4,17 @@ go 1.26.4
 
 require (
 	github.com/alicebob/miniredis/v2 v2.38.0
+	github.com/briandowns/spinner v1.19.0
 	github.com/dapr/cli v1.18.0
 	github.com/dapr/components-contrib v1.18.0
 	github.com/dapr/durabletask-go v0.12.1
 	github.com/dapr/kit v0.18.1
 	github.com/go-chi/chi/v5 v5.3.0
+	github.com/mattn/go-isatty v0.0.20
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
+	golang.org/x/mod v0.35.0
 	google.golang.org/protobuf v1.36.11
 	sigs.k8s.io/yaml v1.5.0
 )
@@ -54,7 +57,6 @@ require (
 	github.com/aws/smithy-go v1.24.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
-	github.com/briandowns/spinner v1.19.0 // indirect
 	github.com/bufbuild/protocompile v0.6.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -134,7 +136,6 @@ require (
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mikeee/aws_credential_helper v0.0.1-alpha.2 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
@@ -199,7 +200,6 @@ require (
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
-	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect

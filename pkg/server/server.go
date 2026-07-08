@@ -12,6 +12,7 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
+	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -31,6 +32,7 @@ type Options struct {
 	Resources     resources.Service
 	News          news.Service
 	ControlPlane  controlplane.Manager
+	UpdateCheck   updatecheck.Service
 	// TelemetryEnabled controls whether the served SPA loads Datadog RUM.
 	TelemetryEnabled bool
 }
@@ -45,7 +47,7 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(localhostGuard)
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane, opts.UpdateCheck))
 		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath, opts.TelemetryEnabled))
 	}
 

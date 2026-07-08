@@ -19,6 +19,7 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/logging"
 	"github.com/diagridio/dev-dashboard/pkg/metadata"
 	"github.com/diagridio/dev-dashboard/pkg/server"
+	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/diagridio/dev-dashboard/web"
 	"github.com/spf13/cobra"
@@ -93,6 +94,7 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	_, crtRunner := containerruntime.Detect()
 	composeSrc := discovery.NewComposeSource(crtRunner)
 	telemetry := telemetryEnabled(os.Getenv)
+	updateCheck := updatecheck.New(&http.Client{Timeout: 5 * time.Second}, "https://api.github.com", "diagridio/dev-dashboard", version.Get().Version, time.Hour)
 	opts, closers := assembleOptions(ctx, serveDeps{
 		BasePath:       basePath,
 		StateStorePath: stateStore,
@@ -105,6 +107,7 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 		ComposeEnv:       composeSrc.Env,
 		ContainerLogs:    containerLogStream(crtRunner),
 		TelemetryEnabled: telemetry,
+		UpdateCheck:      updateCheck,
 	}, dist)
 	for _, close := range closers {
 		close := close
@@ -113,6 +116,7 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 
 	srv := server.New(addr, opts)
 
+	maybeAnnounceUpdate(ctx, updateCheck, version.Get().Version)
 	fmt.Printf("Diagrid Dev Dashboard is running → %s\n", url)
 	if telemetry {
 		fmt.Println("We're using anonymous usage telemetry to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")

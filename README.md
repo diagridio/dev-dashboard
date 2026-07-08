@@ -89,6 +89,11 @@ refresh cycle.
 
 ## Updating the dashboard
 
+On startup the dashboard checks GitHub for a newer release. If one exists, it prints
+a notice as the first line of output and the web UI shows an **Update available**
+indicator next to the version number in the Resources panel. The check is best-effort:
+it is skipped for source/dev builds and fails silently when offline.
+
 Update to the latest release (no-op if already current)
 
 ```sh

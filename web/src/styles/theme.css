@@ -107,6 +107,14 @@ body {
 .bellbtn .bellico { display: block; }
 .app.has-new:not(.collapsed) #bell-h { display: inline-flex; }
 .app.has-new.collapsed #bell-v { display: inline-flex; }
+
+/* Update-available indicator (footer badge + collapsed dot) */
+.upbadge { color: var(--primary); text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.upbadge:hover { text-decoration: underline; }
+.updot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); display: inline-block; }
+.sbvert #update-v { display: none; }
+.app.update-available.collapsed #update-v { display: inline-block; margin-bottom: 8px; }
+
 .sbvert { display: none; }
 .app.collapsed .sbvert { display: flex; flex-direction: column; align-items: center; flex: 1; padding: 8px 0 14px; }
 .sbvert .vtext { margin: auto 0; transform: rotate(-90deg); white-space: nowrap; font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); cursor: pointer; }

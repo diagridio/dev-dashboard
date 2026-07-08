@@ -35,6 +35,9 @@ beforeEach(() => {
     http.get('/api/news', () =>
       HttpResponse.json({ blog: null, report: null, webinar: null, event: null }),
     ),
+    http.get('/api/update-check', () =>
+      HttpResponse.json({ current: '9.9.9', latest: '9.9.9', updateAvailable: false, releaseUrl: '' }),
+    ),
   )
 })
 

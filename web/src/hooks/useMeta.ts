@@ -16,3 +16,21 @@ export function useVersion() {
     refetchInterval: 60_000,
   })
 }
+
+/** Shape returned by GET /api/update-check */
+export interface UpdateInfo {
+  current: string
+  latest: string
+  updateAvailable: boolean
+  releaseUrl: string
+}
+
+/** Fetch update availability from /api/update-check. Refreshes every 5 min. */
+export function useUpdateCheck() {
+  return useQuery<UpdateInfo>({
+    queryKey: ['update-check'],
+    queryFn: () => fetchJSON<UpdateInfo>('/update-check'),
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  })
+}
