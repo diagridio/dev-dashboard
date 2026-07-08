@@ -39,7 +39,7 @@ func TestResolveLatest(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	v, err := resolveLatest(context.Background(), srv.Client(), srv.URL, "diagridio/dev-dashboard")
+	v, err := ResolveLatest(context.Background(), srv.Client(), srv.URL, "diagridio/dev-dashboard")
 	require.NoError(t, err)
 	require.Equal(t, "v1.2.0", v)
 	require.Equal(t, "/repos/diagridio/dev-dashboard/releases/latest", gotPath)
@@ -87,7 +87,7 @@ func TestResolveLatestEmptyTag(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := resolveLatest(context.Background(), srv.Client(), srv.URL, "diagridio/dev-dashboard")
+	_, err := ResolveLatest(context.Background(), srv.Client(), srv.URL, "diagridio/dev-dashboard")
 	require.Error(t, err)
 	require.False(t, errors.Is(err, errNotFound))
 }
