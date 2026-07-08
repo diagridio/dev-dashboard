@@ -9,7 +9,7 @@ import { elapsed, elapsedTenths, formatOffset, formatDateTime, formatDuration } 
 import { highlightJson } from '../lib/json-highlight'
 import { useToast, type ToastHandle } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-import type { WorkflowStatus, WorkflowHistoryEvent } from '../types/workflow'
+import type { WorkflowStatus, WorkflowHistoryEvent, WorkflowFailureDetails } from '../types/workflow'
 import { copyText } from '../lib/clipboard'
 import { sortHistoryForDisplay, orderHistoryForDisplay, eventAnchorId, type HistoryOrder } from '../lib/eventOrder'
 import { buildPairIndex, type PairInfo } from '../lib/pairing'
@@ -153,7 +153,8 @@ export function EventRow({
       <span className="evtag">{eventIdTag}</span>
     ) : null
 
-  const hasDetails = !!(event.input || event.output)
+  const failure: WorkflowFailureDetails | undefined = event.failureDetails
+  const hasDetails = !!(event.input || event.output || failure)
 
   const selectable = !!pair
   const onHeaderClick = (e: ReactMouseEvent) => {
@@ -198,6 +199,29 @@ export function EventRow({
               </button>
             </summary>
             <div className="evbody">
+              {failure && (
+                <div className="evfail">
+                  <span className="evfail-type">{failure.errorType || 'Error'}</span>
+                  {failure.message && <div className="evfail-msg">{failure.message}</div>}
+                  {failure.stackTrace && (
+                    <div>
+                      <div className="lblrow">
+                        <span className="lbl">Stack trace</span>
+                        <button
+                          className="copybtn"
+                          onClick={() => {
+                            copyText(failure.stackTrace ?? '')
+                            toast.show('Stack trace copied')
+                          }}
+                        >
+                          ⧉ Copy
+                        </button>
+                      </div>
+                      <pre className="json stacktrace">{failure.stackTrace}</pre>
+                    </div>
+                  )}
+                </div>
+              )}
               {event.input && (
                 <div>
                   <div className="lblrow">
@@ -269,6 +293,41 @@ export function EventRow({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function FailureBanner({ failure, toast }: { failure: WorkflowFailureDetails; toast: ToastHandle }) {
+  const [showStack, setShowStack] = useState(false)
+  return (
+    <div className="failbanner" role="alert">
+      <div className="failbanner-head">
+        <span className="failbanner-icon" aria-hidden="true">⚠</span>
+        <span className="failbanner-type">{failure.errorType || 'Workflow failed'}</span>
+        {failure.stackTrace && (
+          <button className="tbtn" onClick={() => setShowStack((s) => !s)}>
+            {showStack ? 'Hide stack trace' : 'Show stack trace'}
+          </button>
+        )}
+      </div>
+      {failure.message && <div className="failbanner-msg">{failure.message}</div>}
+      {failure.stackTrace && showStack && (
+        <div>
+          <div className="lblrow">
+            <span className="lbl">Stack trace</span>
+            <button
+              className="copybtn"
+              onClick={() => {
+                copyText(failure.stackTrace ?? '')
+                toast.show('Stack trace copied')
+              }}
+            >
+              ⧉ Copy
+            </button>
+          </div>
+          <pre className="json stacktrace">{failure.stackTrace}</pre>
+        </div>
+      )}
     </div>
   )
 }
@@ -515,6 +574,10 @@ export function WorkflowDetail() {
           </button>
         </div>
       </div>
+
+      {execution.failureDetails && (
+        <FailureBanner failure={execution.failureDetails} toast={toast} />
+      )}
 
       {/* ------------------------------------------------------------------ */}
       {/* Meta grid                                                            */}

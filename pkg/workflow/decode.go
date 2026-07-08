@@ -40,7 +40,7 @@ func DecodeExecution(appID, instanceID string, history []*protos.HistoryEvent, c
 		ex.Output = &v
 	}
 	if fd, err := runtimestate.FailureDetails(rs); err == nil && fd != nil {
-		ex.FailureDetails = &FailureDetails{ErrorType: fd.GetErrorType(), Message: fd.GetErrorMessage()}
+		ex.FailureDetails = failureFromProto(fd)
 	}
 	if status.IsTerminal() {
 		if upd, err := runtimestate.LastUpdatedTime(rs); err == nil && !upd.IsZero() {
@@ -83,8 +83,17 @@ func decodeEvent(e *protos.HistoryEvent) HistoryEvent {
 		ev.Name = s.GetName()
 		ev.Input = strval(s.GetInput())
 	case e.GetExecutionCompleted() != nil:
-		ev.Type = "ExecutionCompleted"
-		ev.Output = strval(e.GetExecutionCompleted().GetResult())
+		c := e.GetExecutionCompleted()
+		// A failed run surfaces as an ExecutionCompleted event carrying
+		// FailureDetails (durabletask has no separate ExecutionFailed event); we
+		// key the re-type off its presence, which mirrors the workflow-level status.
+		if fd := c.GetFailureDetails(); fd != nil {
+			ev.Type = "ExecutionFailed"
+			ev.FailureDetails = failureFromProto(fd)
+		} else {
+			ev.Type = "ExecutionCompleted"
+			ev.Output = strval(c.GetResult())
+		}
 	case e.GetExecutionTerminated() != nil:
 		ev.Type = "ExecutionTerminated"
 		ev.Output = strval(e.GetExecutionTerminated().GetInput())
@@ -104,7 +113,9 @@ func decodeEvent(e *protos.HistoryEvent) HistoryEvent {
 		ev.ScheduledID = i32ptr(c.GetTaskScheduledId())
 	case e.GetTaskFailed() != nil:
 		ev.Type = "TaskFailed"
-		ev.ScheduledID = i32ptr(e.GetTaskFailed().GetTaskScheduledId())
+		f := e.GetTaskFailed()
+		ev.ScheduledID = i32ptr(f.GetTaskScheduledId())
+		ev.FailureDetails = failureFromProto(f.GetFailureDetails())
 	case e.GetTimerCreated() != nil:
 		ev.Type = "TimerCreated"
 	case e.GetTimerFired() != nil:
@@ -136,7 +147,9 @@ func decodeEvent(e *protos.HistoryEvent) HistoryEvent {
 		ev.ScheduledID = i32ptr(c.GetTaskScheduledId())
 	case e.GetChildWorkflowInstanceFailed() != nil:
 		ev.Type = "SubOrchestrationFailed"
-		ev.ScheduledID = i32ptr(e.GetChildWorkflowInstanceFailed().GetTaskScheduledId())
+		f := e.GetChildWorkflowInstanceFailed()
+		ev.ScheduledID = i32ptr(f.GetTaskScheduledId())
+		ev.FailureDetails = failureFromProto(f.GetFailureDetails())
 	default:
 		ev.Type = "Unknown"
 	}
@@ -152,3 +165,14 @@ func strval(v *wrapperspb.StringValue) *string {
 }
 
 func i32ptr(v int32) *int32 { return &v }
+
+func failureFromProto(fd *protos.TaskFailureDetails) *FailureDetails {
+	if fd == nil {
+		return nil
+	}
+	return &FailureDetails{
+		ErrorType:  fd.GetErrorType(),
+		Message:    fd.GetErrorMessage(),
+		StackTrace: fd.GetStackTrace().GetValue(),
+	}
+}

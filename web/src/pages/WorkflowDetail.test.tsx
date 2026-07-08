@@ -1,4 +1,4 @@
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -947,6 +947,40 @@ describe('EventRow', () => {
       `${d.toLocaleDateString()} - ${d.toLocaleTimeString()}`,
     )
   })
+
+  it('renders a red error box (type + message + copyable stack trace) for a failed event', async () => {
+    const { container } = row({
+      type: 'TaskFailed',
+      sequenceId: 4,
+      timestamp: '2026-06-28T10:00:02.000Z',
+      failureDetails: {
+        errorType: 'ChargeError',
+        message: 'card declined',
+        stackTrace: 'at Charge()\n at Run()',
+      },
+    })
+    // Row is expandable (was a bare static row before).
+    expect(container.querySelector('details')).not.toBeNull()
+    expect(container.querySelector('.evfail')).not.toBeNull()
+    expect(screen.getByText('ChargeError')).toBeInTheDocument()
+    expect(screen.getByText('card declined')).toBeInTheDocument()
+    expect(screen.getByText(/at Charge\(\)/)).toBeInTheDocument()
+    expect(screen.getByText('Stack trace')).toBeInTheDocument()
+    // Stack trace uses the wrapping class so long frames stay inside the box.
+    expect(container.querySelector('pre.stacktrace')).not.toBeNull()
+  })
+
+  it('omits the stack-trace section when a failed event has no stack trace', () => {
+    const { container } = row({
+      type: 'SubOrchestrationFailed',
+      sequenceId: 5,
+      timestamp: '2026-06-28T10:00:03.000Z',
+      failureDetails: { errorType: 'ChildError', message: 'child boom' },
+    })
+    expect(container.querySelector('.evfail')).not.toBeNull()
+    expect(screen.getByText('child boom')).toBeInTheDocument()
+    expect(screen.queryByText('Stack trace')).toBeNull()
+  })
 })
 
 describe('WorkflowDetail — pair selection', () => {
@@ -1177,5 +1211,71 @@ describe('WorkflowDetail — pair selection', () => {
       else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
       await act(async () => { window.location.hash = '' })
     }
+  })
+})
+
+describe('WorkflowDetail — failure banner', () => {
+  beforeEach(() => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([{ appId: 'order', health: 'healthy' }])))
+  })
+
+  it('shows a failure banner with type + message, stack trace hidden until toggled', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Failed',
+          createdAt: '2026-06-26T10:00:00Z',
+          lastUpdatedAt: '2026-06-26T10:00:05Z',
+          replayCount: 0,
+          failureDetails: {
+            errorType: 'System.InvalidOperationException',
+            message: 'boom',
+            stackTrace: 'at Foo()\n at Bar()',
+          },
+          history: [
+            { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'ExecutionStarted', name: 'OrderWorkflow' },
+            { sequenceId: 1, timestamp: '2026-06-26T10:00:05Z', type: 'ExecutionFailed', failureDetails: { errorType: 'System.InvalidOperationException', message: 'boom', stackTrace: 'at Foo()\n at Bar()' } },
+          ],
+        }),
+      ),
+    )
+    renderDetail()
+    const banner = await screen.findByRole('alert')
+    expect(banner).toHaveTextContent('System.InvalidOperationException')
+    expect(banner).toHaveTextContent('boom')
+    // Stack trace hidden initially. Scope to the banner: the same stack-trace
+    // text also appears in the per-event .evfail box (Task 2), which is present
+    // in the DOM even while its <details> is collapsed — so a page-wide query
+    // would match that instead. within(banner) asserts the banner's own toggle.
+    expect(within(banner).queryByText(/at Foo\(\)/)).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /show stack trace/i }))
+    expect(within(banner).getByText(/at Foo\(\)/)).toBeInTheDocument()
+    // Stack trace uses the wrapping class so long frames stay inside the banner.
+    expect(banner.querySelector('pre.stacktrace')).not.toBeNull()
+  })
+
+  it('shows no failure banner for a completed workflow', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-26T10:00:00Z',
+          lastUpdatedAt: '2026-06-26T10:00:05Z',
+          replayCount: 0,
+          history: [
+            { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'ExecutionStarted', name: 'OrderWorkflow' },
+          ],
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('COMPLETED')).toBeInTheDocument())
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 })

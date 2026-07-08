@@ -443,6 +443,20 @@ details[open] .caret { transform: rotate(90deg); }
 .evbody pre { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px 11px; max-height: 23.25em; overflow: auto; }
 .evbody .lblrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
 .evbody .lblrow .copybtn { padding: 2px 7px; font-size: 10px; }
+.evbody .evfail { display: grid; gap: 6px; padding: 9px 11px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--fail-fg) 35%, transparent); background: color-mix(in srgb, var(--fail-fg) 10%, transparent); }
+.evbody .evfail-type { font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--fail-fg); }
+.evbody .evfail-msg { font-size: 12.5px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.failbanner { display: grid; gap: 8px; padding: 12px 14px; margin-bottom: 18px; border-radius: 10px; border: 1px solid color-mix(in srgb, var(--fail-fg) 40%, transparent); background: var(--fail-bg); }
+.failbanner-head { display: flex; align-items: center; gap: 9px; }
+.failbanner-icon { color: var(--fail-fg); }
+.failbanner-type { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--fail-fg); }
+.failbanner-head .tbtn { margin-left: auto; }
+.failbanner-msg { font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.failbanner .lblrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Stack traces wrap (long frames/paths) instead of overflowing the box, while
+   keeping the vertical max-height scroll from pre.json. Scoped to .stacktrace so
+   JSON payloads keep their non-wrapping, horizontally-scrolling layout. */
+pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .retrybadge { font-family: var(--mono); font-size: 10px; color: var(--pend-fg); background: var(--pend-bg); border-radius: 5px; padding: 1px 6px; }
 .err { color: var(--fail-fg); }
 .ev.reveal { animation: fadein .28s ease; }

@@ -144,3 +144,92 @@ func TestDecodeSubOrchestrationCreated(t *testing.T) {
 	require.Equal(t, "ChildWorkflow", ex.History[1].Name)
 	require.Equal(t, "child-inst-9", ex.History[1].InstanceID)
 }
+
+func TestDecodeTaskAndSubOrchFailureDetails(t *testing.T) {
+	now := timestamppb.Now()
+	history := []*protos.HistoryEvent{
+		{EventId: 0, Timestamp: now, EventType: &protos.HistoryEvent_ExecutionStarted{ExecutionStarted: &protos.ExecutionStartedEvent{Name: "W"}}},
+		{EventId: 1, Timestamp: now, EventType: &protos.HistoryEvent_TaskScheduled{TaskScheduled: &protos.TaskScheduledEvent{Name: "Charge"}}},
+		{EventId: 2, Timestamp: now, EventType: &protos.HistoryEvent_TaskFailed{TaskFailed: &protos.TaskFailedEvent{
+			TaskScheduledId: 1,
+			FailureDetails: &protos.TaskFailureDetails{
+				ErrorType:    "ChargeError",
+				ErrorMessage: "card declined",
+				StackTrace:   &wrapperspb.StringValue{Value: "at Charge()\n at Run()"},
+			},
+		}}},
+		{EventId: 3, Timestamp: now, EventType: &protos.HistoryEvent_ChildWorkflowInstanceFailed{ChildWorkflowInstanceFailed: &protos.ChildWorkflowInstanceFailedEvent{
+			TaskScheduledId: 1,
+			FailureDetails: &protos.TaskFailureDetails{
+				ErrorType:    "ChildError",
+				ErrorMessage: "child boom",
+			},
+		}}},
+	}
+	ex := DecodeExecution("order", "inst-tf", history, "")
+
+	byType := map[string]HistoryEvent{}
+	for _, e := range ex.History {
+		byType[e.Type] = e
+	}
+
+	tf := byType["TaskFailed"]
+	require.NotNil(t, tf.FailureDetails)
+	require.Equal(t, "ChargeError", tf.FailureDetails.ErrorType)
+	require.Equal(t, "card declined", tf.FailureDetails.Message)
+	require.Equal(t, "at Charge()\n at Run()", tf.FailureDetails.StackTrace)
+
+	sf := byType["SubOrchestrationFailed"]
+	require.NotNil(t, sf.FailureDetails)
+	require.Equal(t, "ChildError", sf.FailureDetails.ErrorType)
+	require.Equal(t, "child boom", sf.FailureDetails.Message)
+	require.Equal(t, "", sf.FailureDetails.StackTrace) // none provided
+}
+
+func TestDecodeExecutionFailed(t *testing.T) {
+	now := timestamppb.Now()
+	history := []*protos.HistoryEvent{
+		{EventId: 0, Timestamp: now, EventType: &protos.HistoryEvent_ExecutionStarted{ExecutionStarted: &protos.ExecutionStartedEvent{Name: "W"}}},
+		{EventId: 1, Timestamp: now, EventType: &protos.HistoryEvent_ExecutionCompleted{ExecutionCompleted: &protos.ExecutionCompletedEvent{
+			WorkflowStatus: protos.OrchestrationStatus_ORCHESTRATION_STATUS_FAILED,
+			FailureDetails: &protos.TaskFailureDetails{
+				ErrorType:    "System.InvalidOperationException",
+				ErrorMessage: "boom",
+				StackTrace:   &wrapperspb.StringValue{Value: "at Foo()\n at Bar()"},
+			},
+		}}},
+	}
+	ex := DecodeExecution("order", "inst-f", history, "")
+
+	require.Equal(t, StatusFailed, ex.Status)
+
+	// Workflow-level failure details populated, incl. stack trace.
+	require.NotNil(t, ex.FailureDetails)
+	require.Equal(t, "System.InvalidOperationException", ex.FailureDetails.ErrorType)
+	require.Equal(t, "boom", ex.FailureDetails.Message)
+	require.Equal(t, "at Foo()\n at Bar()", ex.FailureDetails.StackTrace)
+
+	// Terminal event re-typed to ExecutionFailed with its own failure details.
+	last := ex.History[len(ex.History)-1]
+	require.Equal(t, "ExecutionFailed", last.Type)
+	require.NotNil(t, last.FailureDetails)
+	require.Equal(t, "boom", last.FailureDetails.Message)
+	require.Nil(t, last.Output)
+}
+
+func TestDecodeExecutionCompletedNoFailure(t *testing.T) {
+	now := timestamppb.Now()
+	history := []*protos.HistoryEvent{
+		{EventId: 0, Timestamp: now, EventType: &protos.HistoryEvent_ExecutionStarted{ExecutionStarted: &protos.ExecutionStartedEvent{Name: "W"}}},
+		{EventId: 1, Timestamp: now, EventType: &protos.HistoryEvent_ExecutionCompleted{ExecutionCompleted: &protos.ExecutionCompletedEvent{
+			WorkflowStatus: protos.OrchestrationStatus_ORCHESTRATION_STATUS_COMPLETED,
+			Result:         &wrapperspb.StringValue{Value: `"done"`},
+		}}},
+	}
+	ex := DecodeExecution("order", "inst-ok", history, "")
+	last := ex.History[len(ex.History)-1]
+	require.Equal(t, "ExecutionCompleted", last.Type)
+	require.Nil(t, last.FailureDetails)
+	require.NotNil(t, last.Output)
+	require.Equal(t, `"done"`, *last.Output)
+}

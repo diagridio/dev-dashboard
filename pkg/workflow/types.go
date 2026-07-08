@@ -38,19 +38,21 @@ func (s Status) IsTerminal() bool {
 }
 
 type FailureDetails struct {
-	ErrorType string `json:"errorType,omitempty"`
-	Message   string `json:"message,omitempty"`
+	ErrorType  string `json:"errorType,omitempty"`
+	Message    string `json:"message,omitempty"`
+	StackTrace string `json:"stackTrace,omitempty"`
 }
 
 type HistoryEvent struct {
-	SequenceID  int32     `json:"sequenceId"`
-	Timestamp   time.Time `json:"timestamp"`
-	Type        string    `json:"type"`
-	Name        string    `json:"name,omitempty"`
-	InstanceID  string    `json:"instanceId,omitempty"`  // child instance id for SubOrchestrationCreated
-	ScheduledID *int32    `json:"scheduledId,omitempty"` // start event's EventId; set on completion/fired events
-	Input       *string   `json:"input,omitempty"`
-	Output      *string   `json:"output,omitempty"`
+	SequenceID     int32           `json:"sequenceId"`
+	Timestamp      time.Time       `json:"timestamp"`
+	Type           string          `json:"type"`
+	Name           string          `json:"name,omitempty"`
+	InstanceID     string          `json:"instanceId,omitempty"`  // child instance id for SubOrchestrationCreated
+	ScheduledID    *int32          `json:"scheduledId,omitempty"` // start event's EventId; set on completion/fired events
+	Input          *string         `json:"input,omitempty"`
+	Output         *string         `json:"output,omitempty"`
+	FailureDetails *FailureDetails `json:"failureDetails,omitempty"` // set on TaskFailed / SubOrchestrationFailed / ExecutionFailed
 }
 
 type ExecutionSummary struct {

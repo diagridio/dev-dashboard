@@ -10,6 +10,12 @@ export interface WorkflowSummary {
   lastUpdatedAt?: string
 }
 
+export interface WorkflowFailureDetails {
+  errorType?: string
+  message?: string
+  stackTrace?: string
+}
+
 export interface WorkflowHistoryEvent {
   sequenceId: number
   timestamp: string
@@ -19,6 +25,7 @@ export interface WorkflowHistoryEvent {
   scheduledId?: number // start event's EventId; present on completion/fired events
   input?: string
   output?: string
+  failureDetails?: WorkflowFailureDetails
 }
 
 export interface WorkflowExecution extends WorkflowSummary {
@@ -26,7 +33,7 @@ export interface WorkflowExecution extends WorkflowSummary {
   output?: string
   customStatus?: string
   replayCount: number
-  failureDetails?: { errorType?: string; message?: string }
+  failureDetails?: WorkflowFailureDetails
   history: WorkflowHistoryEvent[]
 }
 
