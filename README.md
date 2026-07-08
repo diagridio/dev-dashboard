@@ -340,6 +340,26 @@ cd web; npm install; npm test; cd ..
 > `-tags integration`, or `-tags e2e`) reports "no test files" for most packages. Always pass
 > the tag.
 
+## Linting
+
+```sh
+make lint          # lint-go (gofmt + go vet) + lint-web (eslint)
+make lint-go       # = gofmt check + go vet -tags unit ./...
+make lint-web      # = cd web && npm install && npm run lint  (eslint .)
+```
+
+The Go checks (`gofmt`, `go vet`) and the web `eslint` run in CI on every push and pull request.
+
+**Pre-commit hook (optional):** install a hook that lints only your staged files before each
+commit:
+
+```sh
+make hooks         # symlinks .git/hooks/pre-commit -> scripts/pre-commit
+```
+
+It runs `gofmt`/`go vet` on staged Go files and `eslint` on staged `web/` files. Bypass it for a
+single commit with `git commit --no-verify`.
+
 ## Releasing
 
 > For maintainers with push access. Releases are built and published by the

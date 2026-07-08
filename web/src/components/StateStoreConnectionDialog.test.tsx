@@ -19,7 +19,7 @@ function setup(ui: React.ReactNode) {
 describe('StateStoreConnectionDialog', () => {
   it('disables Save until required fields are filled, then POSTs', async () => {
     server.use(http.get('/api/metadata/components', () => HttpResponse.json(catalog)))
-    let posted: any = null
+    let posted: unknown = null
     server.use(http.post('/api/statestores', async ({ request }) => {
       posted = await request.json()
       return HttpResponse.json({ name: 'orders' }, { status: 201 })
