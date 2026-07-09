@@ -61,7 +61,7 @@ func (m *manager) doCompose(ctx context.Context, in discovery.Instance, target T
 		return err
 	}
 	for _, id := range ids {
-		if _, err := m.run.Run(ctx, string(actionForCompose(action)), id); err != nil {
+		if _, err := m.run.Run(ctx, string(action), id); err != nil {
 			return err
 		}
 	}
@@ -109,8 +109,6 @@ func composeTargets(in discovery.Instance, target Target, action Action) ([]stri
 	}
 	return stopOrder, nil
 }
-
-func actionForCompose(a Action) Action { return a } // start|stop|restart map 1:1 to docker verbs
 
 // doStandalone dispatches start/stop/restart for a process-table instance.
 // Aspire-managed apps only allow stop; Aspire itself owns start/restart.

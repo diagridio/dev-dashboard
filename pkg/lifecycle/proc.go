@@ -77,6 +77,8 @@ func (execStarter) Start(argv []string, dir, logPath string) error {
 		if err == nil {
 			cmd.Stdout, cmd.Stderr = f, f
 			defer f.Close() // the child holds its own fd after Start
+		} else {
+			logger().Warn("log file unavailable for restarted process; output discarded", "path", logPath, "err", err)
 		}
 	}
 	if err := cmd.Start(); err != nil {

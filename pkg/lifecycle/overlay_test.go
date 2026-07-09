@@ -32,6 +32,33 @@ func TestOverlayAppendsFullyStoppedInstances(t *testing.T) {
 	require.Equal(t, discovery.StatusStopped, got.DaprdStatus)
 }
 
+func TestOverlaySynthesizeClearsStaleMetadata(t *testing.T) {
+	reg := NewRegistry()
+	stopped := standaloneInst()
+	stopped.DaprdStatus, stopped.AppStatus = discovery.StatusRunning, discovery.StatusRunning
+	stopped.Actors = []discovery.ActorType{{Type: "cart", Count: 3}}
+	stopped.Subscriptions = []discovery.Subscription{{PubsubName: "pubsub", Topic: "orders"}}
+	stopped.Components = []discovery.Component{{Name: "statestore", Type: "state.redis"}}
+	stopped.EnabledFeatures = []string{"some-feature"}
+	stopped.RuntimeVersion = "1.14.0"
+	stopped.Placement = "localhost:6050"
+	reg.RecordStop(stopped, map[Target]ProcSnapshot{TargetAll: {PID: 300}})
+
+	proc := newFakeProc() // nothing alive
+	svc := Overlay(fakeApps{items: map[string]discovery.Instance{}}, reg, proc)
+
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	in := items[0]
+	require.Nil(t, in.Actors)
+	require.Nil(t, in.Subscriptions)
+	require.Nil(t, in.Components)
+	require.Nil(t, in.EnabledFeatures)
+	require.Empty(t, in.RuntimeVersion)
+	require.Empty(t, in.Placement)
+}
+
 func TestOverlayMarksPartialAppStopOnLiveInstance(t *testing.T) {
 	reg := NewRegistry()
 	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{TargetApp: {PID: 100}})

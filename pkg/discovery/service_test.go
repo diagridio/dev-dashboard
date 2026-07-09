@@ -407,7 +407,7 @@ func TestEnrichMapsPerTargetStatusAndStartedAt(t *testing.T) {
 	require.Equal(t, "", in.AppStartedAt)
 }
 
-func TestEnrichStandalonetStatusesAndStartTimes(t *testing.T) {
+func TestEnrichStandaloneStatusesAndStartTimes(t *testing.T) {
 	daprdStart := time.Date(2026, 7, 9, 9, 0, 0, 0, time.UTC)
 	created := time.Date(2026, 7, 9, 8, 59, 0, 0, time.UTC)
 	scan := func() ([]ScanResult, error) {
