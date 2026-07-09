@@ -211,3 +211,71 @@ func TestAspireStartRejectedStopAllowed(t *testing.T) {
 	e, _ := reg.Get("orders")
 	require.True(t, e.Instance.IsAspire)
 }
+
+type fakeStarter struct {
+	started [][]string
+	dirs    []string
+	err     error
+}
+
+func (f *fakeStarter) Start(argv []string, dir, logPath string) error {
+	if f.err != nil {
+		return f.err
+	}
+	f.started = append(f.started, argv)
+	f.dirs = append(f.dirs, dir)
+	return nil
+}
+
+func TestStandaloneStartAllRerunsCLICommand(t *testing.T) {
+	reg := NewRegistry()
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
+		TargetAll:   {PID: 300, Argv: []string{"dapr", "run", "--app-id", "orders"}, Dir: "/src"},
+		TargetApp:   {PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"},
+		TargetDaprd: {PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"},
+	})
+	st := &fakeStarter{}
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, newFakeProc(), st)
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStart))
+	require.Equal(t, [][]string{{"dapr", "run", "--app-id", "orders"}}, st.started)
+	require.Equal(t, []string{"/src"}, st.dirs)
+	_, ok := reg.Get("orders")
+	require.False(t, ok, "whole entry dropped after start")
+}
+
+func TestStandaloneStartSingleTarget(t *testing.T) {
+	reg := NewRegistry()
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
+		TargetApp:   {PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src", LogPath: "/tmp/app.log"},
+		TargetDaprd: {PID: 200, Argv: []string{"daprd", "--app-id", "orders"}},
+	})
+	st := &fakeStarter{}
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, newFakeProc(), st)
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionStart))
+	require.Equal(t, [][]string{{"go", "run", "."}}, st.started)
+	e, ok := reg.Get("orders")
+	require.True(t, ok, "daprd snapshot remains")
+	require.Len(t, e.Procs, 1)
+}
+
+func TestStandaloneStartWithoutSnapshotRejected(t *testing.T) {
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}},
+		NewRegistry(), nil, newFakeProc(), &fakeStarter{})
+	require.ErrorIs(t, m.Do(context.Background(), "orders", TargetApp, ActionStart), ErrUnsupported)
+}
+
+func TestStandaloneRestartStopsThenStarts(t *testing.T) {
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"}
+	proc.alive[100] = true
+	st := &fakeStarter{}
+	reg := NewRegistry()
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, proc, st).(*manager)
+	m.grace = 10 * time.Millisecond
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionRestart))
+	require.Equal(t, []int{100}, proc.terminated)
+	require.Equal(t, [][]string{{"go", "run", "."}}, st.started)
+}

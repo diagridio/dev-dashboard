@@ -211,7 +211,47 @@ func (m *manager) terminateWithEscalation(ctx context.Context, pid int) error {
 	return nil
 }
 
-// standaloneStart is implemented in the next task.
+// standaloneStart re-runs the snapshot captured at stop time. TargetAll
+// prefers the dapr CLI command (it starts both halves); the entry is dropped
+// so the next scan's live data wins.
 func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, target Target) error {
-	return fmt.Errorf("%w: standalone start not yet implemented", ErrUnsupported)
+	entry, ok := m.reg.Get(in.InstanceKey)
+	if !ok {
+		return fmt.Errorf("%w: this app was not stopped by the dashboard, so there is no command to re-run", ErrUnsupported)
+	}
+	if target == TargetAll {
+		if snap, ok := entry.Procs[TargetAll]; ok {
+			if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
+				return err
+			}
+			m.reg.Drop(in.InstanceKey)
+			return nil
+		}
+		// No CLI snapshot: bring the halves up individually, sidecar first.
+		started := false
+		for _, t := range []Target{TargetDaprd, TargetApp} {
+			snap, ok := entry.Procs[t]
+			if !ok {
+				continue
+			}
+			if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
+				return err
+			}
+			m.reg.DropTarget(in.InstanceKey, t)
+			started = true
+		}
+		if !started {
+			return fmt.Errorf("%w: no captured command to re-run", ErrUnsupported)
+		}
+		return nil
+	}
+	snap, ok := entry.Procs[target]
+	if !ok {
+		return fmt.Errorf("%w: no captured command for %s", ErrUnsupported, target)
+	}
+	if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
+		return err
+	}
+	m.reg.DropTarget(in.InstanceKey, target)
+	return nil
 }
