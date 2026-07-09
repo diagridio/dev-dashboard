@@ -19,6 +19,7 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/logging"
 	"github.com/diagridio/dev-dashboard/pkg/metadata"
 	"github.com/diagridio/dev-dashboard/pkg/server"
+	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/diagridio/dev-dashboard/web"
@@ -67,6 +68,7 @@ func Execute() error {
 func runServe(ctx context.Context, port int, basePath string, noOpen bool, stateStore, namespace string, verbose bool) error {
 	logger := logging.New(verbose)
 	slog.SetDefault(logger)
+	statestore.SetVerbose(verbose)
 
 	dist, err := web.DistFS()
 	if err != nil {

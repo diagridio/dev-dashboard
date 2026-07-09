@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync/atomic"
 
 	"github.com/dapr/components-contrib/metadata"
 	"github.com/dapr/components-contrib/state"
@@ -13,6 +14,16 @@ import (
 	"github.com/dapr/components-contrib/state/sqlite"
 	"github.com/dapr/kit/logger"
 )
+
+// verbose gates the log level of the kit logger handed to the embedded
+// components-contrib backends. Off (the default) suppresses their INFO
+// chatter (e.g. sqlite's "Creating metadata table"); warnings and errors
+// always surface.
+var verbose atomic.Bool
+
+// SetVerbose lets the backend state stores emit informational logs; wire it
+// to the dashboard's --verbose flag.
+func SetVerbose(v bool) { verbose.Store(v) }
 
 // ErrUnsupported is returned by New when the component type is not one of the
 // three supported backends (state.redis, state.sqlite, state.postgresql/postgres).
@@ -58,6 +69,11 @@ type ccStore struct {
 // Returns ErrUnsupported for any other type.
 func New(ctx context.Context, c Component) (Store, error) {
 	log := logger.NewLogger("dev-dashboard")
+	if verbose.Load() {
+		log.SetOutputLevel(logger.InfoLevel)
+	} else {
+		log.SetOutputLevel(logger.WarnLevel)
+	}
 
 	var inner state.Store
 	switch c.Type {
