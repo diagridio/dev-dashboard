@@ -124,9 +124,9 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
         <Link className="celllink" to={`/apps/${key}`} onClick={(e) => e.stopPropagation()}>
           {hasContainerName ? (
             <>
-              {key}
+              {app.appId}
               <span className="muted" style={{ display: 'block', fontSize: 11, fontWeight: 400 }}>
-                {app.appId}
+                {key}
               </span>
             </>
           ) : (
