@@ -10,6 +10,7 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
 	"github.com/diagridio/dev-dashboard/pkg/controlplane"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/lifecycle"
 	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
 	"github.com/diagridio/dev-dashboard/pkg/server"
@@ -25,8 +26,11 @@ type serveDeps struct {
 	StateStorePath string // explicit component YAML; "" means auto-detect
 	Namespace      string
 	Apps           discovery.Service
-	HomeDir        string
-	HTTPClient     *http.Client // workflow HTTP client (remover/purge)
+	// Lifecycle starts/stops/restarts discovered apps; nil disables the actions
+	// API (routes return 503).
+	Lifecycle  lifecycle.Manager
+	HomeDir    string
+	HTTPClient *http.Client // workflow HTTP client (remover/purge)
 	// ComposeEnv returns the compose endpoint/mount context from the last
 	// compose scan; nil when compose discovery is disabled (tests, no runtime).
 	ComposeEnv func() discovery.ComposeEnv
@@ -95,6 +99,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		DistFS:           dist,
 		Version:          version.Get(),
 		Apps:             decorated,
+		Lifecycle:        deps.Lifecycle,
 		ContainerLogs:    deps.ContainerLogs,
 		Backend:          rc,
 		Stores:           rc,

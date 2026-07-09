@@ -16,6 +16,7 @@ import (
 
 	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/lifecycle"
 	"github.com/diagridio/dev-dashboard/pkg/logging"
 	"github.com/diagridio/dev-dashboard/pkg/metadata"
 	"github.com/diagridio/dev-dashboard/pkg/server"
@@ -96,15 +97,22 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 	}
 	_, crtRunner := containerruntime.Detect()
 	composeSrc := discovery.NewComposeSource(crtRunner)
+	lifeReg := lifecycle.NewRegistry()
+	lifeProc := lifecycle.NewProcController()
+	appsSvc := lifecycle.Overlay(
+		discovery.New(
+			discovery.Merge(discovery.StandaloneScanner(), composeSrc.Scanner()),
+			&http.Client{Timeout: 2 * time.Second}),
+		lifeReg, lifeProc)
+	lifeMgr := lifecycle.New(appsSvc, lifeReg, crtRunner, lifeProc, lifecycle.NewStarter())
 	telemetry := telemetryEnabled(os.Getenv)
 	updateCheck := updatecheck.New(&http.Client{Timeout: 5 * time.Second}, "https://api.github.com", "diagridio/dev-dashboard", version.Get().Version, time.Hour)
 	opts, closers := assembleOptions(ctx, serveDeps{
-		BasePath:       basePath,
-		StateStorePath: stateStore,
-		Namespace:      namespace,
-		Apps: discovery.New(
-			discovery.Merge(discovery.StandaloneScanner(), composeSrc.Scanner()),
-			&http.Client{Timeout: 2 * time.Second}),
+		BasePath:         basePath,
+		StateStorePath:   stateStore,
+		Namespace:        namespace,
+		Apps:             appsSvc,
+		Lifecycle:        lifeMgr,
 		HomeDir:          home,
 		HTTPClient:       &http.Client{Timeout: 10 * time.Second},
 		ComposeEnv:       composeSrc.Env,
