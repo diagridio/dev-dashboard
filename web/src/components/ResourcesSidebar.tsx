@@ -267,6 +267,20 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange,
       </div>
 
       <div className="sbfoot">
+        {updateAvailable && update && (
+          <span className="pw">
+            <a
+              className="upbadge"
+              href={update.releaseUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`${update.latest} is available`}
+              onClick={() => trackAction('update_click', { placement: 'footer', latest: update.latest })}
+            >
+              <span className="updot" aria-hidden="true" /> Update available <span className="ext">↗</span>
+            </a>
+          </span>
+        )}
         <span className="pw">
           Powered by{' '}
           <a
@@ -277,21 +291,6 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange,
             Diagrid
           </a>
           {' · '}v{version}
-          {updateAvailable && update && (
-            <>
-              {'  '}
-              <a
-                className="upbadge"
-                href={update.releaseUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={`${update.latest} is available`}
-                onClick={() => trackAction('update_click', { placement: 'footer', latest: update.latest })}
-              >
-                <span className="updot" aria-hidden="true" /> Update available <span className="ext">↗</span>
-              </a>
-            </>
-          )}
         </span>
         <span className="pw">
           <a

@@ -429,6 +429,14 @@ describe('ResourcesSidebar update indicator', () => {
     expect(link).toHaveAttribute('href', 'https://github.com/diagridio/dev-dashboard/releases/tag/v1.3.0')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    // The badge is its own footer line above Powered by, so nothing is cut off
+    // by the nowrap version line; Issues & feedback stays visible below.
+    const lines = Array.from(document.querySelectorAll('.sbfoot .pw')).map((el) => el.textContent ?? '')
+    expect(lines).toHaveLength(3)
+    expect(lines[0]).toContain('Update available')
+    expect(lines[0]).not.toContain('Powered by')
+    expect(lines[1]).toContain('Powered by')
+    expect(lines[2]).toContain('Issues & feedback')
   })
 
   it('shows no update link when up to date', async () => {
