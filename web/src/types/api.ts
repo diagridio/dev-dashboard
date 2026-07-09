@@ -7,6 +7,8 @@ export type HealthStatus = 'healthy' | 'starting' | 'unhealthy' | 'unknown'
  */
 export interface AppSummary {
   appId: string
+  /** routing identity: container name for compose apps, appId otherwise */
+  instanceKey?: string
   health: HealthStatus
   runtime: string
   /** true when the app is .NET Aspire-managed (started by the Aspire host, not a run template) */

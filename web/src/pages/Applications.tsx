@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useApps } from '../hooks/useApps'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
+import { appKey } from '../lib/appKey'
 import type { AppSummary } from '../types/api'
 
 const PAGE_HEADER = (
@@ -95,7 +96,7 @@ export function Applications() {
             </thead>
             <tbody>
               {apps.map((app) => (
-                <AppRow key={app.appId} app={app} onOpen={() => navigate(`/apps/${app.appId}`)} />
+                <AppRow key={appKey(app)} app={app} onOpen={() => navigate(`/apps/${appKey(app)}`)} />
               ))}
             </tbody>
           </table>
@@ -111,6 +112,8 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
     v ? <td className="mono tabnum">{v}</td> : <td className="mono tabnum faint">—</td>
   const sourceLabel = app.runTemplate || (app.isAspire ? 'Aspire' : app.source === 'compose' ? 'Compose' : '—')
   const unreachable = app.source === 'compose' && app.sidecarReachable === false
+  const key = appKey(app)
+  const hasContainerName = key !== app.appId
   return (
     <tr onClick={onOpen}>
       <td>
@@ -123,8 +126,17 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
         </span>
       </td>
       <td className="b">
-        <Link className="celllink" to={`/apps/${app.appId}`} onClick={(e) => e.stopPropagation()}>
-          {app.appId}
+        <Link className="celllink" to={`/apps/${key}`} onClick={(e) => e.stopPropagation()}>
+          {hasContainerName ? (
+            <>
+              {key}
+              <span className="muted" style={{ display: 'block', fontSize: 11, fontWeight: 400 }}>
+                {app.appId}
+              </span>
+            </>
+          ) : (
+            app.appId
+          )}
         </Link>
       </td>
       <td>
