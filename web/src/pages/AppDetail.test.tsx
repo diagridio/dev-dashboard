@@ -26,6 +26,82 @@ function renderDetail() {
 }
 
 describe('AppDetail', () => {
+  const runningApp = {
+    appId: 'order',
+    health: 'healthy',
+    runtime: 'go',
+    httpPort: 3500,
+    grpcPort: 50001,
+    appPort: 8080,
+    daprdPid: 48230,
+    appPid: 48213,
+    cliPid: 48201,
+    command: 'go run ./cmd/order',
+    runtimeVersion: '1.14.4',
+    metadataOk: true,
+    appStatus: 'running',
+    daprdStatus: 'running',
+  }
+
+  it('stops the whole instance from the header after confirm', async () => {
+    let posted = ''
+    server.use(
+      http.get('/api/apps/order', () => HttpResponse.json(runningApp)),
+      http.post('/api/apps/order/all/stop', () => {
+        posted = 'all/stop'
+        return HttpResponse.json({ status: 'ok' })
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    const stopButtons = screen.getAllByRole('button', { name: 'Stop' })
+    stopButtons[0].click() // header button renders first
+    await waitFor(() => expect(posted).toBe('all/stop'))
+    confirmSpy.mockRestore()
+  })
+
+  it('does not act when confirm is declined', async () => {
+    let posted = false
+    server.use(
+      http.get('/api/apps/order', () => HttpResponse.json(runningApp)),
+      http.post('/api/apps/order/all/stop', () => {
+        posted = true
+        return HttpResponse.json({ status: 'ok' })
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    screen.getAllByRole('button', { name: 'Stop' })[0].click()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(posted).toBe(false)
+    confirmSpy.mockRestore()
+  })
+
+  it('offers Start for a stopped target and hides Start for Aspire', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, appStatus: 'stopped', daprdStatus: 'stopped', isAspire: true }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Managed by Aspire/)).toBeInTheDocument()
+  })
+
+  it('offers per-panel Start for a stopped non-Aspire target', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, daprdStatus: 'stopped' }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getAllByRole('button', { name: 'Start' }).length).toBeGreaterThan(0)
+  })
+
   it('renders header and sidecar fields', async () => {
     server.use(
       http.get('/api/apps/order', () =>
