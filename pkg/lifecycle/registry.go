@@ -99,6 +99,9 @@ func (r *Registry) sortedKeys() []string {
 func (e *Entry) clone() Entry {
 	procs := make(map[Target]ProcSnapshot, len(e.Procs))
 	for t, s := range e.Procs {
+		// Deep-copy Argv to prevent mutations of the returned Entry from corrupting
+		// the stored snapshot.
+		s.Argv = append([]string(nil), s.Argv...)
 		procs[t] = s
 	}
 	return Entry{Instance: e.Instance, Procs: procs}
