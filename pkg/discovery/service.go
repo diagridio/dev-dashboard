@@ -157,7 +157,13 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		in.SidecarReachable = true
 	}
 	if in.Source == SourceCompose && in.Runtime == "unknown" {
-		in.Runtime = InferRuntimeFromImage(r.AppImage)
+		// Prefer the scanner's signal chain (argv → env → image → build
+		// context); fall back to image inference for scan results that
+		// predate AppRuntime (test fixtures).
+		in.Runtime = r.AppRuntime
+		if in.Runtime == "" || in.Runtime == "unknown" {
+			in.Runtime = InferRuntimeFromImage(r.AppImage)
+		}
 	}
 	// An unreachable sidecar (compose, HTTP port unpublished) cannot answer
 	// health or metadata — skip both probes instead of burning their timeouts.

@@ -363,3 +363,23 @@ func TestGetInstanceKeyMatchBeatsAppIDMatch(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "second", in.DaprdContainerID)
 }
+
+func TestEnrichComposeUsesAppRuntime(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			// Scanner chain resolved: wins over image inference.
+			{AppID: "a", Source: SourceCompose, SidecarReachable: false, AppRuntime: "dotnet", AppImage: "python:3.12"},
+			// Chain exhausted ("unknown"): image fallback still applies.
+			{AppID: "b", Source: SourceCompose, SidecarReachable: false, AppRuntime: "unknown", AppImage: "python:3.12"},
+			// Field absent (older fixtures): image fallback still applies.
+			{AppID: "c", Source: SourceCompose, SidecarReachable: false, AppImage: "node:22"},
+		}, nil
+	}
+	svc := New(scan, http.DefaultClient)
+	apps, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, apps, 3)
+	require.Equal(t, "dotnet", apps[0].Runtime)
+	require.Equal(t, "python", apps[1].Runtime)
+	require.Equal(t, "node", apps[2].Runtime)
+}
