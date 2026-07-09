@@ -109,7 +109,7 @@ func (s *ComposeSource) scanOnce() ([]ScanResult, ComposeEnv, error) {
 	defer cancel()
 	env := ComposeEnv{Projects: map[string]ComposeProject{}, PathProject: map[string]string{}}
 
-	out, err := s.run.Run(ctx, "ps", "-q", "--filter", "label="+labelComposeProject)
+	out, err := s.run.Run(ctx, "ps", "-aq", "--filter", "label="+labelComposeProject)
 	if err != nil {
 		return nil, env, fmt.Errorf("compose ps: %w", err)
 	}
@@ -143,9 +143,6 @@ func (s *ComposeSource) scanOnce() ([]ScanResult, ComposeEnv, error) {
 
 	var results []ScanResult
 	for _, c := range containers {
-		if !c.Running {
-			continue
-		}
 		args, ok := parseDaprdArgs(c.Argv)
 		if !ok || args.AppID == "" {
 			continue
@@ -162,6 +159,10 @@ func (s *ComposeSource) scanOnce() ([]ScanResult, ComposeEnv, error) {
 			ComposeService:     c.Service,
 			DaprdContainerID:   c.ID,
 			DaprdContainerName: c.Name,
+			DaprdStatus:        composeStatus(c.Running),
+		}
+		if c.Running {
+			r.DaprdStartedAt = c.StartedAt
 		}
 		r.SidecarReachable = r.HTTPPort != 0
 		if args.ResourcesPath != "" {
@@ -195,8 +196,21 @@ func (s *ComposeSource) scanOnce() ([]ScanResult, ComposeEnv, error) {
 			r.AppContainerName = app.Name
 			r.AppImage = app.Image
 			r.AppRuntime = composeAppRuntime(app)
+			r.AppStatus = composeStatus(app.Running)
+			if app.Running {
+				r.AppStartedAt = app.StartedAt
+			}
 		}
 		results = append(results, r)
 	}
 	return results, env, nil
+}
+
+// composeStatus maps a container's running state to the per-target status
+// string ("running"/"stopped").
+func composeStatus(running bool) string {
+	if running {
+		return StatusRunning
+	}
+	return StatusStopped
 }
