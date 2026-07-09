@@ -49,6 +49,23 @@ type ScanResult struct {
 	SidecarReachable bool
 }
 
+// Key returns the routing identity for this scan result. Compose sidecars can
+// share one -app-id (scaled instances), so they key by container name — the
+// app container when paired, else the daprd container; everything else keys
+// by AppID. Container names are unique per host, so keys are unique whenever
+// a container name is available.
+func (r ScanResult) Key() string {
+	if r.Source == SourceCompose {
+		if r.AppContainerName != "" {
+			return r.AppContainerName
+		}
+		if r.DaprdContainerName != "" {
+			return r.DaprdContainerName
+		}
+	}
+	return r.AppID
+}
+
 type Service interface {
 	List(ctx context.Context) ([]Instance, error)
 	Get(ctx context.Context, appID string) (Instance, error)
@@ -86,7 +103,12 @@ func (s *service) List(ctx context.Context) ([]Instance, error) {
 		}(i, r)
 	}
 	wg.Wait()
-	sort.SliceStable(out, func(a, b int) bool { return out[a].AppID < out[b].AppID })
+	sort.SliceStable(out, func(a, b int) bool {
+		if out[a].AppID != out[b].AppID {
+			return out[a].AppID < out[b].AppID
+		}
+		return out[a].InstanceKey < out[b].InstanceKey
+	})
 	logger().Info("discovered Dapr apps", "count", len(out))
 	return out, nil
 }
@@ -107,7 +129,7 @@ func (s *service) Get(ctx context.Context, appID string) (Instance, error) {
 
 func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	in := Instance{
-		AppID: r.AppID, HTTPPort: r.HTTPPort, GRPCPort: r.GRPCPort, AppPort: r.AppPort,
+		AppID: r.AppID, InstanceKey: r.Key(), HTTPPort: r.HTTPPort, GRPCPort: r.GRPCPort, AppPort: r.AppPort,
 		DaprdPID: r.DaprdPID, CLIPID: r.CLIPID, RunTemplate: r.RunTemplate,
 		ResourcePaths: r.ResourcePaths, ConfigPath: r.ConfigPath, Command: r.Command,
 		Created: r.Created.Local().Format("15:04:05"), Age: humanAge(r.Created),

@@ -283,3 +283,43 @@ func TestHumanAge(t *testing.T) {
 		require.Equal(t, "0s", humanAge(now.Add(5*time.Second)))
 	})
 }
+
+func TestScanResultKey(t *testing.T) {
+	t.Run("compose uses app container name", func(t *testing.T) {
+		r := ScanResult{AppID: "daprmq-service", Source: SourceCompose, AppContainerName: "daprmq-host-1", DaprdContainerName: "daprmq-host-1-dapr"}
+		require.Equal(t, "daprmq-host-1", r.Key())
+	})
+	t.Run("compose falls back to daprd container name", func(t *testing.T) {
+		r := ScanResult{AppID: "daprmq-service", Source: SourceCompose, DaprdContainerName: "daprmq-host-1-dapr"}
+		require.Equal(t, "daprmq-host-1-dapr", r.Key())
+	})
+	t.Run("compose falls back to app id", func(t *testing.T) {
+		r := ScanResult{AppID: "daprmq-service", Source: SourceCompose}
+		require.Equal(t, "daprmq-service", r.Key())
+	})
+	t.Run("standalone always keys by app id", func(t *testing.T) {
+		r := ScanResult{AppID: "order", Source: SourceStandalone, AppContainerName: "ignored"}
+		require.Equal(t, "order", r.Key())
+	})
+	t.Run("empty source keys by app id", func(t *testing.T) {
+		require.Equal(t, "order", ScanResult{AppID: "order"}.Key())
+	})
+}
+
+func TestListSetsInstanceKeyAndSortsWithinAppID(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			{AppID: "daprmq-service", Source: SourceCompose, SidecarReachable: false, AppContainerName: "daprmq-host-2"},
+			{AppID: "daprmq-service", Source: SourceCompose, SidecarReachable: false, AppContainerName: "daprmq-gateway-1"},
+			{AppID: "aaa-app"},
+		}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Millisecond})
+	list, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, list, 3)
+	require.Equal(t, "aaa-app", list[0].AppID)
+	require.Equal(t, "aaa-app", list[0].InstanceKey) // standalone: key == app id
+	require.Equal(t, "daprmq-gateway-1", list[1].InstanceKey)
+	require.Equal(t, "daprmq-host-2", list[2].InstanceKey)
+}
