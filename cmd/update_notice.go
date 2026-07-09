@@ -12,12 +12,18 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-// formatUpdateNotice renders the two-line "new version available" notice.
-func formatUpdateNotice(current, latest string) string {
+// formatUpdateNotice renders the two-line "new version available" notice,
+// followed by a blank line separating it from the startup message. The GitHub
+// release URL is appended to the version line when known.
+func formatUpdateNotice(current, latest, releaseURL string) string {
+	link := ""
+	if releaseURL != "" {
+		link = fmt.Sprintf(" (%s)", releaseURL)
+	}
 	return fmt.Sprintf(
-		"A new version of the Dapr Dev Dashboard is available: %s → %s\n"+
-			"Run `dev-dashboard update` to upgrade.\n",
-		current, latest)
+		"A new version of the Dapr Dev Dashboard is available: %s → %s%s\n"+
+			"Run `dev-dashboard update` to upgrade.\n\n",
+		current, latest, link)
 }
 
 // printUpdateNotice writes the notice to w when an update is available; it writes
@@ -26,7 +32,7 @@ func printUpdateNotice(w io.Writer, r updatecheck.Result) {
 	if !r.UpdateAvailable {
 		return
 	}
-	fmt.Fprint(w, formatUpdateNotice(r.Current, r.Latest))
+	fmt.Fprint(w, formatUpdateNotice(r.Current, r.Latest, r.ReleaseURL))
 }
 
 // maybeAnnounceUpdate runs the startup version check and prints the notice to
