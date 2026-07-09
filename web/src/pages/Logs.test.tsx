@@ -988,4 +988,25 @@ describe('Logs', () => {
     const logfoot = document.querySelector('.logfoot')
     expect(logfoot?.textContent).toMatch(/tail \d+ KB/)
   })
+
+  it('app dropdown lists duplicate-app-id compose instances as distinct options keyed by instanceKey', async () => {
+    const host1 = { ...COMPOSE_SUMMARY, appId: 'daprmq-service', instanceKey: 'daprmq-host-1' }
+    const host2 = { ...COMPOSE_SUMMARY, appId: 'daprmq-service', instanceKey: 'daprmq-host-2' }
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([host1, host2])),
+      http.get('/api/apps/daprmq-host-1', () =>
+        HttpResponse.json({ ...COMPOSE_DETAIL, appId: 'daprmq-service', instanceKey: 'daprmq-host-1' }),
+      ),
+    )
+    renderAt('/logs?app=daprmq-host-1&source=daprd')
+    const select = await screen.findByLabelText('App')
+    await waitFor(() => {
+      const values = Array.from(select.querySelectorAll('option')).map(o => o.value)
+      expect(values).toContain('daprmq-host-1')
+      expect(values).toContain('daprmq-host-2')
+    })
+    // Labels disambiguate: app id + container name.
+    expect(screen.getByRole('option', { name: 'daprmq-service (daprmq-host-1)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'daprmq-service (daprmq-host-2)' })).toBeInTheDocument()
+  })
 })

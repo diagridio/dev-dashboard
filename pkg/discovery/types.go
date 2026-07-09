@@ -12,7 +12,11 @@ const (
 
 // Instance represents a running application instance with Dapr
 type Instance struct {
-	AppID              string         `json:"appId"`
+	AppID string `json:"appId"`
+	// InstanceKey is the routing identity: container name for compose apps
+	// (falling back to app id), app id otherwise. Unique per instance even
+	// when several compose sidecars share one -app-id.
+	InstanceKey        string         `json:"instanceKey"`
 	Health             Health         `json:"health"`
 	Runtime            string         `json:"runtime"`            // e.g. "go", "python", "node", "dotnet", "java", "rust", "unknown"
 	IsAspire           bool           `json:"isAspire,omitempty"` // true when the app is .NET Aspire-managed

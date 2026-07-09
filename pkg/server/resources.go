@@ -59,7 +59,7 @@ func resourcesRouter(res resources.Service, apps discovery.Service) http.Handler
 	return r
 }
 
-// loadedByFor returns the sorted app ids whose instance contains component name.
+// loadedByFor returns the sorted instance keys whose instance contains component name.
 // It lists apps once and scans only for the requested name, avoiding a full index build.
 func loadedByFor(ctx context.Context, apps discovery.Service, name string) []string {
 	list, err := apps.List(ctx)
@@ -70,7 +70,7 @@ func loadedByFor(ctx context.Context, apps discovery.Service, name string) []str
 	for _, in := range list {
 		for _, c := range in.Components {
 			if c.Name == name {
-				ids = append(ids, in.AppID)
+				ids = append(ids, instanceKey(in))
 				break
 			}
 		}
@@ -79,7 +79,7 @@ func loadedByFor(ctx context.Context, apps discovery.Service, name string) []str
 	return ids
 }
 
-// loadedByIndex maps component name -> sorted app ids that loaded it.
+// loadedByIndex maps component name -> sorted instance keys that loaded it.
 func loadedByIndex(ctx context.Context, apps discovery.Service) map[string][]string {
 	idx := map[string][]string{}
 	list, err := apps.List(ctx)
@@ -88,7 +88,7 @@ func loadedByIndex(ctx context.Context, apps discovery.Service) map[string][]str
 	}
 	for _, in := range list {
 		for _, c := range in.Components {
-			idx[c.Name] = append(idx[c.Name], in.AppID)
+			idx[c.Name] = append(idx[c.Name], instanceKey(in))
 		}
 	}
 	for k := range idx {

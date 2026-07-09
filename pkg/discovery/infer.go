@@ -47,3 +47,27 @@ func InferRuntimeFromImage(image string) string {
 		return "unknown"
 	}
 }
+
+// InferRuntimeFromEnv guesses the app's language from environment variables
+// inherited from official base images (best-effort, conservative — only
+// well-known variable names count, never values).
+func InferRuntimeFromEnv(env []string) string {
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		switch name {
+		case "DOTNET_VERSION", "ASPNET_VERSION":
+			return "dotnet"
+		case "NODE_VERSION":
+			return "node"
+		case "PYTHON_VERSION":
+			return "python"
+		case "JAVA_VERSION", "JAVA_HOME":
+			return "java"
+		case "GOLANG_VERSION":
+			return "go"
+		case "RUST_VERSION", "CARGO_HOME":
+			return "rust"
+		}
+	}
+	return "unknown"
+}

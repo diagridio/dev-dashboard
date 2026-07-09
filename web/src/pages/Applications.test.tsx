@@ -131,4 +131,24 @@ describe('Applications', () => {
     renderAt()
     await waitFor(() => expect(document.title).toBe('Applications | Diagrid Dev Dashboard'))
   })
+
+  it('compose apps with duplicate app ids link by container name with the app id underneath', async () => {
+    mockApps([
+      { ...baseApp, appId: 'daprmq-service', instanceKey: 'daprmq-host-1', source: 'compose', composeProject: 'dapr-mq', sidecarReachable: true, runTemplate: '' },
+      { ...baseApp, appId: 'daprmq-service', instanceKey: 'daprmq-host-2', source: 'compose', composeProject: 'dapr-mq', sidecarReachable: true, runTemplate: '' },
+    ])
+    renderAt()
+    const link1 = await screen.findByRole('link', { name: /daprmq-host-1/ })
+    expect(link1).toHaveAttribute('href', '/apps/daprmq-host-1')
+    expect(screen.getByRole('link', { name: /daprmq-host-2/ })).toHaveAttribute('href', '/apps/daprmq-host-2')
+    // The app id renders as a secondary line in each of the two rows.
+    expect(screen.getAllByText('daprmq-service')).toHaveLength(2)
+  })
+
+  it('non-compose apps render a single-line app id and link by app id', async () => {
+    mockApps([{ ...baseApp, instanceKey: 'order' }])
+    renderAt()
+    const link = await screen.findByRole('link', { name: 'order' })
+    expect(link).toHaveAttribute('href', '/apps/order')
+  })
 })

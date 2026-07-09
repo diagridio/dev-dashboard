@@ -56,3 +56,20 @@ func TestResourcesListWithLoadedBy(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, r5.StatusCode)
 	require.Contains(t, body5, `"error":"kind must be component or configuration"`)
 }
+
+func TestLoadedByUsesInstanceKeys(t *testing.T) {
+	res := fakeResources{items: []resources.Resource{{Name: "statestore", Kind: resources.KindComponent, Type: "state.postgresql"}}}
+	apps := &fakeApps{instances: []discovery.Instance{
+		{AppID: "daprmq-service", InstanceKey: "daprmq-host-1", Components: []discovery.Component{{Name: "statestore"}}},
+		{AppID: "daprmq-service", InstanceKey: "daprmq-host-2", Components: []discovery.Component{{Name: "statestore"}}},
+	}}
+	h := resourcesRouter(res, apps)
+
+	r1, body := get(t, h, "/component/statestore")
+	require.Equal(t, http.StatusOK, r1.StatusCode)
+	require.Contains(t, body, `"loadedBy":["daprmq-host-1","daprmq-host-2"]`)
+
+	r2, body2 := get(t, h, "/?kind=component")
+	require.Equal(t, http.StatusOK, r2.StatusCode)
+	require.Contains(t, body2, `"loadedBy":["daprmq-host-1","daprmq-host-2"]`)
+}

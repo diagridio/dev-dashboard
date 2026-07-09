@@ -165,4 +165,18 @@ describe('Subscriptions', () => {
     // Wait for data to settle
     await screen.findByText('orders')
   })
+
+  it('duplicate-app-id instances render distinct rows linking by instanceKey', async () => {
+    server.use(
+      http.get('/api/subscriptions', () =>
+        HttpResponse.json([
+          { appId: 'daprmq-service', instanceKey: 'daprmq-host-1', pubsubName: 'kafka-pubsub', topic: 'orders' },
+          { appId: 'daprmq-service', instanceKey: 'daprmq-host-2', pubsubName: 'kafka-pubsub', topic: 'orders' },
+        ]),
+      ),
+    )
+    renderAt()
+    const links = await screen.findAllByRole('link', { name: /daprmq-service/ })
+    expect(links.map(l => l.getAttribute('href'))).toEqual(['/apps/daprmq-host-1', '/apps/daprmq-host-2'])
+  })
 })

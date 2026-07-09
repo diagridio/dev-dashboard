@@ -5,6 +5,7 @@ import { copyText } from '../lib/clipboard'
 import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
 import { useToast } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
+import { appKey } from '../lib/appKey'
 
 // ---------- content ----------
 
@@ -12,12 +13,15 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const navigate = useNavigate()
   const { toast, toastNode } = useToast()
 
-  useDocumentTitle(app.appId)
+  useDocumentTitle(appKey(app))
 
   const copyPath = (path: string) => {
     copyText(path)
     toast.show('Path copied')
   }
+
+  const key = appKey(app)
+  const hasContainerName = key !== app.appId
 
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
   const isCompose = app.source === 'compose'
@@ -29,24 +33,27 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       <div className="crumbs">
         <Link to="/">Applications</Link>
         <span className="sep">/</span>
-        <span className="cur">{app.appId}</span>
+        <span className="cur">{key}</span>
       </div>
 
       {/* Page header */}
       <div className="phead">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <h1>{app.appId}</h1>
-          <span className="health">
-            <span className={`led ${ledClass(app.health)}`} /> {app.health}
-          </span>
-          <span className="lang">
-            <span className="sw" style={{ background: runtimeSwatch(app.runtime) }} />
-            {app.runtime}
-          </span>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h1>{key}</h1>
+            <span className="health">
+              <span className={`led ${ledClass(app.health)}`} /> {app.health}
+            </span>
+            <span className="lang">
+              <span className="sw" style={{ background: runtimeSwatch(app.runtime) }} />
+              {app.runtime}
+            </span>
+          </div>
+          {hasContainerName && <div className="sub mono">{app.appId}</div>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="tbtn" onClick={() => navigate('/')}>← Back</button>
-          <Link className="tbtn" to={`/logs?app=${app.appId}&source=daprd`}>View logs</Link>
+          <Link className="tbtn" to={`/logs?app=${key}&source=daprd`}>View logs</Link>
         </div>
       </div>
 

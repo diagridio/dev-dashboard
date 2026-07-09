@@ -202,4 +202,38 @@ describe('AppDetail', () => {
     renderDetail()
     await waitFor(() => expect(document.title).toBe('order | Diagrid Dev Dashboard'))
   })
+
+  it('titles compose apps by container name with the app id underneath and links logs by instance key', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'daprmq-service',
+          instanceKey: 'daprmq-host-1',
+          health: 'healthy',
+          runtime: 'dotnet',
+          httpPort: 3502,
+          grpcPort: 50003,
+          appPort: 8080,
+          metadataOk: true,
+          source: 'compose',
+          composeProject: 'dapr-mq',
+          sidecarReachable: true,
+          daprdContainerId: 'aaa111bbb222',
+          daprdContainerName: 'daprmq-host-1-dapr',
+          appContainerId: 'ccc333ddd444',
+          appContainerName: 'daprmq-host-1',
+        }),
+      ),
+    )
+    const { container } = renderDetail()
+    // Container name is the title; the app id renders as the sub-line under it.
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'daprmq-host-1' })).toBeInTheDocument())
+    expect(container.querySelector('.phead .sub')).toHaveTextContent('daprmq-service')
+    // Breadcrumb leaf shows the instance key too.
+    expect(container.querySelector('.crumbs .cur')).toHaveTextContent('daprmq-host-1')
+    expect(screen.getByRole('link', { name: /view logs/i })).toHaveAttribute(
+      'href',
+      '/logs?app=daprmq-host-1&source=daprd',
+    )
+  })
 })

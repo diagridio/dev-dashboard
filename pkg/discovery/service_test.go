@@ -283,3 +283,103 @@ func TestHumanAge(t *testing.T) {
 		require.Equal(t, "0s", humanAge(now.Add(5*time.Second)))
 	})
 }
+
+func TestScanResultKey(t *testing.T) {
+	t.Run("compose uses app container name", func(t *testing.T) {
+		r := ScanResult{AppID: "daprmq-service", Source: SourceCompose, AppContainerName: "daprmq-host-1", DaprdContainerName: "daprmq-host-1-dapr"}
+		require.Equal(t, "daprmq-host-1", r.Key())
+	})
+	t.Run("compose falls back to daprd container name", func(t *testing.T) {
+		r := ScanResult{AppID: "daprmq-service", Source: SourceCompose, DaprdContainerName: "daprmq-host-1-dapr"}
+		require.Equal(t, "daprmq-host-1-dapr", r.Key())
+	})
+	t.Run("compose falls back to app id", func(t *testing.T) {
+		r := ScanResult{AppID: "daprmq-service", Source: SourceCompose}
+		require.Equal(t, "daprmq-service", r.Key())
+	})
+	t.Run("standalone always keys by app id", func(t *testing.T) {
+		r := ScanResult{AppID: "order", Source: SourceStandalone, AppContainerName: "ignored"}
+		require.Equal(t, "order", r.Key())
+	})
+	t.Run("empty source keys by app id", func(t *testing.T) {
+		require.Equal(t, "order", ScanResult{AppID: "order"}.Key())
+	})
+}
+
+func TestListSetsInstanceKeyAndSortsWithinAppID(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			{AppID: "daprmq-service", Source: SourceCompose, SidecarReachable: false, AppContainerName: "daprmq-host-2"},
+			{AppID: "daprmq-service", Source: SourceCompose, SidecarReachable: false, AppContainerName: "daprmq-gateway-1"},
+			{AppID: "aaa-app"},
+		}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Millisecond})
+	list, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, list, 3)
+	require.Equal(t, "aaa-app", list[0].AppID)
+	require.Equal(t, "aaa-app", list[0].InstanceKey) // standalone: key == app id
+	require.Equal(t, "daprmq-gateway-1", list[1].InstanceKey)
+	require.Equal(t, "daprmq-host-2", list[2].InstanceKey)
+}
+
+func TestGetResolvesInstanceKeyThenAppID(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			{AppID: "daprmq-service", Source: SourceCompose, SidecarReachable: false, AppContainerName: "daprmq-gateway-1", DaprdContainerID: "aaa"},
+			{AppID: "daprmq-service", Source: SourceCompose, SidecarReachable: false, AppContainerName: "daprmq-host-1", DaprdContainerID: "bbb"},
+		}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Millisecond})
+
+	// Exact instance-key hit returns that instance, not the first app-id match.
+	in, err := svc.Get(context.Background(), "daprmq-host-1")
+	require.NoError(t, err)
+	require.Equal(t, "bbb", in.DaprdContainerID)
+	require.Equal(t, "daprmq-host-1", in.InstanceKey)
+
+	// A plain app id falls back to the first matching instance (legacy links).
+	in, err = svc.Get(context.Background(), "daprmq-service")
+	require.NoError(t, err)
+	require.Equal(t, "aaa", in.DaprdContainerID)
+
+	// Unknown key still errors.
+	_, err = svc.Get(context.Background(), "nope")
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestGetInstanceKeyMatchBeatsAppIDMatch(t *testing.T) {
+	// "orders" is app-id of the FIRST result but instance key of the SECOND;
+	// the key pass must win even though the app-id match appears earlier.
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			{AppID: "orders", Source: SourceCompose, SidecarReachable: false, AppContainerName: "orders-ctr", DaprdContainerID: "first"},
+			{AppID: "other", Source: SourceCompose, SidecarReachable: false, AppContainerName: "orders", DaprdContainerID: "second"},
+		}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Millisecond})
+	in, err := svc.Get(context.Background(), "orders")
+	require.NoError(t, err)
+	require.Equal(t, "second", in.DaprdContainerID)
+}
+
+func TestEnrichComposeUsesAppRuntime(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			// Scanner chain resolved: wins over image inference.
+			{AppID: "a", Source: SourceCompose, SidecarReachable: false, AppRuntime: "dotnet", AppImage: "python:3.12"},
+			// Chain exhausted ("unknown"): image fallback still applies.
+			{AppID: "b", Source: SourceCompose, SidecarReachable: false, AppRuntime: "unknown", AppImage: "python:3.12"},
+			// Field absent (older fixtures): image fallback still applies.
+			{AppID: "c", Source: SourceCompose, SidecarReachable: false, AppImage: "node:22"},
+		}, nil
+	}
+	svc := New(scan, http.DefaultClient)
+	apps, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, apps, 3)
+	require.Equal(t, "dotnet", apps[0].Runtime)
+	require.Equal(t, "python", apps[1].Runtime)
+	require.Equal(t, "node", apps[2].Runtime)
+}

@@ -42,3 +42,27 @@ func TestInferRuntimeFromImage(t *testing.T) {
 		}
 	}
 }
+
+func TestInferRuntimeFromEnv(t *testing.T) {
+	tests := []struct {
+		name string
+		env  []string
+		want string
+	}{
+		{"dotnet version", []string{"PATH=/usr/bin", "DOTNET_VERSION=10.0.9"}, "dotnet"},
+		{"aspnet version", []string{"ASPNET_VERSION=10.0.9"}, "dotnet"},
+		{"node", []string{"NODE_VERSION=22.1.0"}, "node"},
+		{"python", []string{"PYTHON_VERSION=3.12.4"}, "python"},
+		{"java version", []string{"JAVA_VERSION=21"}, "java"},
+		{"java home", []string{"JAVA_HOME=/opt/java"}, "java"},
+		{"golang", []string{"GOLANG_VERSION=1.23.4"}, "go"},
+		{"rust", []string{"RUST_VERSION=1.79"}, "rust"},
+		{"cargo home", []string{"CARGO_HOME=/usr/local/cargo"}, "rust"},
+		{"no markers", []string{"PATH=/usr/bin", "HOME=/root"}, "unknown"},
+		{"empty", nil, "unknown"},
+		{"value not name", []string{"FOO=NODE_VERSION"}, "unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) { require.Equal(t, tc.want, InferRuntimeFromEnv(tc.env)) })
+	}
+}

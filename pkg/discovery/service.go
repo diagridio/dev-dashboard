@@ -44,14 +44,35 @@ type ScanResult struct {
 	AppContainerID     string
 	AppContainerName   string
 	AppImage           string
+	// AppRuntime is the compose scanner's language inference for the app
+	// container ("" for other sources; possibly "unknown").
+	AppRuntime string
 	// SidecarReachable is false only for compose sidecars whose HTTP port is
 	// not published to the host (metadata/health enrichment impossible).
 	SidecarReachable bool
 }
 
+// Key returns the routing identity for this scan result. Compose sidecars can
+// share one -app-id (scaled instances), so they key by container name — the
+// app container when paired, else the daprd container; everything else keys
+// by AppID. Container names are unique per host, so keys are unique whenever
+// a container name is available.
+func (r ScanResult) Key() string {
+	if r.Source == SourceCompose {
+		if r.AppContainerName != "" {
+			return r.AppContainerName
+		}
+		if r.DaprdContainerName != "" {
+			return r.DaprdContainerName
+		}
+	}
+	return r.AppID
+}
+
 type Service interface {
 	List(ctx context.Context) ([]Instance, error)
-	Get(ctx context.Context, appID string) (Instance, error)
+	// Get resolves key as an InstanceKey first, then as an AppID (first match).
+	Get(ctx context.Context, key string) (Instance, error)
 }
 
 type service struct {
@@ -86,28 +107,42 @@ func (s *service) List(ctx context.Context) ([]Instance, error) {
 		}(i, r)
 	}
 	wg.Wait()
-	sort.SliceStable(out, func(a, b int) bool { return out[a].AppID < out[b].AppID })
+	sort.SliceStable(out, func(a, b int) bool {
+		if out[a].AppID != out[b].AppID {
+			return out[a].AppID < out[b].AppID
+		}
+		return out[a].InstanceKey < out[b].InstanceKey
+	})
 	logger().Info("discovered Dapr apps", "count", len(out))
 	return out, nil
 }
 
-func (s *service) Get(ctx context.Context, appID string) (Instance, error) {
+// Get resolves key as an instance key first (container name for compose
+// apps), then as an app id. The app-id fallback keeps legacy links working —
+// e.g. workflow pages, which only know the daprd app id — and resolves
+// duplicates to the first instance in scan order.
+func (s *service) Get(ctx context.Context, key string) (Instance, error) {
 	results, err := s.scan()
 	if err != nil {
 		logger().Error("app scan failed", "err", err)
 		return Instance{}, err
 	}
 	for _, r := range results {
-		if r.AppID == appID {
+		if r.Key() == key {
 			return s.enrich(ctx, r), nil
 		}
 	}
-	return Instance{}, fmt.Errorf("%w: %s", ErrNotFound, appID)
+	for _, r := range results {
+		if r.AppID == key {
+			return s.enrich(ctx, r), nil
+		}
+	}
+	return Instance{}, fmt.Errorf("%w: %s", ErrNotFound, key)
 }
 
 func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	in := Instance{
-		AppID: r.AppID, HTTPPort: r.HTTPPort, GRPCPort: r.GRPCPort, AppPort: r.AppPort,
+		AppID: r.AppID, InstanceKey: r.Key(), HTTPPort: r.HTTPPort, GRPCPort: r.GRPCPort, AppPort: r.AppPort,
 		DaprdPID: r.DaprdPID, CLIPID: r.CLIPID, RunTemplate: r.RunTemplate,
 		ResourcePaths: r.ResourcePaths, ConfigPath: r.ConfigPath, Command: r.Command,
 		Created: r.Created.Local().Format("15:04:05"), Age: humanAge(r.Created),
@@ -122,7 +157,13 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		in.SidecarReachable = true
 	}
 	if in.Source == SourceCompose && in.Runtime == "unknown" {
-		in.Runtime = InferRuntimeFromImage(r.AppImage)
+		// Prefer the scanner's signal chain (argv → env → image → build
+		// context); fall back to image inference for scan results that
+		// predate AppRuntime (test fixtures).
+		in.Runtime = r.AppRuntime
+		if in.Runtime == "" || in.Runtime == "unknown" {
+			in.Runtime = InferRuntimeFromImage(r.AppImage)
+		}
 	}
 	// An unreachable sidecar (compose, HTTP port unpublished) cannot answer
 	// health or metadata — skip both probes instead of burning their timeouts.

@@ -1,5 +1,7 @@
 export interface Actor {
   appId: string
+  /** routing identity: container name for compose apps, appId otherwise */
+  instanceKey?: string
   type: string
   count: number
   placement?: string
@@ -12,6 +14,8 @@ export interface SubRule {
 
 export interface Subscription {
   appId: string
+  /** routing identity: container name for compose apps, appId otherwise */
+  instanceKey?: string
   pubsubName: string
   topic: string
   rules?: SubRule[]

@@ -81,6 +81,12 @@ func TestComposeSourceScan(t *testing.T) {
 	if r.AppImage != "saga-primes-go" {
 		t.Fatalf("app image: %+v", r)
 	}
+	// App runtime: fixture app container has entrypoint /app/server (no
+	// command signal), image saga-primes-go (no image signal), and
+	// GOLANG_VERSION in env — the env marker resolves it.
+	if r.AppRuntime != "go" {
+		t.Fatalf("app runtime from env marker: %+v", r)
+	}
 	if len(r.ResourcePaths) != 1 || r.ResourcePaths[0] != "/Users/dev/saga/components" {
 		t.Fatalf("host resource path: %+v", r.ResourcePaths)
 	}
