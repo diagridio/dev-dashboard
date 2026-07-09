@@ -80,3 +80,33 @@ func TestComposeValidation(t *testing.T) {
 	m = New(fakeApps{items: map[string]discovery.Instance{"k": in}}, NewRegistry(), run, nil, nil)
 	require.ErrorIs(t, m.Do(context.Background(), "k", TargetApp, ActionStop), ErrUnsupported)
 }
+
+func TestComposeAllRestart(t *testing.T) {
+	run := &fakeRunner{}
+	m := New(fakeApps{items: map[string]discovery.Instance{"k": composeInst()}}, NewRegistry(), run, nil, nil)
+
+	require.NoError(t, m.Do(context.Background(), "k", TargetAll, ActionRestart))
+	require.Equal(t, [][]string{{"restart", "daprdC"}, {"restart", "appC"}}, run.calls)
+}
+
+func TestComposeAllPartialContainers(t *testing.T) {
+	// Test case 1: sidecar-only instance (empty AppContainerID)
+	run := &fakeRunner{}
+	inSidecarOnly := composeInst()
+	inSidecarOnly.AppContainerID = ""
+	m := New(fakeApps{items: map[string]discovery.Instance{"k": inSidecarOnly}}, NewRegistry(), run, nil, nil)
+
+	// TargetAll stop should act on daprd container only
+	require.NoError(t, m.Do(context.Background(), "k", TargetAll, ActionStop))
+	require.NoError(t, m.Do(context.Background(), "k", TargetAll, ActionStart))
+	require.Equal(t, [][]string{{"stop", "daprdC"}, {"start", "daprdC"}}, run.calls)
+
+	// Test case 2: both containers missing
+	inBothMissing := composeInst()
+	inBothMissing.AppContainerID = ""
+	inBothMissing.DaprdContainerID = ""
+	runBoth := &fakeRunner{}
+	mBoth := New(fakeApps{items: map[string]discovery.Instance{"k": inBothMissing}}, NewRegistry(), runBoth, nil, nil)
+
+	require.ErrorIs(t, mBoth.Do(context.Background(), "k", TargetAll, ActionStop), ErrUnsupported)
+}
