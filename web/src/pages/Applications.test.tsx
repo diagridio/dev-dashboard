@@ -72,7 +72,7 @@ describe('Applications', () => {
     expect(link).toHaveAttribute('href', '/apps/order')
   })
 
-  it('renders a stats row with running/healthy/starting counts', async () => {
+  it('renders a stats row with running/healthy/starting/unhealthy counts', async () => {
     server.use(http.get('/api/apps', () => HttpResponse.json(sampleApps)))
     renderAt()
     // Wait for data
@@ -81,7 +81,31 @@ describe('Applications', () => {
     expect(screen.getByText(/apps running/i)).toBeInTheDocument()
     expect(screen.getAllByText(/^healthy$/i).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/^starting$/i).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText(/run template/i).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Unhealthy')).toBeInTheDocument()
+    // The run-template stat card is gone; only the table column header remains.
+    expect(screen.getAllByText(/run template/i)).toHaveLength(1)
+  })
+
+  it('unhealthy stat shows 0 without the bad class when all apps are fine', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json(sampleApps)))
+    renderAt()
+    await screen.findByRole('link', { name: 'order' })
+    const num = screen.getByText('Unhealthy').previousElementSibling as HTMLElement
+    expect(num).toHaveTextContent('0')
+    expect(num).not.toHaveClass('bad')
+  })
+
+  it('unhealthy stat counts unhealthy apps (not unknown) and turns bad', async () => {
+    mockApps([
+      { ...baseApp },
+      { ...baseApp, appId: 'billing', health: 'unhealthy' },
+      { ...baseApp, appId: 'primes-go', source: 'compose', sidecarReachable: false, health: 'unknown' },
+    ])
+    renderAt()
+    await screen.findByRole('link', { name: 'billing' })
+    const num = screen.getByText('Unhealthy').previousElementSibling as HTMLElement
+    expect(num).toHaveTextContent('1')
+    expect(num).toHaveClass('bad')
   })
 
   it('shows an empty state when no apps', async () => {
