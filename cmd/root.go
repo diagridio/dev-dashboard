@@ -23,6 +23,7 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/diagridio/dev-dashboard/web"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -118,7 +119,9 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 
 	srv := server.New(addr, opts)
 
-	maybeAnnounceUpdate(ctx, updateCheck, version.Get().Version)
+	check := maybeAnnounceUpdate(ctx, updateCheck, version.Get().Version)
+	interactive := isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
+	maybeOfferUpdate(ctx, check, os.Stdin, os.Stdout, interactive, selfUpdateAndRestart)
 	fmt.Printf("Diagrid Dev Dashboard is starting → %s\n", url)
 	if telemetry {
 		fmt.Println("We're using anonymous usage telemetry to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
