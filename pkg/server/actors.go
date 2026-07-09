@@ -10,10 +10,20 @@ import (
 
 // ActorRow is a single actor-type entry returned by GET /api/actors.
 type ActorRow struct {
-	AppID     string `json:"appId"`
-	Type      string `json:"type"`
-	Count     int    `json:"count"`
-	Placement string `json:"placement,omitempty"`
+	AppID       string `json:"appId"`
+	InstanceKey string `json:"instanceKey"`
+	Type        string `json:"type"`
+	Count       int    `json:"count"`
+	Placement   string `json:"placement,omitempty"`
+}
+
+// instanceKey returns the instance's routing identity, tolerating fixtures
+// (and any pre-InstanceKey producer) that only set AppID.
+func instanceKey(in discovery.Instance) string {
+	if in.InstanceKey != "" {
+		return in.InstanceKey
+	}
+	return in.AppID
 }
 
 func actorsRouter(apps discovery.Service) http.Handler {
@@ -31,7 +41,7 @@ func actorsRouter(apps discovery.Service) http.Handler {
 				continue
 			}
 			for _, a := range in.Actors {
-				rows = append(rows, ActorRow{AppID: in.AppID, Type: a.Type, Count: a.Count, Placement: in.Placement})
+				rows = append(rows, ActorRow{AppID: in.AppID, InstanceKey: instanceKey(in), Type: a.Type, Count: a.Count, Placement: in.Placement})
 			}
 		}
 		sort.SliceStable(rows, func(i, j int) bool {

@@ -11,6 +11,7 @@ import (
 // SubscriptionRow is a single subscription entry returned by GET /api/subscriptions.
 type SubscriptionRow struct {
 	AppID           string              `json:"appId"`
+	InstanceKey     string              `json:"instanceKey"`
 	PubsubName      string              `json:"pubsubName"`
 	Topic           string              `json:"topic"`
 	Rules           []discovery.SubRule `json:"rules,omitempty"`
@@ -35,6 +36,7 @@ func subscriptionsRouter(apps discovery.Service) http.Handler {
 			for _, s := range in.Subscriptions {
 				rows = append(rows, SubscriptionRow{
 					AppID:           in.AppID,
+					InstanceKey:     instanceKey(in),
 					PubsubName:      s.PubsubName,
 					Topic:           s.Topic,
 					Rules:           s.Rules,

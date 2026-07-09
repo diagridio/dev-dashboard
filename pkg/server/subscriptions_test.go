@@ -27,3 +27,15 @@ func TestSubscriptionsAggregate(t *testing.T) {
 	require.Contains(t, body, `"carts"`)
 	require.NotContains(t, body, `"orders"`)
 }
+
+func TestSubscriptionsRowsCarryInstanceKey(t *testing.T) {
+	apps := &fakeApps{instances: []discovery.Instance{
+		{AppID: "daprmq-service", InstanceKey: "daprmq-host-1", Subscriptions: []discovery.Subscription{{PubsubName: "kafka-pubsub", Topic: "orders"}}},
+		{AppID: "cart", Subscriptions: []discovery.Subscription{{PubsubName: "pubsub", Topic: "carts"}}},
+	}}
+	h := subscriptionsRouter(apps)
+	res, body := get(t, h, "/")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, `"instanceKey":"daprmq-host-1"`)
+	require.Contains(t, body, `"instanceKey":"cart"`)
+}
