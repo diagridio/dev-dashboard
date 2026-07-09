@@ -41,13 +41,10 @@ export function Applications() {
   const running = apps.length
   const healthy = apps.filter((a) => a.health === 'healthy').length
   const starting = apps.filter((a) => a.health === 'starting').length
+  const unhealthy = apps.filter((a) => a.health === 'unhealthy').length
   // Total components loaded across every running app; '—' when none report any.
   const componentsTotal = apps.reduce((n, a) => n + (a.components?.length ?? 0), 0)
   const componentsLoaded = componentsTotal > 0 ? componentsTotal : '—'
-  // Prefer a real run-template name; else label Aspire-managed apps; else label compose; else '—'.
-  const runTemplate =
-    apps.find((a) => a.runTemplate)?.runTemplate ||
-    (apps.some((a) => a.isAspire) ? 'Aspire' : apps.some((a) => a.source === 'compose') ? 'Compose' : '—')
 
   return (
     <div className="page">
@@ -66,14 +63,12 @@ export function Applications() {
           <div className="l">Starting</div>
         </div>
         <div className="stat">
-          <div className="n">{componentsLoaded}</div>
-          <div className="l">Components loaded</div>
+          <div className={unhealthy > 0 ? 'n bad' : 'n'}>{unhealthy}</div>
+          <div className="l">Unhealthy</div>
         </div>
         <div className="stat">
-          <div className="n mono" style={{ fontSize: 18 }}>
-            {runTemplate}
-          </div>
-          <div className="l">Run template</div>
+          <div className="n">{componentsLoaded}</div>
+          <div className="l">Components loaded</div>
         </div>
       </div>
       <div className="card">
