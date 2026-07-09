@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
@@ -235,5 +235,37 @@ describe('AppDetail', () => {
       'href',
       '/logs?app=daprmq-host-1&source=daprd',
     )
+  })
+
+  it('shows per-target status and ticking uptime', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date('2026-07-09T10:05:00Z'))
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'order',
+          health: 'healthy',
+          runtime: 'go',
+          httpPort: 3500,
+          grpcPort: 50001,
+          appPort: 8080,
+          daprdPid: 48230,
+          appPid: 48213,
+          cliPid: 48201,
+          command: 'go run ./cmd/order',
+          runtimeVersion: '1.14.4',
+          metadataOk: true,
+          appStatus: 'running',
+          daprdStatus: 'stopped',
+          appStartedAt: '2026-07-09T10:00:00Z',
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getByText('running')).toBeInTheDocument()
+    expect(screen.getByText('stopped')).toBeInTheDocument()
+    expect(screen.getByText('5m 00s')).toBeInTheDocument() // app uptime ticks from startedAt
+    vi.useRealTimers()
   })
 })

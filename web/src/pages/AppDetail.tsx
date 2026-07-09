@@ -6,6 +6,7 @@ import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
 import { useToast } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { appKey } from '../lib/appKey'
+import { formatUptime, useNow } from '../lib/uptime'
 
 // ---------- content ----------
 
@@ -25,7 +26,25 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
   const isCompose = app.source === 'compose'
-  const unreachable = isCompose && app.sidecarReachable === false
+  const unreachable = isCompose && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
+
+  const now = useNow()
+  const appRunning = app.appStatus === 'running'
+  const daprdRunning = app.daprdStatus === 'running'
+
+  const statusCell = (status?: string) =>
+    status ? (
+      <span className="health">
+        <span className={`led ${ledClass(status === 'running' ? 'healthy' : 'unknown')}`} /> {status}
+      </span>
+    ) : (
+      <span className="faint">—</span>
+    )
+
+  const uptimeCell = (running: boolean, startedAt?: string) => {
+    const text = running && startedAt ? formatUptime(startedAt, now) : null
+    return text ? <span>{text}</span> : <span className="faint">—</span>
+  }
 
   return (
     <div className="page">
@@ -76,6 +95,12 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             Application
           </div>
           <div className="kv">
+            <div className="kk">Status</div>
+            <div className="vv">{statusCell(app.appStatus)}</div>
+
+            <div className="kk">Uptime</div>
+            <div className="vv mono">{uptimeCell(appRunning, app.appStartedAt)}</div>
+
             <div className="kk">Runtime</div>
             <div className="vv">{app.runtime || <span className="faint">—</span>}</div>
 
@@ -118,6 +143,12 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             Dapr sidecar (daprd)
           </div>
           <div className="kv">
+            <div className="kk">Status</div>
+            <div className="vv">{statusCell(app.daprdStatus)}</div>
+
+            <div className="kk">Uptime</div>
+            <div className="vv mono">{uptimeCell(daprdRunning, app.daprdStartedAt)}</div>
+
             <div className="kk">Runtime ver.</div>
             <div className="vv mono">{app.runtimeVersion || <span className="faint">—</span>}</div>
 
