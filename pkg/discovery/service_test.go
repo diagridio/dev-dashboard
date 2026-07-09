@@ -383,3 +383,26 @@ func TestEnrichComposeUsesAppRuntime(t *testing.T) {
 	require.Equal(t, "python", apps[1].Runtime)
 	require.Equal(t, "node", apps[2].Runtime)
 }
+
+func TestEnrichMapsPerTargetStatusAndStartedAt(t *testing.T) {
+	started := time.Date(2026, 7, 9, 10, 0, 0, 0, time.UTC)
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID:          "checkout",
+			Source:         SourceCompose,
+			DaprdStatus:    StatusRunning,
+			AppStatus:      StatusStopped,
+			DaprdStartedAt: started,
+			// AppStartedAt zero: stopped targets expose no start time
+		}}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Second})
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	in := items[0]
+	require.Equal(t, StatusRunning, in.DaprdStatus)
+	require.Equal(t, StatusStopped, in.AppStatus)
+	require.Equal(t, "2026-07-09T10:00:00Z", in.DaprdStartedAt)
+	require.Equal(t, "", in.AppStartedAt)
+}

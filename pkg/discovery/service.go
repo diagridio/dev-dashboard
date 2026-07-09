@@ -50,6 +50,12 @@ type ScanResult struct {
 	// SidecarReachable is false only for compose sidecars whose HTTP port is
 	// not published to the host (metadata/health enrichment impossible).
 	SidecarReachable bool
+
+	// Per-target lifecycle status ("" = unknown; compose scanner sets these).
+	AppStatus      string
+	DaprdStatus    string
+	AppStartedAt   time.Time
+	DaprdStartedAt time.Time
 }
 
 // Key returns the routing identity for this scan result. Compose sidecars can
@@ -151,6 +157,13 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		DaprdContainerID: r.DaprdContainerID, DaprdContainerName: r.DaprdContainerName,
 		AppContainerID: r.AppContainerID, AppContainerName: r.AppContainerName,
 		SidecarReachable: r.SidecarReachable,
+		AppStatus:        r.AppStatus, DaprdStatus: r.DaprdStatus,
+	}
+	if !r.AppStartedAt.IsZero() && r.AppStatus != StatusStopped {
+		in.AppStartedAt = r.AppStartedAt.UTC().Format(time.RFC3339)
+	}
+	if !r.DaprdStartedAt.IsZero() && r.DaprdStatus != StatusStopped {
+		in.DaprdStartedAt = r.DaprdStartedAt.UTC().Format(time.RFC3339)
 	}
 	if in.Source == "" { // scanners predating the field (and bare test fixtures)
 		in.Source = SourceStandalone

@@ -10,6 +10,12 @@ const (
 	HealthUnknown   Health = "unknown"
 )
 
+// Per-target process status. Empty string means unknown.
+const (
+	StatusRunning = "running"
+	StatusStopped = "stopped"
+)
+
 // Instance represents a running application instance with Dapr
 type Instance struct {
 	AppID string `json:"appId"`
@@ -34,8 +40,12 @@ type Instance struct {
 	DaprdPID           int            `json:"daprdPid"`
 	AppPID             int            `json:"appPid"` // 0 = unknown
 	CLIPID             int            `json:"cliPid"`
-	Age                string         `json:"age"`     // human, e.g. "14m"
-	Created            string         `json:"created"` // local time string
+	AppStatus          string         `json:"appStatus,omitempty"`      // "running" | "stopped"; "" unknown
+	DaprdStatus        string         `json:"daprdStatus,omitempty"`    // "running" | "stopped"; "" unknown
+	AppStartedAt       string         `json:"appStartedAt,omitempty"`   // RFC3339 UTC; "" when stopped/unknown
+	DaprdStartedAt     string         `json:"daprdStartedAt,omitempty"` // RFC3339 UTC; "" when stopped/unknown
+	Age                string         `json:"age"`                      // human, e.g. "14m"
+	Created            string         `json:"created"`                  // local time string
 	RunTemplate        string         `json:"runTemplate"`
 	ResourcePaths      []string       `json:"resourcePaths"`
 	ConfigPath         string         `json:"configPath"`
