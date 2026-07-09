@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"strings"
+	"time"
 
 	gnet "github.com/shirou/gopsutil/net"
 	gproc "github.com/shirou/gopsutil/process"
@@ -73,4 +74,17 @@ func (gopsutilResolver) CommandForPort(port int) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// gopsutilProcStart resolves a process's start time from its PID.
+func gopsutilProcStart(pid int) (time.Time, bool) {
+	p, err := gproc.NewProcess(int32(pid))
+	if err != nil {
+		return time.Time{}, false
+	}
+	ms, err := p.CreateTime() // milliseconds since epoch
+	if err != nil || ms <= 0 {
+		return time.Time{}, false
+	}
+	return time.UnixMilli(ms), true
 }
