@@ -112,7 +112,106 @@ func composeTargets(in discovery.Instance, target Target, action Action) ([]stri
 
 func actionForCompose(a Action) Action { return a } // start|stop|restart map 1:1 to docker verbs
 
-// doStandalone is implemented in the standalone tasks.
+// doStandalone dispatches start/stop/restart for a process-table instance.
+// Aspire-managed apps only allow stop; Aspire itself owns start/restart.
 func (m *manager) doStandalone(ctx context.Context, in discovery.Instance, target Target, action Action) error {
-	return fmt.Errorf("%w: standalone lifecycle not yet implemented", ErrUnsupported)
+	if in.IsAspire && action != ActionStop {
+		return fmt.Errorf("%w: Aspire manages this app's lifecycle — restart it from the Aspire dashboard", ErrUnsupported)
+	}
+	switch action {
+	case ActionStop:
+		return m.standaloneStop(ctx, in, target)
+	case ActionStart:
+		return m.standaloneStart(ctx, in, target)
+	default: // restart
+		if err := m.standaloneStop(ctx, in, target); err != nil {
+			return err
+		}
+		return m.standaloneStart(ctx, in, target)
+	}
+}
+
+// standaloneStop snapshots every process it may kill (directly or as a CLI
+// child), records them, then signals with SIGTERM -> SIGKILL escalation.
+func (m *manager) standaloneStop(ctx context.Context, in discovery.Instance, target Target) error {
+	snaps := map[Target]ProcSnapshot{}
+	snapshot := func(t Target, pid int, logPath string) {
+		if pid == 0 {
+			return
+		}
+		s, err := m.proc.Snapshot(pid)
+		if err != nil {
+			logger().Warn("process snapshot failed; restart via dashboard won't be possible", "pid", pid, "err", err)
+			return
+		}
+		s.LogPath = logPath
+		snaps[t] = s
+	}
+
+	var pids []int
+	switch target {
+	case TargetApp:
+		if in.AppPID == 0 {
+			return fmt.Errorf("%w: app process unknown", ErrUnsupported)
+		}
+		snapshot(TargetApp, in.AppPID, in.AppLogPath)
+		pids = []int{in.AppPID}
+	case TargetDaprd:
+		if in.DaprdPID == 0 {
+			return fmt.Errorf("%w: daprd process unknown", ErrUnsupported)
+		}
+		snapshot(TargetDaprd, in.DaprdPID, in.DaprdLogPath)
+		pids = []int{in.DaprdPID}
+	default: // all: snapshot everything, signal the CLI which reaps children
+		snapshot(TargetApp, in.AppPID, in.AppLogPath)
+		snapshot(TargetDaprd, in.DaprdPID, in.DaprdLogPath)
+		snapshot(TargetAll, in.CLIPID, "")
+		if in.CLIPID != 0 {
+			pids = []int{in.CLIPID}
+		} else {
+			for _, p := range []int{in.AppPID, in.DaprdPID} {
+				if p != 0 {
+					pids = append(pids, p)
+				}
+			}
+		}
+		if len(pids) == 0 {
+			return fmt.Errorf("%w: no processes to stop", ErrUnsupported)
+		}
+	}
+	m.reg.RecordStop(in, snaps)
+	for _, pid := range pids {
+		if err := m.terminateWithEscalation(ctx, pid); err != nil {
+			return fmt.Errorf("stop pid %d: %w", pid, err)
+		}
+	}
+	return nil
+}
+
+// terminateWithEscalation SIGTERMs, waits up to m.grace for exit, then SIGKILLs.
+func (m *manager) terminateWithEscalation(ctx context.Context, pid int) error {
+	if err := m.proc.Terminate(pid); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(m.grace)
+	for time.Now().Before(deadline) {
+		if !m.proc.Alive(pid) {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(25 * time.Millisecond):
+		}
+	}
+	if m.proc.Alive(pid) {
+		logger().Warn("process ignored SIGTERM; killing", "pid", pid)
+		return m.proc.Kill(pid)
+	}
+	return nil
+}
+
+// standaloneStart is implemented in the next task.
+func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, target Target) error {
+	return fmt.Errorf("%w: standalone start not yet implemented", ErrUnsupported)
 }

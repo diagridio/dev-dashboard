@@ -2,7 +2,9 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/stretchr/testify/require"
@@ -109,4 +111,103 @@ func TestComposeAllPartialContainers(t *testing.T) {
 	mBoth := New(fakeApps{items: map[string]discovery.Instance{"k": inBothMissing}}, NewRegistry(), runBoth, nil, nil)
 
 	require.ErrorIs(t, mBoth.Do(context.Background(), "k", TargetAll, ActionStop), ErrUnsupported)
+}
+
+// fakeProc is a scriptable ProcController.
+type fakeProc struct {
+	snaps      map[int]ProcSnapshot
+	terminated []int
+	killed     []int
+	alive      map[int]bool
+}
+
+func newFakeProc() *fakeProc {
+	return &fakeProc{snaps: map[int]ProcSnapshot{}, alive: map[int]bool{}}
+}
+func (f *fakeProc) Snapshot(pid int) (ProcSnapshot, error) {
+	if s, ok := f.snaps[pid]; ok {
+		return s, nil
+	}
+	return ProcSnapshot{}, errors.New("no such process")
+}
+func (f *fakeProc) Terminate(pid int) error {
+	f.terminated = append(f.terminated, pid)
+	f.alive[pid] = false
+	return nil
+}
+func (f *fakeProc) Kill(pid int) error {
+	f.killed = append(f.killed, pid)
+	f.alive[pid] = false
+	return nil
+}
+func (f *fakeProc) Alive(pid int) bool { return f.alive[pid] }
+
+func standaloneInst() discovery.Instance {
+	return discovery.Instance{
+		AppID: "orders", InstanceKey: "orders", Source: discovery.SourceStandalone,
+		AppPID: 100, DaprdPID: 200, CLIPID: 300,
+		AppLogPath: "/tmp/app.log", DaprdLogPath: "/tmp/daprd.log",
+	}
+}
+
+func TestStandaloneStopAllSignalsCLIAndSnapshotsEverything(t *testing.T) {
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"}
+	proc.snaps[200] = ProcSnapshot{PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"}
+	proc.snaps[300] = ProcSnapshot{PID: 300, Argv: []string{"dapr", "run", "--app-id", "orders"}, Dir: "/src"}
+	proc.alive[100], proc.alive[200], proc.alive[300] = true, true, true
+
+	reg := NewRegistry()
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, proc, nil).(*manager)
+	m.grace = 10 * time.Millisecond
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStop))
+	require.Equal(t, []int{300}, proc.terminated) // CLI only; it tears down children
+
+	e, ok := reg.Get("orders")
+	require.True(t, ok)
+	require.Equal(t, []string{"dapr", "run", "--app-id", "orders"}, e.Procs[TargetAll].Argv)
+	require.Equal(t, []string{"go", "run", "."}, e.Procs[TargetApp].Argv) // snapshotted before kill
+	require.Equal(t, []string{"daprd", "--app-id", "orders"}, e.Procs[TargetDaprd].Argv)
+}
+
+func TestStandaloneStopSingleTargetEscalatesToKill(t *testing.T) {
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}}
+	proc.alive[100] = true
+	stubborn := &stubbornProc{fakeProc: proc} // Terminate does not clear alive
+
+	reg := NewRegistry()
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, stubborn, nil).(*manager)
+	m.grace = 20 * time.Millisecond
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionStop))
+	require.Equal(t, []int{100}, proc.terminated)
+	require.Equal(t, []int{100}, proc.killed) // escalated after grace
+}
+
+// stubbornProc ignores Terminate (process stays alive) to exercise escalation.
+type stubbornProc struct{ *fakeProc }
+
+func (s *stubbornProc) Terminate(pid int) error {
+	s.terminated = append(s.terminated, pid)
+	return nil // alive stays true
+}
+func (s *stubbornProc) Kill(pid int) error { return s.fakeProc.Kill(pid) }
+
+func TestAspireStartRejectedStopAllowed(t *testing.T) {
+	in := standaloneInst()
+	in.IsAspire = true
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"dotnet", "run"}}
+	proc.alive[100] = true
+	reg := NewRegistry()
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": in}}, reg, nil, proc, nil).(*manager)
+	m.grace = 10 * time.Millisecond
+
+	require.ErrorIs(t, m.Do(context.Background(), "orders", TargetApp, ActionStart), ErrUnsupported)
+	require.ErrorIs(t, m.Do(context.Background(), "orders", TargetAll, ActionRestart), ErrUnsupported)
+	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionStop))
+	e, _ := reg.Get("orders")
+	require.True(t, e.Instance.IsAspire)
 }
