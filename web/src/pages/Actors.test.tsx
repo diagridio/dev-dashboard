@@ -102,4 +102,21 @@ describe('Actors', () => {
     expect(screen.getByText(/loading/i)).toBeInTheDocument()
     await screen.findByText('OrderActor')
   })
+
+  it('duplicate-app-id instances render distinct rows linking by instanceKey', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([
+          { appId: 'daprmq-service', instanceKey: 'daprmq-host-1', type: 'QueueActor', count: 1, placement: 'connected' },
+          { appId: 'daprmq-service', instanceKey: 'daprmq-host-2', type: 'QueueActor', count: 2, placement: 'connected' },
+        ]),
+      ),
+    )
+    renderAt()
+    const links = await screen.findAllByRole('link', { name: /daprmq-service/ })
+    expect(links.map(l => l.getAttribute('href'))).toEqual(['/apps/daprmq-host-1', '/apps/daprmq-host-2'])
+    // Container names shown to tell the rows apart.
+    expect(screen.getByText('(daprmq-host-1)')).toBeInTheDocument()
+    expect(screen.getByText('(daprmq-host-2)')).toBeInTheDocument()
+  })
 })

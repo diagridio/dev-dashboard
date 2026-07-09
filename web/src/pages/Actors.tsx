@@ -62,7 +62,7 @@ export function Actors() {
 
   const activeActors = actors.reduce((sum, a) => sum + (a.count || 0), 0)
   const actorTypes = new Set(actors.map((a) => a.type)).size
-  const hostingApps = new Set(actors.map((a) => a.appId)).size
+  const hostingApps = new Set(actors.map((a) => a.instanceKey ?? a.appId)).size
 
   return (
     <div className="page">
@@ -104,7 +104,7 @@ export function Actors() {
             </thead>
             <tbody>
               {actors.map((actor) => (
-                <ActorRow key={`${actor.appId}/${actor.type}`} actor={actor} />
+                <ActorRow key={`${actor.instanceKey ?? actor.appId}/${actor.type}`} actor={actor} />
               ))}
             </tbody>
           </table>
@@ -121,10 +121,16 @@ export function Actors() {
 
 function ActorRow({ actor }: { actor: Actor }) {
   const isInternal = actor.type.toLowerCase().includes(INTERNAL_PREFIX)
+  const key = actor.instanceKey ?? actor.appId
   return (
     <tr>
       <td className="b">
-        <Link className="celllink" to={`/apps/${actor.appId}`}>{actor.appId}</Link>
+        <Link className="celllink" to={`/apps/${key}`}>
+          {actor.appId}
+          {key !== actor.appId && (
+            <span className="muted" style={{ fontSize: 11, fontWeight: 400, marginLeft: 6 }}>({key})</span>
+          )}
+        </Link>
       </td>
       <td className="mono">
         {actor.type}

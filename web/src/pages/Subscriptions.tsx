@@ -76,7 +76,7 @@ export function Subscriptions() {
             </thead>
             <tbody>
               {subscriptions.map((sub) => (
-                <SubscriptionRow key={`${sub.appId}/${sub.pubsubName}/${sub.topic}`} sub={sub} />
+                <SubscriptionRow key={`${sub.instanceKey ?? sub.appId}/${sub.pubsubName}/${sub.topic}`} sub={sub} />
               ))}
             </tbody>
           </table>
@@ -94,11 +94,17 @@ function SubscriptionRow({ sub }: { sub: Subscription }) {
   const firstPath = rules[0]?.path
   const hasMultipleRules = rules.length > 1
   const scopes = sub.scopes ?? []
+  const key = sub.instanceKey ?? sub.appId
 
   return (
     <tr>
       <td className="b">
-        <Link to={`/apps/${sub.appId}`}>{sub.appId}</Link>
+        <Link to={`/apps/${key}`}>
+          {sub.appId}
+          {key !== sub.appId && (
+            <span className="muted" style={{ fontSize: 11, fontWeight: 400, marginLeft: 6 }}>({key})</span>
+          )}
+        </Link>
       </td>
       <td className="mono">{sub.pubsubName}</td>
       <td className="mono">{sub.topic}</td>
