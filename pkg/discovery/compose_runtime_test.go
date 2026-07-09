@@ -115,3 +115,44 @@ func TestRuntimeFromBuildContext(t *testing.T) {
 		require.Equal(t, "node", runtimeFromBuildContext(cf, proj, "web"))
 	})
 }
+
+func TestComposeAppRuntimeChainPrecedence(t *testing.T) {
+	// Build-context fixture that would say "go" if reached.
+	proj := t.TempDir()
+	writeFile(t, filepath.Join(proj, "svc", "go.mod"), "module x")
+	cf := filepath.Join(proj, "docker-compose.yml")
+	writeFile(t, cf, "services:\n  web:\n    build: ./svc\n")
+
+	base := composeContainer{Service: "web", ConfigFiles: cf, WorkingDir: proj}
+
+	t.Run("argv beats everything", func(t *testing.T) {
+		app := base
+		app.Argv = []string{"dotnet", "App.dll"}
+		app.Env = []string{"NODE_VERSION=22"}
+		app.Image = "python:3.12"
+		require.Equal(t, "dotnet", composeAppRuntime(app))
+	})
+	t.Run("env beats image and files", func(t *testing.T) {
+		app := base
+		app.Argv = []string{"/entrypoint.sh"}
+		app.Env = []string{"NODE_VERSION=22"}
+		app.Image = "python:3.12"
+		require.Equal(t, "node", composeAppRuntime(app))
+	})
+	t.Run("image beats files", func(t *testing.T) {
+		app := base
+		app.Argv = []string{"/app/server"}
+		app.Image = "python:3.12"
+		require.Equal(t, "python", composeAppRuntime(app))
+	})
+	t.Run("build context is the last resort", func(t *testing.T) {
+		app := base
+		app.Argv = []string{"/app/server"}
+		app.Image = "custom-app"
+		require.Equal(t, "go", composeAppRuntime(app))
+	})
+	t.Run("all unknown", func(t *testing.T) {
+		app := composeContainer{Service: "web", Argv: []string{"/app/server"}, Image: "custom-app"}
+		require.Equal(t, "unknown", composeAppRuntime(app))
+	})
+}

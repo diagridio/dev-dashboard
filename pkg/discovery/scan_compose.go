@@ -194,6 +194,7 @@ func (s *ComposeSource) scanOnce() ([]ScanResult, ComposeEnv, error) {
 			r.AppContainerID = app.ID
 			r.AppContainerName = app.Name
 			r.AppImage = app.Image
+			r.AppRuntime = composeAppRuntime(app)
 		}
 		results = append(results, r)
 	}

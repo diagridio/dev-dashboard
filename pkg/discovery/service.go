@@ -44,6 +44,9 @@ type ScanResult struct {
 	AppContainerID     string
 	AppContainerName   string
 	AppImage           string
+	// AppRuntime is the compose scanner's language inference for the app
+	// container ("" for other sources; possibly "unknown").
+	AppRuntime string
 	// SidecarReachable is false only for compose sidecars whose HTTP port is
 	// not published to the host (metadata/health enrichment impossible).
 	SidecarReachable bool

@@ -119,3 +119,20 @@ func runtimeFromMarkerFiles(dir string) string {
 	}
 	return "unknown"
 }
+
+// composeAppRuntime resolves the app's language from scan data, cheapest
+// signal first: launch command, base-image env markers, image name, and
+// finally marker files in the service's local build context (the only step
+// that touches the filesystem).
+func composeAppRuntime(app composeContainer) string {
+	if rt := InferRuntime(strings.Join(app.Argv, " ")); rt != "unknown" {
+		return rt
+	}
+	if rt := InferRuntimeFromEnv(app.Env); rt != "unknown" {
+		return rt
+	}
+	if rt := InferRuntimeFromImage(app.Image); rt != "unknown" {
+		return rt
+	}
+	return runtimeFromBuildContext(app.ConfigFiles, app.WorkingDir, app.Service)
+}

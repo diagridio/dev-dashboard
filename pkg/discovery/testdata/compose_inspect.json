@@ -27,7 +27,8 @@
       "Image": "saga-primes-go",
       "Labels": { "com.docker.compose.project": "saga", "com.docker.compose.service": "primes-go" },
       "Entrypoint": ["/app/server"],
-      "Cmd": null
+      "Cmd": null,
+      "Env": ["PATH=/usr/local/bin:/usr/bin", "GOLANG_VERSION=1.23.4"]
     },
     "NetworkSettings": { "Ports": { "8080/tcp": [ { "HostIp": "0.0.0.0", "HostPort": "8081" } ] } },
     "Mounts": []

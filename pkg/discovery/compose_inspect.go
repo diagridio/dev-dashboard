@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	labelComposeProject = "com.docker.compose.project"
-	labelComposeService = "com.docker.compose.service"
+	labelComposeProject     = "com.docker.compose.project"
+	labelComposeService     = "com.docker.compose.service"
+	labelComposeConfigFiles = "com.docker.compose.project.config_files"
+	labelComposeWorkingDir  = "com.docker.compose.project.working_dir"
 )
 
 // composeContainer is the parsed subset of `docker inspect` for one
@@ -26,6 +28,10 @@ type composeContainer struct {
 	Argv      []string          // entrypoint + cmd
 	Ports     map[int]int       // container tcp port -> published host port
 	Mounts    map[string]string // container destination -> host source (bind only)
+
+	Env         []string // Config.Env — carries base-image markers like DOTNET_VERSION
+	ConfigFiles string   // host path(s) of the compose file(s), comma-separated
+	WorkingDir  string   // host project dir; base for relative build contexts
 }
 
 // rawComposeContainer mirrors the subset of `<runtime> inspect` we consume.
@@ -41,6 +47,7 @@ type rawComposeContainer struct {
 		Labels     map[string]string `json:"Labels"`
 		Entrypoint []string          `json:"Entrypoint"`
 		Cmd        []string          `json:"Cmd"`
+		Env        []string          `json:"Env"`
 	} `json:"Config"`
 	NetworkSettings struct {
 		Ports map[string][]struct {
@@ -77,6 +84,10 @@ func parseComposeContainers(data []byte) ([]composeContainer, error) {
 			Argv:    append(append([]string{}, r.Config.Entrypoint...), r.Config.Cmd...),
 			Ports:   map[int]int{},
 			Mounts:  map[string]string{},
+
+			Env:         r.Config.Env,
+			ConfigFiles: r.Config.Labels[labelComposeConfigFiles],
+			WorkingDir:  r.Config.Labels[labelComposeWorkingDir],
 		}
 		c.StartedAt, _ = time.Parse(time.RFC3339Nano, r.State.StartedAt)
 		for spec, bindings := range r.NetworkSettings.Ports {
