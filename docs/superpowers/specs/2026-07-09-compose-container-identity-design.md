@@ -107,8 +107,9 @@ same-app-id instances have a stable order.
 
 **App detail** (`web/src/pages/AppDetail.tsx`): the `:appId` route param is
 treated as the instance key — `useApp(key)` fetches `/api/apps/${key}`. The
-page title/breadcrumb keeps the **app-id as the primary line** with the
-container name underneath. "View logs" links pass `?app=${instanceKey}`.
+page title (h1) and breadcrumb leaf show the **instance key** (container
+name), with the app-id underneath as the sub-line — same hierarchy as the
+overview. "View logs" links pass `?app=${instanceKey}`.
 
 **Logs page** (`web/src/pages/Logs.tsx`, `web/src/hooks/useLogStream.ts`):
 dropdown option *value* is `instanceKey`; label shows `appId (container-name)`

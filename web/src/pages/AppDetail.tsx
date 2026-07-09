@@ -33,14 +33,14 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       <div className="crumbs">
         <Link to="/">Applications</Link>
         <span className="sep">/</span>
-        <span className="cur">{app.appId}</span>
+        <span className="cur">{key}</span>
       </div>
 
       {/* Page header */}
       <div className="phead">
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <h1>{app.appId}</h1>
+            <h1>{key}</h1>
             <span className="health">
               <span className={`led ${ledClass(app.health)}`} /> {app.health}
             </span>
@@ -49,7 +49,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               {app.runtime}
             </span>
           </div>
-          {hasContainerName && <div className="sub mono">{key}</div>}
+          {hasContainerName && <div className="sub mono">{app.appId}</div>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="tbtn" onClick={() => navigate('/')}>← Back</button>
