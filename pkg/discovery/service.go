@@ -68,7 +68,8 @@ func (r ScanResult) Key() string {
 
 type Service interface {
 	List(ctx context.Context) ([]Instance, error)
-	Get(ctx context.Context, appID string) (Instance, error)
+	// Get resolves key as an InstanceKey first, then as an AppID (first match).
+	Get(ctx context.Context, key string) (Instance, error)
 }
 
 type service struct {
@@ -113,18 +114,27 @@ func (s *service) List(ctx context.Context) ([]Instance, error) {
 	return out, nil
 }
 
-func (s *service) Get(ctx context.Context, appID string) (Instance, error) {
+// Get resolves key as an instance key first (container name for compose
+// apps), then as an app id. The app-id fallback keeps legacy links working —
+// e.g. workflow pages, which only know the daprd app id — and resolves
+// duplicates to the first instance in scan order.
+func (s *service) Get(ctx context.Context, key string) (Instance, error) {
 	results, err := s.scan()
 	if err != nil {
 		logger().Error("app scan failed", "err", err)
 		return Instance{}, err
 	}
 	for _, r := range results {
-		if r.AppID == appID {
+		if r.Key() == key {
 			return s.enrich(ctx, r), nil
 		}
 	}
-	return Instance{}, fmt.Errorf("%w: %s", ErrNotFound, appID)
+	for _, r := range results {
+		if r.AppID == key {
+			return s.enrich(ctx, r), nil
+		}
+	}
+	return Instance{}, fmt.Errorf("%w: %s", ErrNotFound, key)
 }
 
 func (s *service) enrich(ctx context.Context, r ScanResult) Instance {

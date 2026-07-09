@@ -323,3 +323,43 @@ func TestListSetsInstanceKeyAndSortsWithinAppID(t *testing.T) {
 	require.Equal(t, "daprmq-gateway-1", list[1].InstanceKey)
 	require.Equal(t, "daprmq-host-2", list[2].InstanceKey)
 }
+
+func TestGetResolvesInstanceKeyThenAppID(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			{AppID: "daprmq-service", Source: SourceCompose, SidecarReachable: false, AppContainerName: "daprmq-gateway-1", DaprdContainerID: "aaa"},
+			{AppID: "daprmq-service", Source: SourceCompose, SidecarReachable: false, AppContainerName: "daprmq-host-1", DaprdContainerID: "bbb"},
+		}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Millisecond})
+
+	// Exact instance-key hit returns that instance, not the first app-id match.
+	in, err := svc.Get(context.Background(), "daprmq-host-1")
+	require.NoError(t, err)
+	require.Equal(t, "bbb", in.DaprdContainerID)
+	require.Equal(t, "daprmq-host-1", in.InstanceKey)
+
+	// A plain app id falls back to the first matching instance (legacy links).
+	in, err = svc.Get(context.Background(), "daprmq-service")
+	require.NoError(t, err)
+	require.Equal(t, "aaa", in.DaprdContainerID)
+
+	// Unknown key still errors.
+	_, err = svc.Get(context.Background(), "nope")
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestGetInstanceKeyMatchBeatsAppIDMatch(t *testing.T) {
+	// "orders" is app-id of the FIRST result but instance key of the SECOND;
+	// the key pass must win even though the app-id match appears earlier.
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{
+			{AppID: "orders", Source: SourceCompose, SidecarReachable: false, AppContainerName: "orders-ctr", DaprdContainerID: "first"},
+			{AppID: "other", Source: SourceCompose, SidecarReachable: false, AppContainerName: "orders", DaprdContainerID: "second"},
+		}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Millisecond})
+	in, err := svc.Get(context.Background(), "orders")
+	require.NoError(t, err)
+	require.Equal(t, "second", in.DaprdContainerID)
+}
