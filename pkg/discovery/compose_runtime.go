@@ -32,40 +32,15 @@ func runtimeFromBuildContext(configFiles, workingDir, service string) string {
 	if configFiles == "" || service == "" {
 		return "unknown"
 	}
-
-	parts := strings.Split(configFiles, ",")
-
-	// Try each comma-separated part. If it fails and there's a next part,
-	// try merging with the next part (handles paths that contain commas).
-	for i := 0; i < len(parts); {
-		cf := strings.TrimSpace(parts[i])
-
-		dir, ok := buildContextDir(cf, workingDir, service)
-		if ok {
-			if rt := runtimeFromMarkerFiles(dir); rt != "unknown" {
-				return rt
-			}
-			i++
+	for _, cf := range strings.Split(configFiles, ",") {
+		dir, ok := buildContextDir(strings.TrimSpace(cf), workingDir, service)
+		if !ok {
 			continue
 		}
-
-		// If this part failed and there's a next part, try merging
-		if i+1 < len(parts) {
-			mergedCF := cf + "," + strings.TrimSpace(parts[i+1])
-			dir, ok := buildContextDir(mergedCF, workingDir, service)
-			if ok {
-				if rt := runtimeFromMarkerFiles(dir); rt != "unknown" {
-					return rt
-				}
-				// Skip the next part since we merged it
-				i += 2
-				continue
-			}
+		if rt := runtimeFromMarkerFiles(dir); rt != "unknown" {
+			return rt
 		}
-
-		i++
 	}
-
 	return "unknown"
 }
 

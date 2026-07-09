@@ -79,7 +79,9 @@ func TestRuntimeFromBuildContext(t *testing.T) {
 		writeFile(t, cf, "services:\n  web:\n    build: .\n")
 		require.Equal(t, "unknown", runtimeFromBuildContext(cf, proj, "other"))
 	})
-	t.Run("comma-separated config files, second resolves", func(t *testing.T) {
+	// No comma in the subtest name: t.TempDir embeds the name in the path,
+	// and a comma there would collide with the label's comma separator.
+	t.Run("comma-separated config files - second resolves", func(t *testing.T) {
 		proj := t.TempDir()
 		writeFile(t, filepath.Join(proj, "app", "Cargo.toml"), "[package]")
 		cf1 := filepath.Join(proj, "missing.yml") // does not exist
