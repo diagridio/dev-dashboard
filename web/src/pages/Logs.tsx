@@ -8,6 +8,7 @@ import type { LogLine, LogLevel } from '../types/logs'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { parseLogTime } from '../lib/logtime'
 import { parseEnum } from '../lib/parseEnum'
+import { appKey } from '../lib/appKey'
 
 // LogSource is wider than the hook's 'daprd' | 'app'; 'both' composes two streams.
 const LOG_SOURCES = ['both', 'daprd', 'app'] as const
@@ -387,7 +388,10 @@ export function Logs() {
   const [following, setFollowing] = useState(true)
 
   const { data: apps } = useApps()
-  const appIds = (apps ?? []).map(a => a.appId)
+  const appOptions = (apps ?? []).map(a => {
+    const key = appKey(a)
+    return { key, label: key !== a.appId ? `${a.appId} (${key})` : a.appId }
+  })
 
   const { data: app, isLoading } = useApp(appId)
 
@@ -499,9 +503,9 @@ export function Logs() {
           aria-label="App"
         >
           <option value="">— select app —</option>
-          {appIds.map(id => (
-            <option key={id} value={id}>
-              {id}
+          {appOptions.map(o => (
+            <option key={o.key} value={o.key}>
+              {o.label}
             </option>
           ))}
         </select>
