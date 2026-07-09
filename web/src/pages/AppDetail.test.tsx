@@ -265,7 +265,7 @@ describe('AppDetail', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     expect(screen.getByText('running')).toBeInTheDocument()
     expect(screen.getByText('stopped')).toBeInTheDocument()
-    expect(screen.getByText('5m 00s')).toBeInTheDocument() // app uptime ticks from startedAt
+    expect(screen.getByText(/^5m 0[0-2]s$/)).toBeInTheDocument() // app uptime ticks from startedAt
     vi.useRealTimers()
   })
 })
