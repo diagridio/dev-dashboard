@@ -36,6 +36,8 @@ export interface AppSummary {
   appStartedAt?: string
   /** RFC3339 start time of the daprd process/container ("" while stopped) */
   daprdStartedAt?: string
+  /** true when a standalone daprd has no supervising dapr CLI and no live app */
+  sidecarOrphaned?: boolean
   age: string
   created: string
   runTemplate: string
