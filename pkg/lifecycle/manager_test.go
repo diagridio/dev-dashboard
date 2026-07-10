@@ -279,3 +279,34 @@ func TestStandaloneRestartStopsThenStarts(t *testing.T) {
 	require.Equal(t, []int{100}, proc.terminated)
 	require.Equal(t, [][]string{{"go", "run", "."}}, st.started)
 }
+
+func TestStandaloneDaprdTargetFunnelsToAll(t *testing.T) {
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"}
+	proc.snaps[200] = ProcSnapshot{PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"}
+	proc.snaps[300] = ProcSnapshot{PID: 300, Argv: []string{"dapr", "run", "--app-id", "orders"}, Dir: "/src"}
+	proc.alive[100], proc.alive[200], proc.alive[300] = true, true, true
+
+	reg := NewRegistry()
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, proc, nil).(*manager)
+	m.grace = 10 * time.Millisecond
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetDaprd, ActionStop))
+	require.Equal(t, []int{300}, proc.terminated, "daprd target must signal the CLI, like TargetAll")
+	e, ok := reg.Get("orders")
+	require.True(t, ok)
+	require.Contains(t, e.Procs, TargetAll, "whole-instance snapshot recorded")
+}
+
+func TestAspireDaprdStopNotFunneled(t *testing.T) {
+	in := standaloneInst()
+	in.IsAspire = true
+	proc := newFakeProc()
+	proc.snaps[200] = ProcSnapshot{PID: 200, Argv: []string{"daprd", "--app-id", "orders"}}
+	proc.alive[200] = true
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": in}}, NewRegistry(), nil, proc, nil).(*manager)
+	m.grace = 10 * time.Millisecond
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetDaprd, ActionStop))
+	require.Equal(t, []int{200}, proc.terminated, "Aspire keeps per-PID daprd stop")
+}
