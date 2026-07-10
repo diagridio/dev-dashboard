@@ -263,6 +263,11 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	if md.CLIPID != 0 {
 		in.CLIPID = md.CLIPID
 	}
+	// The CLI PID in metadata is written once at launch and survives the
+	// CLI's death; a dead CLI must not mask an orphan or receive signals.
+	if in.CLIPID != 0 && !s.appAlive(in.CLIPID) {
+		in.CLIPID = 0
+	}
 	if md.AppCommand != "" {
 		in.Command = md.AppCommand
 	}

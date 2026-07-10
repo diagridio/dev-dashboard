@@ -132,9 +132,9 @@ stat keeps its current rule (excludes only fully-stopped instances).
   safe."* The header Stop button is the cleanup action (funnel + fallback
   already signal just the daprd PID).
 - Sidecar panel buttons for `dapr run` apps send `target: 'all'`; confirm
-  copy: *"For dapr run apps the sidecar and app are managed together — this
-  will stop/restart the whole instance."* Compose and Aspire button wiring
-  unchanged.
+  copy includes "dapr run manages app + sidecar together" (rendered inside
+  the standard `<Action> <subject>?` template). Compose and Aspire button
+  wiring unchanged.
 
 ## Edge cases
 

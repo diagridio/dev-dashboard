@@ -559,9 +559,19 @@ func TestSidecarOrphanedDetection(t *testing.T) {
 		require.True(t, items[0].SidecarOrphaned)
 	})
 	t.Run("supervising CLI present -> not orphaned", func(t *testing.T) {
-		items, err := newSvc(300).List(context.Background())
+		svc := newSvc(300)
+		svc.pidAlive = func(pid int) bool { return true }
+		items, err := svc.List(context.Background())
 		require.NoError(t, err)
 		require.False(t, items[0].SidecarOrphaned)
+	})
+	t.Run("dead CLI PID -> orphaned", func(t *testing.T) {
+		svc := newSvc(300) // CLIPID from scan, but the process is dead
+		svc.pidAlive = func(pid int) bool { return false }
+		items, err := svc.List(context.Background())
+		require.NoError(t, err)
+		require.True(t, items[0].SidecarOrphaned)
+		require.Zero(t, items[0].CLIPID, "dead CLI PID must not be displayed")
 	})
 	t.Run("app alive -> not orphaned", func(t *testing.T) {
 		svc := newSvc(0)
