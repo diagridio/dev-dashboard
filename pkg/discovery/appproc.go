@@ -1,6 +1,8 @@
 package discovery
 
 import (
+	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -87,4 +89,21 @@ func gopsutilProcStart(pid int) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return time.UnixMilli(ms), true
+}
+
+// gopsutilPidAlive reports whether pid exists in the process table.
+func gopsutilPidAlive(pid int) bool {
+	ok, err := gproc.PidExists(int32(pid))
+	return err == nil && ok
+}
+
+// tcpPortOpen probes a loopback TCP port; a refused dial fails immediately,
+// so the timeout only bites for half-open ports (absent on loopback).
+func tcpPortOpen(port int) bool {
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
 }

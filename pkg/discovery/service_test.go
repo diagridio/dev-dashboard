@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -43,7 +44,8 @@ func TestServiceListEnriches(t *testing.T) {
 	scan := func() ([]ScanResult, error) {
 		return []ScanResult{{AppID: "order", HTTPPort: port, GRPCPort: 50001, AppPort: 8080, DaprdPID: 48230, Created: time.Now(), Command: "go run ./cmd/order"}}, nil
 	}
-	svc := New(scan, &http.Client{Timeout: 2 * time.Second})
+	svc := New(scan, &http.Client{Timeout: 2 * time.Second}).(*service)
+	svc.pidAlive = func(int) bool { return true } // fake PID in fixture isn't a real live process
 
 	list, err := svc.List(context.Background())
 	require.NoError(t, err)
@@ -443,4 +445,86 @@ func TestEnrichStandaloneFallsBackToCreatedWhenProcStartFails(t *testing.T) {
 	in := items[0]
 	require.Equal(t, StatusRunning, in.DaprdStatus)
 	require.Equal(t, "2026-07-09T08:59:00Z", in.DaprdStartedAt)
+}
+
+// stubSidecar serves /v1.0/healthz (204) and /v1.0/metadata with the given
+// extended appPID ("" omits the field). Returns the listening port.
+func stubSidecar(t *testing.T, appPID string) int {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/healthz":
+			w.WriteHeader(http.StatusNoContent)
+		case "/v1.0/metadata":
+			w.Header().Set("Content-Type", "application/json")
+			ext := `{}`
+			if appPID != "" {
+				ext = fmt.Sprintf(`{"appPID":%q,"cliPID":"300"}`, appPID)
+			}
+			fmt.Fprintf(w, `{"id":"orders","extended":%s}`, ext)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	u, err := url.Parse(srv.URL)
+	require.NoError(t, err)
+	port, err := strconv.Atoi(u.Port())
+	require.NoError(t, err)
+	return port
+}
+
+func standaloneScan(httpPort, appPort int) Scanner {
+	return func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "orders", Source: SourceStandalone, DaprdPID: 200,
+			HTTPPort: httpPort, AppPort: appPort, SidecarReachable: true}}, nil
+	}
+}
+
+func TestEnrichDeadAppPIDMarksAppStopped(t *testing.T) {
+	port := stubSidecar(t, "100")
+	svc := New(standaloneScan(port, 8080), &http.Client{Timeout: time.Second}).(*service)
+	svc.procStart = func(int) (time.Time, bool) { return time.Time{}, false }
+	svc.pidAlive = func(pid int) bool { return false } // 100 is dead
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	in := items[0]
+	require.Equal(t, StatusStopped, in.AppStatus)
+	require.Zero(t, in.AppPID, "dead PID must not be displayed")
+	require.Empty(t, in.AppStartedAt)
+}
+
+func TestEnrichLiveAppPIDMarksAppRunning(t *testing.T) {
+	port := stubSidecar(t, "100")
+	svc := New(standaloneScan(port, 8080), &http.Client{Timeout: time.Second}).(*service)
+	svc.procStart = func(int) (time.Time, bool) { return time.Time{}, false }
+	svc.pidAlive = func(pid int) bool { return pid == 100 }
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, StatusRunning, items[0].AppStatus)
+	require.Equal(t, 100, items[0].AppPID)
+}
+
+func TestEnrichPortDialDecidesWhenPIDUnknown(t *testing.T) {
+	for _, tc := range []struct {
+		open bool
+		want string
+	}{{true, StatusRunning}, {false, StatusStopped}} {
+		port := stubSidecar(t, "") // metadata without appPID
+		svc := New(standaloneScan(port, 8080), &http.Client{Timeout: time.Second}).(*service)
+		svc.procStart = func(int) (time.Time, bool) { return time.Time{}, false }
+		svc.portOpen = func(p int) bool { require.Equal(t, 8080, p); return tc.open }
+		items, err := svc.List(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, tc.want, items[0].AppStatus)
+	}
+}
+
+func TestEnrichNoLivenessSignalStaysUnknown(t *testing.T) {
+	port := stubSidecar(t, "")                                                         // no appPID
+	svc := New(standaloneScan(port, 0), &http.Client{Timeout: time.Second}).(*service) // no app port
+	svc.procStart = func(int) (time.Time, bool) { return time.Time{}, false }
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "", items[0].AppStatus)
 }

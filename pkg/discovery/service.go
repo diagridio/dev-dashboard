@@ -87,10 +87,13 @@ type service struct {
 	appProc    appProcResolver
 	stdoutFile func(pid int) string
 	procStart  func(pid int) (time.Time, bool)
+	pidAlive   func(pid int) bool
+	portOpen   func(port int) bool
 }
 
 func New(scan Scanner, client *http.Client) Service {
-	return &service{scan: scan, client: client, appProc: gopsutilResolver{}, stdoutFile: lsofStdoutFile, procStart: gopsutilProcStart}
+	return &service{scan: scan, client: client, appProc: gopsutilResolver{}, stdoutFile: lsofStdoutFile,
+		procStart: gopsutilProcStart, pidAlive: gopsutilPidAlive, portOpen: tcpPortOpen}
 }
 
 // procStartTime resolves a process's start time, returning false if the resolver is nil or pid is 0.
@@ -99,6 +102,15 @@ func (s *service) procStartTime(pid int) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return s.procStart(pid)
+}
+
+// appAlive reports whether pid is a live process. A nil resolver (bare test
+// fixtures) preserves the historical assume-alive behavior.
+func (s *service) appAlive(pid int) bool {
+	if s.pidAlive == nil {
+		return true
+	}
+	return s.pidAlive(pid)
 }
 
 const enrichWorkers = 8
@@ -217,10 +229,26 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	in.Components = md.Components
 	in.EnabledFeatures = md.EnabledFeatures
 	in.Placement = md.Placement
-	if in.Source == SourceStandalone && in.AppPID != 0 {
-		in.AppStatus = StatusRunning
-		if t, ok := s.procStartTime(in.AppPID); ok {
-			in.AppStartedAt = t.UTC().Format(time.RFC3339)
+	if in.Source == SourceStandalone {
+		switch {
+		case in.AppPID != 0:
+			if s.appAlive(in.AppPID) {
+				in.AppStatus = StatusRunning
+				if t, ok := s.procStartTime(in.AppPID); ok {
+					in.AppStartedAt = t.UTC().Format(time.RFC3339)
+				}
+			} else {
+				// Stale metadata: daprd still reports a PID that has exited.
+				in.AppStatus = StatusStopped
+				in.AppPID = 0
+				in.AppStartedAt = ""
+			}
+		case in.AppPort != 0 && s.portOpen != nil:
+			if s.portOpen(in.AppPort) {
+				in.AppStatus = StatusRunning
+			} else {
+				in.AppStatus = StatusStopped
+			}
 		}
 	}
 	if in.Source == SourceCompose {
