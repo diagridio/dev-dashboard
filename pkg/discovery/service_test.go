@@ -513,10 +513,12 @@ func TestEnrichPortDialDecidesWhenPIDUnknown(t *testing.T) {
 		port := stubSidecar(t, "") // metadata without appPID
 		svc := New(standaloneScan(port, 8080), &http.Client{Timeout: time.Second}).(*service)
 		svc.procStart = func(int) (time.Time, bool) { return time.Time{}, false }
-		svc.portOpen = func(p int) bool { require.Equal(t, 8080, p); return tc.open }
+		var gotPort int
+		svc.portOpen = func(p int) bool { gotPort = p; return tc.open }
 		items, err := svc.List(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, tc.want, items[0].AppStatus)
+		require.Equal(t, 8080, gotPort)
 	}
 }
 
