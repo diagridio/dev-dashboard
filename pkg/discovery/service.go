@@ -267,6 +267,9 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		in.Command = md.AppCommand
 	}
 	in.Runtime, in.IsAspire = appRuntime(in.Command, in.AppPort, s.appProc)
+	// Orphan: nothing supervises this daprd and its app is gone. Aspire is
+	// excluded — its daprd legitimately lacks CLI metadata.
+	in.SidecarOrphaned = !in.IsAspire && in.CLIPID == 0 && in.AppStatus == StatusStopped
 	if md.AppLogPath != "" {
 		in.AppLogPath, in.AppLogFormat = md.AppLogPath, logFormatPlain
 	}

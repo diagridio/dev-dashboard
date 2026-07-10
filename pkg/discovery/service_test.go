@@ -530,3 +530,52 @@ func TestEnrichNoLivenessSignalStaysUnknown(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "", items[0].AppStatus)
 }
+
+// fakeAspireResolver makes appRuntime classify the app-port listener as the
+// Aspire DCP proxy.
+type fakeAspireResolver struct{}
+
+func (fakeAspireResolver) CommandForPort(port int) (string, bool) {
+	// Command that passes isAspireProxy check but doesn't match InferRuntime
+	return "/path/to/dcp run-controllers", true
+}
+
+func TestSidecarOrphanedDetection(t *testing.T) {
+	newSvc := func(cliPID int) *service {
+		port := stubSidecar(t, "") // no appPID, no cliPID in metadata
+		scan := func() ([]ScanResult, error) {
+			return []ScanResult{{AppID: "orders", Source: SourceStandalone, DaprdPID: 200,
+				CLIPID: cliPID, HTTPPort: port, AppPort: 8080, SidecarReachable: true}}, nil
+		}
+		svc := New(scan, &http.Client{Timeout: time.Second}).(*service)
+		svc.procStart = func(int) (time.Time, bool) { return time.Time{}, false }
+		svc.portOpen = func(int) bool { return false } // app is dead
+		return svc
+	}
+
+	t.Run("no CLI + dead app -> orphaned", func(t *testing.T) {
+		items, err := newSvc(0).List(context.Background())
+		require.NoError(t, err)
+		require.True(t, items[0].SidecarOrphaned)
+	})
+	t.Run("supervising CLI present -> not orphaned", func(t *testing.T) {
+		items, err := newSvc(300).List(context.Background())
+		require.NoError(t, err)
+		require.False(t, items[0].SidecarOrphaned)
+	})
+	t.Run("app alive -> not orphaned", func(t *testing.T) {
+		svc := newSvc(0)
+		svc.portOpen = func(int) bool { return true }
+		items, err := svc.List(context.Background())
+		require.NoError(t, err)
+		require.False(t, items[0].SidecarOrphaned)
+	})
+	t.Run("aspire excluded", func(t *testing.T) {
+		svc := newSvc(0)
+		svc.appProc = fakeAspireResolver{}
+		items, err := svc.List(context.Background())
+		require.NoError(t, err)
+		require.True(t, items[0].IsAspire, "fixture must classify as Aspire")
+		require.False(t, items[0].SidecarOrphaned)
+	})
+}
