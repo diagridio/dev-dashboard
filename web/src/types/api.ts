@@ -1,6 +1,9 @@
 /** Health status of a Dapr application instance */
 export type HealthStatus = 'healthy' | 'starting' | 'unhealthy' | 'unknown'
 
+/** Per-target process status; absent = unknown */
+export type ProcStatus = 'running' | 'stopped'
+
 /**
  * Summary fields returned in GET /api/apps (list).
  * Mirrors the Go Instance JSON keys for the list view.
@@ -25,6 +28,14 @@ export interface AppSummary {
   daprdPid: number
   appPid: number
   cliPid: number
+  /** lifecycle status of the app process/container; absent = unknown */
+  appStatus?: ProcStatus
+  /** lifecycle status of the daprd process/container; absent = unknown */
+  daprdStatus?: ProcStatus
+  /** RFC3339 start time of the app process/container ("" while stopped) */
+  appStartedAt?: string
+  /** RFC3339 start time of the daprd process/container ("" while stopped) */
+  daprdStartedAt?: string
   age: string
   created: string
   runTemplate: string

@@ -383,3 +383,64 @@ func TestEnrichComposeUsesAppRuntime(t *testing.T) {
 	require.Equal(t, "python", apps[1].Runtime)
 	require.Equal(t, "node", apps[2].Runtime)
 }
+
+func TestEnrichMapsPerTargetStatusAndStartedAt(t *testing.T) {
+	started := time.Date(2026, 7, 9, 10, 0, 0, 0, time.UTC)
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID:          "checkout",
+			Source:         SourceCompose,
+			DaprdStatus:    StatusRunning,
+			AppStatus:      StatusStopped,
+			DaprdStartedAt: started,
+			// AppStartedAt zero: stopped targets expose no start time
+		}}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Second})
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	in := items[0]
+	require.Equal(t, StatusRunning, in.DaprdStatus)
+	require.Equal(t, StatusStopped, in.AppStatus)
+	require.Equal(t, "2026-07-09T10:00:00Z", in.DaprdStartedAt)
+	require.Equal(t, "", in.AppStartedAt)
+}
+
+func TestEnrichStandaloneStatusesAndStartTimes(t *testing.T) {
+	daprdStart := time.Date(2026, 7, 9, 9, 0, 0, 0, time.UTC)
+	created := time.Date(2026, 7, 9, 8, 59, 0, 0, time.UTC)
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "orders", Source: SourceStandalone, DaprdPID: 111, Created: created, SidecarReachable: true}}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Second}).(*service)
+	svc.procStart = func(pid int) (time.Time, bool) {
+		if pid == 111 {
+			return daprdStart, true
+		}
+		return time.Time{}, false
+	}
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	in := items[0]
+	require.Equal(t, StatusRunning, in.DaprdStatus)
+	require.Equal(t, "2026-07-09T09:00:00Z", in.DaprdStartedAt)
+	// no metadata -> app pid unknown -> app status unknown
+	require.Equal(t, "", in.AppStatus)
+}
+
+func TestEnrichStandaloneFallsBackToCreatedWhenProcStartFails(t *testing.T) {
+	created := time.Date(2026, 7, 9, 8, 59, 0, 0, time.UTC)
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "orders", Source: SourceStandalone, DaprdPID: 111, Created: created, SidecarReachable: true}}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Second}).(*service)
+	svc.procStart = func(pid int) (time.Time, bool) {
+		return time.Time{}, false // always fail
+	}
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	in := items[0]
+	require.Equal(t, StatusRunning, in.DaprdStatus)
+	require.Equal(t, "2026-07-09T08:59:00Z", in.DaprdStartedAt)
+}

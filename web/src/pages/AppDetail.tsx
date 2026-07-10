@@ -1,11 +1,13 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
+import { useAppAction, type AppTarget, type AppLifecycleAction } from '../hooks/useAppAction'
 import type { AppDetail as AppDetailType } from '../types/api'
 import { copyText } from '../lib/clipboard'
 import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
 import { useToast } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { appKey } from '../lib/appKey'
+import { formatUptime, useNow } from '../lib/uptime'
 
 // ---------- content ----------
 
@@ -25,7 +27,61 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
   const isCompose = app.source === 'compose'
-  const unreachable = isCompose && app.sidecarReachable === false
+  const unreachable = isCompose && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
+
+  const now = useNow()
+  const appRunning = app.appStatus === 'running'
+  const daprdRunning = app.daprdStatus === 'running'
+
+  const action = useAppAction(key)
+  const runAction = (target: AppTarget, act: AppLifecycleAction, what: string) => {
+    if (!window.confirm(`${act.charAt(0).toUpperCase() + act.slice(1)} ${what}?`)) return
+    action.mutate(
+      { target, action: act },
+      { onError: (e) => toast.show(e instanceof Error ? e.message : 'Action failed') },
+    )
+  }
+  const appStopped = app.appStatus === 'stopped'
+  const daprdStopped = app.daprdStatus === 'stopped'
+  const anyRunning = appRunning || daprdRunning
+  const allStopped = (appStopped || daprdStopped) && !appRunning && !daprdRunning
+  const busy = action.isPending
+
+  const statusCell = (status?: string) =>
+    status ? (
+      <span className="health">
+        <span className={`led ${ledClass(status === 'running' ? 'healthy' : 'unknown')}`} /> {status}
+      </span>
+    ) : (
+      <span className="faint">—</span>
+    )
+
+  const uptimeCell = (running: boolean, startedAt?: string) => {
+    const text = running && startedAt ? formatUptime(startedAt, now) : null
+    return text ? <span>{text}</span> : <span className="faint">—</span>
+  }
+
+  const panelActions = (target: AppTarget, status: string | undefined, what: string) => (
+    <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+      {status === 'running' && (
+        <>
+          {!app.isAspire && (
+            <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'restart', what)}>
+              Restart
+            </button>
+          )}
+          <button className="btn danger" disabled={busy} onClick={() => runAction(target, 'stop', what)}>
+            Stop
+          </button>
+        </>
+      )}
+      {status === 'stopped' && !app.isAspire && (
+        <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'start', what)}>
+          Start
+        </button>
+      )}
+    </span>
+  )
 
   return (
     <div className="page">
@@ -52,6 +108,35 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           {hasContainerName && <div className="sub mono">{key}</div>}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {anyRunning && (
+            <>
+              {!app.isAspire && (
+                <button
+                  className="btn ghost"
+                  disabled={busy}
+                  onClick={() => runAction('all', 'restart', `"${app.appId}" (app + sidecar)`)}
+                >
+                  Restart
+                </button>
+              )}
+              <button
+                className="btn danger"
+                disabled={busy}
+                onClick={() => runAction('all', 'stop', `"${app.appId}" (app + sidecar)`)}
+              >
+                Stop
+              </button>
+            </>
+          )}
+          {allStopped && !app.isAspire && (
+            <button
+              className="btn ghost"
+              disabled={busy}
+              onClick={() => runAction('all', 'start', `"${app.appId}" (app + sidecar)`)}
+            >
+              Start
+            </button>
+          )}
           <button className="tbtn" onClick={() => navigate('/')}>← Back</button>
           <Link className="tbtn" to={`/logs?app=${key}&source=daprd`}>View logs</Link>
         </div>
@@ -66,16 +151,26 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       ) : (
         !app.metadataOk && <div className="hint">metadata unavailable — showing process-scan data only</div>
       )}
+      {app.isAspire && (appStopped || daprdStopped) && (
+        <div className="hint">Managed by Aspire — restart it from the Aspire dashboard.</div>
+      )}
 
       {/* Two-column: Application + Dapr sidecar */}
       <div className="twocol">
         {/* Application panel */}
         <div className="panel">
-          <div className="ph">
+          <div className="ph" style={{ display: 'flex', alignItems: 'center' }}>
             <span className="ic" style={{ background: 'var(--surface-2)', color: 'var(--accent2)' }}>A</span>
             Application
+            {panelActions('app', app.appStatus, `application "${app.appId}"`)}
           </div>
           <div className="kv">
+            <div className="kk">Status</div>
+            <div className="vv">{statusCell(app.appStatus)}</div>
+
+            <div className="kk">Uptime</div>
+            <div className="vv mono">{uptimeCell(appRunning, app.appStartedAt)}</div>
+
             <div className="kk">Runtime</div>
             <div className="vv">{app.runtime || <span className="faint">—</span>}</div>
 
@@ -113,11 +208,18 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
         {/* Dapr sidecar panel */}
         <div className="panel">
-          <div className="ph">
+          <div className="ph" style={{ display: 'flex', alignItems: 'center' }}>
             <span className="ic" style={{ background: 'var(--dapr)', color: '#fff' }}>d</span>
             Dapr sidecar (daprd)
+            {panelActions('daprd', app.daprdStatus, `sidecar of "${app.appId}"`)}
           </div>
           <div className="kv">
+            <div className="kk">Status</div>
+            <div className="vv">{statusCell(app.daprdStatus)}</div>
+
+            <div className="kk">Uptime</div>
+            <div className="vv mono">{uptimeCell(daprdRunning, app.daprdStartedAt)}</div>
+
             <div className="kk">Runtime ver.</div>
             <div className="vv mono">{app.runtimeVersion || <span className="faint">—</span>}</div>
 

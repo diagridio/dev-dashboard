@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 type fakeCRT struct {
@@ -44,7 +46,7 @@ func newFakeCRT(t *testing.T) *fakeCRT {
 		t.Fatal(err)
 	}
 	return &fakeCRT{responses: map[string][]byte{
-		"ps -q":          []byte("aaa111\nbbb222\nccc333\n"),
+		"ps -aq":         []byte("aaa111\nbbb222\nccc333\n"),
 		"inspect aaa111": inspect,
 	}}
 }
@@ -115,7 +117,7 @@ func TestComposeSourceNilRunner(t *testing.T) {
 }
 
 func TestComposeSourceNoContainers(t *testing.T) {
-	crt := &fakeCRT{responses: map[string][]byte{"ps -q": []byte("")}}
+	crt := &fakeCRT{responses: map[string][]byte{"ps -aq": []byte("")}}
 	src := NewComposeSource(crt)
 	results, err := src.Scanner()()
 	if err != nil || len(results) != 0 {
@@ -148,9 +150,105 @@ func TestComposeSourceCachesResults(t *testing.T) {
 }
 
 func TestComposeSourceErrorPropagates(t *testing.T) {
-	crt := &fakeCRT{errs: map[string]error{"ps -q": errors.New("daemon down")}}
+	crt := &fakeCRT{errs: map[string]error{"ps -aq": errors.New("daemon down")}}
 	src := NewComposeSource(crt)
 	if _, err := src.Scanner()(); err == nil {
 		t.Fatal("ps failure must surface as an error (Merge handles it)")
 	}
+}
+
+// fakeRunnerWithStoppedApp returns a fake runner for a project with a running
+// daprd sidecar paired with a stopped ("exited") app container.
+func fakeRunnerWithStoppedApp(t *testing.T) *fakeCRT {
+	t.Helper()
+	inspect := []byte(`[
+  {
+    "Id": "id1",
+    "Name": "/checkout-dapr-1",
+    "State": { "Status": "running", "StartedAt": "2026-07-09T10:00:00.000000000Z" },
+    "Config": {
+      "Image": "daprio/daprd:1.15.0",
+      "Labels": {
+        "com.docker.compose.project": "checkout",
+        "com.docker.compose.service": "checkout"
+      },
+      "Entrypoint": null,
+      "Cmd": ["./daprd", "-app-id", "checkout", "-app-channel-address", "checkout-app", "-app-port", "8080", "-dapr-http-port", "3500", "-dapr-grpc-port", "50001"]
+    },
+    "NetworkSettings": { "Ports": { "3500/tcp": [ { "HostIp": "0.0.0.0", "HostPort": "3500" } ] } },
+    "Mounts": []
+  },
+  {
+    "Id": "id2",
+    "Name": "/checkout-app-1",
+    "State": { "Status": "exited", "StartedAt": "0001-01-01T00:00:00Z" },
+    "Config": {
+      "Image": "checkout-app",
+      "Labels": {
+        "com.docker.compose.project": "checkout",
+        "com.docker.compose.service": "checkout-app"
+      },
+      "Entrypoint": ["/app/server"],
+      "Cmd": null
+    },
+    "NetworkSettings": { "Ports": {} },
+    "Mounts": []
+  }
+]`)
+	return &fakeCRT{responses: map[string][]byte{
+		"ps -aq":      []byte("id1\nid2\n"),
+		"inspect id1": inspect,
+	}}
+}
+
+// fakeRunnerWithStoppedDaprd returns a fake runner for a single stopped
+// ("exited") daprd sidecar with no paired app container and no published
+// ports.
+func fakeRunnerWithStoppedDaprd(t *testing.T) *fakeCRT {
+	t.Helper()
+	inspect := []byte(`[
+  {
+    "Id": "id1",
+    "Name": "/checkout-dapr-1",
+    "State": { "Status": "exited", "StartedAt": "0001-01-01T00:00:00Z" },
+    "Config": {
+      "Image": "daprio/daprd:1.15.0",
+      "Labels": {
+        "com.docker.compose.project": "checkout",
+        "com.docker.compose.service": "checkout"
+      },
+      "Entrypoint": null,
+      "Cmd": ["./daprd", "-app-id", "checkout", "-app-channel-address", "checkout-app", "-app-port", "8080", "-dapr-http-port", "3500", "-dapr-grpc-port", "50001"]
+    },
+    "NetworkSettings": { "Ports": {} },
+    "Mounts": []
+  }
+]`)
+	return &fakeCRT{responses: map[string][]byte{
+		"ps -aq":      []byte("id1\n"),
+		"inspect id1": inspect,
+	}}
+}
+
+func TestComposeScanIncludesStoppedContainers(t *testing.T) {
+	src := NewComposeSource(fakeRunnerWithStoppedApp(t))
+	results, err := src.Scanner()()
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	r := results[0]
+	require.Equal(t, StatusRunning, r.DaprdStatus)
+	require.Equal(t, StatusStopped, r.AppStatus)
+	require.False(t, r.DaprdStartedAt.IsZero())
+	require.True(t, r.AppStartedAt.IsZero())
+	require.Equal(t, "checkout-app", r.ComposeService+"-app") // app container paired
+}
+
+func TestComposeScanStoppedSidecarStillDiscovered(t *testing.T) {
+	src := NewComposeSource(fakeRunnerWithStoppedDaprd(t))
+	results, err := src.Scanner()()
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, StatusStopped, results[0].DaprdStatus)
+	require.False(t, results[0].SidecarReachable)
+	require.Equal(t, 0, results[0].HTTPPort)
 }

@@ -50,6 +50,12 @@ type ScanResult struct {
 	// SidecarReachable is false only for compose sidecars whose HTTP port is
 	// not published to the host (metadata/health enrichment impossible).
 	SidecarReachable bool
+
+	// Per-target lifecycle status ("" = unknown; compose scanner and standalone enrichment set these).
+	AppStatus      string
+	DaprdStatus    string
+	AppStartedAt   time.Time
+	DaprdStartedAt time.Time
 }
 
 // Key returns the routing identity for this scan result. Compose sidecars can
@@ -80,10 +86,19 @@ type service struct {
 	client     *http.Client
 	appProc    appProcResolver
 	stdoutFile func(pid int) string
+	procStart  func(pid int) (time.Time, bool)
 }
 
 func New(scan Scanner, client *http.Client) Service {
-	return &service{scan: scan, client: client, appProc: gopsutilResolver{}, stdoutFile: lsofStdoutFile}
+	return &service{scan: scan, client: client, appProc: gopsutilResolver{}, stdoutFile: lsofStdoutFile, procStart: gopsutilProcStart}
+}
+
+// procStartTime resolves a process's start time, returning false if the resolver is nil or pid is 0.
+func (s *service) procStartTime(pid int) (time.Time, bool) {
+	if s.procStart == nil || pid == 0 {
+		return time.Time{}, false
+	}
+	return s.procStart(pid)
 }
 
 const enrichWorkers = 8
@@ -151,10 +166,27 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		DaprdContainerID: r.DaprdContainerID, DaprdContainerName: r.DaprdContainerName,
 		AppContainerID: r.AppContainerID, AppContainerName: r.AppContainerName,
 		SidecarReachable: r.SidecarReachable,
+		AppStatus:        r.AppStatus, DaprdStatus: r.DaprdStatus,
+	}
+	if !r.AppStartedAt.IsZero() && r.AppStatus != StatusStopped {
+		in.AppStartedAt = r.AppStartedAt.UTC().Format(time.RFC3339)
+	}
+	if !r.DaprdStartedAt.IsZero() && r.DaprdStatus != StatusStopped {
+		in.DaprdStartedAt = r.DaprdStartedAt.UTC().Format(time.RFC3339)
 	}
 	if in.Source == "" { // scanners predating the field (and bare test fixtures)
 		in.Source = SourceStandalone
 		in.SidecarReachable = true
+	}
+	if in.Source == SourceStandalone {
+		in.DaprdStatus = StatusRunning // the process scan saw daprd alive
+		if in.DaprdStartedAt == "" {
+			if t, ok := s.procStartTime(r.DaprdPID); ok {
+				in.DaprdStartedAt = t.UTC().Format(time.RFC3339)
+			} else if !r.Created.IsZero() {
+				in.DaprdStartedAt = r.Created.UTC().Format(time.RFC3339)
+			}
+		}
 	}
 	if in.Source == SourceCompose && in.Runtime == "unknown" {
 		// Prefer the scanner's signal chain (argv → env → image → build
@@ -185,6 +217,12 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	in.Components = md.Components
 	in.EnabledFeatures = md.EnabledFeatures
 	in.Placement = md.Placement
+	if in.Source == SourceStandalone && in.AppPID != 0 {
+		in.AppStatus = StatusRunning
+		if t, ok := s.procStartTime(in.AppPID); ok {
+			in.AppStartedAt = t.UTC().Format(time.RFC3339)
+		}
+	}
 	if in.Source == SourceCompose {
 		// Container apps: metadata Extended fields (PIDs, commands, log paths)
 		// describe the container's own view; process probing and file log

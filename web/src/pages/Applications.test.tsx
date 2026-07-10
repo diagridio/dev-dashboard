@@ -176,4 +176,47 @@ describe('Applications', () => {
     const link = await screen.findByRole('link', { name: 'order' })
     expect(link).toHaveAttribute('href', '/apps/order')
   })
+
+  it('renders stopped instances distinctly and excludes them from the running count', async () => {
+    mockApps([
+      { ...baseApp, appId: 'live', appStatus: 'running', daprdStatus: 'running' },
+      {
+        ...baseApp,
+        appId: 'halted',
+        health: 'unknown',
+        httpPort: 0,
+        grpcPort: 0,
+        appPort: 0,
+        daprdPid: 0,
+        appPid: 0,
+        age: '',
+        appStatus: 'stopped',
+        daprdStatus: 'stopped',
+      },
+    ])
+    renderAt()
+    await waitFor(() => expect(screen.getByText('halted')).toBeInTheDocument())
+    expect(screen.getByText('stopped')).toBeInTheDocument()
+    const runningStat = screen.getByText('Apps running').previousElementSibling
+    expect(runningStat).toHaveTextContent('1')
+  })
+
+  it('suppresses the unreachable hint for a stopped compose sidecar', async () => {
+    mockApps([
+      {
+        ...baseApp,
+        appId: 'primes-go',
+        source: 'compose',
+        composeProject: 'saga',
+        sidecarReachable: false,
+        health: 'unknown',
+        runTemplate: '',
+        appStatus: 'stopped',
+        daprdStatus: 'stopped',
+      },
+    ])
+    renderAt()
+    await waitFor(() => expect(screen.getByText('primes-go')).toBeInTheDocument())
+    expect(screen.queryByTitle(/publish the daprd HTTP port/i)).not.toBeInTheDocument()
+  })
 })

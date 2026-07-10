@@ -5,6 +5,9 @@ import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
 import { appKey } from '../lib/appKey'
 import type { AppSummary } from '../types/api'
 
+// Fully stopped: both the app process/container and its daprd sidecar report 'stopped'.
+const isStopped = (a: AppSummary) => a.appStatus === 'stopped' && a.daprdStatus === 'stopped'
+
 const PAGE_HEADER = (
   <div className="phead">
     <div>
@@ -38,7 +41,7 @@ export function Applications() {
     )
   }
 
-  const running = apps.length
+  const running = apps.filter((a) => !isStopped(a)).length
   const healthy = apps.filter((a) => a.health === 'healthy').length
   const starting = apps.filter((a) => a.health === 'starting').length
   const unhealthy = apps.filter((a) => a.health === 'unhealthy').length
@@ -106,7 +109,8 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
   const num = (v: number) =>
     v ? <td className="mono tabnum">{v}</td> : <td className="mono tabnum faint">—</td>
   const sourceLabel = app.runTemplate || (app.isAspire ? 'Aspire' : app.source === 'compose' ? 'Compose' : '—')
-  const unreachable = app.source === 'compose' && app.sidecarReachable === false
+  const stopped = isStopped(app)
+  const unreachable = app.source === 'compose' && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
   const key = appKey(app)
   const hasContainerName = key !== app.appId
   return (
@@ -116,7 +120,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
           className="health"
           title={unreachable ? 'publish the daprd HTTP port (e.g. 3500:3500) to enable health & metadata' : undefined}
         >
-          <span className={`led ${ledClass(app.health)}`} /> {app.health}
+          <span className={`led ${ledClass(stopped ? 'unknown' : app.health)}`} /> {stopped ? 'stopped' : app.health}
           {unreachable && ' ⓘ'}
         </span>
       </td>

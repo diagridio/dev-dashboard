@@ -10,6 +10,7 @@ import (
 
 	"github.com/diagridio/dev-dashboard/pkg/controlplane"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/lifecycle"
 	"github.com/diagridio/dev-dashboard/pkg/news"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
 	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
@@ -27,12 +28,15 @@ type Options struct {
 	// ContainerLogs streams container logs for compose-discovered apps.
 	// nil disables container log streaming (404 for those apps).
 	ContainerLogs func(ctx context.Context, containerID string) (<-chan string, error)
-	Backend       WorkflowBackend
-	Stores        StoreRegistry
-	Resources     resources.Service
-	News          news.Service
-	ControlPlane  controlplane.Manager
-	UpdateCheck   updatecheck.Service
+	// Lifecycle starts/stops/restarts discovered apps; nil disables the
+	// POST /api/apps/{key}/{target}/{action} route.
+	Lifecycle    lifecycle.Manager
+	Backend      WorkflowBackend
+	Stores       StoreRegistry
+	Resources    resources.Service
+	News         news.Service
+	ControlPlane controlplane.Manager
+	UpdateCheck  updatecheck.Service
 	// TelemetryEnabled controls whether the served SPA loads Datadog RUM.
 	TelemetryEnabled bool
 }
@@ -47,7 +51,7 @@ func NewRouter(opts Options) http.Handler {
 	r.Use(localhostGuard)
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane, opts.UpdateCheck))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Lifecycle, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane, opts.UpdateCheck))
 		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath, opts.TelemetryEnabled))
 	}
 
