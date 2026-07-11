@@ -187,7 +187,9 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             </button>
           )}
           <button className="tbtn" onClick={() => navigate('/')}>← Back</button>
-          <Link className="tbtn" to={`/logs?app=${key}&source=daprd`}>View logs</Link>
+          {caps.logs && (
+            <Link className="tbtn" to={`/logs?app=${key}&source=daprd`}>View logs</Link>
+          )}
         </div>
       </div>
 
