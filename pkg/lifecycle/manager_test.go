@@ -241,7 +241,7 @@ func TestStandaloneStartAllRerunsCLICommand(t *testing.T) {
 	require.Equal(t, [][]string{{"dapr", "run", "--app-id", "orders"}}, st.started)
 	require.Equal(t, []string{"/src"}, st.dirs)
 	_, ok := reg.Get("orders")
-	require.False(t, ok, "whole entry dropped after start")
+	require.True(t, ok, "entry survives start; the overlay drops it once discovery sees the instance live")
 }
 
 func TestStandaloneStartSingleTarget(t *testing.T) {
@@ -256,8 +256,8 @@ func TestStandaloneStartSingleTarget(t *testing.T) {
 	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionStart))
 	require.Equal(t, [][]string{{"go", "run", "."}}, st.started)
 	e, ok := reg.Get("orders")
-	require.True(t, ok, "daprd snapshot remains")
-	require.Len(t, e.Procs, 1)
+	require.True(t, ok, "entry survives start; live reconciliation cleans it up")
+	require.Len(t, e.Procs, 2)
 }
 
 func TestStandaloneStartWithoutSnapshotRejected(t *testing.T) {
@@ -325,8 +325,9 @@ func TestStandaloneStartAllWithoutCLISnapshotStartsHalvesInOrder(t *testing.T) {
 
 	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStart))
 	require.Equal(t, [][]string{{"daprd", "--app-id", "orders"}, {"go", "run", "."}}, st.started, "sidecar starts before the app")
-	_, ok := reg.Get("orders")
-	require.False(t, ok, "both targets dropped -> entry gone")
+	e, ok := reg.Get("orders")
+	require.True(t, ok, "entry survives start; live reconciliation cleans it up")
+	require.Len(t, e.Procs, 2)
 }
 
 // An orphaned sidecar (no supervising CLI, app gone) supports only stop:

@@ -232,8 +232,12 @@ func (m *manager) terminateWithEscalation(ctx context.Context, pid int) error {
 }
 
 // standaloneStart re-runs the snapshot captured at stop time. TargetAll
-// prefers the dapr CLI command (it starts both halves); the entry is dropped
-// so the next scan's live data wins.
+// prefers the dapr CLI command (it starts both halves). The registry entry
+// deliberately survives the start: dropping it here opened a window where
+// the instance was neither remembered nor yet discovered (the page 404'd,
+// and a command that exited immediately erased the instance for good). The
+// overlay's live reconciliation removes the entry once the process scan
+// sees the instance again.
 func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, target Target) error {
 	entry, ok := m.reg.Get(in.InstanceKey)
 	if !ok {
@@ -241,11 +245,7 @@ func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, ta
 	}
 	if target == TargetAll {
 		if snap, ok := entry.Procs[TargetAll]; ok {
-			if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
-				return err
-			}
-			m.reg.Drop(in.InstanceKey)
-			return nil
+			return m.start.Start(snap.Argv, snap.Dir, snap.LogPath)
 		}
 		// No CLI snapshot: bring the halves up individually, sidecar first.
 		started := false
@@ -257,7 +257,6 @@ func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, ta
 			if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
 				return err
 			}
-			m.reg.DropTarget(in.InstanceKey, t)
 			started = true
 		}
 		if !started {
@@ -269,9 +268,5 @@ func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, ta
 	if !ok {
 		return fmt.Errorf("%w: no captured command for %s", ErrUnsupported, target)
 	}
-	if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
-		return err
-	}
-	m.reg.DropTarget(in.InstanceKey, target)
-	return nil
+	return m.start.Start(snap.Argv, snap.Dir, snap.LogPath)
 }
