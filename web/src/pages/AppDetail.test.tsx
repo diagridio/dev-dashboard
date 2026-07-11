@@ -517,6 +517,18 @@ describe('AppDetail', () => {
     expect(screen.queryByRole('button', { name: 'Remove from list' })).not.toBeInTheDocument()
   })
 
+  it('offers a back link when the app cannot be loaded', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ error: 'app not found' }, { status: 404 }),
+      ),
+    )
+    renderDetail()
+    // The query client retries once (~1s backoff) before surfacing the error.
+    expect(await screen.findByText('App not found or failed to load.', undefined, { timeout: 4000 })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Back to applications/ })).toHaveAttribute('href', '/')
+  })
+
   it('surfaces action errors via toast', async () => {
     server.use(
       http.get('/api/apps/order', () => HttpResponse.json(runningApp)),

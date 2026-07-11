@@ -441,6 +441,7 @@ export function AppDetail() {
     return (
       <div className="page">
         <p className="err">App not found or failed to load.</p>
+        <Link className="tbtn" to="/">← Back to applications</Link>
       </div>
     )
   }
