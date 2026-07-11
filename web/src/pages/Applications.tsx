@@ -59,7 +59,7 @@ export function Applications() {
       {PAGE_HEADER}
       <div className="stats">
         <div className="stat">
-          <div className="n mint">{running}</div>
+          <div className="n">{running}</div>
           <div className="l">Apps running</div>
         </div>
         <div className="stat">

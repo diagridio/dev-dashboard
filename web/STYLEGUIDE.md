@@ -111,9 +111,9 @@ All tokens are CSS custom properties. Reference them with `var(--name)`.
 | Token | Use |
 |---|---|
 | `--primary` `#0BDDA3` | Brand mint (theme-independent) |
-| `--accent2` | Theme-aware accent: focus rings, primary buttons, selection tints |
-| `--accent-bright` / `--ok-bright` | Brighter mint for LEDs, "beat" pulse, checkboxes |
+| `--accent-bright` / `--ok-bright` | Brighter mint (theme-independent) — the single interactive accent: `.btn.primary`, focus rings, selection tints, active nav tab, LEDs, "beat" pulse, checkboxes |
 | `--dapr` | Dapr-specific blue (sidecar badges, daprd log source) |
+| `--gold` / `--purple` | Catalyst-brand secondary accents — available for highlights / category chips (not yet used in default UI) |
 
 ### Status palette (paired bg/fg)
 Each status has a background and foreground token, used together:
@@ -135,8 +135,8 @@ Syntax-highlight tokens also exist for YAML (`--yk/--ys/--yc`) and JSON
 | Token | Use |
 |---|---|
 | `--sbw` | Sidebar width (240px; 44px when `.collapsed` or ≤760px) |
-| `--mono` | Monospace stack |
-| `--sans` | Sans stack (default body font) |
+| `--mono` | Monospace stack (system: SF Mono / JetBrains Mono / Menlo…) |
+| `--sans` | Sans stack — **Public Sans** (bundled via `@fontsource-variable/public-sans`, imported in `main.tsx`), system-ui fallback |
 
 ### Implicit scales (radius & padding)
 
@@ -163,7 +163,7 @@ For selection/hover tints, follow the existing pattern with `color-mix` against 
 token rather than inventing a new color:
 
 ```css
-background: color-mix(in srgb, var(--accent2) 10%, var(--surface));
+background: color-mix(in srgb, var(--accent-bright) 10%, var(--surface));
 ```
 
 ---
@@ -288,8 +288,7 @@ component fails the suite until the doc is updated.
   `.compchips`, or a `<pre>`. Use `.ph .ic` for the little square glyph,
   `.ph .tagdot` for a colored dot, `.ph .copybtn` auto-right-aligns.
 - `.stats` / `.stat` — auto-fit grid of summary tiles. `.stat .n` (big number —
-  **mono** + tabular-nums by default; add `.mint` for accent), `.stat .l` (caption
-  label).
+  **mono** + tabular-nums by default), `.stat .l` (caption label).
 - `.metagrid` — dense 4-col key/value header grid (`.m` cell, `.m.span2` to span,
   `.k` label, `.v` value, `.v.mono`). Used on detail headers.
 - `.kv` — 2-col key/value list inside a panel (`.kk` key, `.vv` value, `.vv.mono`).
@@ -321,6 +320,9 @@ component fails the suite until the doc is updated.
 
 **Controls**
 - `.btn` + `.btn.primary` / `.btn.ghost` / `.btn.danger` — buttons.
+  `.primary` = solid green affirmative action; `.danger` = red outline for
+  destructive / disruptive actions (Stop / Remove / Force delete / Disconnect);
+  `.ghost` = neutral outline.
 - `.tbtn` — topbar/secondary button (used for Back / View logs).
 - `.copybtn` (+ `.ok` state) — small copy button; pairs with `copyText` + toast.
 - `.search` (wraps an `<input>`), `.select` — filter inputs.
@@ -386,9 +388,9 @@ flow should be assembled from these — not hand-rolled.
   (`.active` = current, `.done` = completed, mint) separated by `.step-arrow`
   `→` glyphs. Display-only; steps aren't clickable.
 - **`StepNav`** — the Back / Continue / Finish row (`.stepnav`; a `.spacer`
-  keeps the primary action right-aligned when Back is absent). All wizard
-  actions are `.btn.ghost`. Gate progression by passing `canContinue={false}`
-  — disable the button, don't hide it.
+  keeps the primary action right-aligned when Back is absent). The forward
+  action (Continue / Finish) is `.btn.primary`; Back is `.btn.ghost`. Gate
+  progression by passing `canContinue={false}` — disable the button, don't hide it.
 
 The matching CSS is the wizard section of `theme.css` (`.wizard`, `.stepper` /
 `.step`, `.wizard-body` — a min-height so the pane doesn't jump between steps —
@@ -458,7 +460,7 @@ copy/download buttons per builder.
 - **Wide content scrolls, the page doesn't.** Wrap wide tables in `.tablewrap`
   (`overflow-x: auto`). Never let the page body scroll horizontally.
 - **Focus rings are standard:** interactive elements use
-  `:focus-visible { outline: 2px solid var(--accent2); }`. Keep it — don't remove
+  `:focus-visible { outline: 2px solid var(--accent-bright); }`. Keep it — don't remove
   outlines.
 - **Reduced motion:** a global `@media (prefers-reduced-motion: reduce)` disables
   all animation/transition. Any new animation is automatically covered.

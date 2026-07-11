@@ -44,7 +44,7 @@ export function StateStoreConnectionsPanel() {
     <div className="card" style={{ padding: '14px 16px', marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <b style={{ fontSize: 13 }}>Recent workflow state store connections</b>
-        <button className="btn ghost" onClick={() => setAddOpen(true)}>+ Add connection</button>
+        <button className="btn primary" onClick={() => setAddOpen(true)}>+ Add connection</button>
       </div>
 
       {(stores ?? []).length === 0 && <p className="hint">No state store connections yet.</p>}
@@ -61,7 +61,7 @@ export function StateStoreConnectionsPanel() {
             </span>
             {!s.active && (
               <span style={{ display: 'flex', gap: 6 }}>
-                <button className="btn ghost" aria-label={`disconnect ${s.name}`} onClick={() => openDeleteConfirm(s)}>Disconnect</button>
+                <button className="btn danger" aria-label={`disconnect ${s.name}`} onClick={() => openDeleteConfirm(s)}>Disconnect</button>
               </span>
             )}
           </div>
@@ -100,7 +100,7 @@ export function StateStoreConnectionsPanel() {
         {deleteError && <p className="field-err">{deleteError}</p>}
         <div className="modal-actions">
           <button className="btn ghost" onClick={closeDeleteConfirm}>Cancel</button>
-          <button className="btn primary" onClick={handleConfirmDelete}>Disconnect</button>
+          <button className="btn danger" onClick={handleConfirmDelete}>Disconnect</button>
         </div>
       </Modal>
 

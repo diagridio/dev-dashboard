@@ -32,11 +32,11 @@ describe('StepNav', () => {
     render(<StepNav activeStep={0} stepCount={2} canContinue={false} onBack={() => {}} onContinue={() => {}} onFinish={() => {}} />)
     expect(screen.getByRole('button', { name: /continue/i })).toBeDisabled()
   })
-  it('primary button uses ghost styling, never the green .btn.primary', () => {
+  it('forward action uses the green .btn.primary styling', () => {
     render(<StepNav activeStep={0} stepCount={2} canContinue onBack={() => {}} onContinue={() => {}} onFinish={() => {}} />)
     const cont = screen.getByRole('button', { name: /continue/i })
-    expect(cont).toHaveClass('btn', 'ghost')
-    expect(cont).not.toHaveClass('primary')
+    expect(cont).toHaveClass('btn', 'primary')
+    expect(cont).not.toHaveClass('ghost')
     expect(cont).not.toHaveClass('mono')
   })
   it('fires onContinue / onFinish / onBack', () => {

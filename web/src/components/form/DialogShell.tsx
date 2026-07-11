@@ -9,7 +9,7 @@ export function DialogShell({ open, title, onClose, onSave, canSave, children }:
       {children}
       <div className="modal-actions">
         <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
-        <button type="button" className="btn ghost" disabled={!canSave} onClick={onSave}>Save</button>
+        <button type="button" className="btn primary" disabled={!canSave} onClick={onSave}>Save</button>
       </div>
     </Modal>
   )

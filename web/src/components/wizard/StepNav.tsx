@@ -17,9 +17,9 @@ export function StepNav({ activeStep, stepCount, canContinue, onBack, onContinue
         <span className="spacer" />
       )}
       {isLast ? (
-        <button type="button" className="btn ghost" disabled={!canContinue} onClick={onFinish}>Finish</button>
+        <button type="button" className="btn primary" disabled={!canContinue} onClick={onFinish}>Finish</button>
       ) : (
-        <button type="button" className="btn ghost" disabled={!canContinue} onClick={onContinue}>Continue</button>
+        <button type="button" className="btn primary" disabled={!canContinue} onClick={onContinue}>Continue</button>
       )}
     </div>
   )
