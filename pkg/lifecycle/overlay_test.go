@@ -91,15 +91,38 @@ func TestOverlayDropsEntryWhenAppExternallyRestarted(t *testing.T) {
 	require.False(t, ok, "stale entry dropped")
 }
 
-func TestOverlayDropsDaprdEntryWhenKeyLiveAgain(t *testing.T) {
+func TestOverlayDropsDaprdEntryWhenDaprdRestarted(t *testing.T) {
+	// The snapshot captured daprd under PID 999; the live instance runs it
+	// under 200 — the snapshot is stale and must go.
 	reg := NewRegistry()
-	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{TargetDaprd: {PID: 200}})
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{TargetDaprd: {PID: 999}, TargetAll: {PID: 888}})
 
-	live := standaloneInst()
+	live := standaloneInst() // DaprdPID 200, CLIPID 300
 	live.DaprdStatus = discovery.StatusRunning
 	svc := Overlay(fakeApps{items: map[string]discovery.Instance{"orders": live}}, reg, newFakeProc())
 	_, err := svc.List(context.Background())
 	require.NoError(t, err)
 	_, ok := reg.Get("orders")
 	require.False(t, ok)
+}
+
+func TestOverlayKeepsCascadeInsuranceSnapshotsWhilePIDsMatch(t *testing.T) {
+	// An app-only stop captures daprd + CLI while both still run (cascade
+	// insurance). The overlay must not erase them on the next poll: they
+	// still describe the live processes (same PIDs).
+	reg := NewRegistry()
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
+		TargetApp:   {PID: 100},
+		TargetDaprd: {PID: 200},
+		TargetAll:   {PID: 300},
+	})
+
+	live := standaloneInst() // AppPID 100, DaprdPID 200, CLIPID 300
+	live.DaprdStatus = discovery.StatusRunning
+	svc := Overlay(fakeApps{items: map[string]discovery.Instance{"orders": live}}, reg, newFakeProc())
+	_, err := svc.List(context.Background())
+	require.NoError(t, err)
+	e, ok := reg.Get("orders")
+	require.True(t, ok, "insurance snapshots survive while PIDs match")
+	require.Len(t, e.Procs, 3)
 }

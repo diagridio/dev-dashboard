@@ -241,7 +241,7 @@ func TestStandaloneStartAllRerunsCLICommand(t *testing.T) {
 	require.Equal(t, [][]string{{"dapr", "run", "--app-id", "orders"}}, st.started)
 	require.Equal(t, []string{"/src"}, st.dirs)
 	_, ok := reg.Get("orders")
-	require.False(t, ok, "whole entry dropped after start")
+	require.True(t, ok, "entry survives start; the overlay drops it once discovery sees the instance live")
 }
 
 func TestStandaloneStartSingleTarget(t *testing.T) {
@@ -256,8 +256,8 @@ func TestStandaloneStartSingleTarget(t *testing.T) {
 	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionStart))
 	require.Equal(t, [][]string{{"go", "run", "."}}, st.started)
 	e, ok := reg.Get("orders")
-	require.True(t, ok, "daprd snapshot remains")
-	require.Len(t, e.Procs, 1)
+	require.True(t, ok, "entry survives start; live reconciliation cleans it up")
+	require.Len(t, e.Procs, 2)
 }
 
 func TestStandaloneStartWithoutSnapshotRejected(t *testing.T) {
@@ -325,8 +325,9 @@ func TestStandaloneStartAllWithoutCLISnapshotStartsHalvesInOrder(t *testing.T) {
 
 	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStart))
 	require.Equal(t, [][]string{{"daprd", "--app-id", "orders"}, {"go", "run", "."}}, st.started, "sidecar starts before the app")
-	_, ok := reg.Get("orders")
-	require.False(t, ok, "both targets dropped -> entry gone")
+	e, ok := reg.Get("orders")
+	require.True(t, ok, "entry survives start; live reconciliation cleans it up")
+	require.Len(t, e.Procs, 2)
 }
 
 // An orphaned sidecar (no supervising CLI, app gone) supports only stop:
@@ -351,4 +352,50 @@ func TestOrphanedSidecarOnlyStopAllowed(t *testing.T) {
 	require.Equal(t, []int{200}, proc.terminated, "orphan stop signals the surviving daprd")
 	_, ok := reg.Get("orders")
 	require.False(t, ok, "orphan stop must not create a registry entry")
+}
+
+// Stopping only the app usually makes the dapr CLI tear down daprd and exit
+// (supervision cascade). Capture all three commands so the whole instance
+// stays recoverable even when only the app was signalled.
+func TestStandaloneAppStopSnapshotsEverything(t *testing.T) {
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"}
+	proc.snaps[200] = ProcSnapshot{PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"}
+	proc.snaps[300] = ProcSnapshot{PID: 300, Argv: []string{"dapr", "run", "--app-id", "orders"}, Dir: "/src"}
+	proc.alive[100] = true
+	reg := NewRegistry()
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, proc, nil).(*manager)
+	m.grace = 10 * time.Millisecond
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionStop))
+	require.Equal(t, []int{100}, proc.terminated, "only the app is signalled")
+	e, ok := reg.Get("orders")
+	require.True(t, ok)
+	require.Contains(t, e.Procs, TargetApp)
+	require.Contains(t, e.Procs, TargetDaprd, "cascade insurance: daprd command captured")
+	require.Contains(t, e.Procs, TargetAll, "cascade insurance: CLI command captured")
+}
+
+func TestForgetDropsRememberedInstance(t *testing.T) {
+	reg := NewRegistry()
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{TargetAll: {PID: 300}})
+	m := New(fakeApps{items: map[string]discovery.Instance{}}, reg, nil, newFakeProc(), nil)
+
+	require.NoError(t, m.Forget(context.Background(), "orders"))
+	_, ok := reg.Get("orders")
+	require.False(t, ok, "entry dropped")
+
+	require.ErrorIs(t, m.Forget(context.Background(), "orders"), discovery.ErrNotFound)
+}
+
+func TestForgetResolvesAppIDFallback(t *testing.T) {
+	reg := NewRegistry()
+	in := standaloneInst()
+	in.InstanceKey = "orders-1"
+	reg.RecordStop(in, map[Target]ProcSnapshot{TargetAll: {PID: 300}})
+	m := New(fakeApps{items: map[string]discovery.Instance{}}, reg, nil, newFakeProc(), nil)
+
+	require.NoError(t, m.Forget(context.Background(), "orders"), "AppID fallback resolves")
+	_, ok := reg.Get("orders-1")
+	require.False(t, ok, "the entry's own key is dropped, not the fallback alias")
 }

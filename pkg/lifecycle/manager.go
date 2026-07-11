@@ -15,6 +15,10 @@ func logger() *slog.Logger { return slog.Default().With("component", "lifecycle"
 // Manager starts, stops and restarts discovered app instances.
 type Manager interface {
 	Do(ctx context.Context, key string, target Target, action Action) error
+	// Forget drops a remembered stopped instance so it no longer appears on
+	// the dashboard. Only registry-backed (fully stopped standalone)
+	// instances have an entry; anything else is discovery.ErrNotFound.
+	Forget(ctx context.Context, key string) error
 }
 
 type manager struct {
@@ -110,6 +114,18 @@ func composeTargets(in discovery.Instance, target Target, action Action) ([]stri
 	return stopOrder, nil
 }
 
+// Forget implements Manager: it resolves key like the registry (InstanceKey
+// first, AppID fallback) and drops the entry under its own key.
+func (m *manager) Forget(ctx context.Context, key string) error {
+	e, ok := m.reg.Get(key)
+	if !ok {
+		return fmt.Errorf("%w: %s", discovery.ErrNotFound, key)
+	}
+	logger().Info("forgetting stopped instance", "key", e.Instance.InstanceKey)
+	m.reg.Drop(e.Instance.InstanceKey)
+	return nil
+}
+
 // doStandalone dispatches start/stop/restart for a process-table instance.
 // Aspire-managed apps only allow stop; Aspire itself owns start/restart.
 func (m *manager) doStandalone(ctx context.Context, in discovery.Instance, target Target, action Action) error {
@@ -164,7 +180,12 @@ func (m *manager) standaloneStop(ctx context.Context, in discovery.Instance, tar
 		if in.AppPID == 0 {
 			return fmt.Errorf("%w: app process unknown", ErrUnsupported)
 		}
+		// Killing the app usually makes the dapr CLI tear down daprd and exit
+		// (supervision cascade), so capture all three commands even though
+		// only the app is signalled — the whole instance stays recoverable.
 		snapshot(TargetApp, in.AppPID, in.AppLogPath)
+		snapshot(TargetDaprd, in.DaprdPID, in.DaprdLogPath)
+		snapshot(TargetAll, in.CLIPID, "")
 		pids = []int{in.AppPID}
 	case TargetDaprd:
 		if in.DaprdPID == 0 {
@@ -227,8 +248,12 @@ func (m *manager) terminateWithEscalation(ctx context.Context, pid int) error {
 }
 
 // standaloneStart re-runs the snapshot captured at stop time. TargetAll
-// prefers the dapr CLI command (it starts both halves); the entry is dropped
-// so the next scan's live data wins.
+// prefers the dapr CLI command (it starts both halves). The registry entry
+// deliberately survives the start: dropping it here opened a window where
+// the instance was neither remembered nor yet discovered (the page 404'd,
+// and a command that exited immediately erased the instance for good). The
+// overlay's live reconciliation removes the entry once the process scan
+// sees the instance again.
 func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, target Target) error {
 	entry, ok := m.reg.Get(in.InstanceKey)
 	if !ok {
@@ -236,11 +261,7 @@ func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, ta
 	}
 	if target == TargetAll {
 		if snap, ok := entry.Procs[TargetAll]; ok {
-			if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
-				return err
-			}
-			m.reg.Drop(in.InstanceKey)
-			return nil
+			return m.start.Start(snap.Argv, snap.Dir, snap.LogPath)
 		}
 		// No CLI snapshot: bring the halves up individually, sidecar first.
 		started := false
@@ -252,7 +273,6 @@ func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, ta
 			if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
 				return err
 			}
-			m.reg.DropTarget(in.InstanceKey, t)
 			started = true
 		}
 		if !started {
@@ -264,9 +284,5 @@ func (m *manager) standaloneStart(ctx context.Context, in discovery.Instance, ta
 	if !ok {
 		return fmt.Errorf("%w: no captured command for %s", ErrUnsupported, target)
 	}
-	if err := m.start.Start(snap.Argv, snap.Dir, snap.LogPath); err != nil {
-		return err
-	}
-	m.reg.DropTarget(in.InstanceKey, target)
-	return nil
+	return m.start.Start(snap.Argv, snap.Dir, snap.LogPath)
 }

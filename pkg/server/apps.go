@@ -62,5 +62,21 @@ func appsRouter(svc discovery.Service, containerLogs func(context.Context, strin
 		}
 	})
 
+	r.Delete("/{appId}", func(w http.ResponseWriter, req *http.Request) {
+		if life == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "lifecycle actions unavailable"})
+			return
+		}
+		err := life.Forget(req.Context(), chi.URLParam(req, "appId"))
+		switch {
+		case err == nil:
+			w.WriteHeader(http.StatusNoContent)
+		case errors.Is(err, discovery.ErrNotFound):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no remembered stopped instance for this app"})
+		default:
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		}
+	})
+
 	return r
 }

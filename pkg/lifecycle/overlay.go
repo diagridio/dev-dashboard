@@ -62,17 +62,24 @@ func (o *overlay) Get(ctx context.Context, key string) (discovery.Instance, erro
 	return discovery.Instance{}, err
 }
 
-// applyEntry reconciles a live instance against its registry entry. The
-// scanner keys off daprd, so a live key proves daprd is back: daprd/all
-// snapshots are stale. An app snapshot survives only while the app process
-// has not reappeared under a new PID.
+// applyEntry reconciles a live instance against its registry entry. Every
+// snapshot survives while it still describes the live process (same PID):
+// an app-only stop deliberately captures daprd and the CLI as cascade
+// insurance while both are still running, and dropping those eagerly (the
+// scanner seeing the key proves daprd is alive, but not that it was ever
+// restarted) would erase the insurance on the very next poll. A snapshot is
+// stale only once its process reappears under a NEW pid.
 func (o *overlay) applyEntry(in *discovery.Instance) {
 	e, ok := o.reg.Get(in.InstanceKey)
 	if !ok || in.Source == discovery.SourceCompose {
 		return
 	}
-	o.reg.DropTarget(in.InstanceKey, TargetDaprd)
-	o.reg.DropTarget(in.InstanceKey, TargetAll)
+	if snap, ok := e.Procs[TargetDaprd]; ok && in.DaprdPID != 0 && in.DaprdPID != snap.PID {
+		o.reg.DropTarget(in.InstanceKey, TargetDaprd) // daprd restarted since capture
+	}
+	if snap, ok := e.Procs[TargetAll]; ok && in.CLIPID != 0 && in.CLIPID != snap.PID {
+		o.reg.DropTarget(in.InstanceKey, TargetAll) // new dapr run supervisor
+	}
 	snap, ok := e.Procs[TargetApp]
 	if !ok {
 		return

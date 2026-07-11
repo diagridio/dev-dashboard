@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
-import { useAppAction, type AppTarget, type AppLifecycleAction } from '../hooks/useAppAction'
+import { useAppAction, useAppForget, type AppTarget, type AppLifecycleAction } from '../hooks/useAppAction'
 import type { AppDetail as AppDetailType } from '../types/api'
 import { copyText } from '../lib/clipboard'
 import { appDisplayState } from '../lib/appDisplayState'
@@ -56,6 +56,17 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const busy = action.isPending
   // An orphaned sidecar has nothing re-runnable: Stop is the only action.
   const orphaned = !!app.sidecarOrphaned
+  // Fully stopped standalone instances (incl. Aspire ghosts) exist only as
+  // registry memories; offer dropping them from the list.
+  const removable = !isCompose && appStopped && daprdStopped
+  const forget = useAppForget(key)
+  const removeFromList = () => {
+    if (!window.confirm(`Remove "${app.appId}" from the list? The stopped instance will no longer be shown.`)) return
+    forget.mutate(undefined, {
+      onError: (e) => toast.show(e instanceof Error ? e.message : 'Remove failed'),
+      onSuccess: () => navigate('/'),
+    })
+  }
 
   // dapr run supervises app + daprd together; sidecar actions act on the
   // whole instance (see lifecycle manager funneling). Compose and Aspire
@@ -94,7 +105,10 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           </button>
         </>
       )}
-      {status === 'stopped' && !app.isAspire && !orphaned && (
+      {/* Per-panel Start is hidden for fully-stopped dapr run apps: a bare
+          half-restart is not discoverable — the header's whole-instance Start
+          is the affordance. Compose keeps per-container starts. */}
+      {status === 'stopped' && !app.isAspire && !orphaned && (isCompose || !allStopped) && (
         <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'start', what)}>
           Start
         </button>
@@ -151,6 +165,11 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
                 Stop
               </button>
             </>
+          )}
+          {removable && (
+            <button className="btn ghost" disabled={busy || forget.isPending} onClick={removeFromList}>
+              Remove from list
+            </button>
           )}
           {allStopped && !app.isAspire && !orphaned && (
             <button
@@ -422,6 +441,7 @@ export function AppDetail() {
     return (
       <div className="page">
         <p className="err">App not found or failed to load.</p>
+        <Link className="tbtn" to="/">← Back to applications</Link>
       </div>
     )
   }
