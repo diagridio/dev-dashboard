@@ -122,6 +122,12 @@ func (m *manager) doStandalone(ctx context.Context, in discovery.Instance, targe
 	if in.IsAspire && action != ActionStop {
 		return fmt.Errorf("%w: Aspire manages this app's lifecycle — restart it from the Aspire dashboard", ErrUnsupported)
 	}
+	// An orphaned sidecar has no supervising CLI and no app: nothing is
+	// re-runnable, so starting or restarting would only resurrect another
+	// orphan. Stop is the sole supported action.
+	if in.SidecarOrphaned && action != ActionStop {
+		return fmt.Errorf("%w: orphaned sidecar — only stop is supported", ErrUnsupported)
+	}
 	switch action {
 	case ActionStop:
 		return m.standaloneStop(ctx, in, target)
@@ -183,7 +189,12 @@ func (m *manager) standaloneStop(ctx context.Context, in discovery.Instance, tar
 			return fmt.Errorf("%w: no processes to stop", ErrUnsupported)
 		}
 	}
-	m.reg.RecordStop(in, snaps)
+	// Orphans record nothing: their daprd command must not be offered for
+	// re-run (it would only resurrect another orphan), so the instance simply
+	// disappears once its process is gone.
+	if !in.SidecarOrphaned {
+		m.reg.RecordStop(in, snaps)
+	}
 	for _, pid := range pids {
 		if err := m.terminateWithEscalation(ctx, pid); err != nil {
 			return fmt.Errorf("stop pid %d: %w", pid, err)

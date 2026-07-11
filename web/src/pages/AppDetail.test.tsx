@@ -397,4 +397,62 @@ describe('AppDetail', () => {
     await waitFor(() => expect(posted).toBe('daprd/stop'))
     confirmSpy.mockRestore()
   })
+
+  it('offers only Stop for an orphaned sidecar', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          appStatus: 'stopped',
+          daprdStatus: 'running',
+          sidecarOrphaned: true,
+          cliPid: 0,
+          appPid: 0,
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getAllByRole('button', { name: 'Stop' }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Restart' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+  })
+
+  it('surfaces action errors via toast', async () => {
+    server.use(
+      http.get('/api/apps/order', () => HttpResponse.json(runningApp)),
+      http.post('/api/apps/order/all/stop', () =>
+        HttpResponse.json({ error: 'boom from backend' }, { status: 502 }),
+      ),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    screen.getAllByRole('button', { name: 'Stop' })[0].click()
+    await waitFor(() => expect(screen.getByText('boom from backend')).toBeInTheDocument())
+    confirmSpy.mockRestore()
+  })
+
+  it('disables lifecycle buttons while an action is in flight', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    server.use(
+      http.get('/api/apps/order', () => HttpResponse.json(runningApp)),
+      http.post('/api/apps/order/all/stop', async () => {
+        await gate
+        return HttpResponse.json({ status: 'ok' })
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    const stop = screen.getAllByRole('button', { name: 'Stop' })[0]
+    stop.click()
+    await waitFor(() => expect(stop).toBeDisabled())
+    release()
+    await waitFor(() => expect(stop).toBeEnabled())
+    confirmSpy.mockRestore()
+  })
 })

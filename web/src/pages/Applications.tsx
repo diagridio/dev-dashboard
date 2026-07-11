@@ -43,9 +43,13 @@ export function Applications() {
   }
 
   const running = apps.filter((a) => !isStopped(a)).length
-  const healthy = apps.filter((a) => a.health === 'healthy').length
-  const starting = apps.filter((a) => a.health === 'starting').length
-  const unhealthy = apps.filter((a) => a.health === 'unhealthy').length
+  // Stat cards follow the combined display state so a row and its card never
+  // disagree; the amber states (app down, orphaned) need attention and count
+  // as Unhealthy.
+  const labels = apps.map((a) => appDisplayState(a).label)
+  const healthy = labels.filter((l) => l === 'healthy').length
+  const starting = labels.filter((l) => l === 'starting').length
+  const unhealthy = labels.filter((l) => l === 'unhealthy' || l === 'app down' || l === 'orphaned').length
   // Total components loaded across every running app; '—' when none report any.
   const componentsTotal = apps.reduce((n, a) => n + (a.components?.length ?? 0), 0)
   const componentsLoaded = componentsTotal > 0 ? componentsTotal : '—'

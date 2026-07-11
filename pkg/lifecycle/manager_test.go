@@ -310,3 +310,45 @@ func TestAspireDaprdStopNotFunneled(t *testing.T) {
 	require.NoError(t, m.Do(context.Background(), "orders", TargetDaprd, ActionStop))
 	require.Equal(t, []int{200}, proc.terminated, "Aspire keeps per-PID daprd stop")
 }
+
+// Pins the TargetAll start fallback: with no CLI snapshot (e.g. the CLI was
+// never captured), the halves start individually, sidecar first, and each
+// started target leaves the registry.
+func TestStandaloneStartAllWithoutCLISnapshotStartsHalvesInOrder(t *testing.T) {
+	reg := NewRegistry()
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
+		TargetDaprd: {PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"},
+		TargetApp:   {PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"},
+	})
+	st := &fakeStarter{}
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, newFakeProc(), st)
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStart))
+	require.Equal(t, [][]string{{"daprd", "--app-id", "orders"}, {"go", "run", "."}}, st.started, "sidecar starts before the app")
+	_, ok := reg.Get("orders")
+	require.False(t, ok, "both targets dropped -> entry gone")
+}
+
+// An orphaned sidecar (no supervising CLI, app gone) supports only stop:
+// there is no re-runnable command, so start/restart are rejected and a stop
+// records nothing in the registry.
+func TestOrphanedSidecarOnlyStopAllowed(t *testing.T) {
+	in := standaloneInst()
+	in.SidecarOrphaned = true
+	in.CLIPID = 0
+	in.AppPID = 0
+	proc := newFakeProc()
+	proc.snaps[200] = ProcSnapshot{PID: 200, Argv: []string{"daprd", "--app-id", "orders"}}
+	proc.alive[200] = true
+	reg := NewRegistry()
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": in}}, reg, nil, proc, nil).(*manager)
+	m.grace = 10 * time.Millisecond
+
+	require.ErrorIs(t, m.Do(context.Background(), "orders", TargetAll, ActionStart), ErrUnsupported)
+	require.ErrorIs(t, m.Do(context.Background(), "orders", TargetDaprd, ActionRestart), ErrUnsupported)
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStop))
+	require.Equal(t, []int{200}, proc.terminated, "orphan stop signals the surviving daprd")
+	_, ok := reg.Get("orders")
+	require.False(t, ok, "orphan stop must not create a registry entry")
+}

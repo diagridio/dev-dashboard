@@ -239,4 +239,44 @@ describe('Applications', () => {
     expect(screen.getByTitle('app process is not running')).toBeInTheDocument()
     expect(screen.getByTitle('sidecar has no supervising dapr CLI and no app — safe to stop')).toBeInTheDocument()
   })
+
+  it('counts amber states (app down, orphaned) as Unhealthy in the stat cards', async () => {
+    mockApps([
+      { ...baseApp, appId: 'ok1', appStatus: 'running', daprdStatus: 'running' },
+      { ...baseApp, appId: 'appdown', appStatus: 'stopped', daprdStatus: 'running' },
+      { ...baseApp, appId: 'ghost', appPid: 0, appStatus: 'stopped', daprdStatus: 'running', sidecarOrphaned: true },
+    ])
+    renderAt()
+    await waitFor(() => expect(screen.getByText('ok1')).toBeInTheDocument())
+    expect(screen.getByText('Healthy').previousElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Unhealthy').previousElementSibling).toHaveTextContent('2')
+  })
+
+  it('renders the stopped row with the grey off LED', async () => {
+    mockApps([
+      { ...baseApp, appId: 'halted', health: 'unknown', appStatus: 'stopped', daprdStatus: 'stopped' },
+    ])
+    renderAt()
+    await waitFor(() => expect(screen.getByText('halted')).toBeInTheDocument())
+    const badge = screen.getByText('stopped').closest('.health')
+    expect(badge?.querySelector('.led')).toHaveClass('off')
+  })
+
+  it('keeps the unreachable hint for an unreachable but running compose sidecar', async () => {
+    mockApps([
+      {
+        ...baseApp,
+        appId: 'primes-go',
+        source: 'compose',
+        composeProject: 'saga',
+        sidecarReachable: false,
+        health: 'unknown',
+        appStatus: 'running',
+        daprdStatus: 'running',
+      },
+    ])
+    renderAt()
+    await waitFor(() => expect(screen.getByText('primes-go')).toBeInTheDocument())
+    expect(screen.getByTitle(/publish the daprd HTTP port/i)).toBeInTheDocument()
+  })
 })
