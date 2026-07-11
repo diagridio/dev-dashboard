@@ -344,4 +344,57 @@ describe('AppDetail', () => {
     expect(screen.getByText(/^5m 0[0-2]s$/)).toBeInTheDocument() // app uptime ticks from startedAt
     vi.useRealTimers()
   })
+
+  it('shows the orphan banner and orphaned header state', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, appStatus: 'stopped', daprdStatus: 'running', sidecarOrphaned: true, cliPid: 0, appPid: 0 }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getByText(/Orphaned sidecar — this daprd has no supervising dapr CLI/)).toBeInTheDocument()
+    expect(screen.getByText('orphaned')).toBeInTheDocument()
+  })
+
+  it('funnels sidecar stop to the whole instance for dapr run apps', async () => {
+    let posted = ''
+    server.use(
+      http.get('/api/apps/order', () => HttpResponse.json(runningApp)), // standalone, not Aspire
+      http.post('/api/apps/order/all/stop', () => {
+        posted = 'all/stop'
+        return HttpResponse.json({ status: 'ok' })
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    // Buttons render header-first, then app panel, then daprd panel — the
+    // last Stop button is the daprd panel's.
+    const stops = screen.getAllByRole('button', { name: 'Stop' })
+    stops[stops.length - 1].click()
+    await waitFor(() => expect(posted).toBe('all/stop'))
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('app + sidecar together'))
+    confirmSpy.mockRestore()
+  })
+
+  it('keeps per-container sidecar target for compose apps', async () => {
+    let posted = ''
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, source: 'compose', daprdContainerName: 'proj-daprd-1' }),
+      ),
+      http.post('/api/apps/order/daprd/stop', () => {
+        posted = 'daprd/stop'
+        return HttpResponse.json({ status: 'ok' })
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    const stops = screen.getAllByRole('button', { name: 'Stop' })
+    stops[stops.length - 1].click()
+    await waitFor(() => expect(posted).toBe('daprd/stop'))
+    confirmSpy.mockRestore()
+  })
 })

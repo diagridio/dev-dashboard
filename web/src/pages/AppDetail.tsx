@@ -3,6 +3,7 @@ import { useApp } from '../hooks/useApps'
 import { useAppAction, type AppTarget, type AppLifecycleAction } from '../hooks/useAppAction'
 import type { AppDetail as AppDetailType } from '../types/api'
 import { copyText } from '../lib/clipboard'
+import { appDisplayState } from '../lib/appDisplayState'
 import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
 import { useToast } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
@@ -46,6 +47,15 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const anyRunning = appRunning || daprdRunning
   const allStopped = (appStopped || daprdStopped) && !appRunning && !daprdRunning
   const busy = action.isPending
+
+  // dapr run supervises app + daprd together; sidecar actions act on the
+  // whole instance (see lifecycle manager funneling). Compose and Aspire
+  // keep per-target semantics.
+  const daprdTarget: AppTarget = isCompose || app.isAspire ? 'daprd' : 'all'
+  const daprdWhat =
+    isCompose || app.isAspire
+      ? `sidecar of "${app.appId}"`
+      : `"${app.appId}" (dapr run manages app + sidecar together)`
 
   const statusCell = (status?: string) =>
     status ? (
@@ -97,9 +107,14 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <h1>{app.appId}</h1>
-            <span className="health">
-              <span className={`led ${ledClass(app.health)}`} /> {app.health}
-            </span>
+            {(() => {
+              const state = appDisplayState(app)
+              return (
+                <span className="health" title={state.hint}>
+                  <span className={`led ${state.led}`} /> {state.label}
+                </span>
+              )
+            })()}
             <span className="lang">
               <span className="sw" style={{ background: runtimeSwatch(app.runtime) }} />
               {app.runtime}
@@ -153,6 +168,11 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       )}
       {app.isAspire && (appStopped || daprdStopped) && (
         <div className="hint">Managed by Aspire — restart it from the Aspire dashboard.</div>
+      )}
+      {app.sidecarOrphaned && (
+        <div className="hint">
+          Orphaned sidecar — this daprd has no supervising dapr CLI and its app is gone. Stopping it is safe.
+        </div>
       )}
 
       {/* Two-column: Application + Dapr sidecar */}
@@ -211,7 +231,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           <div className="ph" style={{ display: 'flex', alignItems: 'center' }}>
             <span className="ic" style={{ background: 'var(--dapr)', color: '#fff' }}>d</span>
             Dapr sidecar (daprd)
-            {panelActions('daprd', app.daprdStatus, `sidecar of "${app.appId}"`)}
+            {panelActions(daprdTarget, app.daprdStatus, daprdWhat)}
           </div>
           <div className="kv">
             <div className="kk">Status</div>

@@ -1,8 +1,9 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useApps } from '../hooks/useApps'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-import { ledClass, runtimeSwatch } from '../lib/runtimeSwatch'
+import { runtimeSwatch } from '../lib/runtimeSwatch'
 import { appKey } from '../lib/appKey'
+import { appDisplayState } from '../lib/appDisplayState'
 import type { AppSummary } from '../types/api'
 
 // Fully stopped: both the app process/container and its daprd sidecar report 'stopped'.
@@ -109,7 +110,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
   const num = (v: number) =>
     v ? <td className="mono tabnum">{v}</td> : <td className="mono tabnum faint">—</td>
   const sourceLabel = app.runTemplate || (app.isAspire ? 'Aspire' : app.source === 'compose' ? 'Compose' : '—')
-  const stopped = isStopped(app)
+  const state = appDisplayState(app)
   const unreachable = app.source === 'compose' && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
   const key = appKey(app)
   const hasContainerName = key !== app.appId
@@ -118,9 +119,9 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       <td>
         <span
           className="health"
-          title={unreachable ? 'publish the daprd HTTP port (e.g. 3500:3500) to enable health & metadata' : undefined}
+          title={state.hint ?? (unreachable ? 'publish the daprd HTTP port (e.g. 3500:3500) to enable health & metadata' : undefined)}
         >
-          <span className={`led ${ledClass(stopped ? 'unknown' : app.health)}`} /> {stopped ? 'stopped' : app.health}
+          <span className={`led ${state.led}`} /> {state.label}
           {unreachable && ' ⓘ'}
         </span>
       </td>

@@ -190,6 +190,7 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .led.ok { background: var(--ok-bright); }
 .led.warn { background: var(--pend-fg); }
 .led.bad { background: var(--fail-fg); }
+.led.off { background: var(--faint); }
 .lang { display: inline-flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; }
 .lang .sw { width: 9px; height: 9px; border-radius: 2px; }
 .chip { font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 8px; display: inline-flex; gap: 6px; align-items: center; }

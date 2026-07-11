@@ -113,6 +113,12 @@ func composeTargets(in discovery.Instance, target Target, action Action) ([]stri
 // doStandalone dispatches start/stop/restart for a process-table instance.
 // Aspire-managed apps only allow stop; Aspire itself owns start/restart.
 func (m *manager) doStandalone(ctx context.Context, in discovery.Instance, target Target, action Action) error {
+	// dapr run supervises app + daprd together: stopping the sidecar alone
+	// cascades to the app, and restarting it alone orphans daprd outside the
+	// CLI. Funnel sidecar actions to the whole instance instead.
+	if !in.IsAspire && target == TargetDaprd {
+		target = TargetAll
+	}
 	if in.IsAspire && action != ActionStop {
 		return fmt.Errorf("%w: Aspire manages this app's lifecycle — restart it from the Aspire dashboard", ErrUnsupported)
 	}

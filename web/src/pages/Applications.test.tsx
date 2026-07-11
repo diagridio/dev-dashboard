@@ -219,4 +219,24 @@ describe('Applications', () => {
     await waitFor(() => expect(screen.getByText('primes-go')).toBeInTheDocument())
     expect(screen.queryByTitle(/publish the daprd HTTP port/i)).not.toBeInTheDocument()
   })
+
+  it('renders app-down and orphaned states with tooltips', async () => {
+    mockApps([
+      { ...baseApp, appId: 'appdown', appStatus: 'stopped', daprdStatus: 'running' },
+      {
+        ...baseApp,
+        appId: 'ghost',
+        appPid: 0,
+        appStatus: 'stopped',
+        daprdStatus: 'running',
+        sidecarOrphaned: true,
+      },
+    ])
+    renderAt()
+    await waitFor(() => expect(screen.getByText('appdown')).toBeInTheDocument())
+    expect(screen.getByText('app down')).toBeInTheDocument()
+    expect(screen.getByText('orphaned')).toBeInTheDocument()
+    expect(screen.getByTitle('app process is not running')).toBeInTheDocument()
+    expect(screen.getByTitle('sidecar has no supervising dapr CLI and no app — safe to stop')).toBeInTheDocument()
+  })
 })
