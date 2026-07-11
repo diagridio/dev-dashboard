@@ -424,7 +424,7 @@ export function Workflows() {
             borderRadius: 8,
             border: '1px solid var(--line)',
             background: 'var(--surface)',
-            color: removeStatus.failed > 0 ? 'var(--fail-fg)' : 'var(--accent2)',
+            color: removeStatus.failed > 0 ? 'var(--fail-fg)' : 'var(--accent-bright)',
             fontSize: 13,
           }}
         >

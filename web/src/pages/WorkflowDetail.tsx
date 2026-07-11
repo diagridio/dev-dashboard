@@ -676,7 +676,7 @@ export function WorkflowDetail() {
         {/* Input */}
         <div className="panel">
           <div className="ph">
-            <span className="tagdot" style={{ background: 'var(--accent2)' }} />
+            <span className="tagdot" style={{ background: 'var(--accent-bright)' }} />
             {' '}Input{' '}
             <button
               className="copybtn"

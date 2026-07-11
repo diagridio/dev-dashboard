@@ -10,7 +10,7 @@ export function Resiliency() {
           <h1>Resiliency</h1>
           <div className="sub">Dapr resiliency policies</div>
         </div>
-        <Link className="btn ghost" to="/resiliency/new">+ New resiliency policy</Link>
+        <Link className="btn primary" to="/resiliency/new">+ New resiliency policy</Link>
       </div>
       <div className="md">
         <div className="card complist" />

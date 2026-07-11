@@ -69,7 +69,7 @@ export function Actors() {
       {header}
       <div className="stats">
         <div className="stat">
-          <div className="n mint">{activeActors}</div>
+          <div className="n">{activeActors}</div>
           <div className="l">Active actors</div>
         </div>
         <div className="stat">

@@ -62,7 +62,7 @@ export function ResourceList({ kind }: ResourceListProps) {
             <div className="sub">{sub}</div>
           </div>
           {kind === 'component' && (
-            <Link className="btn ghost" to="/components/new">+ New component</Link>
+            <Link className="btn primary" to="/components/new">+ New component</Link>
           )}
         </div>
         <p className="muted">Loading…</p>
@@ -81,7 +81,7 @@ export function ResourceList({ kind }: ResourceListProps) {
             <div className="sub">{sub}</div>
           </div>
           {kind === 'component' && (
-            <Link className="btn ghost" to="/components/new">+ New component</Link>
+            <Link className="btn primary" to="/components/new">+ New component</Link>
           )}
         </div>
         <div className="md">
@@ -109,7 +109,7 @@ export function ResourceList({ kind }: ResourceListProps) {
           <div className="sub">{sub}</div>
         </div>
         {kind === 'component' && (
-          <Link className="btn ghost" to="/components/new">+ New component</Link>
+          <Link className="btn primary" to="/components/new">+ New component</Link>
         )}
       </div>
       <div className="md">

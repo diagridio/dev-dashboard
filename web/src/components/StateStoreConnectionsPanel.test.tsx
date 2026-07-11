@@ -30,10 +30,9 @@ describe('StateStoreConnectionsPanel', () => {
     expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /disconnect orders-pg/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /edit statestore/i })).not.toBeInTheDocument()
-    // Disconnect is non-destructive: ghost styling, not danger.
+    // Disconnect reuses the danger (outline) styling.
     const btn = screen.getByRole('button', { name: /disconnect orders-pg/i })
-    expect(btn.className).toContain('ghost')
-    expect(btn.className).not.toContain('danger')
+    expect(btn.className).toContain('danger')
     // Add button present.
     expect(screen.getByRole('button', { name: /add connection/i })).toBeInTheDocument()
   })
