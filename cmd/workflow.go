@@ -161,11 +161,13 @@ func newTargetResolver(apps discovery.Service, wf workflow.Service) *targetResol
 // (allowing force-delete). If the workflow lookup fails, the error is returned.
 func (r *targetResolver) Resolve(ctx context.Context, appID, instanceID string) (workflow.RemoveTarget, error) {
 	var httpPort int
+	var daprBase string
 	var healthy bool
 
 	inst, err := r.apps.Get(ctx, appID)
 	if err == nil {
 		httpPort = inst.HTTPPort
+		daprBase = inst.DaprHTTPBaseURL
 		healthy = inst.Health == discovery.HealthHealthy
 	}
 	// If apps.Get failed, continue with httpPort=0, healthy=false (force path only).
@@ -176,11 +178,12 @@ func (r *targetResolver) Resolve(ctx context.Context, appID, instanceID string) 
 	}
 
 	return workflow.RemoveTarget{
-		AppID:      appID,
-		InstanceID: instanceID,
-		Status:     ex.Status,
-		HTTPPort:   httpPort,
-		Healthy:    healthy,
+		AppID:           appID,
+		InstanceID:      instanceID,
+		Status:          ex.Status,
+		HTTPPort:        httpPort,
+		DaprHTTPBaseURL: daprBase,
+		Healthy:         healthy,
 	}, nil
 }
 

@@ -95,6 +95,50 @@ func TestRemoveForceDeletesKeys(t *testing.T) {
 	require.Contains(t, f.kv, "order||other||keep||metadata") // untouched
 }
 
+func TestRemoverUsesBaseURL(t *testing.T) {
+	var gotPath string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+
+	r := NewRemover(srv.Client(), nil, "default")
+	res := r.Remove(context.Background(), RemoveTarget{
+		AppID:           "orders",
+		InstanceID:      "wf-1",
+		Status:          StatusCompleted, // terminal → MechPurge (single POST)
+		DaprHTTPBaseURL: srv.URL,
+		Healthy:         true,
+	}, false)
+	if !res.OK {
+		t.Fatalf("remove failed: %+v", res)
+	}
+	if want := "/v1.0-beta1/workflows/dapr/wf-1/purge"; gotPath != want {
+		t.Fatalf("path %q want %q", gotPath, want)
+	}
+}
+
+func TestRemoverBaseURLCountsAsReachable(t *testing.T) {
+	// HTTPPort 0 but a base URL present must still select the HTTP mechanism,
+	// not force-delete.
+	if got := SelectMechanism(StatusCompleted, true, false); got != MechPurge {
+		t.Fatalf("sanity: %v", got)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer srv.Close()
+	r := NewRemover(srv.Client(), nil, "default")
+	res := r.Remove(context.Background(), RemoveTarget{
+		AppID: "a", InstanceID: "i", Status: StatusCompleted,
+		HTTPPort: 0, DaprHTTPBaseURL: srv.URL, Healthy: true,
+	}, false)
+	if !res.OK || res.Mechanism != MechPurge {
+		t.Fatalf("want OK purge, got %+v", res)
+	}
+}
+
 func mustPort(t *testing.T, raw string) int {
 	t.Helper()
 	u, err := url.Parse(raw)
