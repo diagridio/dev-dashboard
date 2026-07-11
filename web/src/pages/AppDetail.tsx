@@ -39,7 +39,14 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
     if (!window.confirm(`${act.charAt(0).toUpperCase() + act.slice(1)} ${what}?`)) return
     action.mutate(
       { target, action: act },
-      { onError: (e) => toast.show(e instanceof Error ? e.message : 'Action failed') },
+      {
+        onError: (e) => toast.show(e instanceof Error ? e.message : 'Action failed'),
+        onSuccess: () => {
+          // A stopped orphan records nothing and vanishes from discovery, so
+          // this page would dead-end on "App not found" — return to the list.
+          if (orphaned && act === 'stop') navigate('/')
+        },
+      },
     )
   }
   const appStopped = app.appStatus === 'stopped'

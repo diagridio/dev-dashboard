@@ -11,6 +11,7 @@ function renderDetail() {
   const client = makeQueryClient()
   const router = createMemoryRouter(
     [
+      { path: '/', element: <div>Applications index</div> },
       { path: '/apps/:appId', element: <AppDetail /> },
       { path: '/components/:name', element: <div>Component detail</div> },
     ],
@@ -416,6 +417,30 @@ describe('AppDetail', () => {
     expect(screen.getAllByRole('button', { name: 'Stop' }).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { name: 'Restart' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+  })
+
+  it('navigates back to the overview after stopping an orphaned sidecar', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          appStatus: 'stopped',
+          daprdStatus: 'running',
+          sidecarOrphaned: true,
+          cliPid: 0,
+          appPid: 0,
+        }),
+      ),
+      http.post('/api/apps/order/all/stop', () => HttpResponse.json({ status: 'ok' })),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    screen.getAllByRole('button', { name: 'Stop' })[0].click()
+    // The stopped orphan vanishes from discovery; the page must not dead-end
+    // on "App not found" but return to the overview.
+    await waitFor(() => expect(screen.getByText('Applications index')).toBeInTheDocument())
+    confirmSpy.mockRestore()
   })
 
   it('surfaces action errors via toast', async () => {
