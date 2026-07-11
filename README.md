@@ -67,10 +67,10 @@ dev-dashboard --version
 The dashboard also ships as a container image, purpose-built for embedding inside a
 [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) AppHost via the
 [`diagrid-labs/dashboard-aspire`](https://github.com/diagrid-labs/dashboard-aspire) hosting
-integration (currently being rewritten against the contract below). It also runs standalone
+integration (which will be rewritten against the contract below). It also runs standalone
 with a hand-written `docker run`.
 
-**Image:** `ghcr.io/diagridio/dev-dashboard`, tagged `:vX.Y.Z` (in lockstep with binary
+**Image:** `ghcr.io/diagridio/dev-dashboard`, tagged `:X.Y.Z` (in lockstep with binary
 releases) and `:latest`. The image bakes in `DEVDASHBOARD_MODE=aspire` and serves on port
 `8080` bound to `0.0.0.0`.
 
