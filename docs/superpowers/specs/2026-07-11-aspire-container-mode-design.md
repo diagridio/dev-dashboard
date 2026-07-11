@@ -61,12 +61,12 @@ Read-only observability **plus workflow actions**:
 
 | Source | Values | Default |
 |---|---|---|
-| `--mode` flag / `DASH_MODE` env | `local`, `aspire` | `local` |
+| `--mode` flag / `DEVDASHBOARD_MODE` env | `local`, `aspire` | `local` |
 
 Precedence everywhere: **flag > env > mode default**. `local` mode is
 byte-for-byte today's behavior; every change below is gated on `aspire`.
 
-The published image sets `ENV DASH_MODE=aspire`, so the integration never has
+The published image sets `ENV DEVDASHBOARD_MODE=aspire`, so the integration never has
 to pass it; it is overridable.
 
 ### App discovery (indexed env vars)
@@ -75,18 +75,18 @@ The integration enumerates Dapr sidecars in the AppHost model and injects:
 
 | Env var | Required | Meaning |
 |---|---|---|
-| `DASH_APP_COUNT` | yes | number of apps (`0` is valid: empty dashboard) |
-| `DASH_APP_<i>_ID` | yes | Dapr app-id (i = 0..count-1) |
-| `DASH_APP_<i>_DAPR_HTTP` | yes | daprd HTTP base URL, reachable **from the dashboard container** (e.g. `http://myapp-dapr:3500`) |
-| `DASH_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DASH_NAMESPACE` |
-| `DASH_APP_<i>_LABEL` | no | display name (Aspire resource name); defaults to the app-id |
+| `DEVDASHBOARD_APP_COUNT` | yes | number of apps (`0` is valid: empty dashboard) |
+| `DEVDASHBOARD_APP_<i>_ID` | yes | Dapr app-id (i = 0..count-1) |
+| `DEVDASHBOARD_APP_<i>_DAPR_HTTP` | yes | daprd HTTP base URL, reachable **from the dashboard container** (e.g. `http://myapp-dapr:3500`) |
+| `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE` |
+| `DEVDASHBOARD_APP_<i>_LABEL` | no | display name (Aspire resource name); defaults to the app-id |
 
 Indexed single-value vars (not JSON) because each `DAPR_HTTP` value is one
 Aspire endpoint reference — runtime-resolved and container→host rewritten by
 Aspire — and must not need string escaping inside a composite value.
 
-Validation is **fail-fast at startup**: `DASH_MODE=aspire` with a missing or
-non-numeric `DASH_APP_COUNT`, or any missing required per-app var, or an
+Validation is **fail-fast at startup**: `DEVDASHBOARD_MODE=aspire` with a missing or
+non-numeric `DEVDASHBOARD_APP_COUNT`, or any missing required per-app var, or an
 unparsable `DAPR_HTTP` URL, exits with an error naming the exact variable. A
 misconfigured integration should be loud, not quietly empty.
 
@@ -94,12 +94,12 @@ misconfigured integration should be loud, not quietly empty.
 
 | Env / flag | Default (aspire) | Default (local) | Meaning |
 |---|---|---|---|
-| `DASH_PORT` / `--port` | `8080` | `9090` | listen port |
-| `DASH_BIND` / `--bind` (new flag) | `0.0.0.0` | `127.0.0.1` | bind host |
-| `DASH_STATESTORE_FILE` / `--statestore` | unset | unset | path to a mounted Dapr state-store component YAML; enables workflows |
-| `DASH_NAMESPACE` / `--namespace` | `default` | `default` | default Dapr namespace for workflow actor keys |
-| `DASH_RESOURCES_PATH` (new) | dir of `DASH_STATESTORE_FILE` | n/a | extra component directories for the Resources page, `os.PathListSeparator`-separated |
-| `--base-path` | unset | unset | flag only, unchanged (Aspire proxies to root; no env alias to avoid colliding with the build-time Vite `DASH_BASE_PATH`) |
+| `DEVDASHBOARD_PORT` / `--port` | `8080` | `9090` | listen port |
+| `DEVDASHBOARD_BIND` / `--bind` (new flag) | `0.0.0.0` | `127.0.0.1` | bind host |
+| `DEVDASHBOARD_STATESTORE_FILE` / `--statestore` | unset | unset | path to a mounted Dapr state-store component YAML; enables workflows |
+| `DEVDASHBOARD_NAMESPACE` / `--namespace` | `default` | `default` | default Dapr namespace for workflow actor keys |
+| `DEVDASHBOARD_RESOURCES_PATH` (new) | dir of `DEVDASHBOARD_STATESTORE_FILE` | n/a | extra component directories for the Resources page, `os.PathListSeparator`-separated |
+| `--base-path` | unset | unset | flag only, unchanged (Aspire proxies to root; no env alias needed) |
 | `DEVDASHBOARD_TELEMETRY_OPTOUT` | unchanged | unchanged | existing telemetry opt-out |
 
 Aspire mode behavior changes (no new config needed):
@@ -113,21 +113,21 @@ Aspire mode behavior changes (no new config needed):
   UI hides those features (capabilities, below).
 
 The prototype integration's `COMPONENT_FILE` and `APP_ID` env vars are
-superseded by `DASH_STATESTORE_FILE` and the discovery list; the integration
+superseded by `DEVDASHBOARD_STATESTORE_FILE` and the discovery list; the integration
 migrates when it is rewritten.
 
 ## Binary internals
 
 ### Mode plumbing
 
-Resolve the mode once at startup in `cmd/root.go` (flag > `DASH_MODE`).
+Resolve the mode once at startup in `cmd/root.go` (flag > `DEVDASHBOARD_MODE`).
 A small mode value threads through `runServe` and gates behavior at the
 existing seams — no parallel code path.
 
 ### Discovery: `AspireScanner`
 
 New `discovery.AspireScanner(getenv)` produces `[]ScanResult` from the
-`DASH_APP_*` contract, with `Source: SourceAspire` (new constant). In aspire
+`DEVDASHBOARD_APP_*` contract, with `Source: SourceAspire` (new constant). In aspire
 mode `runServe` builds the discovery service from **only** this scanner — no
 `StandaloneScanner`, no compose source, no `containerruntime.Detect()`.
 
@@ -177,7 +177,7 @@ window.__DASH_CAPABILITIES__ = {lifecycle: bool, controlPlane: bool, logs: bool,
 
 Local mode: all true (workflows true as today — the page handles a missing
 store gracefully). Aspire mode: `lifecycle`, `controlPlane`, `logs` false;
-`workflows` true iff `DASH_STATESTORE_FILE` is set. The React app reads the
+`workflows` true iff `DEVDASHBOARD_STATESTORE_FILE` is set. The React app reads the
 flags through a small typed accessor (like the telemetry flag today) and
 hides navigation entries and controls for disabled capabilities — no dead
 buttons. Server-side, the corresponding routes are not registered, so the
@@ -187,8 +187,8 @@ capability flags are advisory UX, not the security boundary.
 
 `cmd/derivePaths` builds scan roots from `$HOME/.dapr` and per-app
 `ResourcePaths` (from daprd argv) — both empty in a container. In aspire mode
-seed the resource scan paths with `DASH_RESOURCES_PATH` (default: the
-directory containing `DASH_STATESTORE_FILE`), so the page truthfully shows
+seed the resource scan paths with `DEVDASHBOARD_RESOURCES_PATH` (default: the
+directory containing `DEVDASHBOARD_STATESTORE_FILE`), so the page truthfully shows
 the mounted component YAMLs.
 
 ### Workflow store
@@ -207,7 +207,7 @@ Multi-stage `Dockerfile` at the repo root:
 2. `golang` stage: `CGO_ENABLED=0 go build` with the same ldflags as
    goreleaser (version/commit/date build args).
 3. Final stage: `gcr.io/distroless/static` with just the binary.
-   `ENTRYPOINT ["/dev-dashboard"]`, `ENV DASH_MODE=aspire`, `EXPOSE 8080`.
+   `ENTRYPOINT ["/dev-dashboard"]`, `ENV DEVDASHBOARD_MODE=aspire`, `EXPOSE 8080`.
 
 Distroless works because aspire mode never shells out (no docker/podman, no
 browser opener) and the binary is pure-Go static (modernc sqlite, CGO off).
@@ -227,9 +227,9 @@ breakage is caught before release.
 | Condition | Behavior |
 |---|---|
 | aspire mode, contract env missing/malformed | exit non-zero at startup, error names the variable |
-| `DASH_APP_COUNT=0` | valid; dashboard serves with an empty app list |
+| `DEVDASHBOARD_APP_COUNT=0` | valid; dashboard serves with an empty app list |
 | daprd endpoint unreachable at runtime | app shown unhealthy/unreachable (existing `SidecarReachable`/health semantics); retried each poll |
-| `DASH_STATESTORE_FILE` unset | workflows capability off; UI hides workflow pages |
+| `DEVDASHBOARD_STATESTORE_FILE` unset | workflows capability off; UI hides workflow pages |
 | state-store file unreadable / store unreachable | existing graceful-degradation banner (PR #39 behavior) |
 | workflow terminate/purge fails | existing per-instance error results, unchanged |
 
@@ -259,7 +259,7 @@ AppHost run via the rewritten integration.
 ## Risks and assumptions
 
 - **Sidecar reachability is the integration's job.** The contract only
-  requires that each `DASH_APP_<i>_DAPR_HTTP` URL be reachable from the
+  requires that each `DEVDASHBOARD_APP_<i>_DAPR_HTTP` URL be reachable from the
   dashboard container. Whether Aspire's Dapr integration exposes sidecar
   endpoints as referenceable resources (and how container→host rewriting
   behaves for executable-hosted sidecars) must be validated by an early
