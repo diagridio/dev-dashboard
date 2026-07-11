@@ -44,7 +44,7 @@ func newFakeApps() *fakeApps {
 }
 
 func TestAppsListReturnsAllInstances(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil)
+	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
 	res, body := get(t, h, "/")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Equal(t, "application/json", res.Header.Get("Content-Type"))
@@ -57,7 +57,7 @@ func TestAppsListReturnsAllInstances(t *testing.T) {
 }
 
 func TestAppsDetailReturnsInstance(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil)
+	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
 	res, body := get(t, h, "/checkout")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -68,13 +68,13 @@ func TestAppsDetailReturnsInstance(t *testing.T) {
 }
 
 func TestAppsDetailReturns404ForUnknownApp(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil)
+	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
 	res, _ := get(t, h, "/does-not-exist")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
 func TestAppsLogsReturns404WhenNoLogPath(t *testing.T) {
-	h := appsRouter(&fakeApps{instances: []discovery.Instance{{AppID: "order"}}}, nil, nil)
+	h := appsRouter(&fakeApps{instances: []discovery.Instance{{AppID: "order"}}}, nil, nil, FullCapabilities())
 	res, _ := get(t, h, "/order/logs")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
@@ -115,7 +115,7 @@ func TestAppsLifecycleRoute(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			life := &fakeLifecycle{err: tc.err}
-			h := appsRouter(newFakeApps(), nil, life)
+			h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
 			req := httptest.NewRequest(http.MethodPost, "/orders/app/stop", nil)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
@@ -130,7 +130,7 @@ func TestAppsLifecycleRoute(t *testing.T) {
 }
 
 func TestAppsLifecycleRouteNilManager(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil)
+	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/orders/app/stop", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -149,7 +149,7 @@ func TestAppsForgetRoute(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			life := &fakeLifecycle{forgetErr: tc.err}
-			h := appsRouter(newFakeApps(), nil, life)
+			h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
 			req := httptest.NewRequest(http.MethodDelete, "/orders", nil)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
@@ -162,7 +162,7 @@ func TestAppsForgetRoute(t *testing.T) {
 }
 
 func TestAppsForgetRouteNilManager(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil)
+	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodDelete, "/orders", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
