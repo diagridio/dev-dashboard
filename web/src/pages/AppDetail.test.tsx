@@ -398,6 +398,26 @@ describe('AppDetail', () => {
     confirmSpy.mockRestore()
   })
 
+  it('offers only Stop for an orphaned sidecar', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          appStatus: 'stopped',
+          daprdStatus: 'running',
+          sidecarOrphaned: true,
+          cliPid: 0,
+          appPid: 0,
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getAllByRole('button', { name: 'Stop' }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Restart' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+  })
+
   it('surfaces action errors via toast', async () => {
     server.use(
       http.get('/api/apps/order', () => HttpResponse.json(runningApp)),

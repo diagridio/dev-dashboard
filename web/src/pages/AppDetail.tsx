@@ -47,6 +47,8 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const anyRunning = appRunning || daprdRunning
   const allStopped = (appStopped || daprdStopped) && !appRunning && !daprdRunning
   const busy = action.isPending
+  // An orphaned sidecar has nothing re-runnable: Stop is the only action.
+  const orphaned = !!app.sidecarOrphaned
 
   // dapr run supervises app + daprd together; sidecar actions act on the
   // whole instance (see lifecycle manager funneling). Compose and Aspire
@@ -75,7 +77,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
     <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
       {status === 'running' && (
         <>
-          {!app.isAspire && (
+          {!app.isAspire && !orphaned && (
             <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'restart', what)}>
               Restart
             </button>
@@ -85,7 +87,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           </button>
         </>
       )}
-      {status === 'stopped' && !app.isAspire && (
+      {status === 'stopped' && !app.isAspire && !orphaned && (
         <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'start', what)}>
           Start
         </button>
@@ -125,7 +127,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {anyRunning && (
             <>
-              {!app.isAspire && (
+              {!app.isAspire && !orphaned && (
                 <button
                   className="btn ghost"
                   disabled={busy}
@@ -143,7 +145,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               </button>
             </>
           )}
-          {allStopped && !app.isAspire && (
+          {allStopped && !app.isAspire && !orphaned && (
             <button
               className="btn ghost"
               disabled={busy}
