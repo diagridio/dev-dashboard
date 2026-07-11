@@ -4,12 +4,21 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
-// CheckHealth probes a sidecar's /v1.0/healthz endpoint.
-func CheckHealth(ctx context.Context, client *http.Client, httpPort int) Health {
-	url := fmt.Sprintf("http://127.0.0.1:%d/v1.0/healthz", httpPort)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// sidecarBaseURL resolves the daprd HTTP endpoint: an explicit base URL
+// (aspire contract) wins; otherwise the historical loopback-port form.
+func sidecarBaseURL(base string, httpPort int) string {
+	if base != "" {
+		return strings.TrimRight(base, "/")
+	}
+	return fmt.Sprintf("http://127.0.0.1:%d", httpPort)
+}
+
+// CheckHealth probes a sidecar's /v1.0/healthz endpoint at baseURL.
+func CheckHealth(ctx context.Context, client *http.Client, baseURL string) Health {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1.0/healthz", nil)
 	if err != nil {
 		return HealthUnknown
 	}

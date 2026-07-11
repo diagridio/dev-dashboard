@@ -261,6 +261,38 @@ func TestEnrichComposeCarriesContainerFields(t *testing.T) {
 	}
 }
 
+func TestEnrichAspireUsesBaseURLAndPassesThroughFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1.0/healthz":
+			w.WriteHeader(200)
+		case "/v1.0/metadata":
+			_, _ = w.Write([]byte(`{"id":"orders","runtimeVersion":"1.14.4"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID: "orders", Source: SourceAspire, SidecarReachable: true,
+			DaprHTTPBaseURL: srv.URL, Namespace: "default", Label: "orders-service",
+		}}, nil
+	}
+	svc := New(scan, srv.Client())
+	apps, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, apps, 1)
+	in := apps[0]
+	require.Equal(t, HealthHealthy, in.Health)
+	require.True(t, in.MetadataOK)
+	require.True(t, in.IsAspire)
+	require.Equal(t, srv.URL, in.DaprHTTPBaseURL)
+	require.Equal(t, "default", in.Namespace)
+	require.Equal(t, "orders-service", in.Label)
+}
+
 func TestHumanAge(t *testing.T) {
 	now := time.Now()
 	t.Run("zero time -> empty", func(t *testing.T) {

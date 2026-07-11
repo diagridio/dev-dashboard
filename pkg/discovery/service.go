@@ -191,6 +191,7 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		AppContainerID: r.AppContainerID, AppContainerName: r.AppContainerName,
 		SidecarReachable: r.SidecarReachable,
 		AppStatus:        r.AppStatus, DaprdStatus: r.DaprdStatus,
+		DaprHTTPBaseURL: r.DaprHTTPBaseURL, Namespace: r.Namespace, Label: r.Label,
 	}
 	// A zero Created (e.g. a compose container created but never started)
 	// would otherwise render as "00:00:00".
@@ -206,6 +207,9 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	if in.Source == "" { // scanners predating the field (and bare test fixtures)
 		in.Source = SourceStandalone
 		in.SidecarReachable = true
+	}
+	if in.Source == SourceAspire {
+		in.IsAspire = true
 	}
 	if in.Source == SourceStandalone {
 		in.DaprdStatus = StatusRunning // the process scan saw daprd alive
@@ -231,8 +235,9 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	if !in.SidecarReachable {
 		return in
 	}
-	in.Health = CheckHealth(ctx, s.client, r.HTTPPort)
-	md, err := FetchMetadata(ctx, s.client, r.HTTPPort)
+	base := sidecarBaseURL(r.DaprHTTPBaseURL, r.HTTPPort)
+	in.Health = CheckHealth(ctx, s.client, base)
+	md, err := FetchMetadata(ctx, s.client, base)
 	if err != nil {
 		in.MetadataOK = false
 		logger().Warn("app metadata unavailable", "appID", r.AppID, "httpPort", r.HTTPPort, "err", err)
@@ -272,6 +277,14 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		// Container apps: metadata Extended fields (PIDs, commands, log paths)
 		// describe the container's own view; process probing and file log
 		// sources don't apply. Logs stream from the container runtime instead.
+		if md.RunTemplate != "" {
+			in.RunTemplate = md.RunTemplate
+		}
+		return in
+	}
+	if in.Source == SourceAspire {
+		// Env-contract apps are containers/executables managed by Aspire:
+		// host PIDs, stdout files, and orphan semantics don't apply.
 		if md.RunTemplate != "" {
 			in.RunTemplate = md.RunTemplate
 		}
