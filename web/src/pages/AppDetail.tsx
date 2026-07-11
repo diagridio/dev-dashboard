@@ -94,7 +94,10 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           </button>
         </>
       )}
-      {status === 'stopped' && !app.isAspire && !orphaned && (
+      {/* Per-panel Start is hidden for fully-stopped dapr run apps: a bare
+          half-restart is not discoverable — the header's whole-instance Start
+          is the affordance. Compose keeps per-container starts. */}
+      {status === 'stopped' && !app.isAspire && !orphaned && (isCompose || !allStopped) && (
         <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'start', what)}>
           Start
         </button>

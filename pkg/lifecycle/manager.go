@@ -164,7 +164,12 @@ func (m *manager) standaloneStop(ctx context.Context, in discovery.Instance, tar
 		if in.AppPID == 0 {
 			return fmt.Errorf("%w: app process unknown", ErrUnsupported)
 		}
+		// Killing the app usually makes the dapr CLI tear down daprd and exit
+		// (supervision cascade), so capture all three commands even though
+		// only the app is signalled — the whole instance stays recoverable.
 		snapshot(TargetApp, in.AppPID, in.AppLogPath)
+		snapshot(TargetDaprd, in.DaprdPID, in.DaprdLogPath)
+		snapshot(TargetAll, in.CLIPID, "")
 		pids = []int{in.AppPID}
 	case TargetDaprd:
 		if in.DaprdPID == 0 {

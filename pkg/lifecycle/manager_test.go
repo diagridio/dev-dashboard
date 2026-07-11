@@ -352,3 +352,25 @@ func TestOrphanedSidecarOnlyStopAllowed(t *testing.T) {
 	_, ok := reg.Get("orders")
 	require.False(t, ok, "orphan stop must not create a registry entry")
 }
+
+// Stopping only the app usually makes the dapr CLI tear down daprd and exit
+// (supervision cascade). Capture all three commands so the whole instance
+// stays recoverable even when only the app was signalled.
+func TestStandaloneAppStopSnapshotsEverything(t *testing.T) {
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"}
+	proc.snaps[200] = ProcSnapshot{PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"}
+	proc.snaps[300] = ProcSnapshot{PID: 300, Argv: []string{"dapr", "run", "--app-id", "orders"}, Dir: "/src"}
+	proc.alive[100] = true
+	reg := NewRegistry()
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, proc, nil).(*manager)
+	m.grace = 10 * time.Millisecond
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionStop))
+	require.Equal(t, []int{100}, proc.terminated, "only the app is signalled")
+	e, ok := reg.Get("orders")
+	require.True(t, ok)
+	require.Contains(t, e.Procs, TargetApp)
+	require.Contains(t, e.Procs, TargetDaprd, "cascade insurance: daprd command captured")
+	require.Contains(t, e.Procs, TargetAll, "cascade insurance: CLI command captured")
+}

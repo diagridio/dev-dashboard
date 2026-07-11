@@ -443,6 +443,27 @@ describe('AppDetail', () => {
     confirmSpy.mockRestore()
   })
 
+
+  it('offers a single whole-instance Start when a dapr run app is fully stopped', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          health: 'unknown',
+          appStatus: 'stopped',
+          daprdStatus: 'stopped',
+          appPid: 0,
+          daprdPid: 0,
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    // Per-panel Starts are hidden: a bare app or bare daprd restart is not
+    // discoverable/useful — the header whole-instance Start is the affordance.
+    expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(1)
+  })
+
   it('surfaces action errors via toast', async () => {
     server.use(
       http.get('/api/apps/order', () => HttpResponse.json(runningApp)),
