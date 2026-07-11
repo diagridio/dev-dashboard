@@ -130,7 +130,7 @@ spec:
 
 	pool := newConnPool("default", nil, apps, nil)
 	registry := LoadRegistry(t.TempDir())
-	rc := newReconciler(context.Background(), apps, "default", "", "", nil, registry, pool, src.Env)
+	rc := newReconciler(context.Background(), apps, "default", "", "", nil, registry, pool, src.Env, nil)
 	defer rc.Close()
 
 	got, err := apps.List(context.Background())

@@ -43,6 +43,19 @@ type serveDeps struct {
 	// UpdateCheck is the shared latest-release checker; also used by runServe to
 	// print the startup notice, so the server reuses its warmed cache.
 	UpdateCheck updatecheck.Service
+	// AllowNonLoopback relaxes the server's request guard from loopback-only to
+	// any Host (aspire/container mode, where the dashboard is reached via a
+	// published port).
+	AllowNonLoopback bool
+	// Capabilities gates optional feature routes and SPA flags; nil means full
+	// host-mode capabilities.
+	Capabilities *server.Capabilities
+	// ResourcesPaths are extra resource directories appended to the reconciler's
+	// scan paths (aspire-mode DEVDASHBOARD_RESOURCES_PATH); nil in host mode.
+	ResourcesPaths []string
+	// QuietRegistry suppresses the "no home directory" registry-persistence
+	// warning when persistence is deliberately disabled (aspire mode).
+	QuietRegistry bool
 }
 
 // containerLogStream adapts a runtime Runner into the log-stream dependency.
@@ -69,14 +82,14 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	var registry *ConnRegistry
 	if deps.HomeDir != "" {
 		registry = LoadRegistry(deps.HomeDir)
-	} else {
+	} else if !deps.QuietRegistry {
 		slog.Default().With("component", "registry").Warn("no home directory; connection registry persistence disabled")
 	}
 	pool := newConnPool(deps.Namespace, deps.HTTPClient, appsSvc, nil)
 
 	// Build the reconciler that owns all apps-derived state (resource paths,
 	// detected state stores, active-store election) plus the registry and pool.
-	rc := newReconciler(ctx, appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool, deps.ComposeEnv)
+	rc := newReconciler(ctx, appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool, deps.ComposeEnv, deps.ResourcesPaths)
 
 	// Seed once synchronously from the boot snapshot so the first request is
 	// correct. Best-effort: an empty/failed list yields an empty derived state.
@@ -108,5 +121,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		ControlPlane:     controlplane.New(),
 		TelemetryEnabled: deps.TelemetryEnabled,
 		UpdateCheck:      deps.UpdateCheck,
+		AllowNonLoopback: deps.AllowNonLoopback,
+		Capabilities:     deps.Capabilities,
 	}, []func() error{rc.Close}
 }

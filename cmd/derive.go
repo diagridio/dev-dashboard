@@ -18,7 +18,11 @@ import (
 //
 // stateStorePath, when non-empty, is an explicit component YAML that overrides
 // state-store auto-detection (scanPaths becomes exactly that path).
-func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string) (resPaths, scanPaths []string, loaded map[string]bool, appPaths []string) {
+// extraResPaths are appended to resPaths only (scanPaths untouched) — the
+// aspire-mode resources path(s) live alongside apps' own resource paths but
+// must not participate in state-store auto-detection, which the explicit
+// statestore path owns.
+func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string, extraResPaths []string) (resPaths, scanPaths []string, loaded map[string]bool, appPaths []string) {
 	loaded = make(map[string]bool)
 	for _, a := range apps {
 		for _, c := range a.Components {
@@ -49,6 +53,7 @@ func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string) (res
 			resPaths = append(resPaths, filepath.Dir(a.ConfigPath))
 		}
 	}
+	resPaths = append(resPaths, extraResPaths...)
 	return resPaths, scanPaths, loaded, appPaths
 }
 

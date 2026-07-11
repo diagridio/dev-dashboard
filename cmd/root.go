@@ -32,6 +32,8 @@ import (
 func NewRootCmd() *cobra.Command {
 	var (
 		port       int
+		bind       string
+		modeFlag   string
 		basePath   string
 		noOpen     bool
 		stateStore string
@@ -46,11 +48,21 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return runServe(cmd.Context(), port, basePath, noOpen, stateStore, namespace, verbose)
+			mode, err := resolveMode(modeFlag, os.Getenv)
+			if err != nil {
+				return err
+			}
+			settings, err := resolveServeSettings(mode, cmd.Flags().Changed, port, bind, stateStore, namespace, os.Getenv)
+			if err != nil {
+				return err
+			}
+			return runServe(cmd.Context(), mode, settings, basePath, noOpen, verbose)
 		},
 	}
 	c.SetVersionTemplate(fmt.Sprintf("dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
+	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (aspire mode defaults to 0.0.0.0)")
+	c.Flags().StringVar(&modeFlag, "mode", "", `serving/discovery mode: "aspire", or unset for the complete scan`)
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")
 	c.Flags().StringVar(&stateStore, "statestore", "", "path to a state-store component YAML (overrides auto-detect)")
@@ -67,7 +79,7 @@ func Execute() error {
 	return NewRootCmd().ExecuteContext(ctx)
 }
 
-func runServe(ctx context.Context, port int, basePath string, noOpen bool, stateStore, namespace string, verbose bool) error {
+func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath string, noOpen, verbose bool) error {
 	logger := logging.New(verbose)
 	slog.SetDefault(logger)
 	statestore.SetVerbose(verbose)
@@ -81,44 +93,85 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 		logger.Error("component metadata bundle failed to load", "err", err)
 		return fmt.Errorf("init component metadata: %w", err)
 	}
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	addr := fmt.Sprintf("%s:%d", settings.Bind, settings.Port)
 	urlPath := ""
 	if trimmed := trimSlash(basePath); trimmed != "" {
 		urlPath = "/" + trimmed
 	}
-	url := fmt.Sprintf("http://%s%s/", addr, urlPath)
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		// An empty home disables registry persistence in assembleOptions rather
-		// than falling back to a CWD-relative registry path.
-		logger.Warn("home directory unavailable; connection registry will not be persisted", "err", err)
-		home = ""
+	displayHost := settings.Bind
+	if displayHost == "0.0.0.0" || displayHost == "::" {
+		displayHost = "localhost"
 	}
-	_, crtRunner := containerruntime.Detect()
-	composeSrc := discovery.NewComposeSource(crtRunner)
-	lifeReg := lifecycle.NewRegistry()
-	lifeProc := lifecycle.NewProcController()
-	appsSvc := lifecycle.Overlay(
-		discovery.New(
-			discovery.Merge(discovery.StandaloneScanner(), composeSrc.Scanner()),
-			&http.Client{Timeout: 2 * time.Second}),
-		lifeReg, lifeProc)
-	lifeMgr := lifecycle.New(appsSvc, lifeReg, crtRunner, lifeProc, lifecycle.NewStarter())
+	url := fmt.Sprintf("http://%s:%d%s/", displayHost, settings.Port, urlPath)
+
+	// Aspire/container mode disables registry persistence entirely (no home
+	// directory), so the "no home" warning is suppressed via QuietRegistry.
+	home := ""
+	if mode != ModeAspire {
+		home, err = os.UserHomeDir()
+		if err != nil {
+			// An empty home disables registry persistence in assembleOptions rather
+			// than falling back to a CWD-relative registry path.
+			logger.Warn("home directory unavailable; connection registry will not be persisted", "err", err)
+			home = ""
+		}
+	}
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	var (
+		appsSvc       discovery.Service
+		lifeMgr       lifecycle.Manager
+		composeEnv    func() discovery.ComposeEnv
+		containerLogs func(context.Context, string) (<-chan string, error)
+		updateCheck   updatecheck.Service
+		caps          *server.Capabilities
+	)
+	switch mode {
+	case ModeAspire:
+		scan, err := discovery.NewAspireScanner(os.Getenv)
+		if err != nil {
+			return err
+		}
+		appsSvc = discovery.New(scan, client)
+		caps = &server.Capabilities{Workflows: settings.StateStore != ""}
+	default:
+		_, crtRunner := containerruntime.Detect()
+		composeSrc := discovery.NewComposeSource(crtRunner)
+		scanners := []discovery.Scanner{discovery.StandaloneScanner(), composeSrc.Scanner()}
+		if discovery.AspireContractPresent(os.Getenv) {
+			as, err := discovery.NewAspireScanner(os.Getenv)
+			if err != nil {
+				return err
+			}
+			scanners = append(scanners, as)
+		}
+		lifeReg := lifecycle.NewRegistry()
+		lifeProc := lifecycle.NewProcController()
+		appsSvc = lifecycle.Overlay(
+			discovery.New(discovery.Merge(scanners...), client), lifeReg, lifeProc)
+		lifeMgr = lifecycle.New(appsSvc, lifeReg, crtRunner, lifeProc, lifecycle.NewStarter())
+		composeEnv = composeSrc.Env
+		containerLogs = containerLogStream(crtRunner)
+		updateCheck = updatecheck.New(&http.Client{Timeout: 5 * time.Second}, "https://api.github.com", "diagridio/dev-dashboard", version.Get().Version, time.Hour)
+	}
+
 	telemetry := telemetryEnabled(os.Getenv)
-	updateCheck := updatecheck.New(&http.Client{Timeout: 5 * time.Second}, "https://api.github.com", "diagridio/dev-dashboard", version.Get().Version, time.Hour)
 	opts, closers := assembleOptions(ctx, serveDeps{
 		BasePath:         basePath,
-		StateStorePath:   stateStore,
-		Namespace:        namespace,
+		StateStorePath:   settings.StateStore,
+		Namespace:        settings.Namespace,
 		Apps:             appsSvc,
 		Lifecycle:        lifeMgr,
 		HomeDir:          home,
 		HTTPClient:       &http.Client{Timeout: 10 * time.Second},
-		ComposeEnv:       composeSrc.Env,
-		ContainerLogs:    containerLogStream(crtRunner),
+		ComposeEnv:       composeEnv,
+		ContainerLogs:    containerLogs,
 		TelemetryEnabled: telemetry,
 		UpdateCheck:      updateCheck,
+		AllowNonLoopback: mode == ModeAspire,
+		Capabilities:     caps,
+		ResourcesPaths:   settings.ResourcesPaths,
+		QuietRegistry:    mode == ModeAspire,
 	}, dist)
 	for _, close := range closers {
 		close := close
@@ -127,16 +180,18 @@ func runServe(ctx context.Context, port int, basePath string, noOpen bool, state
 
 	srv := server.New(addr, opts)
 
-	check := maybeAnnounceUpdate(ctx, updateCheck, version.Get().Version)
-	interactive := isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
-	maybeOfferUpdate(ctx, check, os.Stdin, os.Stdout, interactive, selfUpdateAndRestart)
+	if updateCheck != nil {
+		check := maybeAnnounceUpdate(ctx, updateCheck, version.Get().Version)
+		interactive := isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
+		maybeOfferUpdate(ctx, check, os.Stdin, os.Stdout, interactive, selfUpdateAndRestart)
+	}
 	fmt.Printf("Diagrid Dev Dashboard is starting → %s\n", url)
 	if telemetry {
 		fmt.Println("We're using anonymous usage telemetry to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
 	} else {
 		fmt.Println("Anonymous usage telemetry is disabled (DEVDASHBOARD_TELEMETRY_OPTOUT=true).")
 	}
-	if !noOpen {
+	if !noOpen && mode != ModeAspire {
 		go func() { time.Sleep(400 * time.Millisecond); _ = openBrowser(url) }()
 	}
 

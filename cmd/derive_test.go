@@ -14,7 +14,7 @@ func TestDerivePaths_AutoDetect(t *testing.T) {
 		{AppID: "order", ResourcePaths: []string{"/app/resources"}, ConfigPath: "/app/config/cfg.yaml",
 			Components: []discovery.Component{{Name: "statestore", Type: "state.redis"}}},
 	}
-	resPaths, scanPaths, loaded, _ := derivePaths(apps, "/home/me", "")
+	resPaths, scanPaths, loaded, _ := derivePaths(apps, "/home/me", "", nil)
 
 	require.Contains(t, resPaths, "/home/me/.dapr/components")
 	require.Contains(t, resPaths, "/home/me/.dapr")
@@ -30,7 +30,7 @@ func TestDerivePaths_AutoDetect(t *testing.T) {
 
 func TestDerivePaths_ExplicitStateStoreOverride(t *testing.T) {
 	apps := []discovery.Instance{{AppID: "order", ResourcePaths: []string{"/app/resources"}}}
-	_, scanPaths, _, _ := derivePaths(apps, "/home/me", "/explicit/store.yaml")
+	_, scanPaths, _, _ := derivePaths(apps, "/home/me", "/explicit/store.yaml", nil)
 	require.Equal(t, []string{"/explicit/store.yaml"}, scanPaths)
 }
 
@@ -39,7 +39,7 @@ func TestDerivePaths_AppPaths(t *testing.T) {
 		{AppID: "a", ResourcePaths: []string{"/app/a/resources"}},
 		{AppID: "b", ResourcePaths: []string{"/app/b/resources"}},
 	}
-	_, _, _, appPaths := derivePaths(apps, "/home/me", "")
+	_, _, _, appPaths := derivePaths(apps, "/home/me", "", nil)
 	require.ElementsMatch(t, []string{"/app/a/resources", "/app/b/resources"}, appPaths)
 	require.NotContains(t, appPaths, "/home/me/.dapr/components")
 }
@@ -94,4 +94,20 @@ func TestAppsFingerprint_GroupSeparatorNotConfusableWithItems(t *testing.T) {
 	}
 	require.NotEqual(t, appsFingerprint(idItem), appsFingerprint(pathNamedItem),
 		"an id item must never hash like a group boundary + path item")
+}
+
+func TestDerivePathsExtraResPaths(t *testing.T) {
+	resPaths, scanPaths, _, _ := derivePaths(nil, "", "/app/components/state.yaml", []string{"/app/components"})
+	found := false
+	for _, p := range resPaths {
+		if p == "/app/components" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("resPaths missing extra path: %v", resPaths)
+	}
+	if len(scanPaths) != 1 || scanPaths[0] != "/app/components/state.yaml" {
+		t.Fatalf("explicit statestore must own scanPaths: %v", scanPaths)
+	}
 }

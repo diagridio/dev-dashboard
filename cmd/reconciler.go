@@ -47,6 +47,9 @@ type reconciler struct {
 	degraded       storeEntry
 	// composeEnv returns the compose endpoint/mount context (nil = no compose).
 	composeEnv func() discovery.ComposeEnv
+	// extraResPaths are appended to the reconciler's resource scan paths on every
+	// reconcile (aspire-mode DEVDASHBOARD_RESOURCES_PATH); nil in host mode.
+	extraResPaths []string
 
 	reconciling atomic.Bool // single-flight guard for background reconciles
 
@@ -62,7 +65,7 @@ type reconciler struct {
 // process-lifetime base context: store-open contexts derive from it so that
 // shutdown (Ctrl-C) aborts in-flight dials instead of blocking on them.
 // composeEnv returns the compose endpoint/mount context; nil disables translation.
-func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client, registry *ConnRegistry, pool *connPool, composeEnv func() discovery.ComposeEnv) *reconciler {
+func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeDir, stateStorePath string, client *http.Client, registry *ConnRegistry, pool *connPool, composeEnv func() discovery.ComposeEnv, extraResPaths []string) *reconciler {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -76,6 +79,7 @@ func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeD
 		registry:       registry,
 		pool:           pool,
 		composeEnv:     composeEnv,
+		extraResPaths:  extraResPaths,
 		degraded:       buildStoreEntry(nil, namespace, client, apps),
 	}
 }
@@ -122,7 +126,7 @@ func identity(c *statestore.Component) string {
 // fingerprint for apps.
 func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	log := slog.Default().With("component", "reconciler")
-	resPaths, scanPaths, loaded, appPaths := derivePaths(apps, rc.homeDir, rc.stateStorePath)
+	resPaths, scanPaths, loaded, appPaths := derivePaths(apps, rc.homeDir, rc.stateStorePath, rc.extraResPaths)
 	detected, err := statestore.Detect(scanPaths)
 	if err != nil {
 		log.Warn("state-store detection failed", "err", err)
