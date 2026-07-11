@@ -375,3 +375,27 @@ func TestStandaloneAppStopSnapshotsEverything(t *testing.T) {
 	require.Contains(t, e.Procs, TargetDaprd, "cascade insurance: daprd command captured")
 	require.Contains(t, e.Procs, TargetAll, "cascade insurance: CLI command captured")
 }
+
+func TestForgetDropsRememberedInstance(t *testing.T) {
+	reg := NewRegistry()
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{TargetAll: {PID: 300}})
+	m := New(fakeApps{items: map[string]discovery.Instance{}}, reg, nil, newFakeProc(), nil)
+
+	require.NoError(t, m.Forget(context.Background(), "orders"))
+	_, ok := reg.Get("orders")
+	require.False(t, ok, "entry dropped")
+
+	require.ErrorIs(t, m.Forget(context.Background(), "orders"), discovery.ErrNotFound)
+}
+
+func TestForgetResolvesAppIDFallback(t *testing.T) {
+	reg := NewRegistry()
+	in := standaloneInst()
+	in.InstanceKey = "orders-1"
+	reg.RecordStop(in, map[Target]ProcSnapshot{TargetAll: {PID: 300}})
+	m := New(fakeApps{items: map[string]discovery.Instance{}}, reg, nil, newFakeProc(), nil)
+
+	require.NoError(t, m.Forget(context.Background(), "orders"), "AppID fallback resolves")
+	_, ok := reg.Get("orders-1")
+	require.False(t, ok, "the entry's own key is dropped, not the fallback alias")
+}

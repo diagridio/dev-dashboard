@@ -464,6 +464,59 @@ describe('AppDetail', () => {
     expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(1)
   })
 
+  it('removes a fully stopped instance from the list and returns to the overview', async () => {
+    let deleted = false
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          health: 'unknown',
+          appStatus: 'stopped',
+          daprdStatus: 'stopped',
+          appPid: 0,
+          daprdPid: 0,
+        }),
+      ),
+      http.delete('/api/apps/order', () => {
+        deleted = true
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    screen.getByRole('button', { name: 'Remove from list' }).click()
+    await waitFor(() => expect(screen.getByText('Applications index')).toBeInTheDocument())
+    expect(deleted).toBe(true)
+    confirmSpy.mockRestore()
+  })
+
+  it('offers Remove from list for a fully stopped Aspire ghost, not for running or compose apps', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          isAspire: true,
+          health: 'unknown',
+          appStatus: 'stopped',
+          daprdStatus: 'stopped',
+          appPid: 0,
+          daprdPid: 0,
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Remove from list' })).toBeInTheDocument()
+  })
+
+  it('hides Remove from list for running instances', async () => {
+    server.use(http.get('/api/apps/order', () => HttpResponse.json(runningApp)))
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Remove from list' })).not.toBeInTheDocument()
+  })
+
   it('surfaces action errors via toast', async () => {
     server.use(
       http.get('/api/apps/order', () => HttpResponse.json(runningApp)),

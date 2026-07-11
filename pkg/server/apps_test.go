@@ -81,15 +81,21 @@ func TestAppsLogsReturns404WhenNoLogPath(t *testing.T) {
 
 // fakeLifecycle is a test double for lifecycle.Manager.
 type fakeLifecycle struct {
-	err    error
-	gotKey string
-	gotTgt lifecycle.Target
-	gotAct lifecycle.Action
+	err       error
+	forgetErr error
+	gotKey    string
+	gotTgt    lifecycle.Target
+	gotAct    lifecycle.Action
 }
 
 func (f *fakeLifecycle) Do(ctx context.Context, key string, target lifecycle.Target, action lifecycle.Action) error {
 	f.gotKey, f.gotTgt, f.gotAct = key, target, action
 	return f.err
+}
+
+func (f *fakeLifecycle) Forget(ctx context.Context, key string) error {
+	f.gotKey = key
+	return f.forgetErr
 }
 
 func TestAppsLifecycleRoute(t *testing.T) {
@@ -126,6 +132,38 @@ func TestAppsLifecycleRoute(t *testing.T) {
 func TestAppsLifecycleRouteNilManager(t *testing.T) {
 	h := appsRouter(newFakeApps(), nil, nil)
 	req := httptest.NewRequest(http.MethodPost, "/orders/app/stop", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestAppsForgetRoute(t *testing.T) {
+	cases := []struct {
+		name   string
+		err    error
+		status int
+	}{
+		{"ok", nil, http.StatusNoContent},
+		{"not found", discovery.ErrNotFound, http.StatusNotFound},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			life := &fakeLifecycle{forgetErr: tc.err}
+			h := appsRouter(newFakeApps(), nil, life)
+			req := httptest.NewRequest(http.MethodDelete, "/orders", nil)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			require.Equal(t, tc.status, rec.Code)
+			if tc.err == nil {
+				require.Equal(t, "orders", life.gotKey)
+			}
+		})
+	}
+}
+
+func TestAppsForgetRouteNilManager(t *testing.T) {
+	h := appsRouter(newFakeApps(), nil, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/orders", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)

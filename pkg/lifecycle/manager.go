@@ -15,6 +15,10 @@ func logger() *slog.Logger { return slog.Default().With("component", "lifecycle"
 // Manager starts, stops and restarts discovered app instances.
 type Manager interface {
 	Do(ctx context.Context, key string, target Target, action Action) error
+	// Forget drops a remembered stopped instance so it no longer appears on
+	// the dashboard. Only registry-backed (fully stopped standalone)
+	// instances have an entry; anything else is discovery.ErrNotFound.
+	Forget(ctx context.Context, key string) error
 }
 
 type manager struct {
@@ -108,6 +112,18 @@ func composeTargets(in discovery.Instance, target Target, action Action) ([]stri
 		return startOrder, nil
 	}
 	return stopOrder, nil
+}
+
+// Forget implements Manager: it resolves key like the registry (InstanceKey
+// first, AppID fallback) and drops the entry under its own key.
+func (m *manager) Forget(ctx context.Context, key string) error {
+	e, ok := m.reg.Get(key)
+	if !ok {
+		return fmt.Errorf("%w: %s", discovery.ErrNotFound, key)
+	}
+	logger().Info("forgetting stopped instance", "key", e.Instance.InstanceKey)
+	m.reg.Drop(e.Instance.InstanceKey)
+	return nil
 }
 
 // doStandalone dispatches start/stop/restart for a process-table instance.
