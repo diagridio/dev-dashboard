@@ -31,6 +31,38 @@ archives:
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
+dockers:
+  - id: linux-amd64
+    ids: [dev-dashboard]
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-amd64"
+    build_flag_templates:
+      - "--platform=linux/amd64"
+  - id: linux-arm64
+    ids: [dev-dashboard]
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile.goreleaser
+    use: buildx
+    image_templates:
+      - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-arm64"
+    build_flag_templates:
+      - "--platform=linux/arm64"
+
+docker_manifests:
+  - name_template: "ghcr.io/diagridio/dev-dashboard:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-amd64"
+      - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/diagridio/dev-dashboard:latest"
+    image_templates:
+      - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-amd64"
+      - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-arm64"
+
 checksum:
   name_template: "checksums.txt"
 
