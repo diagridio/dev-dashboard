@@ -310,3 +310,21 @@ func TestAspireDaprdStopNotFunneled(t *testing.T) {
 	require.NoError(t, m.Do(context.Background(), "orders", TargetDaprd, ActionStop))
 	require.Equal(t, []int{200}, proc.terminated, "Aspire keeps per-PID daprd stop")
 }
+
+// Pins the TargetAll start fallback: with no CLI snapshot (e.g. the CLI was
+// never captured), the halves start individually, sidecar first, and each
+// started target leaves the registry.
+func TestStandaloneStartAllWithoutCLISnapshotStartsHalvesInOrder(t *testing.T) {
+	reg := NewRegistry()
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
+		TargetDaprd: {PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"},
+		TargetApp:   {PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"},
+	})
+	st := &fakeStarter{}
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, newFakeProc(), st)
+
+	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStart))
+	require.Equal(t, [][]string{{"daprd", "--app-id", "orders"}, {"go", "run", "."}}, st.started, "sidecar starts before the app")
+	_, ok := reg.Get("orders")
+	require.False(t, ok, "both targets dropped -> entry gone")
+}

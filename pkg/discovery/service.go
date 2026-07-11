@@ -172,13 +172,18 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		AppID: r.AppID, InstanceKey: r.Key(), HTTPPort: r.HTTPPort, GRPCPort: r.GRPCPort, AppPort: r.AppPort,
 		DaprdPID: r.DaprdPID, CLIPID: r.CLIPID, RunTemplate: r.RunTemplate,
 		ResourcePaths: r.ResourcePaths, ConfigPath: r.ConfigPath, Command: r.Command,
-		Created: r.Created.Local().Format("15:04:05"), Age: humanAge(r.Created),
+		Age:     humanAge(r.Created),
 		Runtime: InferRuntime(r.Command), Health: HealthUnknown,
 		Source: r.Source, ComposeProject: r.ComposeProject, ComposeService: r.ComposeService,
 		DaprdContainerID: r.DaprdContainerID, DaprdContainerName: r.DaprdContainerName,
 		AppContainerID: r.AppContainerID, AppContainerName: r.AppContainerName,
 		SidecarReachable: r.SidecarReachable,
 		AppStatus:        r.AppStatus, DaprdStatus: r.DaprdStatus,
+	}
+	// A zero Created (e.g. a compose container created but never started)
+	// would otherwise render as "00:00:00".
+	if !r.Created.IsZero() {
+		in.Created = r.Created.Local().Format("15:04:05")
 	}
 	if !r.AppStartedAt.IsZero() && r.AppStatus != StatusStopped {
 		in.AppStartedAt = r.AppStartedAt.UTC().Format(time.RFC3339)

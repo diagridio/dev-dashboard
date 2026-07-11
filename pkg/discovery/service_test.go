@@ -589,3 +589,17 @@ func TestSidecarOrphanedDetection(t *testing.T) {
 		require.False(t, items[0].SidecarOrphaned)
 	})
 }
+
+// A compose container that was created but never started has a zero StartedAt;
+// it must render no Created timestamp ("00:00:00") and no Age.
+func TestEnrichZeroCreatedShowsNoTimestamp(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{AppID: "checkout", Source: SourceCompose,
+			DaprdStatus: StatusStopped, AppStatus: StatusStopped}}, nil
+	}
+	svc := New(scan, &http.Client{Timeout: time.Second})
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "", items[0].Created)
+	require.Equal(t, "", items[0].Age)
+}
