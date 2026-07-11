@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"net/http"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -12,8 +13,9 @@ import (
 // unknown paths so client-side (History-API) routing works. basePath is the
 // optional subpath the app is mounted under ("" for root). telemetryEnabled
 // is injected into the served index.html as window.__DASH_TELEMETRY_ENABLED__
-// so the front-end knows whether to load Datadog RUM.
-func SPAHandler(fsys fs.FS, basePath string, telemetryEnabled bool) http.Handler {
+// so the front-end knows whether to load Datadog RUM, and version is injected
+// as window.__DASH_VERSION__ so RUM can tag events with the build version.
+func SPAHandler(fsys fs.FS, basePath string, telemetryEnabled bool, version string) http.Handler {
 	basePath = "/" + strings.Trim(basePath, "/")
 	fileServer := http.FileServer(http.FS(fsys))
 
@@ -42,11 +44,11 @@ func SPAHandler(fsys fs.FS, basePath string, telemetryEnabled bool) http.Handler
 			http.NotFound(w, r)
 			return
 		}
-		serveIndex(w, r, fsys, telemetryEnabled)
+		serveIndex(w, r, fsys, telemetryEnabled, version)
 	})
 }
 
-func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS, telemetryEnabled bool) {
+func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS, telemetryEnabled bool, version string) {
 	data, err := fs.ReadFile(fsys, "index.html")
 	if err != nil {
 		http.Error(w, "index.html not found", http.StatusInternalServerError)
@@ -56,7 +58,8 @@ func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS, telemetryEna
 	if telemetryEnabled {
 		flag = "true"
 	}
-	script := []byte("<script>window.__DASH_TELEMETRY_ENABLED__=" + flag + ";</script></head>")
+	// strconv.Quote produces a safely-escaped JS string literal for the version.
+	script := []byte("<script>window.__DASH_TELEMETRY_ENABLED__=" + flag + ";window.__DASH_VERSION__=" + strconv.Quote(version) + ";</script></head>")
 	data = bytes.Replace(data, []byte("</head>"), script, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

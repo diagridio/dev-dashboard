@@ -32,14 +32,14 @@ func get(t *testing.T, h http.Handler, path string) (*http.Response, string) {
 }
 
 func TestSPAServesExistingFile(t *testing.T) {
-	h := SPAHandler(testFS(), "", true)
+	h := SPAHandler(testFS(), "", true, "v1.2.3")
 	res, body := get(t, h, "/assets/app.js")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "console.log")
 }
 
 func TestSPAFallsBackToIndex(t *testing.T) {
-	h := SPAHandler(testFS(), "", true)
+	h := SPAHandler(testFS(), "", true, "v1.2.3")
 	res, body := get(t, h, "/workflows/order/abc123")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "shell")
@@ -47,14 +47,14 @@ func TestSPAFallsBackToIndex(t *testing.T) {
 }
 
 func TestSPARespectsBasePath(t *testing.T) {
-	h := SPAHandler(testFS(), "/dashboard", true)
+	h := SPAHandler(testFS(), "/dashboard", true, "v1.2.3")
 	res, body := get(t, h, "/dashboard/anything")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "shell")
 }
 
 func TestSPADirectoryRequestDoesNotListContents(t *testing.T) {
-	h := SPAHandler(testFS(), "", true)
+	h := SPAHandler(testFS(), "", true, "v1.2.3")
 
 	// An embedded directory must not produce an http.FileServer auto-index
 	// (or a redirect toward one); it is a client-route miss → SPA shell.
@@ -67,20 +67,26 @@ func TestSPADirectoryRequestDoesNotListContents(t *testing.T) {
 }
 
 func TestSPAMissingAssetReturns404(t *testing.T) {
-	h := SPAHandler(testFS(), "", true)
+	h := SPAHandler(testFS(), "", true, "v1.2.3")
 	res, body := get(t, h, "/assets/missing.js")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 	require.NotContains(t, body, "shell")
 }
 
 func TestSPAInjectsTelemetryEnabledTrue(t *testing.T) {
-	h := SPAHandler(testFS(), "", true)
+	h := SPAHandler(testFS(), "", true, "v1.2.3")
 	_, body := get(t, h, "/")
-	require.Contains(t, body, "<script>window.__DASH_TELEMETRY_ENABLED__=true;</script>")
+	require.Contains(t, body, "window.__DASH_TELEMETRY_ENABLED__=true;")
 }
 
 func TestSPAInjectsTelemetryEnabledFalse(t *testing.T) {
-	h := SPAHandler(testFS(), "", false)
+	h := SPAHandler(testFS(), "", false, "v1.2.3")
 	_, body := get(t, h, "/")
-	require.Contains(t, body, "<script>window.__DASH_TELEMETRY_ENABLED__=false;</script>")
+	require.Contains(t, body, "window.__DASH_TELEMETRY_ENABLED__=false;")
+}
+
+func TestSPAInjectsVersion(t *testing.T) {
+	h := SPAHandler(testFS(), "", true, "v1.2.3")
+	_, body := get(t, h, "/")
+	require.Contains(t, body, `window.__DASH_VERSION__="v1.2.3";`)
 }

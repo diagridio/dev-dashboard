@@ -1,6 +1,7 @@
 declare global {
   interface Window {
     __DASH_TELEMETRY_ENABLED__?: boolean
+    __DASH_VERSION__?: string
   }
 }
 
@@ -24,12 +25,16 @@ function runOrBuffer(fn: (r: Rum) => void): void {
 export async function initTelemetry(): Promise<void> {
   if (window.__DASH_TELEMETRY_ENABLED__ !== true) return
   const { datadogRum } = await import('@datadog/browser-rum')
+  const version = window.__DASH_VERSION__
   datadogRum.init({
     applicationId: '80d4832f-54ab-4091-bd92-0d816379b40a',
     clientToken: 'pub566ae9a25b52873b96a28f4075cf6825',
     site: 'datadoghq.com',
     service: 'dev-dashboard',
     env: 'prod',
+    // Tag every event with the build version so errors and performance can be
+    // segmented by release. Omitted for dev/source builds that report no version.
+    ...(version && version !== 'dev' ? { version } : {}),
     sessionSampleRate: 100,
     sessionReplaySampleRate: 0,
     trackUserInteractions: true,

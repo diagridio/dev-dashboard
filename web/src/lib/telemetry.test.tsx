@@ -21,6 +21,7 @@ beforeEach(() => {
   addErrorMock.mockClear()
   startViewMock.mockClear()
   delete (window as { __DASH_TELEMETRY_ENABLED__?: boolean }).__DASH_TELEMETRY_ENABLED__
+  delete (window as { __DASH_VERSION__?: string }).__DASH_VERSION__
 })
 
 describe('initTelemetry', () => {
@@ -57,6 +58,22 @@ describe('initTelemetry', () => {
       defaultPrivacyLevel: 'mask',
       trackViewsManually: true,
     })
+  })
+
+  it('passes the injected build version to datadogRum.init', async () => {
+    window.__DASH_TELEMETRY_ENABLED__ = true
+    window.__DASH_VERSION__ = 'v1.2.3'
+    const { initTelemetry } = await import('./telemetry')
+    await initTelemetry()
+    expect(initMock).toHaveBeenCalledWith(expect.objectContaining({ version: 'v1.2.3' }))
+  })
+
+  it('omits version for dev/source builds', async () => {
+    window.__DASH_TELEMETRY_ENABLED__ = true
+    window.__DASH_VERSION__ = 'dev'
+    const { initTelemetry } = await import('./telemetry')
+    await initTelemetry()
+    expect(initMock).toHaveBeenCalledWith(expect.not.objectContaining({ version: expect.anything() }))
   })
 
   it('delegates trackAction/trackError/trackView to the RUM SDK once enabled', async () => {
