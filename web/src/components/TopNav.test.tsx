@@ -105,6 +105,21 @@ describe('TopNav', () => {
     expect(trackAction).toHaveBeenCalledWith('nav_click', { label: 'Workflows' })
   })
 
+  it('hides capability-gated entries when their capability is off', () => {
+    window.__DASH_CAPABILITIES__ = {
+      lifecycle: false,
+      controlPlane: false,
+      logs: false,
+      workflows: true,
+    }
+    renderNav()
+    expect(screen.queryByText('Control Plane')).toBeNull()
+    expect(screen.queryByText('Logs')).toBeNull()
+    expect(screen.getByText('Workflows')).toBeInTheDocument()
+    expect(screen.getByText('Applications')).toBeInTheDocument()
+    delete window.__DASH_CAPABILITIES__
+  })
+
   describe('topbar height tracking', () => {
     afterEach(() => {
       vi.unstubAllGlobals()

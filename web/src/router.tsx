@@ -13,6 +13,33 @@ import { Resiliency } from './pages/Resiliency'
 import { ResiliencyBuilder } from './pages/resiliency-builder/ResiliencyBuilder'
 import { ControlPlane } from './pages/ControlPlane'
 import { RouteError } from './components/RouteError'
+import { getCapabilities } from './lib/capabilities'
+
+const caps = getCapabilities()
+
+const gatedChildren: RouteObject[] = [
+  { index: true, element: <Applications />, handle: { rumView: 'Applications' } },
+  { path: 'apps/:appId', element: <AppDetail />, handle: { rumView: 'AppDetail' } },
+  ...(caps.workflows
+    ? [
+        { path: 'workflows', element: <Workflows />, handle: { rumView: 'Workflows' } },
+        { path: 'workflows/:appId/:instanceId', element: <WorkflowDetail />, handle: { rumView: 'WorkflowDetail' } },
+      ]
+    : []),
+  { path: 'actors', element: <Actors />, handle: { rumView: 'Actors' } },
+  { path: 'subscriptions', element: <Subscriptions />, handle: { rumView: 'Subscriptions' } },
+  { path: 'components/new', element: <ComponentBuilder />, handle: { rumView: 'ComponentBuilder' } },
+  { path: 'components', element: <ResourceList kind="component" />, handle: { rumView: 'Components' } },
+  { path: 'components/:name', element: <ResourceList kind="component" />, handle: { rumView: 'Components' } },
+  { path: 'configurations', element: <ResourceList kind="configuration" />, handle: { rumView: 'Configurations' } },
+  { path: 'configurations/:name', element: <ResourceList kind="configuration" />, handle: { rumView: 'Configurations' } },
+  { path: 'resiliency', element: <Resiliency />, handle: { rumView: 'Resiliency' } },
+  { path: 'resiliency/new', element: <ResiliencyBuilder />, handle: { rumView: 'ResiliencyBuilder' } },
+  ...(caps.controlPlane
+    ? [{ path: 'control-plane', element: <ControlPlane />, handle: { rumView: 'ControlPlane' } }]
+    : []),
+  ...(caps.logs ? [{ path: 'logs', element: <Logs />, handle: { rumView: 'Logs' } }] : []),
+]
 
 export const routes: RouteObject[] = [
   {
@@ -25,23 +52,7 @@ export const routes: RouteObject[] = [
         // Pathless layout route: page render errors are caught here, so the
         // error renders inside the App shell (TopNav/sidebar stay usable).
         errorElement: <RouteError />,
-        children: [
-          { index: true, element: <Applications />, handle: { rumView: 'Applications' } },
-          { path: 'apps/:appId', element: <AppDetail />, handle: { rumView: 'AppDetail' } },
-          { path: 'workflows', element: <Workflows />, handle: { rumView: 'Workflows' } },
-          { path: 'workflows/:appId/:instanceId', element: <WorkflowDetail />, handle: { rumView: 'WorkflowDetail' } },
-          { path: 'actors', element: <Actors />, handle: { rumView: 'Actors' } },
-          { path: 'subscriptions', element: <Subscriptions />, handle: { rumView: 'Subscriptions' } },
-          { path: 'components/new', element: <ComponentBuilder />, handle: { rumView: 'ComponentBuilder' } },
-          { path: 'components', element: <ResourceList kind="component" />, handle: { rumView: 'Components' } },
-          { path: 'components/:name', element: <ResourceList kind="component" />, handle: { rumView: 'Components' } },
-          { path: 'configurations', element: <ResourceList kind="configuration" />, handle: { rumView: 'Configurations' } },
-          { path: 'configurations/:name', element: <ResourceList kind="configuration" />, handle: { rumView: 'Configurations' } },
-          { path: 'resiliency', element: <Resiliency />, handle: { rumView: 'Resiliency' } },
-          { path: 'resiliency/new', element: <ResiliencyBuilder />, handle: { rumView: 'ResiliencyBuilder' } },
-          { path: 'control-plane', element: <ControlPlane />, handle: { rumView: 'ControlPlane' } },
-          { path: 'logs', element: <Logs />, handle: { rumView: 'Logs' } },
-        ],
+        children: gatedChildren,
       },
     ],
   },

@@ -5,22 +5,24 @@ import { ThemeToggle } from './ThemeToggle'
 import { RefreshControl } from './RefreshControl'
 import type { Theme } from '../lib/prefs'
 import { trackAction } from '../lib/telemetry'
+import { getCapabilities, type Capabilities } from '../lib/capabilities'
 
 export interface NavItem {
   label: string
   to: string
+  cap?: keyof Capabilities
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Applications', to: '/' },
   { label: 'Components', to: '/components' },
-  { label: 'Workflows', to: '/workflows' },
+  { label: 'Workflows', to: '/workflows', cap: 'workflows' },
   { label: 'Actors', to: '/actors' },
   { label: 'Subscriptions', to: '/subscriptions' },
   { label: 'Resiliency', to: '/resiliency' },
   { label: 'Configurations', to: '/configurations' },
-  { label: 'Control Plane', to: '/control-plane' },
-  { label: 'Logs', to: '/logs' },
+  { label: 'Control Plane', to: '/control-plane', cap: 'controlPlane' },
+  { label: 'Logs', to: '/logs', cap: 'logs' },
 ]
 
 interface TopNavProps {
@@ -30,6 +32,8 @@ interface TopNavProps {
 
 export function TopNav({ theme, onThemeChange }: TopNavProps) {
   const headerRef = useRef<HTMLElement>(null)
+  const caps = getCapabilities()
+  const items = NAV_ITEMS.filter((item) => !item.cap || caps[item.cap])
 
   // The nav can wrap onto extra rows on narrow/zoomed windows; the fixed
   // sidebar reads --topbar-h to start below the topbar's real height.
@@ -57,7 +61,7 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
       </span>
 
       <nav className="nav" aria-label="Primary navigation">
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
