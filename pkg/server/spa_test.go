@@ -33,14 +33,14 @@ func get(t *testing.T, h http.Handler, path string) (*http.Response, string) {
 }
 
 func TestSPAServesExistingFile(t *testing.T) {
-	h := SPAHandler(testFS(), "", true, FullCapabilities())
+	h := SPAHandler(testFS(), "", true, "v1.2.3", FullCapabilities())
 	res, body := get(t, h, "/assets/app.js")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "console.log")
 }
 
 func TestSPAFallsBackToIndex(t *testing.T) {
-	h := SPAHandler(testFS(), "", true, FullCapabilities())
+	h := SPAHandler(testFS(), "", true, "v1.2.3", FullCapabilities())
 	res, body := get(t, h, "/workflows/order/abc123")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "shell")
@@ -48,14 +48,14 @@ func TestSPAFallsBackToIndex(t *testing.T) {
 }
 
 func TestSPARespectsBasePath(t *testing.T) {
-	h := SPAHandler(testFS(), "/dashboard", true, FullCapabilities())
+	h := SPAHandler(testFS(), "/dashboard", true, "v1.2.3", FullCapabilities())
 	res, body := get(t, h, "/dashboard/anything")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, "shell")
 }
 
 func TestSPADirectoryRequestDoesNotListContents(t *testing.T) {
-	h := SPAHandler(testFS(), "", true, FullCapabilities())
+	h := SPAHandler(testFS(), "", true, "v1.2.3", FullCapabilities())
 
 	// An embedded directory must not produce an http.FileServer auto-index
 	// (or a redirect toward one); it is a client-route miss → SPA shell.
@@ -68,27 +68,33 @@ func TestSPADirectoryRequestDoesNotListContents(t *testing.T) {
 }
 
 func TestSPAMissingAssetReturns404(t *testing.T) {
-	h := SPAHandler(testFS(), "", true, FullCapabilities())
+	h := SPAHandler(testFS(), "", true, "v1.2.3", FullCapabilities())
 	res, body := get(t, h, "/assets/missing.js")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 	require.NotContains(t, body, "shell")
 }
 
 func TestSPAInjectsTelemetryEnabledTrue(t *testing.T) {
-	h := SPAHandler(testFS(), "", true, FullCapabilities())
+	h := SPAHandler(testFS(), "", true, "v1.2.3", FullCapabilities())
 	_, body := get(t, h, "/")
-	require.Contains(t, body, "<script>window.__DASH_TELEMETRY_ENABLED__=true;")
+	require.Contains(t, body, "window.__DASH_TELEMETRY_ENABLED__=true;")
 }
 
 func TestSPAInjectsTelemetryEnabledFalse(t *testing.T) {
-	h := SPAHandler(testFS(), "", false, FullCapabilities())
+	h := SPAHandler(testFS(), "", false, "v1.2.3", FullCapabilities())
 	_, body := get(t, h, "/")
-	require.Contains(t, body, "<script>window.__DASH_TELEMETRY_ENABLED__=false;")
+	require.Contains(t, body, "window.__DASH_TELEMETRY_ENABLED__=false;")
+}
+
+func TestSPAInjectsVersion(t *testing.T) {
+	h := SPAHandler(testFS(), "", true, "v1.2.3", FullCapabilities())
+	_, body := get(t, h, "/")
+	require.Contains(t, body, `window.__DASH_VERSION__="v1.2.3";`)
 }
 
 func TestServeIndexInjectsCapabilities(t *testing.T) {
 	fsys := fstest.MapFS{"index.html": {Data: []byte("<html><head></head><body></body></html>")}}
-	h := SPAHandler(fsys, "", false, Capabilities{Workflows: true})
+	h := SPAHandler(fsys, "", false, "v1.2.3", Capabilities{Workflows: true})
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	h.ServeHTTP(rec, req)
