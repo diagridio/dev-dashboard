@@ -103,8 +103,8 @@ The integration enumerates Dapr sidecars in the AppHost model and injects:
 | `DEVDASHBOARD_APP_COUNT` | yes | number of apps (`0` is valid: empty dashboard) |
 | `DEVDASHBOARD_APP_<i>_ID` | yes | Dapr app-id (i = 0..count-1) |
 | `DEVDASHBOARD_APP_<i>_DAPR_HTTP` | yes | daprd HTTP base URL, reachable **from the dashboard container** (e.g. `http://myapp-dapr:3500`) |
-| `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE` |
-| `DEVDASHBOARD_APP_<i>_LABEL` | no | display name (Aspire resource name); defaults to the app-id |
+| `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Accepted and exposed in the API; currently informational — workflow queries use the global `DEVDASHBOARD_NAMESPACE`, not the per-app value |
+| `DEVDASHBOARD_APP_<i>_LABEL` | no | display name (Aspire resource name); defaults to the app-id. Accepted and exposed in the API; currently informational — UI display of labels is planned |
 
 Indexed single-value vars (not JSON) because each `DAPR_HTTP` value is one
 Aspire endpoint reference — runtime-resolved and container→host rewritten by
@@ -160,7 +160,10 @@ New `discovery.AspireScanner(getenv)` produces `[]ScanResult` from the
 mode `runServe` builds the discovery service from **only** this scanner — no
 `StandaloneScanner`, no compose source, no `containerruntime.Detect()`.
 With mode unset, the scanner joins the existing standalone+compose merge
-when the contract is present, and is skipped when it is absent.
+when the contract is present, and is skipped when it is absent. On a key
+collision (an Aspire-launched daprd also found by the standalone host scan),
+the merge dedups by `Key()` and the aspire entry wins, since it carries
+`DaprHTTPBaseURL`.
 
 The scanner itself is static (env read once, validated at startup); the
 existing discovery poll loop still re-probes health and metadata every cycle,
@@ -245,8 +248,9 @@ browser opener) and the binary is pure-Go static (modernc sqlite, CGO off).
 
 Publishing: goreleaser `dockers` + `docker_manifests` blocks build
 linux/amd64 + linux/arm64 images on the existing tag-driven release, pushed
-to **`ghcr.io/diagridio/dev-dashboard`** with `:vX.Y.Z` and `:latest` tags —
-image and binary versions stay in lockstep. (The prototype integration's
+to **`ghcr.io/diagridio/dev-dashboard`** with `:X.Y.Z` (goreleaser strips the
+tag's `v` prefix) and `:latest` tags — image and binary versions stay in
+lockstep. (The prototype integration's
 `ghcr.io/diagridio/diagrid-dashboard` name is superseded; it repoints when
 rewritten.)
 

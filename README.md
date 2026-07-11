@@ -102,12 +102,16 @@ docker run --rm -p 8080:8080 \
 | `DEVDASHBOARD_APP_COUNT` | yes | number of apps (`0` is valid: empty dashboard) |
 | `DEVDASHBOARD_APP_<i>_ID` | yes | Dapr app-id |
 | `DEVDASHBOARD_APP_<i>_DAPR_HTTP` | yes | daprd HTTP base URL, reachable **from the dashboard container** (e.g. `http://myapp-dapr:3500`) |
-| `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE` |
-| `DEVDASHBOARD_APP_<i>_LABEL` | no | display name; defaults to the app-id |
+| `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Accepted and exposed in the API; currently informational — workflow queries use the global `DEVDASHBOARD_NAMESPACE`, not the per-app value |
+| `DEVDASHBOARD_APP_<i>_LABEL` | no | display name; defaults to the app-id. Accepted and exposed in the API; currently informational — UI display of labels is planned |
 
 Validation is fail-fast at startup: a missing or non-numeric `DEVDASHBOARD_APP_COUNT`, any
 missing required per-app var, or an unparsable `DAPR_HTTP` URL exits with an error naming the
 exact variable.
+
+**Security note:** in aspire mode the dashboard accepts any `Host` header (same-origin CSRF
+protection on mutating requests still applies). This is intended for local development behind
+Aspire's proxy — do not publish the container's port beyond the developer's own machine/network.
 
 **Serving and features:**
 
@@ -424,7 +428,8 @@ single commit with `git commit --no-verify`.
 > [`release` GitHub Actions workflow](.github/workflows/release.yaml): pushing a `vX.Y.Z` tag
 > runs [GoReleaser](https://goreleaser.com), which compiles the cross-platform archives plus
 > `checksums.txt` and publishes them to a GitHub Release. The version (`dev-dashboard --version`)
-> is injected from the tag via build-time ldflags.
+> is injected from the tag via build-time ldflags. The same tag-driven run also builds and
+> pushes the multi-arch container image to `ghcr.io/diagridio/dev-dashboard` via goreleaser.
 
 Because `go install` cannot run `npm`, the release tag commit must embed the prebuilt
 `web/dist`. `scripts/release.sh` handles this: it builds the SPA, creates a **detached** commit
