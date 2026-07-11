@@ -16,6 +16,9 @@ var ErrNotFound = errors.New("app not found")
 const (
 	SourceStandalone = "standalone"
 	SourceCompose    = "compose"
+	// SourceAspire marks apps injected via the DEVDASHBOARD_APP_* env
+	// contract (aspire mode, or mode-unset with the contract present).
+	SourceAspire = "aspire"
 )
 
 func logger() *slog.Logger { return slog.Default().With("component", "discovery") }
@@ -50,6 +53,15 @@ type ScanResult struct {
 	// SidecarReachable is false only for compose sidecars whose HTTP port is
 	// not published to the host (metadata/health enrichment impossible).
 	SidecarReachable bool
+
+	// DaprHTTPBaseURL, when set (aspire source), replaces
+	// http://127.0.0.1:<HTTPPort> as the daprd HTTP endpoint for health,
+	// metadata, and workflow calls.
+	DaprHTTPBaseURL string
+	// Namespace and Label come from the Aspire env contract ("" for other
+	// sources). Label is the orchestrator's display name for the app.
+	Namespace string
+	Label     string
 
 	// Per-target lifecycle status ("" = unknown; compose scanner and standalone enrichment set these).
 	AppStatus      string
