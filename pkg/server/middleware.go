@@ -7,32 +7,52 @@ import (
 	"strings"
 )
 
-// localhostGuard hardens the loopback-only server against browser-borne
-// attacks:
+// requestGuard hardens the server against browser-borne attacks. Two modes:
 //
-//   - DNS rebinding: every request must carry a loopback Host header
-//     (localhost, 127.0.0.1, or ::1 — with or without a port). A rebinding
-//     attack resolves an attacker-controlled name to 127.0.0.1, so the Host
-//     header still names the attacker's domain and is rejected here.
-//   - CSRF: state-changing requests (POST/PUT/DELETE/PATCH) with an Origin
-//     header must originate from a loopback origin on any port (the Vite dev
-//     server runs on its own port). Requests without an Origin header (curl,
-//     CLI tools) are allowed.
-func localhostGuard(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isLoopbackHostname(stripPort(r.Host)) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden: non-local Host header"})
-			return
-		}
-		switch r.Method {
-		case http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch:
-			if origin := r.Header.Get("Origin"); origin != "" && !isLoopbackOrigin(origin) {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden: cross-origin request"})
+// allowAnyHost=false (loopback bind, the host-mode default):
+//   - DNS rebinding: every request must carry a loopback Host header.
+//   - CSRF: mutating requests with an Origin header must originate from a
+//     loopback origin on any port (the Vite dev server has its own port).
+//
+// allowAnyHost=true (aspire/container mode, reached through a proxy on an
+// arbitrary host): the Host allowlist is meaningless, so it is skipped, and
+// CSRF tightens to same-origin — a present Origin must match the request
+// Host exactly. Requests without an Origin (curl, CLI tools) pass in both
+// modes.
+func requestGuard(allowAnyHost bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !allowAnyHost && !isLoopbackHostname(stripPort(r.Host)) {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden: non-local Host header"})
 				return
 			}
-		}
-		next.ServeHTTP(w, r)
-	})
+			switch r.Method {
+			case http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch:
+				origin := r.Header.Get("Origin")
+				if origin != "" {
+					crossOrigin := !isLoopbackOrigin(origin)
+					if allowAnyHost {
+						crossOrigin = !sameOrigin(origin, r.Host)
+					}
+					if crossOrigin {
+						writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden: cross-origin request"})
+						return
+					}
+				}
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// sameOrigin reports whether an Origin header's host:port equals the
+// request's Host header.
+func sameOrigin(origin, host string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return u.Host == host
 }
 
 // stripPort returns the host part of a Host header value, which may or may

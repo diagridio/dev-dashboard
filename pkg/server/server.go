@@ -39,6 +39,10 @@ type Options struct {
 	UpdateCheck  updatecheck.Service
 	// TelemetryEnabled controls whether the served SPA loads Datadog RUM.
 	TelemetryEnabled bool
+	// AllowNonLoopback switches the request guard from the loopback
+	// allowlist to same-origin CSRF (aspire/container mode, where the
+	// dashboard is reached through a proxy on an arbitrary host).
+	AllowNonLoopback bool
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
@@ -48,7 +52,7 @@ func NewRouter(opts Options) http.Handler {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Use(localhostGuard)
+	r.Use(requestGuard(opts.AllowNonLoopback))
 
 	mount := func(router chi.Router) {
 		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Lifecycle, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane, opts.UpdateCheck))

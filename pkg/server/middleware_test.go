@@ -24,11 +24,11 @@ func guardedRequest(t *testing.T, method, host, origin string) *http.Response {
 		req.Header.Set("Origin", origin)
 	}
 	rec := httptest.NewRecorder()
-	localhostGuard(okHandler).ServeHTTP(rec, req)
+	requestGuard(false)(okHandler).ServeHTTP(rec, req)
 	return rec.Result()
 }
 
-func TestLocalhostGuardHost(t *testing.T) {
+func TestRequestGuardHost(t *testing.T) {
 	tests := []struct {
 		name string
 		host string
@@ -58,7 +58,7 @@ func TestLocalhostGuardHost(t *testing.T) {
 	}
 }
 
-func TestLocalhostGuardOrigin(t *testing.T) {
+func TestRequestGuardOrigin(t *testing.T) {
 	tests := []struct {
 		name   string
 		method string
@@ -85,9 +85,9 @@ func TestLocalhostGuardOrigin(t *testing.T) {
 	}
 }
 
-// TestRouterAppliesLocalhostGuard proves the guard is wired into the full
+// TestRouterAppliesRequestGuard proves the guard is wired into the full
 // router, in front of the API and the SPA fallback.
-func TestRouterAppliesLocalhostGuard(t *testing.T) {
+func TestRouterAppliesRequestGuard(t *testing.T) {
 	h := newTestRouter("")
 
 	send := func(method, path, host, origin string) *http.Response {
@@ -111,4 +111,38 @@ func TestRouterAppliesLocalhostGuard(t *testing.T) {
 	// Legitimate local traffic still works.
 	require.Equal(t, http.StatusOK, send(http.MethodGet, "/api/health", "127.0.0.1:9090", "").StatusCode)
 	require.Equal(t, http.StatusOK, send(http.MethodGet, "/api/health", "[::1]:8080", "").StatusCode)
+}
+
+func TestRequestGuardAllowAnyHost(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	h := requestGuard(true)(ok)
+
+	tests := []struct {
+		name   string
+		method string
+		host   string
+		origin string
+		want   int
+	}{
+		{"non-loopback host allowed", http.MethodGet, "dashboard.example:8080", "", http.StatusOK},
+		{"proxy host allowed", http.MethodGet, "diagrid-dashboard.localhost", "", http.StatusOK},
+		{"mutating same-origin allowed", http.MethodPost, "dash.local:8080", "http://dash.local:8080", http.StatusOK},
+		{"mutating no-origin allowed", http.MethodPost, "dash.local:8080", "", http.StatusOK},
+		{"mutating cross-origin forbidden", http.MethodPost, "dash.local:8080", "http://evil.example", http.StatusForbidden},
+		{"mutating origin port mismatch forbidden", http.MethodPost, "dash.local:8080", "http://dash.local:9999", http.StatusForbidden},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, "/api/health", nil)
+			req.Host = tc.host
+			if tc.origin != "" {
+				req.Header.Set("Origin", tc.origin)
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("got %d want %d", rec.Code, tc.want)
+			}
+		})
+	}
 }
