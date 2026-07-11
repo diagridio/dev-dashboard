@@ -61,10 +61,28 @@ Read-only observability **plus workflow actions**:
 
 | Source | Values | Default |
 |---|---|---|
-| `--mode` flag / `DEVDASHBOARD_MODE` env | `local`, `aspire` | `local` |
+| `--mode` flag / `DEVDASHBOARD_MODE` env | `aspire` (reserved for future work: `dapr`, `compose`) | unset |
 
-Precedence everywhere: **flag > env > mode default**. `local` mode is
-byte-for-byte today's behavior; every change below is gated on `aspire`.
+The mode takes exactly **one value** — it is a single-source filter, not a
+list. Combinations are deliberately unsupported: developers are unlikely to
+need a specific mix (e.g. compose+aspire but not `dapr run`), and a
+multi-value contract is not worth that cost.
+
+**Mode unset (the default) performs the complete scan across all discovery
+sources**: `dapr run` host processes, docker compose containers, and — when
+its env contract is present — Aspire-injected apps. Serving posture is
+today's host behavior, byte-for-byte (loopback bind, port 9090, browser
+open, update check, all features on).
+
+`--mode=aspire` restricts discovery to the Aspire env contract alone and
+switches to container serving posture; every change below is gated on it.
+
+**Future work (reserved, not in this iteration):** `--mode=dapr` and
+`--mode=compose` restrict discovery to only `dapr run` processes or only
+docker compose containers respectively, keeping host serving posture
+unchanged.
+
+Precedence everywhere: **flag > env > mode default**.
 
 The published image sets `ENV DEVDASHBOARD_MODE=aspire`, so the integration never has
 to pass it; it is overridable.
@@ -90,9 +108,13 @@ non-numeric `DEVDASHBOARD_APP_COUNT`, or any missing required per-app var, or an
 unparsable `DAPR_HTTP` URL, exits with an error naming the exact variable. A
 misconfigured integration should be loud, not quietly empty.
 
+With mode unset the contract is optional: an absent `DEVDASHBOARD_APP_COUNT`
+simply disables the Aspire source and the full host scan proceeds; a
+present-but-malformed contract still fails fast.
+
 ### Serving and features
 
-| Env / flag | Default (aspire) | Default (local) | Meaning |
+| Env / flag | Default (aspire) | Default (mode unset) | Meaning |
 |---|---|---|---|
 | `DEVDASHBOARD_PORT` / `--port` | `8080` | `9090` | listen port |
 | `DEVDASHBOARD_BIND` / `--bind` (new flag) | `0.0.0.0` | `127.0.0.1` | bind host |
@@ -130,6 +152,8 @@ New `discovery.AspireScanner(getenv)` produces `[]ScanResult` from the
 `DEVDASHBOARD_APP_*` contract, with `Source: SourceAspire` (new constant). In aspire
 mode `runServe` builds the discovery service from **only** this scanner — no
 `StandaloneScanner`, no compose source, no `containerruntime.Detect()`.
+With mode unset, the scanner joins the existing standalone+compose merge
+when the contract is present, and is skipped when it is absent.
 
 The scanner itself is static (env read once, validated at startup); the
 existing discovery poll loop still re-probes health and metadata every cycle,
@@ -146,8 +170,8 @@ replaces the hardcoded `http://127.0.0.1:<port>` in:
    through daprd HTTP; `RemoveTarget` gains the same field, populated from
    the app inventory. (`forceDelete` already uses the state store; no change.)
 
-Empty field ⇒ existing `127.0.0.1:<port>` behavior, so local mode is
-untouched.
+Empty field ⇒ existing `127.0.0.1:<port>` behavior, so host-scanned apps
+are untouched.
 
 ### Middleware: Host guard and CSRF
 
@@ -163,7 +187,7 @@ through Aspire's proxy on an arbitrary host, so:
   is present, its host must equal the request `Host`. CSRF protection stays;
   the loopback assumption goes.
 
-Local mode keeps both checks exactly as today.
+All non-aspire modes keep both checks exactly as today.
 
 ### UI capability gating
 
@@ -175,7 +199,7 @@ injection with:
 window.__DASH_CAPABILITIES__ = {lifecycle: bool, controlPlane: bool, logs: bool, workflows: bool}
 ```
 
-Local mode: all true (workflows true as today — the page handles a missing
+Mode unset: all true (workflows true as today — the page handles a missing
 store gracefully). Aspire mode: `lifecycle`, `controlPlane`, `logs` false;
 `workflows` true iff `DEVDASHBOARD_STATESTORE_FILE` is set. The React app reads the
 flags through a small typed accessor (like the telemetry flag today) and
@@ -227,6 +251,9 @@ breakage is caught before release.
 | Condition | Behavior |
 |---|---|
 | aspire mode, contract env missing/malformed | exit non-zero at startup, error names the variable |
+| mode unset, contract env absent | Aspire source skipped; full host scan proceeds |
+| mode unset, contract env present but malformed | exit non-zero at startup, error names the variable |
+| unknown `--mode` / `DEVDASHBOARD_MODE` value | exit non-zero at startup listing supported values |
 | `DEVDASHBOARD_APP_COUNT=0` | valid; dashboard serves with an empty app list |
 | daprd endpoint unreachable at runtime | app shown unhealthy/unreachable (existing `SidecarReachable`/health semantics); retried each poll |
 | `DEVDASHBOARD_STATESTORE_FILE` unset | workflows capability off; UI hides workflow pages |
@@ -239,11 +266,13 @@ Unit (table-driven, `-tags unit`, matching repo conventions):
 
 - `AspireScanner` env parsing: happy path, count `0`, missing/non-numeric
   count, missing per-app ID/URL, bad URL, namespace/label defaulting.
+- Mode resolution: unset ⇒ full scan (all sources, aspire source iff
+  contract present), `aspire` ⇒ aspire-only, unknown value ⇒ startup error.
 - Base-URL selection in `CheckHealth`, `FetchMetadata`, and
   `workflow.Remover` (base URL set vs. empty fallback) against `httptest`
   servers.
 - Middleware: aspire mode admits non-loopback `Host`; same-origin rule
-  accepts matching, rejects mismatched `Origin`; local mode unchanged.
+  accepts matching, rejects mismatched `Origin`; unset mode unchanged.
 - Capability JSON injection per mode.
 
 Integration (`-tags integration`):
