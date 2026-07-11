@@ -74,6 +74,13 @@ its env contract is present — Aspire-injected apps. Serving posture is
 today's host behavior, byte-for-byte (loopback bind, port 9090, browser
 open, update check, all features on).
 
+Note that the standalone process scan matches **any** host `daprd` process
+by executable name, not just `dapr run` children — so daprd sidecars
+launched by an Aspire AppHost as host executables are already discovered
+today, and that keeps working unchanged with mode unset. The env-contract
+Aspire source is additive on top of (and merged with) that incidental
+detection, not a replacement for it.
+
 `--mode=aspire` restricts discovery to the Aspire env contract alone and
 switches to container serving posture; every change below is gated on it.
 
