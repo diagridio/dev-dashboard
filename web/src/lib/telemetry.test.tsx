@@ -52,6 +52,7 @@ describe('initTelemetry', () => {
       env: 'prod',
       sessionSampleRate: 100,
       sessionReplaySampleRate: 0,
+      trackAnonymousUser: true,
       trackUserInteractions: true,
       trackResources: true,
       trackLongTasks: true,

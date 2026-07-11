@@ -37,6 +37,10 @@ export async function initTelemetry(): Promise<void> {
     ...(version && version !== 'dev' ? { version } : {}),
     sessionSampleRate: 100,
     sessionReplaySampleRate: 0,
+    // Persist a stable anonymous id across sessions (@usr.anonymous_id) so
+    // DAU/MAU can be counted without auth. Explicit so a future SDK default
+    // flip can't silently drop it.
+    trackAnonymousUser: true,
     trackUserInteractions: true,
     trackResources: true,
     trackLongTasks: true,
