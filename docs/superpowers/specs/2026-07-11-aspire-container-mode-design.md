@@ -103,7 +103,7 @@ The integration enumerates Dapr sidecars in the AppHost model and injects:
 | `DEVDASHBOARD_APP_COUNT` | yes | number of apps (`0` is valid: empty dashboard) |
 | `DEVDASHBOARD_APP_<i>_ID` | yes | Dapr app-id (i = 0..count-1) |
 | `DEVDASHBOARD_APP_<i>_DAPR_HTTP` | yes | daprd HTTP base URL, reachable **from the dashboard container** (e.g. `http://myapp-dapr:3500`) |
-| `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Accepted and exposed in the API; currently informational — workflow queries use the global `DEVDASHBOARD_NAMESPACE`, not the per-app value |
+| `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Used for **app-scoped** workflow operations — one instance's history (`Get`), an app-filtered `List`/`Stats`, and force delete — which build state-store key patterns under the app's own namespace. The store-wide scans (all-apps `List`/`Stats`, `AppIDs`) remain on the global `DEVDASHBOARD_NAMESPACE`, since a single scan pattern bakes in one namespace and cannot span namespaces without redesign |
 | `DEVDASHBOARD_APP_<i>_LABEL` | no | display name (Aspire resource name); defaults to the app-id. Accepted and exposed in the API; currently informational — UI display of labels is planned |
 
 Indexed single-value vars (not JSON) because each `DAPR_HTTP` value is one
