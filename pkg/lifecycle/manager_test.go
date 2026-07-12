@@ -83,6 +83,34 @@ func TestComposeValidation(t *testing.T) {
 	require.ErrorIs(t, m.Do(context.Background(), "k", TargetApp, ActionStop), ErrUnsupported)
 }
 
+// tcInst returns a testcontainers-sourced instance: ryuk owns the container
+// lifecycle and Maven owns the JVM, so the dashboard must not touch either.
+func tcInst() discovery.Instance {
+	return discovery.Instance{
+		AppID: "workflow-patterns-app", InstanceKey: "crazy_lamport",
+		Source: discovery.SourceTestcontainers, DaprdContainerID: "28af628017d1",
+	}
+}
+
+func TestDo_TestcontainersUnsupported(t *testing.T) {
+	// A nonzero AppPID (the app happens to be a visible host process) must not
+	// matter: without the source guard, doStandalone would happily snapshot
+	// and signal it. Asserting proc.terminated stays empty proves the guard
+	// short-circuits before touching any process, not just that some other
+	// standalone code path coincidentally also returns ErrUnsupported.
+	in := tcInst()
+	in.AppPID = 100
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"java", "-jar", "app.jar"}}
+	proc.alive[100] = true
+
+	m := New(fakeApps{items: map[string]discovery.Instance{"crazy_lamport": in}},
+		NewRegistry(), nil, proc, nil)
+	err := m.Do(context.Background(), "crazy_lamport", TargetAll, ActionStop)
+	require.ErrorIs(t, err, ErrUnsupported)
+	require.Empty(t, proc.terminated, "testcontainers-managed app must never be signalled")
+}
+
 func TestComposeAllRestart(t *testing.T) {
 	run := &fakeRunner{}
 	m := New(fakeApps{items: map[string]discovery.Instance{"k": composeInst()}}, NewRegistry(), run, nil, nil)

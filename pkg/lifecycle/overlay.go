@@ -71,7 +71,7 @@ func (o *overlay) Get(ctx context.Context, key string) (discovery.Instance, erro
 // stale only once its process reappears under a NEW pid.
 func (o *overlay) applyEntry(in *discovery.Instance) {
 	e, ok := o.reg.Get(in.InstanceKey)
-	if !ok || in.Source == discovery.SourceCompose {
+	if !ok || in.Source == discovery.SourceCompose || in.Source == discovery.SourceTestcontainers {
 		return
 	}
 	if snap, ok := e.Procs[TargetDaprd]; ok && in.DaprdPID != 0 && in.DaprdPID != snap.PID {

@@ -51,6 +51,11 @@ func (m *manager) Do(ctx context.Context, key string, target Target, action Acti
 	if in.Source == discovery.SourceCompose {
 		return m.doCompose(ctx, in, target, action)
 	}
+	if in.Source == discovery.SourceTestcontainers {
+		// Testcontainers owns these containers (ryuk reaps them) and the test
+		// process owns the app; the dashboard must not fight either.
+		return fmt.Errorf("%w: testcontainers-managed app", ErrUnsupported)
+	}
 	return m.doStandalone(ctx, in, target, action)
 }
 
