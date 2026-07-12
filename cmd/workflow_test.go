@@ -63,6 +63,24 @@ func TestTargetResolver(t *testing.T) {
 		require.True(t, got.Healthy)
 	})
 
+	t.Run("populates namespace from the instance", func(t *testing.T) {
+		disc := fakeDiscovery{inst: discovery.Instance{AppID: "order", HTTPPort: 3500, Namespace: "prod", Health: discovery.HealthHealthy}}
+		wf := fakeWorkflowSvc{ex: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "inst", Status: workflow.StatusRunning}}}
+		r := newTargetResolver(disc, wf)
+		got, err := r.Resolve(ctx, "order", "inst")
+		require.NoError(t, err)
+		require.Equal(t, "prod", got.Namespace)
+	})
+
+	t.Run("leaves namespace empty for host-scanned apps", func(t *testing.T) {
+		disc := fakeDiscovery{inst: discovery.Instance{AppID: "order", HTTPPort: 3500, Namespace: "", Health: discovery.HealthHealthy}}
+		wf := fakeWorkflowSvc{ex: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "inst", Status: workflow.StatusRunning}}}
+		r := newTargetResolver(disc, wf)
+		got, err := r.Resolve(ctx, "order", "inst")
+		require.NoError(t, err)
+		require.Equal(t, "", got.Namespace)
+	})
+
 	t.Run("discovery Get fails — still succeeds with HTTPPort=0 Healthy=false", func(t *testing.T) {
 		disc := fakeDiscovery{err: errors.New("not found")}
 		wf := fakeWorkflowSvc{ex: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "inst", Status: workflow.StatusCompleted}}}

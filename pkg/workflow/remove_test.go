@@ -95,6 +95,52 @@ func TestRemoveForceDeletesKeys(t *testing.T) {
 	require.Contains(t, f.kv, "order||other||keep||metadata") // untouched
 }
 
+// patternStore wraps fakeStore to record the LIKE patterns passed to Keys.
+type patternStore struct {
+	*fakeStore
+	patterns []string
+}
+
+func (p *patternStore) Keys(ctx context.Context, pattern, token string, n int) ([]string, string, error) {
+	p.patterns = append(p.patterns, pattern)
+	return p.fakeStore.Keys(ctx, pattern, token, n)
+}
+
+func TestRemoveForceDeleteUsesPerAppNamespace(t *testing.T) {
+	f := &patternStore{fakeStore: newFakeStore()}
+	// Instance data lives under the app's own namespace "prod", while the
+	// remover's store namespace is the global "default".
+	prefix := statestore.InstancePrefix("prod", "order", "stuck")
+	f.kv[prefix+"metadata"] = []byte("{}")
+	f.kv[prefix+"history-000000"] = []byte("x")
+
+	r := NewRemover(&http.Client{Timeout: time.Second}, f, "default")
+	res := r.Remove(context.Background(), RemoveTarget{
+		AppID: "order", InstanceID: "stuck", Namespace: "prod", Status: StatusRunning, Healthy: false,
+	}, false)
+	require.True(t, res.OK, res.Error)
+	require.Equal(t, MechForce, res.Mechanism)
+	require.NotContains(t, f.kv, prefix+"metadata")
+	require.NotContains(t, f.kv, prefix+"history-000000")
+	require.Contains(t, f.patterns, statestore.InstanceKeyPattern("prod", "order", "stuck"),
+		"force delete must scan under the target's per-app namespace")
+}
+
+func TestRemoveForceDeleteFallsBackToRemoverNamespace(t *testing.T) {
+	f := &patternStore{fakeStore: newFakeStore()}
+	prefix := statestore.InstancePrefix("default", "order", "stuck")
+	f.kv[prefix+"metadata"] = []byte("{}")
+
+	r := NewRemover(&http.Client{Timeout: time.Second}, f, "default")
+	res := r.Remove(context.Background(), RemoveTarget{
+		AppID: "order", InstanceID: "stuck", Namespace: "", Status: StatusRunning, Healthy: false,
+	}, false)
+	require.True(t, res.OK, res.Error)
+	require.NotContains(t, f.kv, prefix+"metadata")
+	require.Contains(t, f.patterns, statestore.InstanceKeyPattern("default", "order", "stuck"),
+		"empty target namespace must fall back to the remover's store namespace")
+}
+
 func TestRemoverUsesBaseURL(t *testing.T) {
 	var gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

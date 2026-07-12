@@ -21,6 +21,10 @@ type RemoveTarget struct {
 	// http://127.0.0.1:<HTTPPort> for the terminate/purge calls.
 	DaprHTTPBaseURL string
 	Healthy         bool
+	// Namespace, when non-empty (aspire per-app DEVDASHBOARD_APP_<i>_NAMESPACE),
+	// scopes the force-delete state-key pattern to the app's own namespace.
+	// Empty (host-scanned apps) falls back to the remover's store namespace.
+	Namespace string
 }
 
 type RemoveResult struct {
@@ -120,7 +124,11 @@ func (r *Remover) forceDelete(ctx context.Context, t RemoveTarget) error {
 		slog.Default().With("component", "workflow").Warn("force delete unavailable", "app", t.AppID, "instance", t.InstanceID)
 		return fmt.Errorf("force delete unavailable: no state store")
 	}
-	keys, _, err := r.store.Keys(ctx, statestore.InstanceKeyPattern(r.namespace, t.AppID, t.InstanceID), "", 0)
+	ns := r.namespace
+	if t.Namespace != "" {
+		ns = t.Namespace
+	}
+	keys, _, err := r.store.Keys(ctx, statestore.InstanceKeyPattern(ns, t.AppID, t.InstanceID), "", 0)
 	if err != nil {
 		return err
 	}

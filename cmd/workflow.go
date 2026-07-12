@@ -165,12 +165,14 @@ func (r *targetResolver) Resolve(ctx context.Context, appID, instanceID string) 
 	var httpPort int
 	var daprBase string
 	var healthy bool
+	var namespace string
 
 	inst, err := r.apps.Get(ctx, appID)
 	if err == nil {
 		httpPort = inst.HTTPPort
 		daprBase = inst.DaprHTTPBaseURL
 		healthy = inst.Health == discovery.HealthHealthy
+		namespace = inst.Namespace // "" for host-scanned apps → global namespace
 	}
 	// If apps.Get failed, continue with httpPort=0, healthy=false (force path only).
 
@@ -186,6 +188,7 @@ func (r *targetResolver) Resolve(ctx context.Context, appID, instanceID string) 
 		HTTPPort:        httpPort,
 		DaprHTTPBaseURL: daprBase,
 		Healthy:         healthy,
+		Namespace:       namespace,
 	}, nil
 }
 
@@ -200,7 +203,17 @@ type storeEntry struct {
 // resolver for an already-opened state store. It is the construction the old
 // newStoreBackend did inline; the connpool reuses it for each opened identity.
 func buildStoreEntry(st statestore.Store, namespace string, client *http.Client, apps discovery.Service) storeEntry {
-	svc := workflow.New(st, namespace)
+	// App-scoped workflow reads (Get/history and app-filtered List/Stats) honor
+	// the app's per-app namespace (aspire DEVDASHBOARD_APP_<i>_NAMESPACE); an
+	// unknown app or empty namespace falls back to the store namespace.
+	nsResolver := func(ctx context.Context, appID string) string {
+		inst, err := apps.Get(ctx, appID)
+		if err != nil {
+			return ""
+		}
+		return inst.Namespace
+	}
+	svc := workflow.New(st, namespace, workflow.WithNamespaceResolver(nsResolver))
 	rem := workflow.NewRemover(client, st, namespace)
 	res := newTargetResolver(apps, svc)
 	return storeEntry{svc: svc, rem: rem, targets: res}

@@ -51,13 +51,46 @@ type Service interface {
 type service struct {
 	store     statestore.Store
 	namespace string
+	// nsResolver, when set, maps an app-id to its per-app namespace (aspire
+	// DEVDASHBOARD_APP_<i>_NAMESPACE). It returns "" when the app has no
+	// per-app namespace, in which case the store namespace is used. It is only
+	// consulted for app-scoped operations (Get/history and app-filtered
+	// List/Stats); the store-wide scans (all-apps List/Stats, AppIDs) always
+	// use the store namespace.
+	nsResolver func(ctx context.Context, appID string) string
 }
 
-func New(store statestore.Store, namespace string) Service {
+// Option customizes a workflow Service.
+type Option func(*service)
+
+// WithNamespaceResolver injects a per-app namespace lookup used by app-scoped
+// operations. fn returns "" to fall back to the store namespace.
+func WithNamespaceResolver(fn func(ctx context.Context, appID string) string) Option {
+	return func(s *service) { s.nsResolver = fn }
+}
+
+func New(store statestore.Store, namespace string, opts ...Option) Service {
 	if namespace == "" {
 		namespace = "default"
 	}
-	return &service{store: store, namespace: namespace}
+	s := &service{store: store, namespace: namespace}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
+}
+
+// effectiveNS returns the namespace to use for an app-scoped operation: the
+// app's per-app namespace when a resolver is set and returns non-empty for a
+// specific app-id, otherwise the store namespace. An empty appID (all-apps
+// scan) always uses the store namespace.
+func (s *service) effectiveNS(ctx context.Context, appID string) string {
+	if appID != "" && s.nsResolver != nil {
+		if ns := s.nsResolver(ctx, appID); ns != "" {
+			return ns
+		}
+	}
+	return s.namespace
 }
 
 // unreachableService is a workflow.Service for a known state store whose
@@ -96,11 +129,12 @@ func (u unreachableService) AppIDs(context.Context) ([]string, error) {
 }
 
 // metaKeys returns instance-metadata keys: scoped to one app when appID != "",
-// otherwise across every app-id in the namespace.
-func (s *service) metaKeys(ctx context.Context, appID, token string, pageSize int) ([]string, string, error) {
-	pattern := statestore.AllInstanceMetaPattern(s.namespace)
+// otherwise across every app-id in the namespace. ns is the namespace to scan
+// (the per-app namespace for an app-scoped query, else the store namespace).
+func (s *service) metaKeys(ctx context.Context, ns, appID, token string, pageSize int) ([]string, string, error) {
+	pattern := statestore.AllInstanceMetaPattern(ns)
 	if appID != "" {
-		pattern = statestore.InstanceMetaPattern(s.namespace, appID)
+		pattern = statestore.InstanceMetaPattern(ns, appID)
 	}
 	return s.store.Keys(ctx, pattern, token, pageSize)
 }
@@ -123,6 +157,10 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	if pageSize <= 0 {
 		pageSize = defaultPageSize
 	}
+	// For an app-filtered query, honor the app's per-app namespace for both the
+	// key scan and the per-instance load. The all-apps scan (AppID == "") uses
+	// the store namespace.
+	ns := s.effectiveNS(ctx, q.AppID)
 
 	// Any predicate that can reject an instance makes a key-page under-fill.
 	filtered := len(q.Status) > 0 || q.Search != "" || !q.IncludeChildren
@@ -137,7 +175,7 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	next := ""
 	scanned := 0
 	for {
-		metaKeys, n, err := s.metaKeys(ctx, q.AppID, token, pageSize)
+		metaKeys, n, err := s.metaKeys(ctx, ns, q.AppID, token, pageSize)
 		if err != nil {
 			return ListResult{}, err
 		}
@@ -157,7 +195,7 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 				continue
 			}
 			seen[dedupKey] = struct{}{}
-			ex, err := s.load(ctx, appID, id)
+			ex, err := s.load(ctx, ns, appID, id)
 			if err != nil {
 				continue
 			}
@@ -195,8 +233,9 @@ func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 	searchQ := ListQuery{Search: q.Search, IncludeChildren: q.IncludeChildren}
 	res := StatsResult{Counts: map[Status]int{}}
 	seen := make(map[string]struct{})
+	ns := s.effectiveNS(ctx, q.AppID)
 
-	metaKeys, _, err := s.metaKeys(ctx, q.AppID, "", 0)
+	metaKeys, _, err := s.metaKeys(ctx, ns, q.AppID, "", 0)
 	if err != nil {
 		return StatsResult{}, err
 	}
@@ -214,7 +253,7 @@ func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 			continue
 		}
 		seen[dedupKey] = struct{}{}
-		ex, err := s.load(ctx, appID, id)
+		ex, err := s.load(ctx, ns, appID, id)
 		if err != nil {
 			continue
 		}
@@ -260,7 +299,7 @@ func (s *service) Get(ctx context.Context, appID, instanceID string) (Execution,
 	if s.store == nil {
 		return Execution{}, ErrNoStore
 	}
-	ex, err := s.load(ctx, appID, instanceID)
+	ex, err := s.load(ctx, s.effectiveNS(ctx, appID), appID, instanceID)
 	if err != nil {
 		return Execution{}, err
 	}
@@ -270,9 +309,10 @@ func (s *service) Get(ctx context.Context, appID, instanceID string) (Execution,
 	return ex, nil
 }
 
-// load reads an instance's history-* and customStatus keys and decodes them.
-func (s *service) load(ctx context.Context, appID, instanceID string) (Execution, error) {
-	keys, _, err := s.store.Keys(ctx, statestore.InstanceKeyPattern(s.namespace, appID, instanceID), "", 0)
+// load reads an instance's history-* and customStatus keys and decodes them
+// under the given namespace.
+func (s *service) load(ctx context.Context, ns, appID, instanceID string) (Execution, error) {
+	keys, _, err := s.store.Keys(ctx, statestore.InstanceKeyPattern(ns, appID, instanceID), "", 0)
 	if err != nil {
 		return Execution{}, err
 	}
@@ -283,7 +323,7 @@ func (s *service) load(ctx context.Context, appID, instanceID string) (Execution
 	if err != nil {
 		return Execution{}, err
 	}
-	prefix := statestore.InstancePrefix(s.namespace, appID, instanceID)
+	prefix := statestore.InstancePrefix(ns, appID, instanceID)
 	var history []*protos.HistoryEvent
 	var historyKeys []string
 	customStatus := ""
