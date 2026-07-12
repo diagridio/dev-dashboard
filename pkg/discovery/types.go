@@ -39,16 +39,21 @@ type Instance struct {
 	DaprHTTPBaseURL string `json:"daprHttpBaseUrl,omitempty"`
 	Namespace       string `json:"namespace,omitempty"`
 	Label           string `json:"label,omitempty"`
-	HTTPPort        int    `json:"httpPort"`
-	GRPCPort        int    `json:"grpcPort"`
-	AppPort         int    `json:"appPort"`
-	DaprdPID        int    `json:"daprdPid"`
-	AppPID          int    `json:"appPid"` // 0 = unknown
-	CLIPID          int    `json:"cliPid"`
-	AppStatus       string `json:"appStatus,omitempty"`      // "running" | "stopped"; "" unknown
-	DaprdStatus     string `json:"daprdStatus,omitempty"`    // "running" | "stopped"; "" unknown
-	AppStartedAt    string `json:"appStartedAt,omitempty"`   // RFC3339 UTC; "" when stopped/unknown
-	DaprdStartedAt  string `json:"daprdStartedAt,omitempty"` // RFC3339 UTC; "" when stopped/unknown
+
+	// TestcontainersSession groups one Testcontainers run's containers
+	// (org.testcontainers.sessionId label; "" for other sources).
+	TestcontainersSession string `json:"testcontainersSession,omitempty"`
+
+	HTTPPort       int    `json:"httpPort"`
+	GRPCPort       int    `json:"grpcPort"`
+	AppPort        int    `json:"appPort"`
+	DaprdPID       int    `json:"daprdPid"`
+	AppPID         int    `json:"appPid"` // 0 = unknown
+	CLIPID         int    `json:"cliPid"`
+	AppStatus      string `json:"appStatus,omitempty"`      // "running" | "stopped"; "" unknown
+	DaprdStatus    string `json:"daprdStatus,omitempty"`    // "running" | "stopped"; "" unknown
+	AppStartedAt   string `json:"appStartedAt,omitempty"`   // RFC3339 UTC; "" when stopped/unknown
+	DaprdStartedAt string `json:"daprdStartedAt,omitempty"` // RFC3339 UTC; "" when stopped/unknown
 	// SidecarOrphaned marks a standalone daprd with no supervising dapr CLI
 	// and no live app (e.g. an external stop missed a detached sidecar).
 	SidecarOrphaned bool           `json:"sidecarOrphaned,omitempty"`

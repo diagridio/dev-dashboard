@@ -19,6 +19,9 @@ const (
 	// SourceAspire marks apps injected via the DEVDASHBOARD_APP_* env
 	// contract (aspire mode, or mode-unset with the contract present).
 	SourceAspire = "aspire"
+	// SourceTestcontainers marks daprd sidecars run by Testcontainers
+	// (org.testcontainers=true label), e.g. dapr-spring-boot-starter-test.
+	SourceTestcontainers = "testcontainers"
 )
 
 func logger() *slog.Logger { return slog.Default().With("component", "discovery") }
@@ -63,6 +66,10 @@ type ScanResult struct {
 	Namespace string
 	Label     string
 
+	// TestcontainersSession groups one Testcontainers run's containers
+	// (org.testcontainers.sessionId label; "" for other sources).
+	TestcontainersSession string
+
 	// Per-target lifecycle status ("" = unknown; compose scanner and standalone enrichment set these).
 	AppStatus      string
 	DaprdStatus    string
@@ -83,6 +90,9 @@ func (r ScanResult) Key() string {
 		if r.DaprdContainerName != "" {
 			return r.DaprdContainerName
 		}
+	}
+	if r.Source == SourceTestcontainers && r.DaprdContainerName != "" {
+		return r.DaprdContainerName
 	}
 	return r.AppID
 }
@@ -192,6 +202,7 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		SidecarReachable: r.SidecarReachable,
 		AppStatus:        r.AppStatus, DaprdStatus: r.DaprdStatus,
 		DaprHTTPBaseURL: r.DaprHTTPBaseURL, Namespace: r.Namespace, Label: r.Label,
+		TestcontainersSession: r.TestcontainersSession,
 	}
 	// A zero Created (e.g. a compose container created but never started)
 	// would otherwise render as "00:00:00".

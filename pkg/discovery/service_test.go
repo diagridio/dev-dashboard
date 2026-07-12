@@ -340,6 +340,17 @@ func TestScanResultKey(t *testing.T) {
 	})
 }
 
+func TestScanResultKey_Testcontainers(t *testing.T) {
+	r := ScanResult{AppID: "workflow-patterns-app", Source: SourceTestcontainers, DaprdContainerName: "crazy_lamport"}
+	if got := r.Key(); got != "crazy_lamport" {
+		t.Fatalf("expected container-name key, got %q", got)
+	}
+	r.DaprdContainerName = ""
+	if got := r.Key(); got != "workflow-patterns-app" {
+		t.Fatalf("expected app-id fallback, got %q", got)
+	}
+}
+
 func TestListSetsInstanceKeyAndSortsWithinAppID(t *testing.T) {
 	scan := func() ([]ScanResult, error) {
 		return []ScanResult{
