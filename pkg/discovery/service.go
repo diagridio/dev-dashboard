@@ -241,6 +241,25 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 			in.Runtime = InferRuntimeFromImage(r.AppImage)
 		}
 	}
+	if in.Source == SourceTestcontainers {
+		// The app is a host process reached via host.testcontainers.internal:
+		// probe the app port for liveness and infer the runtime from its
+		// listener's command (metadata carries no app command here).
+		if in.AppPort != 0 && s.portOpen != nil {
+			if s.portOpen(in.AppPort) {
+				in.AppStatus = StatusRunning
+			} else {
+				in.AppStatus = StatusStopped
+			}
+		}
+		if in.Runtime == "unknown" && s.appProc != nil && in.AppPort != 0 {
+			if cmd, ok := s.appProc.CommandForPort(in.AppPort); ok {
+				if rt := InferRuntime(cmd); rt != "unknown" {
+					in.Runtime = rt
+				}
+			}
+		}
+	}
 	// An unreachable sidecar (compose, HTTP port unpublished) cannot answer
 	// health or metadata — skip both probes instead of burning their timeouts.
 	if !in.SidecarReachable {
@@ -296,6 +315,15 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	if in.Source == SourceAspire {
 		// Env-contract apps are containers/executables managed by Aspire:
 		// host PIDs, stdout files, and orphan semantics don't apply.
+		if md.RunTemplate != "" {
+			in.RunTemplate = md.RunTemplate
+		}
+		return in
+	}
+	if in.Source == SourceTestcontainers {
+		// Container sidecar + host app: metadata Extended PIDs/log paths
+		// describe the container's own view; daprd logs stream from the
+		// container runtime, and the app's stdout belongs to the test process.
 		if md.RunTemplate != "" {
 			in.RunTemplate = md.RunTemplate
 		}
