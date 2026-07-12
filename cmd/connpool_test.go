@@ -58,7 +58,7 @@ func compB() statestore.Component {
 
 func TestConnPool_OpensOnceAndCaches(t *testing.T) {
 	o := &poolOpener{}
-	p := newConnPool("default", &http.Client{}, nil, o.open)
+	p := newConnPool("default", &http.Client{}, nil, o.open, nil)
 
 	e1, err := p.openOrGet(context.Background(), compA())
 	require.NoError(t, err)
@@ -73,7 +73,7 @@ func TestConnPool_OpensOnceAndCaches(t *testing.T) {
 
 func TestConnPool_OpenError_NotCached(t *testing.T) {
 	o := &poolOpener{err: errors.New("connect failed")}
-	p := newConnPool("default", &http.Client{}, nil, o.open)
+	p := newConnPool("default", &http.Client{}, nil, o.open, nil)
 
 	_, err := p.openOrGet(context.Background(), compA())
 	require.Error(t, err)
@@ -84,7 +84,7 @@ func TestConnPool_OpenError_NotCached(t *testing.T) {
 
 func TestConnPool_SingleFlight(t *testing.T) {
 	o := &poolOpener{block: make(chan struct{})}
-	p := newConnPool("default", &http.Client{}, nil, o.open)
+	p := newConnPool("default", &http.Client{}, nil, o.open, nil)
 
 	const n = 8
 	var wg sync.WaitGroup
@@ -106,7 +106,7 @@ func TestConnPool_SingleFlight(t *testing.T) {
 
 func TestConnPool_CloseClosesAll(t *testing.T) {
 	o := &poolOpener{}
-	p := newConnPool("default", &http.Client{}, nil, o.open)
+	p := newConnPool("default", &http.Client{}, nil, o.open, nil)
 
 	_, err := p.openOrGet(context.Background(), compA())
 	require.NoError(t, err)
@@ -120,7 +120,7 @@ func TestConnPool_CloseClosesAll(t *testing.T) {
 
 func TestConnPool_TwoIdentitiesBothRetained(t *testing.T) {
 	o := &poolOpener{}
-	p := newConnPool("default", &http.Client{}, nil, o.open)
+	p := newConnPool("default", &http.Client{}, nil, o.open, nil)
 
 	_, err := p.openOrGet(context.Background(), compA())
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestConnPool_TwoIdentitiesBothRetained(t *testing.T) {
 func TestConnPool_EvictDuringOpenClosesStore(t *testing.T) {
 	block := make(chan struct{})
 	o := &poolOpener{block: block}
-	p := newConnPool("default", &http.Client{}, nil, o.open)
+	p := newConnPool("default", &http.Client{}, nil, o.open, nil)
 
 	comp := compA()
 	var openErr error
@@ -188,7 +188,7 @@ func TestConnPool_EvictDuringOpenClosesStore(t *testing.T) {
 	// The pool must have no cached entry for compA.
 	// A subsequent openOrGet should open a brand-new connection (opens count goes to 2).
 	o2 := &poolOpener{}
-	p2 := newConnPool("default", &http.Client{}, nil, o2.open)
+	p2 := newConnPool("default", &http.Client{}, nil, o2.open, nil)
 	_, err := p2.openOrGet(context.Background(), comp)
 	require.NoError(t, err) // sanity: a fresh pool works normally
 }
@@ -216,7 +216,7 @@ func TestConnPool_EvictDuringStoreAssignment_NoLeakNoRace(t *testing.T) {
 			close(returning) // signal "opener about to return"; the store write happens after this
 			return st, err
 		}
-		p := newConnPool("default", &http.Client{}, nil, open)
+		p := newConnPool("default", &http.Client{}, nil, open, nil)
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -259,7 +259,7 @@ func TestConnPool_CloseJoinsAllErrors(t *testing.T) {
 		}
 		return failingCloseStore{poolStore: poolStore{closes: &closes}, closeErr: e}, nil
 	}
-	p := newConnPool("default", &http.Client{}, nil, open)
+	p := newConnPool("default", &http.Client{}, nil, open, nil)
 
 	_, err := p.openOrGet(context.Background(), compA())
 	require.NoError(t, err)
@@ -276,7 +276,7 @@ func TestConnPool_CloseJoinsAllErrors(t *testing.T) {
 // connection is opened and openOrGet returns an error.
 func TestConnPool_OpenOrGetAfterCloseErrors(t *testing.T) {
 	o := &poolOpener{}
-	p := newConnPool("default", &http.Client{}, nil, o.open)
+	p := newConnPool("default", &http.Client{}, nil, o.open, nil)
 
 	require.NoError(t, p.Close())
 

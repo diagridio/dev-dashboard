@@ -28,6 +28,10 @@ type connPool struct {
 	client    *http.Client
 	apps      discovery.Service
 	open      storeOpener
+	// appNS is the static appID→namespace map from the aspire env contract
+	// (nil in host mode); passed through to each built store entry so workflow
+	// reads resolve per-app namespaces without discovery probes.
+	appNS map[string]string
 
 	mu     sync.Mutex
 	slots  map[string]*poolSlot
@@ -35,7 +39,7 @@ type connPool struct {
 }
 
 // newConnPool builds a connPool. open == nil defaults to statestore.New.
-func newConnPool(namespace string, client *http.Client, apps discovery.Service, open storeOpener) *connPool {
+func newConnPool(namespace string, client *http.Client, apps discovery.Service, open storeOpener, appNS map[string]string) *connPool {
 	if open == nil {
 		open = statestore.New
 	}
@@ -44,6 +48,7 @@ func newConnPool(namespace string, client *http.Client, apps discovery.Service, 
 		client:    client,
 		apps:      apps,
 		open:      open,
+		appNS:     appNS,
 		slots:     make(map[string]*poolSlot),
 	}
 }
@@ -101,7 +106,7 @@ func (p *connPool) openOrGet(ctx context.Context, c statestore.Component) (store
 	}
 
 	slot.store = st
-	slot.entry = buildStoreEntry(st, p.namespace, p.client, p.apps)
+	slot.entry = buildStoreEntry(st, p.namespace, p.client, p.apps, p.appNS)
 	close(slot.done)
 	return slot.entry, nil
 }

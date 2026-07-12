@@ -62,6 +62,11 @@ type serveDeps struct {
 	// QuietRegistry suppresses the "no home directory" registry-persistence
 	// warning when persistence is deliberately disabled (aspire mode).
 	QuietRegistry bool
+	// AppNamespaces is the static appID→namespace map parsed once from the
+	// aspire DEVDASHBOARD_APP_* env contract; nil when the contract is absent.
+	// Workflow reads resolve per-app namespaces from it by map lookup, never
+	// via discovery enrichment (sidecar probes).
+	AppNamespaces map[string]string
 }
 
 // containerLogStream adapts a runtime Runner into the log-stream dependency.
@@ -91,7 +96,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	} else if !deps.QuietRegistry {
 		slog.Default().With("component", "registry").Warn("no home directory; connection registry persistence disabled")
 	}
-	pool := newConnPool(deps.Namespace, deps.HTTPClient, appsSvc, nil)
+	pool := newConnPool(deps.Namespace, deps.HTTPClient, appsSvc, nil, deps.AppNamespaces)
 
 	// Build the reconciler that owns all apps-derived state (resource paths,
 	// detected state stores, active-store election) plus the registry and pool.

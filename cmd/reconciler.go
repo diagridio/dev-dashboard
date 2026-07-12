@@ -80,7 +80,9 @@ func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeD
 		pool:           pool,
 		composeEnv:     composeEnv,
 		extraResPaths:  extraResPaths,
-		degraded:       buildStoreEntry(nil, namespace, client, apps),
+		// The degraded entry has a nil store: every operation fails with
+		// ErrNoStore before any key/namespace resolution, so no appNS map.
+		degraded: buildStoreEntry(nil, namespace, client, apps, nil),
 	}
 }
 

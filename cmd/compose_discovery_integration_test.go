@@ -128,7 +128,7 @@ spec:
 	})
 	apps := discovery.New(src.Scanner(), httpClientNoDial()) // enrichment fails fast; scan data suffices
 
-	pool := newConnPool("default", nil, apps, nil)
+	pool := newConnPool("default", nil, apps, nil, nil)
 	registry := LoadRegistry(t.TempDir())
 	rc := newReconciler(context.Background(), apps, "default", "", "", nil, registry, pool, src.Env, nil)
 	defer rc.Close()

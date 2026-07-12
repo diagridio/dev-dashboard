@@ -130,6 +130,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		containerLogs func(context.Context, string) (<-chan string, error)
 		updateCheck   updatecheck.Service
 		caps          *server.Capabilities
+		appNS         map[string]string
 	)
 	switch mode {
 	case ModeAspire:
@@ -137,6 +138,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		if err != nil {
 			return err
 		}
+		appNS = contractNamespaces(scan)
 		appsSvc = discovery.New(scan, client)
 		caps = &server.Capabilities{Workflows: settings.StateStore != ""}
 	default:
@@ -148,6 +150,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 			if err != nil {
 				return err
 			}
+			appNS = contractNamespaces(as)
 			scanners = append(scanners, as)
 		}
 		lifeReg := lifecycle.NewRegistry()
@@ -179,6 +182,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		Capabilities:     caps,
 		ResourcesPaths:   settings.ResourcesPaths,
 		QuietRegistry:    mode == ModeAspire,
+		AppNamespaces:    appNS,
 	}, dist)
 	for _, close := range closers {
 		close := close
