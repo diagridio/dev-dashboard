@@ -128,6 +128,7 @@ present-but-malformed contract still fails fast.
 | `DEVDASHBOARD_STATESTORE_FILE` / `--statestore` | unset | unset | path to a mounted Dapr state-store component YAML; enables workflows |
 | `DEVDASHBOARD_NAMESPACE` / `--namespace` | `default` | `default` | default Dapr namespace for workflow actor keys |
 | `DEVDASHBOARD_RESOURCES_PATH` (new) | dir of `DEVDASHBOARD_STATESTORE_FILE` | n/a | extra component directories for the Resources page, `os.PathListSeparator`-separated |
+| `DEVDASHBOARD_ALLOWED_HOSTS` (new) | unset (any host) | n/a | optional, env-only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed); empty means any host |
 | `--base-path` | unset | unset | flag only, unchanged (Aspire proxies to root; no env alias needed) |
 | `DEVDASHBOARD_TELEMETRY_OPTOUT` | unchanged | unchanged | existing telemetry opt-out |
 
@@ -196,6 +197,14 @@ through Aspire's proxy on an arbitrary host, so:
 - The mutating-request rule becomes **same-origin**: when an `Origin` header
   is present, its host must equal the request `Host`. CSRF protection stays;
   the loopback assumption goes.
+
+When `DEVDASHBOARD_ALLOWED_HOSTS` is set, the dropped loopback `Host` check is
+replaced by an allowlist — the `Host` header must be a loopback name or one of
+the listed hostnames (case-insensitive, port ignored), closing the DNS-rebinding
+hole a published localhost port would otherwise leave open. The same-origin rule
+is normalized: hostnames compare case-insensitively and ports compare by
+effective value (explicit port, else 443 for https / 80 for http on the Origin,
+else the listen port for a portless `Host`).
 
 All non-aspire modes keep both checks exactly as today.
 

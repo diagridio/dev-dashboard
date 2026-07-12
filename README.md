@@ -109,9 +109,13 @@ Validation is fail-fast at startup: a missing or non-numeric `DEVDASHBOARD_APP_C
 missing required per-app var, or an unparsable `DAPR_HTTP` URL exits with an error naming the
 exact variable.
 
-**Security note:** in aspire mode the dashboard accepts any `Host` header (same-origin CSRF
-protection on mutating requests still applies). This is intended for local development behind
-Aspire's proxy — do not publish the container's port beyond the developer's own machine/network.
+**Security note:** in aspire mode the dashboard drops the loopback `Host` check (the container
+is addressed by its Docker-network name or a published port). Without `DEVDASHBOARD_ALLOWED_HOSTS`
+it accepts any `Host`, which means a malicious web page using DNS rebinding can reach the API even
+when the port is published only to `localhost`. Setting `DEVDASHBOARD_ALLOWED_HOSTS` to the
+hostnames the dashboard is served under closes that hole (loopback names are always allowed).
+Mutating requests are still protected by a normalized same-origin check. The dashboard is a local
+development tool — never expose it publicly.
 
 **Serving and features:**
 
@@ -122,6 +126,7 @@ Aspire's proxy — do not publish the container's port beyond the developer's ow
 | `DEVDASHBOARD_STATESTORE_FILE` / `--statestore` | unset | path to a mounted Dapr state-store component YAML; enables the Workflows page |
 | `DEVDASHBOARD_NAMESPACE` / `--namespace` | `default` | default Dapr namespace for workflow actor keys |
 | `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra component directories for the Resources page, `os.PathListSeparator`-separated |
+| `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, aspire mode only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
 | `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
 
 Precedence everywhere is **flag > env > mode default**.
