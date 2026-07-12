@@ -118,6 +118,8 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
   const unreachable = app.source === 'compose' && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
   const key = appKey(app)
   const hasContainerName = key !== app.appId
+  const hasLabel = !hasContainerName && !!app.label && app.label !== app.appId
+  const secondary = hasContainerName ? key : hasLabel ? app.label : null
   return (
     <tr onClick={onOpen}>
       <td>
@@ -131,11 +133,11 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       </td>
       <td className="b">
         <Link className="celllink" to={`/apps/${key}`} onClick={(e) => e.stopPropagation()}>
-          {hasContainerName ? (
+          {secondary ? (
             <>
               {app.appId}
               <span className="muted" style={{ display: 'block', fontSize: 11, fontWeight: 400 }}>
-                {key}
+                {secondary}
               </span>
             </>
           ) : (

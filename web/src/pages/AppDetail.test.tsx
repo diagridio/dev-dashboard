@@ -318,6 +318,28 @@ describe('AppDetail', () => {
     )
   })
 
+  it('shows the aspire label under the header when it differs from the app id', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, isAspire: true, label: 'Order Service' }),
+      ),
+    )
+    const { container } = renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(container.querySelector('.phead .sub')).toHaveTextContent('Order Service')
+  })
+
+  it('does not show a label sub-line when it equals the app id or is absent', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, isAspire: true, label: 'order' }),
+      ),
+    )
+    const { container } = renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(container.querySelector('.phead .sub')).toBeNull()
+  })
+
   it('shows per-target status and ticking uptime', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-07-09T10:05:00Z'))

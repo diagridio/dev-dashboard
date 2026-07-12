@@ -28,6 +28,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
   const key = appKey(app)
   const hasContainerName = key !== app.appId
+  const hasLabel = !hasContainerName && !!app.label && app.label !== app.appId
 
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
   const isCompose = app.source === 'compose'
@@ -149,7 +150,11 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               {app.runtime}
             </span>
           </div>
-          {hasContainerName && <div className="sub mono">{key}</div>}
+          {hasContainerName ? (
+            <div className="sub mono">{key}</div>
+          ) : (
+            hasLabel && <div className="sub mono">{app.label}</div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {caps.lifecycle && anyRunning && (

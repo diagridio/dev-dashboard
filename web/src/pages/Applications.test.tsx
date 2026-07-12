@@ -177,6 +177,26 @@ describe('Applications', () => {
     expect(link).toHaveAttribute('href', '/apps/order')
   })
 
+  it('shows the aspire label as muted secondary text when it differs from the app id', async () => {
+    mockApps([{ ...baseApp, appId: 'order', isAspire: true, label: 'Order Service' }])
+    renderAt()
+    const link = await screen.findByRole('link', { name: /order/ })
+    expect(link.textContent!.startsWith('order')).toBe(true)
+    expect(link.querySelector('.muted')).toHaveTextContent('Order Service')
+  })
+
+  it('does not duplicate the app id when the aspire label equals it or is absent', async () => {
+    mockApps([
+      { ...baseApp, appId: 'order', isAspire: true, label: 'order' },
+      { ...baseApp, appId: 'shipping', isAspire: true },
+    ])
+    renderAt()
+    const orderLink = await screen.findByRole('link', { name: 'order' })
+    expect(orderLink.querySelector('.muted')).toBeNull()
+    const shippingLink = screen.getByRole('link', { name: 'shipping' })
+    expect(shippingLink.querySelector('.muted')).toBeNull()
+  })
+
   it('renders stopped instances distinctly and excludes them from the running count', async () => {
     mockApps([
       { ...baseApp, appId: 'live', appStatus: 'running', daprdStatus: 'running' },

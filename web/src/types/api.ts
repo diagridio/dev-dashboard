@@ -16,6 +16,10 @@ export interface AppSummary {
   runtime: string
   /** true when the app is .NET Aspire-managed (started by the Aspire host, not a run template) */
   isAspire?: boolean
+  /** display name from the Aspire AppHost; defaults to appId, so it may be identical (Aspire apps only) */
+  label?: string
+  /** per-app Dapr namespace assigned by the Aspire AppHost (Aspire apps only) */
+  namespace?: string
   /** discovery source: process table vs docker compose containers */
   source?: 'standalone' | 'compose'
   /** compose project name (source === 'compose' only) */

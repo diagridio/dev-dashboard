@@ -103,7 +103,7 @@ docker run --rm -p 8080:8080 \
 | `DEVDASHBOARD_APP_<i>_ID` | yes | Dapr app-id |
 | `DEVDASHBOARD_APP_<i>_DAPR_HTTP` | yes | daprd HTTP base URL, reachable **from the dashboard container** (e.g. `http://myapp-dapr:3500`) |
 | `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Used for **app-scoped** workflow operations — fetching one instance's history, an app-filtered workflow list/stats, and force delete — so those honor the app's own namespace. The store-wide workflow list, stats, and app-id dropdown (all-apps scans) still use the global `DEVDASHBOARD_NAMESPACE` |
-| `DEVDASHBOARD_APP_<i>_LABEL` | no | display name; defaults to the app-id. Accepted and exposed in the API; currently informational — UI display of labels is planned |
+| `DEVDASHBOARD_APP_<i>_LABEL` | no | display name; defaults to the app-id. Shown in the applications list and app detail header whenever it differs from the app-id |
 
 Validation is fail-fast at startup: a missing or non-numeric `DEVDASHBOARD_APP_COUNT`, any
 missing required per-app var, or an unparsable `DAPR_HTTP` URL exits with an error naming the
