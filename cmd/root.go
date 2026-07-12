@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -61,7 +63,7 @@ func NewRootCmd() *cobra.Command {
 	}
 	c.SetVersionTemplate(fmt.Sprintf("dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
-	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (aspire mode defaults to 0.0.0.0)")
+	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (aspire mode defaults to 0.0.0.0); binding a non-loopback address without aspire mode leaves the loopback Host guard in place, which rejects remote clients")
 	c.Flags().StringVar(&modeFlag, "mode", "", `serving/discovery mode: "aspire", or unset for the complete scan`)
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")
@@ -93,7 +95,10 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		logger.Error("component metadata bundle failed to load", "err", err)
 		return fmt.Errorf("init component metadata: %w", err)
 	}
-	addr := fmt.Sprintf("%s:%d", settings.Bind, settings.Port)
+	addr := listenAddr(settings.Bind, settings.Port)
+	if mode == ModeDefault && !isLoopbackBind(settings.Bind) {
+		logger.Warn("binding a non-loopback address without aspire mode; the loopback Host guard will reject remote clients (set --mode aspire for container serving posture)", "bind", settings.Bind)
+	}
 	urlPath := ""
 	if trimmed := trimSlash(basePath); trimmed != "" {
 		urlPath = "/" + trimmed
@@ -224,6 +229,22 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 // getenv) — restart the dashboard for a changed value to take effect.
 func telemetryEnabled(getenv func(string) string) bool {
 	return !strings.EqualFold(getenv("DEVDASHBOARD_TELEMETRY_OPTOUT"), "true")
+}
+
+// listenAddr joins a bind address and port into a listen address, correctly
+// bracketing IPv6 literals (e.g. "::" -> "[::]:8080").
+func listenAddr(bind string, port int) string {
+	return net.JoinHostPort(bind, strconv.Itoa(port))
+}
+
+// isLoopbackBind reports whether a bind address is a loopback address the
+// dashboard's loopback Host guard is designed for.
+func isLoopbackBind(bind string) bool {
+	switch bind {
+	case "127.0.0.1", "localhost", "::1":
+		return true
+	}
+	return false
 }
 
 func trimSlash(s string) string {

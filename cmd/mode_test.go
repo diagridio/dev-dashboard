@@ -46,6 +46,23 @@ func TestResolveMode(t *testing.T) {
 	}
 }
 
+func TestListenAddr(t *testing.T) {
+	tests := []struct {
+		bind string
+		port int
+		want string
+	}{
+		{"127.0.0.1", 9090, "127.0.0.1:9090"},
+		{"::", 8080, "[::]:8080"},
+		{"0.0.0.0", 8080, "0.0.0.0:8080"},
+	}
+	for _, tc := range tests {
+		if got := listenAddr(tc.bind, tc.port); got != tc.want {
+			t.Fatalf("listenAddr(%q,%d)=%q want %q", tc.bind, tc.port, got, tc.want)
+		}
+	}
+}
+
 func TestResolveServeSettings(t *testing.T) {
 	noneChanged := func(string) bool { return false }
 	tests := []struct {
