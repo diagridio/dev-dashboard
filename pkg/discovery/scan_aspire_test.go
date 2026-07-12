@@ -117,3 +117,53 @@ func TestNewAspireScannerErrorsNameTheVariable(t *testing.T) {
 		})
 	}
 }
+
+func TestNewAspireScannerCountCap(t *testing.T) {
+	_, err := NewAspireScanner(envFunc(map[string]string{"DEVDASHBOARD_APP_COUNT": "1025"}))
+	if err == nil {
+		t.Fatal("want error for count over cap")
+	}
+	if !strings.Contains(err.Error(), "DEVDASHBOARD_APP_COUNT") || !strings.Contains(err.Error(), "1024") {
+		t.Fatalf("error %q must name the variable and the cap 1024", err)
+	}
+}
+
+func TestNewAspireScannerDuplicateID(t *testing.T) {
+	_, err := NewAspireScanner(envFunc(map[string]string{
+		"DEVDASHBOARD_APP_COUNT":       "3",
+		"DEVDASHBOARD_APP_0_ID":        "orders",
+		"DEVDASHBOARD_APP_0_DAPR_HTTP": "http://a:3500",
+		"DEVDASHBOARD_APP_1_ID":        "payments",
+		"DEVDASHBOARD_APP_1_DAPR_HTTP": "http://b:3500",
+		"DEVDASHBOARD_APP_2_ID":        "orders",
+		"DEVDASHBOARD_APP_2_DAPR_HTTP": "http://c:3500",
+	}))
+	if err == nil {
+		t.Fatal("want error for duplicate app id")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "DEVDASHBOARD_APP_2_ID") || !strings.Contains(msg, "DEVDASHBOARD_APP_0_ID") {
+		t.Fatalf("error %q must name both DEVDASHBOARD_APP_2_ID and DEVDASHBOARD_APP_0_ID", err)
+	}
+	if !strings.Contains(msg, "orders") {
+		t.Fatalf("error %q must name the duplicate id", err)
+	}
+}
+
+func TestNewAspireScannerReportsAllErrors(t *testing.T) {
+	// Index 0: missing ID (valid URL). Index 1: valid ID, bad URL. Both
+	// variables must appear in the joined error.
+	_, err := NewAspireScanner(envFunc(map[string]string{
+		"DEVDASHBOARD_APP_COUNT":       "2",
+		"DEVDASHBOARD_APP_0_DAPR_HTTP": "http://a:3500",
+		"DEVDASHBOARD_APP_1_ID":        "b",
+		"DEVDASHBOARD_APP_1_DAPR_HTTP": "ftp://b:3500",
+	}))
+	if err == nil {
+		t.Fatal("want error")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "DEVDASHBOARD_APP_0_ID") || !strings.Contains(msg, "DEVDASHBOARD_APP_1_DAPR_HTTP") {
+		t.Fatalf("error %q must report both index-0 ID and index-1 URL variables", err)
+	}
+}

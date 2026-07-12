@@ -1,11 +1,16 @@
 package discovery
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
 	"strings"
 )
+
+// maxAspireAppCount bounds DEVDASHBOARD_APP_COUNT to guard against a runaway
+// or hostile value forcing a huge allocation/scan loop.
+const maxAspireAppCount = 1024
 
 // AspireContractPresent reports whether the DEVDASHBOARD_APP_* env contract
 // is set at all (anchor variable: DEVDASHBOARD_APP_COUNT). Used with mode
@@ -25,22 +30,39 @@ func NewAspireScanner(getenv func(string) string) (Scanner, error) {
 	if err != nil || count < 0 {
 		return nil, fmt.Errorf("DEVDASHBOARD_APP_COUNT: expected a non-negative integer, got %q", countRaw)
 	}
+	if count > maxAspireAppCount {
+		return nil, fmt.Errorf("DEVDASHBOARD_APP_COUNT: %d exceeds the maximum of %d", count, maxAspireAppCount)
+	}
 	defaultNS := strings.TrimSpace(getenv("DEVDASHBOARD_NAMESPACE"))
 	if defaultNS == "" {
 		defaultNS = "default"
 	}
 	results := make([]ScanResult, 0, count)
+	// seenID maps a validated app id to the env var that first defined it, so a
+	// later duplicate can name both variables.
+	seenID := make(map[string]string, count)
+	var errs []error
 	for i := 0; i < count; i++ {
 		idKey := fmt.Sprintf("DEVDASHBOARD_APP_%d_ID", i)
 		urlKey := fmt.Sprintf("DEVDASHBOARD_APP_%d_DAPR_HTTP", i)
 		id := strings.TrimSpace(getenv(idKey))
-		if id == "" {
-			return nil, fmt.Errorf("%s: required but empty", idKey)
-		}
 		raw := strings.TrimSpace(getenv(urlKey))
+
+		bad := false
+		if id == "" {
+			errs = append(errs, fmt.Errorf("%s: required but empty", idKey))
+			bad = true
+		} else if prev, ok := seenID[id]; ok {
+			errs = append(errs, fmt.Errorf("%s: duplicate app id %q (already used by %s)", idKey, id, prev))
+			bad = true
+		}
 		u, err := url.Parse(raw)
 		if raw == "" || err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-			return nil, fmt.Errorf("%s: expected an http(s) base URL, got %q", urlKey, raw)
+			errs = append(errs, fmt.Errorf("%s: expected an http(s) base URL, got %q", urlKey, raw))
+			bad = true
+		}
+		if bad {
+			continue
 		}
 		ns := strings.TrimSpace(getenv(fmt.Sprintf("DEVDASHBOARD_APP_%d_NAMESPACE", i)))
 		if ns == "" {
@@ -50,6 +72,7 @@ func NewAspireScanner(getenv func(string) string) (Scanner, error) {
 		if label == "" {
 			label = id
 		}
+		seenID[id] = idKey
 		results = append(results, ScanResult{
 			AppID:            id,
 			DaprHTTPBaseURL:  strings.TrimRight(raw, "/"),
@@ -58,6 +81,9 @@ func NewAspireScanner(getenv func(string) string) (Scanner, error) {
 			Source:           SourceAspire,
 			SidecarReachable: true,
 		})
+	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
 	}
 	return func() ([]ScanResult, error) {
 		out := make([]ScanResult, len(results))
