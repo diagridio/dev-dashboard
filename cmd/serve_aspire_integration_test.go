@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -50,7 +49,7 @@ func TestAspireModeEndToEnd(t *testing.T) {
 		"index.html": &fstest.MapFile{Data: []byte("<html>spa</html>")},
 	}
 
-	opts, closers := assembleOptions(context.Background(), serveDeps{
+	opts, closers := assembleOptions(t.Context(), serveDeps{
 		Namespace:        "default",
 		Apps:             appsSvc,
 		HTTPClient:       &http.Client{Timeout: 5 * time.Second},

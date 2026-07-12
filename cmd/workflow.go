@@ -155,8 +155,10 @@ func newTargetResolver(apps discovery.Service, wf workflow.Service) *targetResol
 	return &targetResolver{apps: apps, wf: wf}
 }
 
-// Resolve satisfies server.TargetResolver. It fetches the instance's HTTP port
-// and health from discovery, and its current status from the workflow service.
+// Resolve satisfies server.TargetResolver. It fetches the instance's HTTP port,
+// its DaprHTTPBaseURL, and health from discovery, and its current status from
+// the workflow service. The DaprHTTPBaseURL is carried through so aspire apps
+// (addressed by base URL, not a localhost port) use HTTP terminate/purge.
 // If discovery fails, the target is returned with HTTPPort=0 and Healthy=false
 // (allowing force-delete). If the workflow lookup fails, the error is returned.
 func (r *targetResolver) Resolve(ctx context.Context, appID, instanceID string) (workflow.RemoveTarget, error) {

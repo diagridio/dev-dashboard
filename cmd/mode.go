@@ -31,7 +31,7 @@ func resolveMode(flagValue string, getenv func(string) string) (Mode, error) {
 	case ModeDefault, ModeAspire:
 		return Mode(v), nil
 	}
-	return ModeDefault, fmt.Errorf("unknown mode %q: supported values are \"aspire\", or unset for the complete scan", v)
+	return ModeDefault, fmt.Errorf("unknown mode %q: supported values are \"aspire\" (or unset for the complete scan)", v)
 }
 
 // serveSettings is the fully resolved serve configuration: flag > env > mode

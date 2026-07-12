@@ -66,13 +66,15 @@ func TestListenAddr(t *testing.T) {
 func TestResolveServeSettings(t *testing.T) {
 	noneChanged := func(string) bool { return false }
 	tests := []struct {
-		name    string
-		mode    Mode
-		changed func(string) bool
-		port    int
-		bind    string
-		env     map[string]string
-		want    serveSettings
+		name       string
+		mode       Mode
+		changed    func(string) bool
+		port       int
+		bind       string
+		stateStore string
+		namespace  string
+		env        map[string]string
+		want       serveSettings
 	}{
 		{
 			name: "default mode keeps host defaults",
@@ -120,11 +122,36 @@ func TestResolveServeSettings(t *testing.T) {
 			want: serveSettings{Port: 8080, Bind: "0.0.0.0", Namespace: "default",
 				AllowedHosts: []string{"a.example", "b.example"}},
 		},
+		{
+			name: "changed bind flag beats env",
+			mode: ModeDefault, changed: func(f string) bool { return f == "bind" },
+			port: 9090, bind: "10.0.0.5",
+			env:  map[string]string{"DEVDASHBOARD_BIND": "192.168.1.1"},
+			want: serveSettings{Port: 9090, Bind: "10.0.0.5", Namespace: "default"},
+		},
+		{
+			name: "changed namespace flag beats env",
+			mode: ModeDefault, changed: func(f string) bool { return f == "namespace" },
+			port: 9090, bind: "127.0.0.1", namespace: "team-x",
+			env:  map[string]string{"DEVDASHBOARD_NAMESPACE": "env-ns"},
+			want: serveSettings{Port: 9090, Bind: "127.0.0.1", Namespace: "team-x"},
+		},
+		{
+			name: "non-empty statestore flag beats env",
+			mode: ModeDefault, changed: noneChanged,
+			port: 9090, bind: "127.0.0.1", stateStore: "/flag/state.yaml",
+			env:  map[string]string{"DEVDASHBOARD_STATESTORE_FILE": "/env/state.yaml"},
+			want: serveSettings{Port: 9090, Bind: "127.0.0.1", StateStore: "/flag/state.yaml", Namespace: "default"},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			getenv := func(k string) string { return tc.env[k] }
-			got, err := resolveServeSettings(tc.mode, tc.changed, tc.port, tc.bind, "", "default", getenv)
+			ns := tc.namespace
+			if ns == "" {
+				ns = "default"
+			}
+			got, err := resolveServeSettings(tc.mode, tc.changed, tc.port, tc.bind, tc.stateStore, ns, getenv)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
