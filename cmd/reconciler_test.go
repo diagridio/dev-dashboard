@@ -197,6 +197,64 @@ func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
 	}
 }
 
+// staticApps is a discovery.Service double returning a fixed instance list
+// (unit-tag counterpart of the integration-only wiringFakeApps).
+type staticApps struct {
+	instances []discovery.Instance
+}
+
+func (a staticApps) List(context.Context) ([]discovery.Instance, error) {
+	return a.instances, nil
+}
+
+func (a staticApps) Get(_ context.Context, appID string) (discovery.Instance, error) {
+	for _, in := range a.instances {
+		if in.AppID == appID {
+			return in, nil
+		}
+	}
+	return discovery.Instance{}, discovery.ErrNotFound
+}
+
+// TestServiceFor_SidecarComposite asserts the selection rule wiring, not the
+// gRPC data path (covered in pkg/workflow): with no store elected, a
+// testcontainers app with a gRPC port must make ServiceFor("") return a
+// service whose List does NOT fail with ErrNoStore.
+func TestServiceFor_SidecarComposite(t *testing.T) {
+	apps := staticApps{instances: []discovery.Instance{{
+		AppID: "tc-app", InstanceKey: "crazy_lamport",
+		Source: discovery.SourceTestcontainers, GRPCPort: 1, SidecarReachable: true,
+	}}}
+	pool := newConnPool("default", &http.Client{}, apps, failingOpener{}.open, nil)
+	rc := newReconciler(context.Background(), apps, "default", "", "", &http.Client{}, nil, pool, nil, nil)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	svc, _, _, ok := rc.ServiceFor("")
+	require.True(t, ok)
+	// The gRPC endpoint (port 1) is unreachable, so the sidecar source skips
+	// the app — but the composite must swallow ErrNoStore because a sidecar
+	// endpoint exists. An empty page, not an error, is the contract.
+	res, err := svc.List(context.Background(), workflow.ListQuery{})
+	require.NoError(t, err)
+	require.Empty(t, res.Items)
+}
+
+// TestServiceFor_NoEndpointsPreservesErrNoStore keeps the existing no-store
+// banner behavior when nothing is sidecar-eligible.
+func TestServiceFor_NoEndpointsPreservesErrNoStore(t *testing.T) {
+	apps := staticApps{instances: []discovery.Instance{{
+		AppID: "plain-app", Source: discovery.SourceStandalone,
+	}}}
+	pool := newConnPool("default", &http.Client{}, apps, failingOpener{}.open, nil)
+	rc := newReconciler(context.Background(), apps, "default", "", "", &http.Client{}, nil, pool, nil, nil)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	svc, _, _, ok := rc.ServiceFor("")
+	require.True(t, ok)
+	_, err := svc.List(context.Background(), workflow.ListQuery{})
+	require.ErrorIs(t, err, workflow.ErrNoStore)
+}
+
 // failingOpener always fails to open, simulating an unreachable backend.
 type failingOpener struct{}
 
