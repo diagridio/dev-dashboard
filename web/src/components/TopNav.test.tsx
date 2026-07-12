@@ -47,6 +47,10 @@ describe('NAV_ITEMS', () => {
 })
 
 describe('TopNav', () => {
+  afterEach(() => {
+    delete window.__DASH_CAPABILITIES__
+  })
+
   function renderNav() {
     return render(
       <RefreshProvider>
@@ -117,7 +121,6 @@ describe('TopNav', () => {
     expect(screen.queryByText('Logs')).toBeNull()
     expect(screen.getByText('Workflows')).toBeInTheDocument()
     expect(screen.getByText('Applications')).toBeInTheDocument()
-    delete window.__DASH_CAPABILITIES__
   })
 
   describe('topbar height tracking', () => {
