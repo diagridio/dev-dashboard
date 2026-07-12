@@ -169,6 +169,8 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		TelemetryEnabled: telemetry,
 		UpdateCheck:      updateCheck,
 		AllowNonLoopback: mode == ModeAspire,
+		AllowedHosts:     settings.AllowedHosts,
+		ListenPort:       settings.Port,
 		Capabilities:     caps,
 		ResourcesPaths:   settings.ResourcesPaths,
 		QuietRegistry:    mode == ModeAspire,

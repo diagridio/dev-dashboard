@@ -42,6 +42,9 @@ type serveSettings struct {
 	StateStore     string
 	Namespace      string
 	ResourcesPaths []string
+	// AllowedHosts restricts the Host header in container posture
+	// (DEVDASHBOARD_ALLOWED_HOSTS, comma-separated; env-only, no flag).
+	AllowedHosts []string
 }
 
 // resolveServeSettings applies the flag > env > mode-default precedence.
@@ -85,6 +88,13 @@ func resolveServeSettings(mode Mode, flagChanged func(string) bool, port int, bi
 		}
 	} else if mode == ModeAspire && s.StateStore != "" {
 		s.ResourcesPaths = []string{filepath.Dir(s.StateStore)}
+	}
+	if v := getenv("DEVDASHBOARD_ALLOWED_HOSTS"); v != "" {
+		for _, h := range strings.Split(v, ",") {
+			if h = strings.TrimSpace(h); h != "" {
+				s.AllowedHosts = append(s.AllowedHosts, h)
+			}
+		}
 	}
 	return s, nil
 }

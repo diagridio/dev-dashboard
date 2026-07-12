@@ -43,6 +43,13 @@ type Options struct {
 	// allowlist to same-origin CSRF (aspire/container mode, where the
 	// dashboard is reached through a proxy on an arbitrary host).
 	AllowNonLoopback bool
+	// AllowedHosts, when non-empty in container posture, restricts the Host
+	// header to these hostnames (loopback names always allowed); empty means
+	// any Host passes. Populated from DEVDASHBOARD_ALLOWED_HOSTS.
+	AllowedHosts []string
+	// ListenPort is the server's listen port, used to normalize a portless
+	// Host header when comparing Origin against Host in container posture.
+	ListenPort int
 	// Capabilities gates optional feature routes and the SPA's capability
 	// flags; nil means FullCapabilities (host mode).
 	Capabilities *Capabilities
@@ -71,7 +78,7 @@ func NewRouter(opts Options) http.Handler {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Use(requestGuard(opts.AllowNonLoopback))
+	r.Use(requestGuard(guardConfig{allowAnyHost: opts.AllowNonLoopback, allowedHosts: opts.AllowedHosts, port: opts.ListenPort}))
 
 	caps := FullCapabilities()
 	if opts.Capabilities != nil {

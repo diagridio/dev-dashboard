@@ -94,6 +94,15 @@ func TestResolveServeSettings(t *testing.T) {
 			want: serveSettings{Port: 8080, Bind: "0.0.0.0", Namespace: "default",
 				ResourcesPaths: []string{"/mnt/a", "/mnt/b"}},
 		},
+		{
+			name: "allowed hosts split on comma, trimmed",
+			mode: ModeAspire, changed: noneChanged, port: 9090, bind: "127.0.0.1",
+			env: map[string]string{
+				"DEVDASHBOARD_ALLOWED_HOSTS": "a.example, b.example",
+			},
+			want: serveSettings{Port: 8080, Bind: "0.0.0.0", Namespace: "default",
+				AllowedHosts: []string{"a.example", "b.example"}},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -47,6 +47,12 @@ type serveDeps struct {
 	// any Host (aspire/container mode, where the dashboard is reached via a
 	// published port).
 	AllowNonLoopback bool
+	// AllowedHosts restricts the Host header in container posture (loopback
+	// always allowed); empty means any Host passes. From DEVDASHBOARD_ALLOWED_HOSTS.
+	AllowedHosts []string
+	// ListenPort is the server's listen port, used to normalize a portless Host
+	// header when comparing Origin against Host in container posture.
+	ListenPort int
 	// Capabilities gates optional feature routes and SPA flags; nil means full
 	// host-mode capabilities.
 	Capabilities *server.Capabilities
@@ -122,6 +128,8 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		TelemetryEnabled: deps.TelemetryEnabled,
 		UpdateCheck:      deps.UpdateCheck,
 		AllowNonLoopback: deps.AllowNonLoopback,
+		AllowedHosts:     deps.AllowedHosts,
+		ListenPort:       deps.ListenPort,
 		Capabilities:     deps.Capabilities,
 	}, []func() error{rc.Close}
 }
