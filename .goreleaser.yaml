@@ -59,6 +59,9 @@ docker_manifests:
       - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-amd64"
       - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-arm64"
   - name_template: "ghcr.io/diagridio/dev-dashboard:latest"
+    # Prerelease tags (v1.5.0-rc.1) must not move :latest — consumers
+    # (README example, Aspire hosting integration) resolve it by default.
+    skip_push: auto
     image_templates:
       - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-amd64"
       - "ghcr.io/diagridio/dev-dashboard:{{ .Version }}-arm64"

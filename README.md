@@ -71,7 +71,8 @@ integration (which will be rewritten against the contract below). It also runs s
 with a hand-written `docker run`.
 
 **Image:** `ghcr.io/diagridio/dev-dashboard`, tagged `:X.Y.Z` (in lockstep with binary
-releases) and `:latest`. The image bakes in `DEVDASHBOARD_MODE=aspire` and serves on port
+releases) and `:latest`. Prerelease tags (e.g. `v1.5.0-rc.1`) publish their own version tag
+but do not move `:latest`. The image bakes in `DEVDASHBOARD_MODE=aspire` and serves on port
 `8080` bound to `0.0.0.0`.
 
 In aspire mode, discovery is restricted to the env contract below (no host process scan, no
@@ -435,6 +436,8 @@ single commit with `git commit --no-verify`.
 > `checksums.txt` and publishes them to a GitHub Release. The version (`dev-dashboard --version`)
 > is injected from the tag via build-time ldflags. The same tag-driven run also builds and
 > pushes the multi-arch container image to `ghcr.io/diagridio/dev-dashboard` via goreleaser.
+> Prerelease tags (any `-suffix`, e.g. `v1.5.0-rc.1`) push their version-tagged image but
+> skip the `:latest` manifest, so release candidates never reach `:latest` consumers.
 
 Because `go install` cannot run `npm`, the release tag commit must embed the prebuilt
 `web/dist`. `scripts/release.sh` handles this: it builds the SPA, creates a **detached** commit
