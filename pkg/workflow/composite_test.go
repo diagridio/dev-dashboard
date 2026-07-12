@@ -107,6 +107,31 @@ func TestComposite_MergesAndSidecarWinsCollisions(t *testing.T) {
 	require.Equal(t, []string{"store-app", "tc-app"}, ids)
 }
 
+func TestComposite_CursorPageExcludesSidecarItems(t *testing.T) {
+	now := time.Now()
+	base := fakeBase{items: []ExecutionSummary{
+		{AppID: "store-app", InstanceID: "s1", Name: "StoreWF", Status: StatusCompleted, CreatedAt: &now},
+	}}
+	sc := sidecarWith(t, "tc-app", &fakeHub{
+		pages:  [][]string{{"w1"}},
+		states: map[string]*protos.WorkflowState{"w1": wfState("w1", "LiveWF", protos.OrchestrationStatus_ORCHESTRATION_STATUS_RUNNING, "")},
+	})
+	svc := NewComposite(base, sc)
+
+	// First page (empty PageToken): sidecar items are merged in, as before.
+	res, err := svc.List(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 2)
+
+	// Cursor page (non-empty PageToken): sidecar items must not be
+	// re-merged, or every page after the first would repeat them.
+	res, err = svc.List(context.Background(), ListQuery{IncludeChildren: true, PageToken: "tok"})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 1)
+	require.Equal(t, "s1", res.Items[0].InstanceID)
+	require.Equal(t, "tok", res.NextToken)
+}
+
 func TestComposite_NoStoreSuppressedWhenSidecarHasEndpoints(t *testing.T) {
 	base := fakeBase{err: ErrNoStore}
 	sc := sidecarWith(t, "tc-app", &fakeHub{

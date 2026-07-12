@@ -11,8 +11,12 @@ import (
 //   - an app the sidecar source owns (testcontainers apps always; every
 //     reachable app when no store is openable) is served by the sidecar;
 //   - everything else is served by the store;
-//   - all-apps queries merge both, the sidecar winning collisions (it is
-//     live; the store copy may be a stale earlier run).
+//   - all-apps queries merge both on the first page only (empty PageToken),
+//     the sidecar winning collisions (it is live; the store copy may be a
+//     stale earlier run); cursor pages (non-empty PageToken) return base
+//     results alone, since the sidecar's full result set was already
+//     surfaced on page one and re-merging it on every page would repeat
+//     those rows.
 //
 // Base errors ErrNoStore/ErrStoreUnreachable are suppressed when the sidecar
 // currently has endpoints — otherwise they propagate unchanged so the
@@ -43,6 +47,12 @@ func (c *composite) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	baseRes, baseErr := c.base.List(ctx, q)
 	if baseErr != nil && !(storeMissing(baseErr) && c.sc.HasEndpoints(ctx)) {
 		return ListResult{}, baseErr
+	}
+	if q.PageToken != "" {
+		// Cursor page: the sidecar's full result set was already merged into
+		// page one, and it has no cursor of its own to advance — re-merging
+		// it here would repeat every sidecar row on every subsequent page.
+		return baseRes, nil
 	}
 	scRes, scErr := c.sc.List(ctx, q)
 	if scErr != nil {
