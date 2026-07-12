@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
@@ -27,6 +27,10 @@ function renderDetail() {
 }
 
 describe('AppDetail', () => {
+  afterEach(() => {
+    delete window.__DASH_CAPABILITIES__
+  })
+
   const runningApp = {
     appId: 'order',
     health: 'healthy',
@@ -314,6 +318,28 @@ describe('AppDetail', () => {
     )
   })
 
+  it('shows the aspire label under the header when it differs from the app id', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, isAspire: true, label: 'Order Service' }),
+      ),
+    )
+    const { container } = renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(container.querySelector('.phead .sub')).toHaveTextContent('Order Service')
+  })
+
+  it('does not show a label sub-line when it equals the app id or is absent', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, isAspire: true, label: 'order' }),
+      ),
+    )
+    const { container } = renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(container.querySelector('.phead .sub')).toBeNull()
+  })
+
   it('shows per-target status and ticking uptime', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-07-09T10:05:00Z'))
@@ -515,6 +541,18 @@ describe('AppDetail', () => {
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     expect(screen.queryByRole('button', { name: 'Remove from list' })).not.toBeInTheDocument()
+  })
+
+  it('hides the View logs link when the logs capability is off', async () => {
+    window.__DASH_CAPABILITIES__ = { lifecycle: false, controlPlane: false, logs: false, workflows: true }
+    try {
+      server.use(http.get('/api/apps/order', () => HttpResponse.json(runningApp)))
+      renderDetail()
+      await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+      expect(screen.queryByRole('link', { name: /view logs/i })).not.toBeInTheDocument()
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
   })
 
   it('offers a back link when the app cannot be loaded', async () => {

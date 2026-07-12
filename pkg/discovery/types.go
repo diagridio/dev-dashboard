@@ -26,7 +26,7 @@ type Instance struct {
 	Health             Health `json:"health"`
 	Runtime            string `json:"runtime"`            // e.g. "go", "python", "node", "dotnet", "java", "rust", "unknown"
 	IsAspire           bool   `json:"isAspire,omitempty"` // true when the app is .NET Aspire-managed
-	Source             string `json:"source"`             // "standalone" | "compose"
+	Source             string `json:"source"`             // "standalone" | "compose" | "aspire"
 	ComposeProject     string `json:"composeProject,omitempty"`
 	ComposeService     string `json:"composeService,omitempty"`
 	DaprdContainerID   string `json:"daprdContainerId,omitempty"`
@@ -34,16 +34,21 @@ type Instance struct {
 	AppContainerID     string `json:"appContainerId,omitempty"`
 	AppContainerName   string `json:"appContainerName,omitempty"`
 	SidecarReachable   bool   `json:"sidecarReachable"`
-	HTTPPort           int    `json:"httpPort"`
-	GRPCPort           int    `json:"grpcPort"`
-	AppPort            int    `json:"appPort"`
-	DaprdPID           int    `json:"daprdPid"`
-	AppPID             int    `json:"appPid"` // 0 = unknown
-	CLIPID             int    `json:"cliPid"`
-	AppStatus          string `json:"appStatus,omitempty"`      // "running" | "stopped"; "" unknown
-	DaprdStatus        string `json:"daprdStatus,omitempty"`    // "running" | "stopped"; "" unknown
-	AppStartedAt       string `json:"appStartedAt,omitempty"`   // RFC3339 UTC; "" when stopped/unknown
-	DaprdStartedAt     string `json:"daprdStartedAt,omitempty"` // RFC3339 UTC; "" when stopped/unknown
+	// DaprHTTPBaseURL is the daprd HTTP endpoint for aspire-source apps
+	// ("" otherwise; consumers fall back to 127.0.0.1:httpPort).
+	DaprHTTPBaseURL string `json:"daprHttpBaseUrl,omitempty"`
+	Namespace       string `json:"namespace,omitempty"`
+	Label           string `json:"label,omitempty"`
+	HTTPPort        int    `json:"httpPort"`
+	GRPCPort        int    `json:"grpcPort"`
+	AppPort         int    `json:"appPort"`
+	DaprdPID        int    `json:"daprdPid"`
+	AppPID          int    `json:"appPid"` // 0 = unknown
+	CLIPID          int    `json:"cliPid"`
+	AppStatus       string `json:"appStatus,omitempty"`      // "running" | "stopped"; "" unknown
+	DaprdStatus     string `json:"daprdStatus,omitempty"`    // "running" | "stopped"; "" unknown
+	AppStartedAt    string `json:"appStartedAt,omitempty"`   // RFC3339 UTC; "" when stopped/unknown
+	DaprdStartedAt  string `json:"daprdStartedAt,omitempty"` // RFC3339 UTC; "" when stopped/unknown
 	// SidecarOrphaned marks a standalone daprd with no supervising dapr CLI
 	// and no live app (e.g. an external stop missed a detached sidecar).
 	SidecarOrphaned bool           `json:"sidecarOrphaned,omitempty"`

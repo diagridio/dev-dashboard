@@ -5,6 +5,8 @@ package cmd
 import (
 	"context"
 	"errors"
+	"net/http"
+	"sync/atomic"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -63,6 +65,24 @@ func TestTargetResolver(t *testing.T) {
 		require.True(t, got.Healthy)
 	})
 
+	t.Run("populates namespace from the instance", func(t *testing.T) {
+		disc := fakeDiscovery{inst: discovery.Instance{AppID: "order", HTTPPort: 3500, Namespace: "prod", Health: discovery.HealthHealthy}}
+		wf := fakeWorkflowSvc{ex: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "inst", Status: workflow.StatusRunning}}}
+		r := newTargetResolver(disc, wf)
+		got, err := r.Resolve(ctx, "order", "inst")
+		require.NoError(t, err)
+		require.Equal(t, "prod", got.Namespace)
+	})
+
+	t.Run("leaves namespace empty for host-scanned apps", func(t *testing.T) {
+		disc := fakeDiscovery{inst: discovery.Instance{AppID: "order", HTTPPort: 3500, Namespace: "", Health: discovery.HealthHealthy}}
+		wf := fakeWorkflowSvc{ex: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "inst", Status: workflow.StatusRunning}}}
+		r := newTargetResolver(disc, wf)
+		got, err := r.Resolve(ctx, "order", "inst")
+		require.NoError(t, err)
+		require.Equal(t, "", got.Namespace)
+	})
+
 	t.Run("discovery Get fails — still succeeds with HTTPPort=0 Healthy=false", func(t *testing.T) {
 		disc := fakeDiscovery{err: errors.New("not found")}
 		wf := fakeWorkflowSvc{ex: workflow.Execution{ExecutionSummary: workflow.ExecutionSummary{AppID: "order", InstanceID: "inst", Status: workflow.StatusCompleted}}}
@@ -81,6 +101,73 @@ func TestTargetResolver(t *testing.T) {
 		_, err := r.Resolve(ctx, "order", "inst")
 		require.Error(t, err)
 	})
+}
+
+// --- per-app namespace: static contract map, no sidecar probes ---
+
+func TestContractNamespaces(t *testing.T) {
+	env := map[string]string{
+		"DEVDASHBOARD_APP_COUNT":       "2",
+		"DEVDASHBOARD_APP_0_ID":        "orders",
+		"DEVDASHBOARD_APP_0_DAPR_HTTP": "http://orders-dapr:3500",
+		"DEVDASHBOARD_APP_0_NAMESPACE": "prod",
+		"DEVDASHBOARD_APP_1_ID":        "billing",
+		"DEVDASHBOARD_APP_1_DAPR_HTTP": "http://billing-dapr:3500",
+	}
+	scan, err := discovery.NewAspireScanner(func(k string) string { return env[k] })
+	require.NoError(t, err)
+
+	m := contractNamespaces(scan)
+	require.Equal(t, "prod", m["orders"])
+	require.Equal(t, "default", m["billing"], "unset per-app namespace falls back to the contract default")
+	require.Empty(t, m["unknown"], "unknown app resolves to empty (global namespace)")
+}
+
+// patternKeysStore is a statestore.Store recording the LIKE patterns passed to
+// Keys; all reads return empty.
+type patternKeysStore struct{ patterns []string }
+
+func (s *patternKeysStore) Keys(_ context.Context, pattern, _ string, _ int) ([]string, string, error) {
+	s.patterns = append(s.patterns, pattern)
+	return nil, "", nil
+}
+func (s *patternKeysStore) Get(context.Context, string) ([]byte, error) { return nil, nil }
+func (s *patternKeysStore) BulkGet(context.Context, []string) (map[string][]byte, error) {
+	return nil, nil
+}
+func (s *patternKeysStore) Delete(context.Context, string) error      { return nil }
+func (s *patternKeysStore) Set(context.Context, string, []byte) error { return nil }
+func (s *patternKeysStore) Close() error                              { return nil }
+
+// countingApps is a discovery.Service double counting Get calls (each real Get
+// costs two sidecar HTTP probes via enrich).
+type countingApps struct {
+	fakeDiscovery
+	gets int32
+}
+
+func (c *countingApps) Get(ctx context.Context, key string) (discovery.Instance, error) {
+	atomic.AddInt32(&c.gets, 1)
+	return c.fakeDiscovery.Get(ctx, key)
+}
+
+func TestBuildStoreEntryNamespaceResolverIsStatic(t *testing.T) {
+	st := &patternKeysStore{}
+	apps := &countingApps{}
+	entry := buildStoreEntry(st, "default", &http.Client{}, apps, map[string]string{"orders": "prod"})
+
+	// App-scoped Get resolves the namespace from the static contract map...
+	_, err := entry.svc.Get(context.Background(), "orders", "inst-1")
+	require.ErrorIs(t, err, workflow.ErrNotFound) // store is empty; only the pattern matters
+	require.Contains(t, st.patterns, statestore.InstanceKeyPattern("prod", "orders", "inst-1"))
+
+	// ...an unmapped app falls back to the store namespace...
+	_, err = entry.svc.Get(context.Background(), "other", "inst-2")
+	require.ErrorIs(t, err, workflow.ErrNotFound)
+	require.Contains(t, st.patterns, statestore.InstanceKeyPattern("default", "other", "inst-2"))
+
+	// ...and neither resolution touched discovery (zero sidecar probes).
+	require.Zero(t, atomic.LoadInt32(&apps.gets), "namespace resolution must not call apps.Get")
 }
 
 func TestStoreRegistry_StoresReturnsActiveOnly_FirstFallback(t *testing.T) {

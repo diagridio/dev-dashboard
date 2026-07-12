@@ -155,18 +155,24 @@ func newTargetResolver(apps discovery.Service, wf workflow.Service) *targetResol
 	return &targetResolver{apps: apps, wf: wf}
 }
 
-// Resolve satisfies server.TargetResolver. It fetches the instance's HTTP port
-// and health from discovery, and its current status from the workflow service.
+// Resolve satisfies server.TargetResolver. It fetches the instance's HTTP port,
+// its DaprHTTPBaseURL, and health from discovery, and its current status from
+// the workflow service. The DaprHTTPBaseURL is carried through so aspire apps
+// (addressed by base URL, not a localhost port) use HTTP terminate/purge.
 // If discovery fails, the target is returned with HTTPPort=0 and Healthy=false
 // (allowing force-delete). If the workflow lookup fails, the error is returned.
 func (r *targetResolver) Resolve(ctx context.Context, appID, instanceID string) (workflow.RemoveTarget, error) {
 	var httpPort int
+	var daprBase string
 	var healthy bool
+	var namespace string
 
 	inst, err := r.apps.Get(ctx, appID)
 	if err == nil {
 		httpPort = inst.HTTPPort
+		daprBase = inst.DaprHTTPBaseURL
 		healthy = inst.Health == discovery.HealthHealthy
+		namespace = inst.Namespace // "" for host-scanned apps → global namespace
 	}
 	// If apps.Get failed, continue with httpPort=0, healthy=false (force path only).
 
@@ -176,11 +182,13 @@ func (r *targetResolver) Resolve(ctx context.Context, appID, instanceID string) 
 	}
 
 	return workflow.RemoveTarget{
-		AppID:      appID,
-		InstanceID: instanceID,
-		Status:     ex.Status,
-		HTTPPort:   httpPort,
-		Healthy:    healthy,
+		AppID:           appID,
+		InstanceID:      instanceID,
+		Status:          ex.Status,
+		HTTPPort:        httpPort,
+		DaprHTTPBaseURL: daprBase,
+		Healthy:         healthy,
+		Namespace:       namespace,
 	}, nil
 }
 
@@ -191,11 +199,36 @@ type storeEntry struct {
 	targets server.TargetResolver
 }
 
+// contractNamespaces invokes a static aspire scanner once and returns the
+// appID→namespace map from the parsed DEVDASHBOARD_APP_* env contract. The
+// scanner is a static, error-free closure over env parsed at startup, so this
+// costs nothing and never blocks; a scan error or empty contract yields nil
+// (every lookup then falls back to the global namespace).
+func contractNamespaces(scan discovery.Scanner) map[string]string {
+	results, err := scan()
+	if err != nil || len(results) == 0 {
+		return nil
+	}
+	m := make(map[string]string, len(results))
+	for _, r := range results {
+		if r.Namespace != "" {
+			m[r.AppID] = r.Namespace
+		}
+	}
+	return m
+}
+
 // buildStoreEntry assembles the per-store workflow service, remover, and target
 // resolver for an already-opened state store. It is the construction the old
 // newStoreBackend did inline; the connpool reuses it for each opened identity.
-func buildStoreEntry(st statestore.Store, namespace string, client *http.Client, apps discovery.Service) storeEntry {
-	svc := workflow.New(st, namespace)
+// appNS is the static appID→namespace map from the aspire env contract (nil in
+// host mode): app-scoped workflow reads (Get/history and app-filtered
+// List/Stats) resolve their namespace from it by plain map lookup — never via
+// discovery, whose Get enriches with sidecar HTTP probes. A missing app or nil
+// map yields "" and falls back to the store namespace.
+func buildStoreEntry(st statestore.Store, namespace string, client *http.Client, apps discovery.Service, appNS map[string]string) storeEntry {
+	nsResolver := func(_ context.Context, appID string) string { return appNS[appID] }
+	svc := workflow.New(st, namespace, workflow.WithNamespaceResolver(nsResolver))
 	rem := workflow.NewRemover(client, st, namespace)
 	res := newTargetResolver(apps, svc)
 	return storeEntry{svc: svc, rem: rem, targets: res}

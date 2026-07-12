@@ -43,6 +43,30 @@ type serveDeps struct {
 	// UpdateCheck is the shared latest-release checker; also used by runServe to
 	// print the startup notice, so the server reuses its warmed cache.
 	UpdateCheck updatecheck.Service
+	// AllowNonLoopback relaxes the server's request guard from loopback-only to
+	// any Host (aspire/container mode, where the dashboard is reached via a
+	// published port).
+	AllowNonLoopback bool
+	// AllowedHosts restricts the Host header in container posture (loopback
+	// always allowed); empty means any Host passes. From DEVDASHBOARD_ALLOWED_HOSTS.
+	AllowedHosts []string
+	// ListenPort is the server's listen port, used to normalize a portless Host
+	// header when comparing Origin against Host in container posture.
+	ListenPort int
+	// Capabilities gates optional feature routes and SPA flags; nil means full
+	// host-mode capabilities.
+	Capabilities *server.Capabilities
+	// ResourcesPaths are extra resource directories appended to the reconciler's
+	// scan paths (aspire-mode DEVDASHBOARD_RESOURCES_PATH); nil in host mode.
+	ResourcesPaths []string
+	// QuietRegistry suppresses the "no home directory" registry-persistence
+	// warning when persistence is deliberately disabled (aspire mode).
+	QuietRegistry bool
+	// AppNamespaces is the static appID→namespace map parsed once from the
+	// aspire DEVDASHBOARD_APP_* env contract; nil when the contract is absent.
+	// Workflow reads resolve per-app namespaces from it by map lookup, never
+	// via discovery enrichment (sidecar probes).
+	AppNamespaces map[string]string
 }
 
 // containerLogStream adapts a runtime Runner into the log-stream dependency.
@@ -69,14 +93,14 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	var registry *ConnRegistry
 	if deps.HomeDir != "" {
 		registry = LoadRegistry(deps.HomeDir)
-	} else {
+	} else if !deps.QuietRegistry {
 		slog.Default().With("component", "registry").Warn("no home directory; connection registry persistence disabled")
 	}
-	pool := newConnPool(deps.Namespace, deps.HTTPClient, appsSvc, nil)
+	pool := newConnPool(deps.Namespace, deps.HTTPClient, appsSvc, nil, deps.AppNamespaces)
 
 	// Build the reconciler that owns all apps-derived state (resource paths,
 	// detected state stores, active-store election) plus the registry and pool.
-	rc := newReconciler(ctx, appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool, deps.ComposeEnv)
+	rc := newReconciler(ctx, appsSvc, deps.Namespace, deps.HomeDir, deps.StateStorePath, deps.HTTPClient, registry, pool, deps.ComposeEnv, deps.ResourcesPaths)
 
 	// Seed once synchronously from the boot snapshot so the first request is
 	// correct. Best-effort: an empty/failed list yields an empty derived state.
@@ -108,5 +132,9 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		ControlPlane:     controlplane.New(),
 		TelemetryEnabled: deps.TelemetryEnabled,
 		UpdateCheck:      deps.UpdateCheck,
+		AllowNonLoopback: deps.AllowNonLoopback,
+		AllowedHosts:     deps.AllowedHosts,
+		ListenPort:       deps.ListenPort,
+		Capabilities:     deps.Capabilities,
 	}, []func() error{rc.Close}
 }

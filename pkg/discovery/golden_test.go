@@ -8,10 +8,8 @@ import (
 	"flag"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -36,12 +34,7 @@ func TestFetchMetadataGolden(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
-	u, err := url.Parse(srv.URL)
-	require.NoError(t, err)
-	port, err := strconv.Atoi(u.Port())
-	require.NoError(t, err)
-
-	md, err := discovery.FetchMetadata(context.Background(), &http.Client{Timeout: 2 * time.Second}, port)
+	md, err := discovery.FetchMetadata(context.Background(), &http.Client{Timeout: 2 * time.Second}, srv.URL)
 	require.NoError(t, err)
 
 	got, err := json.MarshalIndent(md, "", "  ")

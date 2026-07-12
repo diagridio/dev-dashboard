@@ -39,6 +39,36 @@ type Options struct {
 	UpdateCheck  updatecheck.Service
 	// TelemetryEnabled controls whether the served SPA loads Datadog RUM.
 	TelemetryEnabled bool
+	// AllowNonLoopback switches the request guard from the loopback
+	// allowlist to same-origin CSRF (aspire/container mode, where the
+	// dashboard is reached through a proxy on an arbitrary host).
+	AllowNonLoopback bool
+	// AllowedHosts, when non-empty in container posture, restricts the Host
+	// header to these hostnames (loopback names always allowed); empty means
+	// any Host passes. Populated from DEVDASHBOARD_ALLOWED_HOSTS.
+	AllowedHosts []string
+	// ListenPort is the server's listen port, used to normalize a portless
+	// Host header when comparing Origin against Host in container posture.
+	ListenPort int
+	// Capabilities gates optional feature routes and the SPA's capability
+	// flags; nil means FullCapabilities (host mode).
+	Capabilities *Capabilities
+}
+
+// Capabilities gates optional feature surfaces per serving mode. The JSON
+// form is injected into the SPA as window.__DASH_CAPABILITIES__; the same
+// flags gate server-side route registration (the flags are advisory UX for
+// the UI; absent routes are the real boundary).
+type Capabilities struct {
+	Lifecycle    bool `json:"lifecycle"`
+	ControlPlane bool `json:"controlPlane"`
+	Logs         bool `json:"logs"`
+	Workflows    bool `json:"workflows"`
+}
+
+// FullCapabilities is the host-mode default: everything on.
+func FullCapabilities() Capabilities {
+	return Capabilities{Lifecycle: true, ControlPlane: true, Logs: true, Workflows: true}
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
@@ -48,11 +78,16 @@ func NewRouter(opts Options) http.Handler {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
-	r.Use(localhostGuard)
+	r.Use(requestGuard(guardConfig{allowAnyHost: opts.AllowNonLoopback, allowedHosts: opts.AllowedHosts, port: opts.ListenPort}))
+
+	caps := FullCapabilities()
+	if opts.Capabilities != nil {
+		caps = *opts.Capabilities
+	}
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Lifecycle, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane, opts.UpdateCheck))
-		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath, opts.TelemetryEnabled, opts.Version.Version))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Lifecycle, opts.Backend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane, opts.UpdateCheck, caps))
+		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath, opts.TelemetryEnabled, opts.Version.Version, caps))
 	}
 
 	if base == "" {

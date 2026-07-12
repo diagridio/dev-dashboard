@@ -1,0 +1,5 @@
+FROM gcr.io/distroless/static:nonroot
+COPY dev-dashboard /dev-dashboard
+ENV DEVDASHBOARD_MODE=aspire
+EXPOSE 8080
+ENTRYPOINT ["/dev-dashboard"]

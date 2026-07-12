@@ -9,6 +9,7 @@ import { useToast } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { appKey } from '../lib/appKey'
 import { formatUptime, useNow } from '../lib/uptime'
+import { getCapabilities } from '../lib/capabilities'
 
 // ---------- content ----------
 
@@ -18,6 +19,8 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
   useDocumentTitle(appKey(app))
 
+  const caps = getCapabilities()
+
   const copyPath = (path: string) => {
     copyText(path)
     toast.show('Path copied')
@@ -25,6 +28,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
   const key = appKey(app)
   const hasContainerName = key !== app.appId
+  const hasLabel = !hasContainerName && !!app.label && app.label !== app.appId
 
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
   const isCompose = app.source === 'compose'
@@ -91,30 +95,33 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
     return text ? <span>{text}</span> : <span className="faint">—</span>
   }
 
-  const panelActions = (target: AppTarget, status: string | undefined, what: string) => (
-    <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-      {status === 'running' && (
-        <>
-          {!app.isAspire && !orphaned && (
-            <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'restart', what)}>
-              Restart
+  const panelActions = (target: AppTarget, status: string | undefined, what: string) => {
+    if (!caps.lifecycle) return null
+    return (
+      <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+        {status === 'running' && (
+          <>
+            {!app.isAspire && !orphaned && (
+              <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'restart', what)}>
+                Restart
+              </button>
+            )}
+            <button className="btn danger" disabled={busy} onClick={() => runAction(target, 'stop', what)}>
+              Stop
             </button>
-          )}
-          <button className="btn danger" disabled={busy} onClick={() => runAction(target, 'stop', what)}>
-            Stop
+          </>
+        )}
+        {/* Per-panel Start is hidden for fully-stopped dapr run apps: a bare
+            half-restart is not discoverable — the header's whole-instance Start
+            is the affordance. Compose keeps per-container starts. */}
+        {status === 'stopped' && !app.isAspire && !orphaned && (isCompose || !allStopped) && (
+          <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'start', what)}>
+            Start
           </button>
-        </>
-      )}
-      {/* Per-panel Start is hidden for fully-stopped dapr run apps: a bare
-          half-restart is not discoverable — the header's whole-instance Start
-          is the affordance. Compose keeps per-container starts. */}
-      {status === 'stopped' && !app.isAspire && !orphaned && (isCompose || !allStopped) && (
-        <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'start', what)}>
-          Start
-        </button>
-      )}
-    </span>
-  )
+        )}
+      </span>
+    )
+  }
 
   return (
     <div className="page">
@@ -143,10 +150,14 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               {app.runtime}
             </span>
           </div>
-          {hasContainerName && <div className="sub mono">{key}</div>}
+          {hasContainerName ? (
+            <div className="sub mono">{key}</div>
+          ) : (
+            hasLabel && <div className="sub mono">{app.label}</div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {anyRunning && (
+          {caps.lifecycle && anyRunning && (
             <>
               {!app.isAspire && !orphaned && (
                 <button
@@ -166,12 +177,12 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               </button>
             </>
           )}
-          {removable && (
+          {caps.lifecycle && removable && (
             <button className="btn ghost" disabled={busy || forget.isPending} onClick={removeFromList}>
               Remove from list
             </button>
           )}
-          {allStopped && !app.isAspire && !orphaned && (
+          {caps.lifecycle && allStopped && !app.isAspire && !orphaned && (
             <button
               className="btn ghost"
               disabled={busy}
@@ -181,7 +192,9 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             </button>
           )}
           <button className="tbtn" onClick={() => navigate('/')}>← Back</button>
-          <Link className="tbtn" to={`/logs?app=${key}&source=daprd`}>View logs</Link>
+          {caps.logs && (
+            <Link className="tbtn" to={`/logs?app=${key}&source=daprd`}>View logs</Link>
+          )}
         </div>
       </div>
 

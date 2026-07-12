@@ -93,8 +93,8 @@ func TestReconciler_ServiceForRouting(t *testing.T) {
 	require.NotEqual(t, ids[autoPath], ids[autoPath2], "same name + different paths -> distinct ids")
 
 	o := &fakeOpener{}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Seed an elected active store directly (no apps needed for this routing test).
@@ -131,8 +131,8 @@ func TestReconciler_NoActiveNoStoresDegraded(t *testing.T) {
 	home := t.TempDir()
 	reg := LoadRegistry(home)
 	o := &fakeOpener{}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// No elected store and empty name -> degraded entry, ok=true.
@@ -149,8 +149,8 @@ func TestReconciler_StoresListsAllEntriesAndMutators(t *testing.T) {
 	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
 
 	o := &fakeOpener{}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Elect "autostore" active so the active flag is exercised.
@@ -220,8 +220,8 @@ func TestReconciler_ServiceForUnreachableByID(t *testing.T) {
 	}
 	require.NotEmpty(t, id)
 
-	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	svc, _, _, ok := rc.ServiceFor(id)
@@ -236,8 +236,8 @@ func TestReconciler_ServiceForUnreachableActive(t *testing.T) {
 	home := t.TempDir()
 
 	reg := LoadRegistry(home)
-	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Elect an active store; the pool's opener will fail to connect to it.
@@ -255,8 +255,8 @@ func TestReconciler_ServiceForUnreachableActive(t *testing.T) {
 func TestReconciler_ServiceForNoStoreStillErrNoStore(t *testing.T) {
 	home := t.TempDir()
 	reg := LoadRegistry(home)
-	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// No elected store and empty id -> degraded/ErrNoStore (genuinely no store).
@@ -269,8 +269,8 @@ func TestReconciler_ServiceForNoStoreStillErrNoStore(t *testing.T) {
 func TestReconciler_ServiceForUnknownID(t *testing.T) {
 	home := t.TempDir()
 	reg := LoadRegistry(home)
-	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, failingOpener{}.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	_, _, _, ok := rc.ServiceFor("nosuchid")
@@ -301,10 +301,10 @@ func TestReconciler_BaseCtxCancelAbortsPreWarm(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	o := &blockingCtxOpener{started: make(chan struct{})}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
 	reg := LoadRegistry(home)
 	// stateStorePath = compPath so reconcile detects and elects it, then pre-warms.
-	rc := newReconciler(ctx, nil, "default", home, compPath, &http.Client{}, reg, pool, nil)
+	rc := newReconciler(ctx, nil, "default", home, compPath, &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	done := make(chan struct{})
@@ -354,8 +354,8 @@ func TestComponentFor_WarnsOnUnresolvedSecrets(t *testing.T) {
 	t.Cleanup(func() { slog.SetDefault(prev) })
 
 	o := &fakeOpener{}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	_, ok := rc.componentFor(id)
@@ -368,8 +368,8 @@ func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {
 	home := t.TempDir()
 	reg := LoadRegistry(home)
 	o := &fakeOpener{}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	require.NoError(t, rc.AddStore("dup", "state.redis", map[string]string{"redisHost": "h"}))
@@ -398,8 +398,8 @@ func TestReconciler_StoresOrderingAndDismissedFilter(t *testing.T) {
 		Metadata: map[string]string{"connectionString": "host=h2 dbname=d2"}}))
 
 	o := &fakeOpener{}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// No active store: pure recency order, newest first.
@@ -454,8 +454,8 @@ func TestReconciler_DeleteStoreRefusesActive(t *testing.T) {
 	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
 
 	o := &fakeOpener{}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	active := statestore.Component{Name: "autostore", Type: "state.sqlite", Path: autoPath,
@@ -500,7 +500,7 @@ spec:
 			PathProject: map[string]string{dir: "saga"},
 		}
 	}
-	rc := newReconciler(context.Background(), nil, "default", "", "", nil, nil, nil, composeEnv)
+	rc := newReconciler(context.Background(), nil, "default", "", "", nil, nil, nil, composeEnv, nil)
 	c := statestore.Component{
 		Name: "statestore", Type: "state.redis", Path: filepath.Join(dir, "statestore.yaml"),
 		Metadata: map[string]string{"redisHost": "redis:6379"},
@@ -526,8 +526,8 @@ func TestReconciler_UndismissActiveStore(t *testing.T) {
 	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "autostore", Type: "state.sqlite", Source: SourceAuto, Path: autoPath}))
 
 	o := &fakeOpener{}
-	pool := newConnPool("default", &http.Client{}, nil, o.open)
-	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil)
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
 	t.Cleanup(func() { _ = rc.Close() })
 
 	// Tombstone it, then simulate reconcile electing it active.

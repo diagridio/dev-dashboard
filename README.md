@@ -62,6 +62,76 @@ Download the archive for your platform from the [GitHub Releases](https://github
 dev-dashboard --version
 ```
 
+## Run as a container (.NET Aspire)
+
+The dashboard also ships as a container image, purpose-built for embedding inside a
+[.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) AppHost via the
+[`diagrid-labs/dashboard-aspire`](https://github.com/diagrid-labs/dashboard-aspire) hosting
+integration (which will be rewritten against the contract below). It also runs standalone
+with a hand-written `docker run`.
+
+**Image:** `ghcr.io/diagridio/dev-dashboard`, tagged `:X.Y.Z` (in lockstep with binary
+releases) and `:latest`. Prerelease tags (e.g. `v1.5.0-rc.1`) publish their own version tag
+but do not move `:latest`. The image bakes in `DEVDASHBOARD_MODE=aspire` and serves on port
+`8080` bound to `0.0.0.0`.
+
+In aspire mode, discovery is restricted to the env contract below (no host process scan, no
+Docker Compose scan), and the following are disabled: app lifecycle controls
+(start/stop/restart), the control-plane page, log tailing, self-update/update-check, and
+automatic browser opening.
+
+**Try it:**
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e DEVDASHBOARD_APP_COUNT=1 \
+  -e DEVDASHBOARD_APP_0_ID=myapp \
+  -e DEVDASHBOARD_APP_0_DAPR_HTTP=http://host.docker.internal:3500 \
+  ghcr.io/diagridio/dev-dashboard:latest
+```
+
+**Mode switch:**
+
+| Source | Values | Default |
+|---|---|---|
+| `--mode` flag / `DEVDASHBOARD_MODE` env | `aspire` (reserved for future work: `dapr`, `compose`) | unset |
+
+**App discovery** — one set of `_<i>_*` vars per app, for `i = 0..DEVDASHBOARD_APP_COUNT-1`:
+
+| Env var | Required | Meaning |
+|---|---|---|
+| `DEVDASHBOARD_APP_COUNT` | yes | number of apps (`0` is valid: empty dashboard) |
+| `DEVDASHBOARD_APP_<i>_ID` | yes | Dapr app-id |
+| `DEVDASHBOARD_APP_<i>_DAPR_HTTP` | yes | daprd HTTP base URL, reachable **from the dashboard container** (e.g. `http://myapp-dapr:3500`) |
+| `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Used for **app-scoped** workflow operations — fetching one instance's history, an app-filtered workflow list/stats, and force delete — so those honor the app's own namespace. The store-wide workflow list, stats, and app-id dropdown (all-apps scans) still use the global `DEVDASHBOARD_NAMESPACE` |
+| `DEVDASHBOARD_APP_<i>_LABEL` | no | display name; defaults to the app-id. Shown in the applications list and app detail header whenever it differs from the app-id |
+
+Validation is fail-fast at startup: a missing or non-numeric `DEVDASHBOARD_APP_COUNT`, any
+missing required per-app var, or an unparsable `DAPR_HTTP` URL exits with an error naming the
+exact variable.
+
+**Security note:** in aspire mode the dashboard drops the loopback `Host` check (the container
+is addressed by its Docker-network name or a published port). Without `DEVDASHBOARD_ALLOWED_HOSTS`
+it accepts any `Host`, which means a malicious web page using DNS rebinding can reach the API even
+when the port is published only to `localhost`. Setting `DEVDASHBOARD_ALLOWED_HOSTS` to the
+hostnames the dashboard is served under closes that hole (loopback names are always allowed).
+Mutating requests are still protected by a normalized same-origin check. The dashboard is a local
+development tool — never expose it publicly.
+
+**Serving and features:**
+
+| Env var / flag | Default (aspire) | Meaning |
+|---|---|---|
+| `DEVDASHBOARD_PORT` / `--port` | `8080` | listen port |
+| `DEVDASHBOARD_BIND` / `--bind` | `0.0.0.0` | bind address |
+| `DEVDASHBOARD_STATESTORE_FILE` / `--statestore` | unset | path to a mounted Dapr state-store component YAML; enables the Workflows page |
+| `DEVDASHBOARD_NAMESPACE` / `--namespace` | `default` | default Dapr namespace for workflow actor keys |
+| `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra component directories for the Resources page, `os.PathListSeparator`-separated |
+| `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, aspire mode only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
+| `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
+
+Precedence everywhere is **flag > env > mode default**.
+
 ## Run the dashboard
 
 ```sh
@@ -82,6 +152,13 @@ dev-dashboard --verbose
 No additional setup is needed: the dashboard discovers running Dapr apps the same way
 `dapr list` does, so anything started with `dapr run` / `dapr run -f`, Aspire and Docker compose shows up within one
 refresh cycle.
+
+With `--mode`/`DEVDASHBOARD_MODE` unset (the default for host use), the dashboard performs the
+complete scan across all discovery sources described above. `--mode=aspire` restricts
+discovery to the container env contract and switches to container serving posture — see
+[Run as a container](#run-as-a-container-net-aspire) above. `dapr` and `compose` are reserved
+mode values for future single-source filtering and are not implemented yet. `--bind` (default
+`127.0.0.1`, `0.0.0.0` in aspire mode) controls the listen address alongside `--port`.
 
 ## Updating the dashboard
 
@@ -357,7 +434,10 @@ single commit with `git commit --no-verify`.
 > [`release` GitHub Actions workflow](.github/workflows/release.yaml): pushing a `vX.Y.Z` tag
 > runs [GoReleaser](https://goreleaser.com), which compiles the cross-platform archives plus
 > `checksums.txt` and publishes them to a GitHub Release. The version (`dev-dashboard --version`)
-> is injected from the tag via build-time ldflags.
+> is injected from the tag via build-time ldflags. The same tag-driven run also builds and
+> pushes the multi-arch container image to `ghcr.io/diagridio/dev-dashboard` via goreleaser.
+> Prerelease tags (any `-suffix`, e.g. `v1.5.0-rc.1`) push their version-tagged image but
+> skip the `:latest` manifest, so release candidates never reach `:latest` consumers.
 
 Because `go install` cannot run `npm`, the release tag commit must embed the prebuilt
 `web/dist`. `scripts/release.sh` handles this: it builds the SPA, creates a **detached** commit

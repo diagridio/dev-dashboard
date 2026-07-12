@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"path"
@@ -13,9 +14,11 @@ import (
 // unknown paths so client-side (History-API) routing works. basePath is the
 // optional subpath the app is mounted under ("" for root). telemetryEnabled
 // is injected into the served index.html as window.__DASH_TELEMETRY_ENABLED__
-// so the front-end knows whether to load Datadog RUM, and version is injected
-// as window.__DASH_VERSION__ so RUM can tag events with the build version.
-func SPAHandler(fsys fs.FS, basePath string, telemetryEnabled bool, version string) http.Handler {
+// so the front-end knows whether to load Datadog RUM. version is injected as
+// window.__DASH_VERSION__ so RUM can tag events with the build version, and
+// caps as window.__DASH_CAPABILITIES__ so the front-end can hide UI for
+// routes the server has gated off.
+func SPAHandler(fsys fs.FS, basePath string, telemetryEnabled bool, version string, caps Capabilities) http.Handler {
 	basePath = "/" + strings.Trim(basePath, "/")
 	fileServer := http.FileServer(http.FS(fsys))
 
@@ -44,11 +47,11 @@ func SPAHandler(fsys fs.FS, basePath string, telemetryEnabled bool, version stri
 			http.NotFound(w, r)
 			return
 		}
-		serveIndex(w, r, fsys, telemetryEnabled, version)
+		serveIndex(w, r, fsys, telemetryEnabled, version, caps)
 	})
 }
 
-func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS, telemetryEnabled bool, version string) {
+func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS, telemetryEnabled bool, version string, caps Capabilities) {
 	data, err := fs.ReadFile(fsys, "index.html")
 	if err != nil {
 		http.Error(w, "index.html not found", http.StatusInternalServerError)
@@ -58,8 +61,12 @@ func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS, telemetryEna
 	if telemetryEnabled {
 		flag = "true"
 	}
+	// caps is a bool-only struct, so marshaling cannot fail.
+	capsJSON, _ := json.Marshal(caps)
 	// strconv.Quote produces a safely-escaped JS string literal for the version.
-	script := []byte("<script>window.__DASH_TELEMETRY_ENABLED__=" + flag + ";window.__DASH_VERSION__=" + strconv.Quote(version) + ";</script></head>")
+	script := []byte("<script>window.__DASH_TELEMETRY_ENABLED__=" + flag +
+		";window.__DASH_VERSION__=" + strconv.Quote(version) +
+		";window.__DASH_CAPABILITIES__=" + string(capsJSON) + ";</script></head>")
 	data = bytes.Replace(data, []byte("</head>"), script, 1)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")

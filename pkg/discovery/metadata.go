@@ -85,10 +85,9 @@ func runTemplateFromExtended(extended map[string]string) string {
 	return ""
 }
 
-// FetchMetadata queries a sidecar's /v1.0/metadata endpoint.
-func FetchMetadata(ctx context.Context, client *http.Client, httpPort int) (Metadata, error) {
-	url := fmt.Sprintf("http://127.0.0.1:%d/v1.0/metadata", httpPort)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// FetchMetadata queries a sidecar's /v1.0/metadata endpoint at baseURL.
+func FetchMetadata(ctx context.Context, client *http.Client, baseURL string) (Metadata, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1.0/metadata", nil)
 	if err != nil {
 		return Metadata{}, err
 	}

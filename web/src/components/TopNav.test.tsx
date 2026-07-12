@@ -47,6 +47,10 @@ describe('NAV_ITEMS', () => {
 })
 
 describe('TopNav', () => {
+  afterEach(() => {
+    delete window.__DASH_CAPABILITIES__
+  })
+
   function renderNav() {
     return render(
       <RefreshProvider>
@@ -103,6 +107,20 @@ describe('TopNav', () => {
     renderNav()
     fireEvent.click(screen.getByRole('link', { name: 'Workflows' }))
     expect(trackAction).toHaveBeenCalledWith('nav_click', { label: 'Workflows' })
+  })
+
+  it('hides capability-gated entries when their capability is off', () => {
+    window.__DASH_CAPABILITIES__ = {
+      lifecycle: false,
+      controlPlane: false,
+      logs: false,
+      workflows: true,
+    }
+    renderNav()
+    expect(screen.queryByText('Control Plane')).toBeNull()
+    expect(screen.queryByText('Logs')).toBeNull()
+    expect(screen.getByText('Workflows')).toBeInTheDocument()
+    expect(screen.getByText('Applications')).toBeInTheDocument()
   })
 
   describe('topbar height tracking', () => {

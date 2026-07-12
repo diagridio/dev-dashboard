@@ -101,9 +101,7 @@ func TestDaprWorkflowReadBack(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 
-	svc := workflow.New(store, "default", func(context.Context) ([]string, error) {
-		return []string{"ordersvc"}, nil
-	})
+	svc := workflow.New(store, "default")
 
 	ex, err := svc.Get(context.Background(), "ordersvc", instanceID)
 	require.NoError(t, err)

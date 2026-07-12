@@ -108,6 +108,43 @@ func TestServiceListAndFilter(t *testing.T) {
 	require.Empty(t, res.Items)
 }
 
+func TestServiceGetUsesPerAppNamespace(t *testing.T) {
+	f := newFakeStore()
+	// Instance data lives under the app's own namespace "prod"; the service's
+	// store namespace is the global "default".
+	seedWorkflow(t, f, "prod", "order", "inst-a", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
+
+	nsFor := func(_ context.Context, appID string) string {
+		if appID == "order" {
+			return "prod"
+		}
+		return ""
+	}
+	svc := New(f, "default", WithNamespaceResolver(nsFor))
+
+	ex, err := svc.Get(context.Background(), "order", "inst-a")
+	require.NoError(t, err)
+	require.Equal(t, "OrderWorkflow", ex.Name)
+
+	// A list filtered by that app also honors the per-app namespace.
+	res, err := svc.List(context.Background(), ListQuery{AppID: "order"})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 1)
+	require.Equal(t, "inst-a", res.Items[0].InstanceID)
+}
+
+func TestServiceGetFallsBackToStoreNamespace(t *testing.T) {
+	f := newFakeStore()
+	seedWorkflow(t, f, "default", "order", "inst-a", "OrderWorkflow", []*protos.HistoryEvent{startedEvent("OrderWorkflow")})
+
+	// Resolver returns "" (e.g. host-scanned app) → fall back to store namespace.
+	svc := New(f, "default", WithNamespaceResolver(func(context.Context, string) string { return "" }))
+
+	ex, err := svc.Get(context.Background(), "order", "inst-a")
+	require.NoError(t, err)
+	require.Equal(t, "OrderWorkflow", ex.Name)
+}
+
 func TestServiceListNoStore(t *testing.T) {
 	svc := New(nil, "default")
 	_, err := svc.List(context.Background(), ListQuery{})
