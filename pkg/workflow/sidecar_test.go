@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/dapr/durabletask-go/api/protos"
 	"github.com/stretchr/testify/require"
@@ -26,9 +27,16 @@ type fakeHub struct {
 	states        map[string]*protos.WorkflowState
 	history       map[string][]*protos.HistoryEvent
 	unimplemented bool
+	// block, when set, makes ListInstanceIDs and GetInstance hang until the
+	// caller's context is done, simulating a wedged sidecar.
+	block bool
 }
 
-func (f *fakeHub) ListInstanceIDs(_ context.Context, req *protos.ListInstanceIDsRequest) (*protos.ListInstanceIDsResponse, error) {
+func (f *fakeHub) ListInstanceIDs(ctx context.Context, req *protos.ListInstanceIDsRequest) (*protos.ListInstanceIDsResponse, error) {
+	if f.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	if f.unimplemented {
 		return nil, status.Error(codes.Unimplemented, "not implemented")
 	}
@@ -47,7 +55,11 @@ func (f *fakeHub) ListInstanceIDs(_ context.Context, req *protos.ListInstanceIDs
 	return resp, nil
 }
 
-func (f *fakeHub) GetInstance(_ context.Context, req *protos.GetInstanceRequest) (*protos.GetInstanceResponse, error) {
+func (f *fakeHub) GetInstance(ctx context.Context, req *protos.GetInstanceRequest) (*protos.GetInstanceResponse, error) {
+	if f.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
 	st, ok := f.states[req.GetInstanceId()]
 	if !ok {
 		return &protos.GetInstanceResponse{Exists: false}, nil
@@ -190,6 +202,65 @@ func TestSidecarList_UnimplementedSkipsApp(t *testing.T) {
 	res, err := svc.List(context.Background(), ListQuery{})
 	require.NoError(t, err) // per-app failure skips the app, never errors the page
 	require.Empty(t, res.Items)
+}
+
+// withShortSidecarTimeout shrinks sidecarCallTimeout for the duration of a
+// test, restoring it on cleanup, so blocking-forever fakes resolve quickly.
+func withShortSidecarTimeout(t *testing.T) {
+	t.Helper()
+	orig := sidecarCallTimeout
+	sidecarCallTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { sidecarCallTimeout = orig })
+}
+
+func TestSidecarList_PerAppTimeoutSkipsWedgedApp(t *testing.T) {
+	withShortSidecarTimeout(t)
+	hub := &fakeHub{block: true}
+	addr := startFakeHub(t, hub)
+	pool := NewSidecarPool()
+	t.Cleanup(func() { _ = pool.Close() })
+	svc := pool.Service(fixedEndpoints("wedged-app", addr))
+
+	start := time.Now()
+	res, err := svc.List(context.Background(), ListQuery{})
+	elapsed := time.Since(start)
+
+	require.NoError(t, err) // wedged app is skipped, not errored
+	require.Empty(t, res.Items)
+	require.Less(t, elapsed, time.Second, "List must not block on a wedged app's RPCs")
+}
+
+func TestSidecarGet_PerAppTimeout(t *testing.T) {
+	withShortSidecarTimeout(t)
+	hub := &fakeHub{block: true}
+	addr := startFakeHub(t, hub)
+	pool := NewSidecarPool()
+	t.Cleanup(func() { _ = pool.Close() })
+	svc := pool.Service(fixedEndpoints("wedged-app", addr))
+
+	start := time.Now()
+	_, err := svc.Get(context.Background(), "wedged-app", "x")
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	require.Less(t, elapsed, time.Second, "Get must not block on a wedged app's RPCs")
+}
+
+func TestSidecarAppIDs_PerAppTimeout(t *testing.T) {
+	withShortSidecarTimeout(t)
+	hub := &fakeHub{block: true}
+	addr := startFakeHub(t, hub)
+	pool := NewSidecarPool()
+	t.Cleanup(func() { _ = pool.Close() })
+	svc := pool.Service(fixedEndpoints("wedged-app", addr))
+
+	start := time.Now()
+	ids, err := svc.AppIDs(context.Background())
+	elapsed := time.Since(start)
+
+	require.NoError(t, err) // wedged app's probe is skipped, not errored
+	require.Empty(t, ids)
+	require.Less(t, elapsed, time.Second, "AppIDs must not block on a wedged app's probe")
 }
 
 func TestSidecarOwnsAndAppIDs(t *testing.T) {

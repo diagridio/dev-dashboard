@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/dapr/durabletask-go/api"
 	dtwf "github.com/dapr/durabletask-go/workflow"
@@ -38,6 +39,14 @@ const (
 	// maxSidecarInstances bounds instances read per app per query.
 	maxSidecarInstances = 1000
 )
+
+// sidecarCallTimeout bounds every per-app gRPC call sequence to the sidecar
+// (instance-ID pagination + metadata fan-out in listApp, the Get call pair,
+// and each AppIDs probe). A wedged or port-reused endpoint can otherwise
+// hang the caller's context-less HTTP request indefinitely; because the
+// budget is per app, one bad endpoint never eats into another app's time.
+// A var (not a const) so tests can shrink it instead of blocking for real.
+var sidecarCallTimeout = 3 * time.Second
 
 func sidecarLogger() *slog.Logger { return slog.Default().With("component", "workflow-sidecar") }
 
@@ -175,6 +184,8 @@ func (s *SidecarService) Get(ctx context.Context, appID, instanceID string) (Exe
 	if err != nil {
 		return Execution{}, err
 	}
+	ctx, cancel := context.WithTimeout(ctx, sidecarCallTimeout)
+	defer cancel()
 	md, err := cl.FetchWorkflowMetadata(ctx, instanceID)
 	if err != nil {
 		if errors.Is(err, api.ErrInstanceNotFound) {
@@ -214,7 +225,9 @@ func (s *SidecarService) AppIDs(ctx context.Context) ([]string, error) {
 		if err != nil {
 			continue
 		}
-		resp, err := cl.ListInstanceIDs(ctx)
+		probeCtx, cancel := context.WithTimeout(ctx, sidecarCallTimeout)
+		resp, err := cl.ListInstanceIDs(probeCtx)
+		cancel()
 		if err != nil {
 			sidecarLogger().Warn("sidecar workflow app probe failed", "appID", ep.AppID, "err", err)
 			continue
@@ -234,6 +247,11 @@ func (s *SidecarService) listApp(ctx context.Context, ep SidecarEndpoint) ([]Exe
 	if err != nil {
 		return nil, err
 	}
+	// One timeout for the whole app: ID pagination plus the metadata
+	// fan-out below all share this budget, so a wedged endpoint can't
+	// consume more than sidecarCallTimeout regardless of instance count.
+	ctx, cancel := context.WithTimeout(ctx, sidecarCallTimeout)
+	defer cancel()
 	resp, err := cl.ListInstanceIDs(ctx)
 	if err != nil {
 		return nil, mapSidecarErr(err)
