@@ -23,6 +23,7 @@ type composeContainer struct {
 	Image     string
 	Project   string
 	Service   string
+	Labels    map[string]string // Labels is the full container label map (compose, testcontainers, …).
 	Running   bool
 	StartedAt time.Time
 	Argv      []string          // entrypoint + cmd
@@ -61,25 +62,22 @@ type rawComposeContainer struct {
 	} `json:"Mounts"`
 }
 
-// parseComposeContainers decodes a batched inspect array, keeping only
-// compose-labelled containers.
-func parseComposeContainers(data []byte) ([]composeContainer, error) {
+// parseInspectContainers decodes a batched inspect array, keeping every
+// container. Project/Service are populated from compose labels when present.
+func parseInspectContainers(data []byte) ([]composeContainer, error) {
 	var raw []rawComposeContainer
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 	out := make([]composeContainer, 0, len(raw))
 	for _, r := range raw {
-		project := r.Config.Labels[labelComposeProject]
-		if project == "" {
-			continue
-		}
 		c := composeContainer{
 			ID:      r.ID,
 			Name:    strings.TrimPrefix(r.Name, "/"),
 			Image:   r.Config.Image,
-			Project: project,
+			Project: r.Config.Labels[labelComposeProject],
 			Service: r.Config.Labels[labelComposeService],
+			Labels:  r.Config.Labels,
 			Running: r.State.Status == "running",
 			Argv:    append(append([]string{}, r.Config.Entrypoint...), r.Config.Cmd...),
 			Ports:   map[int]int{},
@@ -106,6 +104,23 @@ func parseComposeContainers(data []byte) ([]composeContainer, error) {
 			if m.Type == "bind" {
 				c.Mounts[m.Destination] = m.Source
 			}
+		}
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+// parseComposeContainers decodes a batched inspect array, keeping only
+// compose-labelled containers.
+func parseComposeContainers(data []byte) ([]composeContainer, error) {
+	all, err := parseInspectContainers(data)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]composeContainer, 0, len(all))
+	for _, c := range all {
+		if c.Project == "" {
+			continue
 		}
 		out = append(out, c)
 	}

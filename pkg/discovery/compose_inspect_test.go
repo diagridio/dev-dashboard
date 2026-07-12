@@ -5,6 +5,8 @@ package discovery
 import (
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseComposeContainers(t *testing.T) {
@@ -81,4 +83,51 @@ func TestTranslateMountPath(t *testing.T) {
 			t.Fatalf("TranslateMountPath(%q) = %q,%v want %q,%v", tt.in, got, ok, tt.want, tt.ok)
 		}
 	}
+}
+
+func TestParseInspectContainers_KeepsUnlabeledAndExposesLabels(t *testing.T) {
+	data := []byte(`[
+  {
+    "Id": "tc1",
+    "Name": "/crazy_lamport",
+    "State": { "Status": "running", "StartedAt": "2026-07-12T14:00:00.000000000Z" },
+    "Config": {
+      "Image": "daprio/daprd:1.18.0",
+      "Labels": {
+        "org.testcontainers": "true",
+        "org.testcontainers.sessionId": "efeba7ba"
+      },
+      "Entrypoint": null,
+      "Cmd": ["./daprd", "--app-id", "workflow-patterns-app"]
+    },
+    "NetworkSettings": { "Ports": { "3500/tcp": [ { "HostPort": "58444" } ] } },
+    "Mounts": []
+  },
+  {
+    "Id": "c1",
+    "Name": "/checkout-dapr-1",
+    "State": { "Status": "running", "StartedAt": "2026-07-12T14:00:00.000000000Z" },
+    "Config": {
+      "Image": "daprio/daprd:1.15.0",
+      "Labels": { "com.docker.compose.project": "checkout", "com.docker.compose.service": "checkout" },
+      "Entrypoint": null,
+      "Cmd": ["./daprd"]
+    },
+    "NetworkSettings": { "Ports": {} },
+    "Mounts": []
+  }
+]`)
+	all, err := parseInspectContainers(data)
+	require.NoError(t, err)
+	require.Len(t, all, 2)
+	require.Equal(t, "true", all[0].Labels["org.testcontainers"])
+	require.Equal(t, "efeba7ba", all[0].Labels["org.testcontainers.sessionId"])
+	require.Empty(t, all[0].Project)
+	require.Equal(t, "checkout", all[1].Project)
+
+	// parseComposeContainers keeps filtering to compose-labeled containers only.
+	compose, err := parseComposeContainers(data)
+	require.NoError(t, err)
+	require.Len(t, compose, 1)
+	require.Equal(t, "checkout", compose[0].Project)
 }
