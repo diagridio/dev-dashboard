@@ -340,6 +340,17 @@ func TestScanResultKey(t *testing.T) {
 	})
 }
 
+func TestScanResultKey_Testcontainers(t *testing.T) {
+	r := ScanResult{AppID: "workflow-patterns-app", Source: SourceTestcontainers, DaprdContainerName: "crazy_lamport"}
+	if got := r.Key(); got != "crazy_lamport" {
+		t.Fatalf("expected container-name key, got %q", got)
+	}
+	r.DaprdContainerName = ""
+	if got := r.Key(); got != "workflow-patterns-app" {
+		t.Fatalf("expected app-id fallback, got %q", got)
+	}
+}
+
 func TestListSetsInstanceKeyAndSortsWithinAppID(t *testing.T) {
 	scan := func() ([]ScanResult, error) {
 		return []ScanResult{
@@ -634,4 +645,47 @@ func TestEnrichZeroCreatedShowsNoTimestamp(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "", items[0].Created)
 	require.Equal(t, "", items[0].Age)
+}
+
+type fakeAppProc struct{ cmd string }
+
+func (f fakeAppProc) CommandForPort(int) (string, bool) { return f.cmd, f.cmd != "" }
+
+func TestEnrich_TestcontainersHostAppPairing(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID: "workflow-patterns-app", Source: SourceTestcontainers,
+			AppPort: 8080, HTTPPort: 0, // HTTP port unpublished => probes skipped
+			DaprdContainerName: "crazy_lamport", DaprdStatus: StatusRunning,
+			TestcontainersSession: "efeba7ba",
+			Command:               "./daprd --app-id workflow-patterns-app --app-port 8080",
+		}}, nil
+	}
+	svc := &service{
+		scan:     scan,
+		appProc:  fakeAppProc{cmd: "/opt/homebrew/bin/java -cp app.jar io.dapr.Example"},
+		portOpen: func(port int) bool { return port == 8080 },
+	}
+	out, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	in := out[0]
+	require.Equal(t, "java", in.Runtime)
+	require.Equal(t, StatusRunning, in.AppStatus)
+	require.Equal(t, "efeba7ba", in.TestcontainersSession)
+	require.Equal(t, "crazy_lamport", in.InstanceKey)
+	require.False(t, in.SidecarOrphaned)
+}
+
+func TestEnrich_TestcontainersStoppedApp(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID: "workflow-patterns-app", Source: SourceTestcontainers,
+			AppPort: 8080, DaprdContainerName: "crazy_lamport",
+		}}, nil
+	}
+	svc := &service{scan: scan, appProc: fakeAppProc{}, portOpen: func(int) bool { return false }}
+	out, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, StatusStopped, out[0].AppStatus)
 }

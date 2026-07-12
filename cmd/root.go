@@ -144,7 +144,8 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 	default:
 		_, crtRunner := containerruntime.Detect()
 		composeSrc := discovery.NewComposeSource(crtRunner)
-		scanners := []discovery.Scanner{discovery.StandaloneScanner(), composeSrc.Scanner()}
+		tcSrc := discovery.NewTestcontainersSource(crtRunner)
+		scanners := []discovery.Scanner{discovery.StandaloneScanner(), composeSrc.Scanner(), tcSrc.Scanner()}
 		if discovery.AspireContractPresent(os.Getenv) {
 			as, err := discovery.NewAspireScanner(os.Getenv)
 			if err != nil {

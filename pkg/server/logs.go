@@ -55,7 +55,7 @@ func logsHandler(svc discovery.Service, containerLogs func(context.Context, stri
 
 		var ch <-chan string
 		format := ""
-		if in.Source == discovery.SourceCompose {
+		if in.Source == discovery.SourceCompose || in.Source == discovery.SourceTestcontainers {
 			id := in.DaprdContainerID
 			if source == "app" {
 				id = in.AppContainerID

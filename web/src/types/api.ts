@@ -18,10 +18,12 @@ export interface AppSummary {
   isAspire?: boolean
   /** display name from the Aspire AppHost; defaults to appId, so it may be identical (Aspire apps only) */
   label?: string
+  /** org.testcontainers.sessionId grouping one Testcontainers run (source === 'testcontainers' only) */
+  testcontainersSession?: string
   /** per-app Dapr namespace assigned by the Aspire AppHost (Aspire apps only) */
   namespace?: string
-  /** discovery source: process table vs docker compose containers */
-  source?: 'standalone' | 'compose'
+  /** discovery source: process table, docker compose, aspire env contract, or testcontainers */
+  source?: 'standalone' | 'compose' | 'aspire' | 'testcontainers'
   /** compose project name (source === 'compose' only) */
   composeProject?: string
   /** false when a compose sidecar's HTTP port is not published to the host */

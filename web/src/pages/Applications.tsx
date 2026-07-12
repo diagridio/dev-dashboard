@@ -113,7 +113,15 @@ export function Applications() {
 function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
   const num = (v: number) =>
     v ? <td className="mono tabnum">{v}</td> : <td className="mono tabnum faint">—</td>
-  const sourceLabel = app.runTemplate || (app.isAspire ? 'Aspire' : app.source === 'compose' ? 'Compose' : '—')
+  const sourceLabel =
+    app.runTemplate ||
+    (app.isAspire
+      ? 'Aspire'
+      : app.source === 'compose'
+        ? 'Compose'
+        : app.source === 'testcontainers'
+          ? 'Testcontainers'
+          : '—')
   const state = appDisplayState(app)
   const unreachable = app.source === 'compose' && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
   const key = appKey(app)

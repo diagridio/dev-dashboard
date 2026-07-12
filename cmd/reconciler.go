@@ -45,6 +45,7 @@ type reconciler struct {
 	registry       *ConnRegistry
 	pool           *connPool
 	degraded       storeEntry
+	sidecarPool    *workflow.SidecarPool
 	// composeEnv returns the compose endpoint/mount context (nil = no compose).
 	composeEnv func() discovery.ComposeEnv
 	// extraResPaths are appended to the reconciler's resource scan paths on every
@@ -82,7 +83,8 @@ func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeD
 		extraResPaths:  extraResPaths,
 		// The degraded entry has a nil store: every operation fails with
 		// ErrNoStore before any key/namespace resolution, so no appNS map.
-		degraded: buildStoreEntry(nil, namespace, client, apps, nil),
+		degraded:    buildStoreEntry(nil, namespace, client, apps, nil),
+		sidecarPool: workflow.NewSidecarPool(),
 	}
 }
 
@@ -407,26 +409,57 @@ func (rc *reconciler) DeleteStore(id string) error {
 	return nil
 }
 
-// ServiceFor satisfies server.WorkflowBackend. The argument is a registry entry
-// id (the ?store= value), never a name.
-//   - id == "" -> the elected active store, pre-warmed via the pool. If no store
-//     is elected, the degraded (ErrNoStore) entry. If a store IS elected but the
-//     pool cannot open it, the unreachable service (ErrStoreUnreachable).
-//   - id matches a registry entry -> build its component and connect via the
-//     pool; on open failure, the unreachable service.
-//   - unknown id -> ok=false.
-func (rc *reconciler) ServiceFor(id string) (workflow.Service, server.WorkflowRemover, server.TargetResolver, bool) {
+// sidecarEndpoints returns the workflow sidecar endpoints eligible under the
+// selection rule. Testcontainers apps are always eligible (their store lives
+// inside the container and is never host-readable). When includeAll is true
+// (no openable active store), every reachable non-aspire sidecar with a
+// published gRPC port becomes eligible. The list is computed per query from
+// live discovery so re-published random ports apply immediately.
+func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
+	return func(ctx context.Context) []workflow.SidecarEndpoint {
+		if rc.apps == nil {
+			return nil
+		}
+		apps, err := rc.apps.List(ctx)
+		if err != nil {
+			return nil
+		}
+		var eps []workflow.SidecarEndpoint
+		seen := map[string]bool{}
+		for _, in := range apps {
+			if in.GRPCPort == 0 || seen[in.AppID] {
+				continue
+			}
+			include := in.Source == discovery.SourceTestcontainers ||
+				(includeAll && in.SidecarReachable && in.Source != discovery.SourceAspire)
+			if !include {
+				continue
+			}
+			seen[in.AppID] = true
+			eps = append(eps, workflow.SidecarEndpoint{
+				AppID: in.AppID,
+				Addr:  "127.0.0.1:" + strconv.Itoa(in.GRPCPort),
+			})
+		}
+		return eps
+	}
+}
+
+// baseServiceFor resolves the store-backed service exactly as ServiceFor
+// historically did. storeUp reports whether a store actually opened (false
+// for the degraded no-store entry and the unreachable service).
+func (rc *reconciler) baseServiceFor(id string) (svc workflow.Service, rem server.WorkflowRemover, storeUp, known bool) {
 	var comp statestore.Component
 	if id == "" {
 		active := rc.activeComponent()
 		if active == nil {
-			return rc.degraded.svc, rc.degraded.rem, rc.degraded.targets, true
+			return rc.degraded.svc, rc.degraded.rem, false, true
 		}
 		comp = *active
 	} else {
 		c, ok := rc.componentFor(id)
 		if !ok {
-			return nil, nil, nil, false
+			return nil, nil, false, false
 		}
 		comp = c
 	}
@@ -441,13 +474,34 @@ func (rc *reconciler) ServiceFor(id string) (workflow.Service, server.WorkflowRe
 	defer cancel()
 	e, err := rc.pool.openOrGet(octx, comp)
 	if err != nil {
-		// Known store, unreachable: return a service that surfaces an accurate
-		// store-specific "could not connect…" error (not the no-store message),
-		// reusing the degraded remover/target-resolver.
+		// Known store, unreachable: surface an accurate store-specific
+		// "could not connect…" error (not the no-store message).
 		return workflow.NewUnreachableService(comp.Name, statestore.ConnInfo(comp)),
-			rc.degraded.rem, rc.degraded.targets, true
+			rc.degraded.rem, false, true
 	}
-	return e.svc, e.rem, e.targets, true
+	return e.svc, e.rem, true, true
+}
+
+// ServiceFor satisfies server.WorkflowBackend. The store-backed service is
+// composed with the sidecar-gRPC source: testcontainers apps always read via
+// their sidecar; when the active store is missing or unopenable (id == ""),
+// every reachable sidecar with a gRPC port becomes sidecar-sourced.
+//
+// The argument is a registry entry id (the ?store= value), never a name.
+//   - id == "" -> the elected active store, pre-warmed via the pool. If no store
+//     is elected, the degraded (ErrNoStore) entry. If a store IS elected but the
+//     pool cannot open it, the unreachable service (ErrStoreUnreachable).
+//   - id matches a registry entry -> build its component and connect via the
+//     pool; on open failure, the unreachable service.
+//   - unknown id -> ok=false.
+func (rc *reconciler) ServiceFor(id string) (workflow.Service, server.WorkflowRemover, server.TargetResolver, bool) {
+	baseSvc, rem, storeUp, known := rc.baseServiceFor(id)
+	if !known {
+		return nil, nil, nil, false
+	}
+	sc := rc.sidecarPool.Service(rc.sidecarEndpoints(id == "" && !storeUp))
+	svc := workflow.NewComposite(baseSvc, sc)
+	return svc, rem, newTargetResolver(rc.apps, svc), true
 }
 
 // Paths returns the current resource scan paths (provider for resources.New).
@@ -488,6 +542,9 @@ func (rc *reconciler) Close() error {
 	rc.mu.Lock()
 	rc.closed = true
 	rc.mu.Unlock()
+	if rc.sidecarPool != nil {
+		_ = rc.sidecarPool.Close()
+	}
 	if rc.pool != nil {
 		return rc.pool.Close()
 	}

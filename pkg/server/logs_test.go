@@ -159,6 +159,35 @@ func TestLogsComposeDaprdDefault(t *testing.T) {
 	}
 }
 
+func TestLogsTestcontainersStreamsDaprdFromContainer(t *testing.T) {
+	app := discovery.Instance{
+		AppID: "workflow-patterns-app", Source: discovery.SourceTestcontainers,
+		DaprdContainerID: "28af628017d1",
+	}
+	var gotID string
+	containerLogs := func(_ context.Context, id string) (<-chan string, error) {
+		gotID = id
+		ch := make(chan string, 1)
+		ch <- "hello from testcontainers daprd"
+		close(ch)
+		return ch, nil
+	}
+	h := logsHandler(&fakeApps{instances: []discovery.Instance{app}}, containerLogs)
+	req := httptest.NewRequest("GET", "/api/apps/workflow-patterns-app/logs", nil)
+	req = withChiParam(req, "appId", "workflow-patterns-app")
+	rec := httptest.NewRecorder()
+	h(rec, req)
+	if gotID != "28af628017d1" {
+		t.Fatalf("no ?source param must stream the daprd container, got %q", gotID)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Fatalf("content type: %q", ct)
+	}
+	if !strings.Contains(rec.Body.String(), "data: hello from testcontainers daprd\n\n") {
+		t.Fatalf("body: %q", rec.Body.String())
+	}
+}
+
 func TestLogsComposeNoRuntime404(t *testing.T) {
 	app := discovery.Instance{AppID: "x", Source: discovery.SourceCompose, DaprdContainerID: "aaa"}
 	h := logsHandler(&fakeApps{instances: []discovery.Instance{app}}, nil) // no container runtime wired
