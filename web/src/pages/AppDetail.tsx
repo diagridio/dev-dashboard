@@ -32,6 +32,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
   const appPidDisplay = !app.metadataOk ? 'unknown' : app.appPid ? String(app.appPid) : '—'
   const isCompose = app.source === 'compose'
+  const isTestcontainers = app.source === 'testcontainers'
   const unreachable = isCompose && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
 
   const now = useNow()
@@ -96,7 +97,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   }
 
   const panelActions = (target: AppTarget, status: string | undefined, what: string) => {
-    if (!caps.lifecycle) return null
+    if (!caps.lifecycle || isTestcontainers) return null
     return (
       <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
         {status === 'running' && (
@@ -157,7 +158,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          {caps.lifecycle && anyRunning && (
+          {caps.lifecycle && !isTestcontainers && anyRunning && (
             <>
               {!app.isAspire && !orphaned && (
                 <button
@@ -182,7 +183,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               Remove from list
             </button>
           )}
-          {caps.lifecycle && allStopped && !app.isAspire && !orphaned && (
+          {caps.lifecycle && !isTestcontainers && allStopped && !app.isAspire && !orphaned && (
             <button
               className="btn ghost"
               disabled={busy}

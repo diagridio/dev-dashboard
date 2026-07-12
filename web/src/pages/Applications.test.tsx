@@ -140,6 +140,15 @@ describe('Applications', () => {
     expect(hint).toBeInTheDocument()
   })
 
+  it('labels testcontainers apps', async () => {
+    mockApps([
+      { ...baseApp, appId: 'workflow-patterns-app', source: 'testcontainers', runTemplate: '' },
+    ])
+    renderAt()
+    const cells = await screen.findAllByText('Testcontainers')
+    expect(cells.length).toBeGreaterThanOrEqual(1)
+  })
+
   it('does not show the hint for reachable compose apps', async () => {
     mockApps([
       { ...baseApp, appId: 'primes-go', source: 'compose', composeProject: 'saga', sidecarReachable: true, runTemplate: '' },

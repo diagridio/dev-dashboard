@@ -405,6 +405,38 @@ describe('AppDetail', () => {
     confirmSpy.mockRestore()
   })
 
+  it('hides all lifecycle controls for testcontainers apps', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, source: 'testcontainers', testcontainersSession: 'abc123' }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Stop' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Restart' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+  })
+
+  it('hides the whole-instance Start button for a fully stopped testcontainers app', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          source: 'testcontainers',
+          testcontainersSession: 'abc123',
+          appStatus: 'stopped',
+          daprdStatus: 'stopped',
+          appPid: 0,
+          daprdPid: 0,
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+  })
+
   it('keeps per-container sidecar target for compose apps', async () => {
     let posted = ''
     server.use(
