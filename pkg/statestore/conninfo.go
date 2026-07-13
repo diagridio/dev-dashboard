@@ -18,6 +18,8 @@ func ConnInfo(c Component) string {
 		return strings.TrimSpace(c.Metadata["connectionString"])
 	case "state.postgresql", "state.postgres":
 		return pgConnInfo(c.Metadata["connectionString"])
+	case "state.mongodb":
+		return mongoConnInfo(c.Metadata["host"], c.Metadata["databaseName"])
 	default:
 		return ""
 	}
@@ -73,5 +75,35 @@ func pgConnInfo(cs string) string {
 		return hostPort
 	default:
 		return db
+	}
+}
+
+// mongoConnInfo builds a credentials-free "host[:port][/dbname]" summary for a
+// MongoDB component. The host field may be a bare "host:port" or a full
+// mongodb:// URI; userinfo (user:password) is always discarded.
+func mongoConnInfo(hostField, dbName string) string {
+	hostField = strings.TrimSpace(hostField)
+	if hostField == "" {
+		return ""
+	}
+	host := hostField
+	db := strings.TrimSpace(dbName)
+	if strings.HasPrefix(hostField, "mongodb://") || strings.HasPrefix(hostField, "mongodb+srv://") {
+		u, err := url.Parse(hostField)
+		if err != nil {
+			return ""
+		}
+		// SECURITY: u.Host is host[:port] only; Go's net/url keeps userinfo in
+		// u.User, which we never read. Do not rebuild this from raw strings.
+		host = u.Host
+		if db == "" {
+			db = strings.TrimPrefix(u.Path, "/")
+		}
+	}
+	switch {
+	case host != "" && db != "":
+		return host + "/" + db
+	default:
+		return host
 	}
 }
