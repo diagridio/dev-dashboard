@@ -267,7 +267,8 @@ component fails the suite until the doc is updated.
 | Pattern | Pointer |
 |---|---|
 | Status → pill | `components/StatusPill.tsx` — status string → `.pill .s-*` + uppercased label. **Don't hand-map statuses.** |
-| Modal dialog | `components/Modal.tsx` — focus-trapped shell (`.modal-backdrop` + `.card.modal-card`); `components/ConfirmRemoveDialog.tsx` for destructive confirms. Both trap/restore focus via `hooks/useModalFocus.ts` — reuse it, don't hand-roll traps. |
+| Modal dialog | `components/Modal.tsx` — focus-trapped shell (`.modal-backdrop` + `.card.modal-card`); accepts `initialFocusRef` (element focused on open) and `narrow` (the 420px confirm width). Traps/restores focus via `hooks/useModalFocus.ts` — reuse it, don't hand-roll traps. |
+| Confirmation dialog | `components/ConfirmDialog.tsx` — a narrow `Modal` with a Cancel + confirm footer. Cancel gets initial focus (Enter can't fire the action by accident); the confirm button is `.btn.danger` by default, or `.btn.primary` via `danger={false}` for non-destructive actions (Start/Restart). **Never use `window.confirm`** — every confirmation goes through this component. `components/ConfirmRemoveDialog.tsx` (workflow delete: mechanism summary + force checkbox) is the reference composition for a confirm with extra body content. |
 | Save/cancel form dialog | `components/form/DialogShell.tsx` — titled `Modal` with Save/Cancel footer + `duplicateNameError` name-collision guard; the builder dialogs are the reference usage. |
 | Follow-scroll log pane | `hooks/useFollowScroll.ts` — pin-to-bottom with scroll-away disengage (24px threshold); both Logs viewers use it. |
 | Descriptor-driven form control | `components/MetadataFieldInput.tsx` — one `.inp` control from a component-metadata field descriptor (vs hand-composed forms: see §6). |
@@ -297,8 +298,10 @@ component fails the suite until the doc is updated.
   (`.ci.sel` = selected).
 - **Modal shell** — `.modal-backdrop` (fixed full-screen overlay, centers its child) wraps
   `.card.modal-card` (the dialog surface; composes `.card`), with `.modal-title` for the
-  heading and `.modal-actions` for the right-aligned footer button row. Prefer the `Modal`
-  component over assembling these by hand.
+  heading and `.modal-actions` for the right-aligned footer button row.
+  `.modal-card.narrow` caps the width at 420px — the confirmation-dialog size
+  (form dialogs keep the 560px default). Prefer the `Modal` / `ConfirmDialog`
+  components over assembling these by hand.
 
 **Tables**
 - `table.t` — standard table; add `.click` to make rows clickable (cursor + hover).
@@ -443,6 +446,17 @@ copy/download buttons per builder.
   ```
   The App-detail component chips follow the same rule (`.chip.k` wrapped in a
   `<Link>`). In tables, prefer `.celllink` (above).
+- **Confirmations:** any action that needs a "are you sure?" — destructive or
+  disruptive — opens `ConfirmDialog` (see §5), never the native `window.confirm`.
+  Title is the question (*"Stop "order" (app + sidecar)?"*), optional body copy is
+  a muted 14px paragraph, and the confirm button is labelled with the verb
+  ("Stop", "Remove", "Disconnect" — `.btn.danger`; Start/Restart pass
+  `danger={false}` for `.btn.primary`).
+- **Capability gating:** features the host may not support (lifecycle, logs,
+  workflows, control plane) are gated via `getCapabilities()` from
+  `lib/capabilities.ts` (server-injected `window.__DASH_CAPABILITIES__`; defaults
+  to everything on in dev/tests). **Hide** the gated nav item, route, or button —
+  don't render it disabled.
 - **Em dash for empty values:** render `<span className="faint">—</span>`, not an
   empty cell.
 - **Copy-to-clipboard:** `.copybtn` (or click-to-copy on a `.vv.mono`) → `copyText()`
