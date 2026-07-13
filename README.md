@@ -6,7 +6,10 @@ your machine, plus guided builders for authoring Dapr component and resiliency Y
 ## Goal
 
 The Diagrid Dev Dashboard is a companion for local Dapr development. It inspects the
-apps you start with `dapr run` / `dapr run -f`, Aspire or Docker compose, and surfaces everything about them — sidecars, workflows, actors, subscriptions, components, resiliency policies, configurations, and logs.
+apps you start with `dapr run` / `dapr run -f`, Aspire, Docker Compose, or Dapr
+Testcontainers (e.g. Spring Boot apps run with `mvn spring-boot:test-run` and
+`dapr-spring-boot-starter-test`), and surfaces everything about them — sidecars, workflows,
+actors, subscriptions, components, resiliency policies, configurations, and logs.
 
 It also helps you author Dapr resources. The **Component Builder** walks you through
 picking a component type from the full Dapr catalog, filling in its metadata fields, and
@@ -150,8 +153,11 @@ dev-dashboard --verbose
 ```
 
 No additional setup is needed: the dashboard discovers running Dapr apps the same way
-`dapr list` does, so anything started with `dapr run` / `dapr run -f`, Aspire and Docker compose shows up within one
-refresh cycle.
+`dapr list` does, so anything started with `dapr run` / `dapr run -f`, Aspire, Docker
+Compose, or Dapr Testcontainers shows up within one refresh cycle. Testcontainers apps
+(e.g. a Spring Boot app under `mvn spring-boot:test-run`) need zero configuration: the
+dashboard finds the Testcontainers-managed daprd container, pairs it with your host app
+process, and even reads workflows from an in-memory state store via the sidecar itself.
 
 With `--mode`/`DEVDASHBOARD_MODE` unset (the default for host use), the dashboard performs the
 complete scan across all discovery sources described above. `--mode=aspire` restricts
@@ -209,7 +215,8 @@ Developers use the dashboard to observe and debug Dapr apps while building local
 - **Review actors & subscriptions** — global pages aggregating active actor types and pub/sub
   subscriptions across all apps, each linkable back to the owning application.
 - **Read components & configurations** — read-only YAML viewers, enriched with which apps
-  loaded each component.
+  loaded each component; components that only exist inside a Testcontainers daprd container
+  are extracted and shown too, with a container-prefixed path.
 - **Build component YAML** — a guided wizard over the full Dapr component catalog: pick a
   type, fill in its metadata fields (with per-field docs and defaults), choose an
   authentication profile, then copy or download the generated YAML.
@@ -244,8 +251,8 @@ The dashboard is a **local development tool**, and only that:
 - **Not a control plane or deployment tool.** It observes and helps you author YAML locally;
   it does not deploy apps or manage remote Dapr installations.
 
-Run it on your own machine, alongside the apps you start with `dapr run`, Aspire, or Docker
-compose.
+Run it on your own machine, alongside the apps you start with `dapr run`, Aspire, Docker
+Compose, or Dapr Testcontainers.
 
 ## Building from source
 
@@ -327,8 +334,15 @@ marked `actorStateStore: "true"` (falling back to the first detected). Check:
   store by hand via the connection manager on the Components page.
 - Workflow keys are namespaced; the dashboard defaults to `default`. For another namespace, pass
   `--namespace <ns>`.
-- Only **Redis / PostgreSQL / SQLite** state stores are supported.
+- Only **Redis / PostgreSQL / SQLite** state stores can be opened directly. Apps whose store
+  the dashboard can't open (e.g. `state.in-memory`, or a Testcontainers app whose store lives
+  inside the container) are served **via their sidecar's gRPC workflow API** instead — this
+  requires Dapr ≥ 1.17 and only works while the sidecar is running.
 - Confirm the app actually persisted a workflow (an empty store → empty list).
+
+**Testcontainers apps** (e.g. the Java quickstarts run with `mvn spring-boot:test-run`) need
+none of the store setup above: workflows, components, and app details all come from the
+Testcontainers-managed sidecar itself.
 
 ## Testing
 
@@ -527,12 +541,19 @@ sidecars and state store.
   on demand during each `/api/apps` fetch (no separate background poller), so its refresh cadence
   follows the UI's autorefresh interval. A second scanner discovers Dapr apps running under
   **docker compose** by inspecting compose-labelled containers (app id and ports from the daprd
-  argv, logs streamed from the container runtime); both sources are merged, so one failing never
-  hides the other.
+  argv, logs streamed from the container runtime). A third scanner discovers **Dapr
+  Testcontainers** sessions (`org.testcontainers`-labelled daprd containers, e.g. from
+  `dapr-spring-boot-starter-test`): the randomly-published HTTP/gRPC ports are re-read every
+  poll, the host app process is paired via the app port (real PID, uptime, runtime), and the
+  component YAML declared in test config is extracted from the container so it appears on the
+  Components page. All sources are merged, so one failing never hides the others.
 - **Workflows** are read from the detected **state store backend** (Redis / PostgreSQL /
-  SQLite); a client is built from the auto-detected component YAML. Purge uses the official
-  Dapr workflow API when reachable, with direct state-store key deletion as an explicit force
-  fallback.
+  SQLite); a client is built from the auto-detected component YAML. When the dashboard cannot
+  open an app's store — Testcontainers apps (whose store lives inside the container,
+  `state.in-memory` included), or any app when no store is openable — workflows are read live
+  from the **sidecar's gRPC workflow API** (Dapr ≥ 1.17) instead, per app. Purge uses the
+  official Dapr workflow API when reachable, with direct state-store key deletion as an
+  explicit force fallback.
 - **Connections registry** — the state stores the dashboard can read from are tracked in a
   registry: auto-detected component refs plus any connections added in the UI, persisted to
   `~/.dapr/dev-dashboard/connections.yaml` (mode `0600`). The `pkg/metadata` catalog drives the

@@ -15,20 +15,26 @@ For UI styling conventions see [`web/STYLEGUIDE.md`](web/STYLEGUIDE.md).
 
 The dashboard is a **single Go binary** that:
 
-1. **Observes** local Dapr development read-only — it never starts or stops your apps.
+1. **Observes** local Dapr development — it discovers your apps; it only starts or stops
+   them when you use the explicit lifecycle controls.
 2. **Embeds** a React SPA (via `go:embed`) and serves it from the same origin as its API.
-3. **Discovers** running apps the same way `dapr list` does (the local process table),
-   then enriches each with a live `GET /v1.0/metadata` call to the sidecar.
-4. **Reads workflows** directly from the Dapr **state store** backend (Redis / PostgreSQL /
-   SQLite), not through your app.
+3. **Discovers** running apps from three merged sources — the local process table (the same
+   scan as `dapr list`), Docker Compose containers, and Dapr Testcontainers sessions — then
+   enriches each with a live `GET /v1.0/metadata` call to the sidecar.
+4. **Reads workflows** from the Dapr **state store** backend (Redis / PostgreSQL / SQLite)
+   when it can open one, and **live from the sidecar's gRPC workflow API** (Dapr ≥ 1.17)
+   per app when it can't — Testcontainers apps always, and every reachable sidecar when no
+   store is openable. That is what makes `state.in-memory` workflows inspectable.
 5. **Degrades gracefully** — a down sidecar, an unreachable store, or a missing runtime
    turns into a partial result or a clear error, never a crash.
 
 The only mutating operations in the entire product are: workflow **terminate/purge**,
 managing your own saved **state-store connections** (persisted to
-`~/.dapr/dev-dashboard/connections.yaml`, mode `0600`), and **control-plane lifecycle**
-actions (start/restart/stop of the self-hosted `dapr_scheduler` / `dapr_placement`
-containers, allowlisted to those names).
+`~/.dapr/dev-dashboard/connections.yaml`, mode `0600`), **app lifecycle** actions
+(start/stop/restart of discovered `dapr run` and compose apps — refused for Testcontainers
+apps, whose containers belong to ryuk and whose app belongs to the test process), and
+**control-plane lifecycle** actions (start/restart/stop of the self-hosted
+`dapr_scheduler` / `dapr_placement` containers, allowlisted to those names).
 
 ### Top-level data flow
 
@@ -72,9 +78,12 @@ cmd/                    cobra root + subcommands; process wiring; NO domain logi
   workflow.go           store-election precedence (newStoreRegistry)
 pkg/                    domain packages — each isolated, none import cmd/
   discovery/            standalone.List() + /v1.0/metadata + /v1.0/healthz enrichment;
-                        also scans compose containers via ComposeSource (scan_compose.go)
+                        also scans compose containers (scan_compose.go) and Testcontainers
+                        daprd containers (scan_testcontainers.go, tar_extract.go)
   statestore/           Store client (redis/postgres/sqlite), Detect, secret resolution
-  workflow/             list / stats / history / terminate / purge (reads the store)
+  workflow/             list / stats / history / terminate / purge; store-backed reads
+                        (service.go) + sidecar-gRPC reads (sidecar.go) routed per app
+                        (composite.go)
   controlplane/         docker/podman detection, inspect, lifecycle actions, log stream
   containerruntime/     docker/podman resolution + exec runner (shared by controlplane & discovery)
   resources/            component + configuration YAML loader
@@ -298,7 +307,9 @@ CLI PIDs, created time, run-template, resource paths, and command. Each result i
   to find the backing file; for Aspire/DCP apps, parse the DCP session directory to locate
   the per-resource log files.
 
-A second scanner, `ComposeSource` (`scan_compose.go`), discovers Dapr apps running under **docker compose**: it lists compose-labelled containers (`ps -q --filter label=com.docker.compose.project`), batch-inspects them, and treats any container whose argv invokes `daprd` as a sidecar — app id and ports come from the daprd flags, host-reachable ports from the published port bindings, and resource/config paths from the bind-mount table (host side). The paired app container is matched by compose service name (`-app-channel-address`, falling back to the app id). Sidecars without a published HTTP port are listed but marked `sidecarReachable=false` and skip health/metadata probes (the UI shows a publish-port hint). Both scanners are combined with `Merge` (one failing source never hides the other) and the compose scan is cached for ~2s behind a ~3s exec timeout. The scanner also exposes a per-project **endpoint map** (`ComposeEnv`) — compose service → published host ports, plus mount tables — which the reconciler uses to **translate** detected state-store addresses (e.g. `postgres-db:5432` → `localhost:5432`) at connect time via `statestore.Translate`; translation is in-memory only, never persisted. Compose app logs stream from `docker logs -f` (`Options.ContainerLogs`) instead of file tailing.
+A second scanner, `ComposeSource` (`scan_compose.go`), discovers Dapr apps running under **docker compose**: it lists compose-labelled containers (`ps -q --filter label=com.docker.compose.project`), batch-inspects them, and treats any container whose argv invokes `daprd` as a sidecar — app id and ports come from the daprd flags, host-reachable ports from the published port bindings, and resource/config paths from the bind-mount table (host side). The paired app container is matched by compose service name (`-app-channel-address`, falling back to the app id). Sidecars without a published HTTP port are listed but marked `sidecarReachable=false` and skip health/metadata probes (the UI shows a publish-port hint). The compose scan is cached for ~2s behind a ~3s exec timeout. The scanner also exposes a per-project **endpoint map** (`ComposeEnv`) — compose service → published host ports, plus mount tables — which the reconciler uses to **translate** detected state-store addresses (e.g. `postgres-db:5432` → `localhost:5432`) at connect time via `statestore.Translate`; translation is in-memory only, never persisted. Compose app logs stream from `docker logs -f` (`Options.ContainerLogs`) instead of file tailing.
+
+A third scanner, `TestcontainersSource` (`scan_testcontainers.go`), discovers **Dapr Testcontainers** sessions (e.g. Spring Boot apps run with `mvn spring-boot:test-run` and `dapr-spring-boot-starter-test`): it lists `org.testcontainers=true`-labelled containers and keeps those whose argv invokes `daprd` (which naturally excludes ryuk/placement/scheduler helpers). The daprd container publishes its HTTP/gRPC ports to **random host ports on every run**, so port mappings are re-read each poll. Unlike compose, the paired app is a **host process** (reached via `host.testcontainers.internal`): enrichment probes the app port for liveness and resolves the listener's command and PID (`appproc.go`) for runtime inference, App PID, and uptime. The scanner also extracts the container's `--resources-path` YAML as a tar stream (`cp <id>:<dir> -`, `tar_extract.go` — no shell needed, distroless-safe; cached per container ID, evicted on departure, transient failures retried) and exposes it via `Files()` for the resources extras provider (see Resources below). Lifecycle actions are refused for these apps — ryuk owns the containers, the test process owns the app. All scanners are combined with `Merge` (one failing source never hides the others).
 
 Derived fields include a human-friendly `Age` and an inferred runtime language.
 **To add a per-app field:** add it to `Instance` (`types.go`), populate it in `enrich`
@@ -322,7 +333,22 @@ scan cap is hit — so a filter that matches nothing can't scan unbounded). `Sta
 `AppIDs` aggregate across all instances. `Remove` (`remove.go`) picks a mechanism by state:
 terminate-then-purge or purge via the sidecar's Dapr workflow API when healthy, or a direct
 state-store key-deletion **force** fallback when the sidecar is unreachable or `force` is
-requested. **To add a workflow field:** add it to the types (`types.go`) and extract it in
+requested.
+
+A second data source, `SidecarService` (`sidecar.go`), reads workflows **live from daprd's
+gRPC workflow management API** (`ListInstanceIDs` / `FetchWorkflowMetadata` /
+`GetInstanceHistory` via the durabletask-go client, Dapr ≥ 1.17; pre-1.17 sidecars map to a
+version message). It works with any backing store — `state.in-memory` included — because
+the sidecar itself answers; per-app gRPC calls are timeout-bounded, and a failing app is
+skipped, never failing the page. `NewComposite` (`composite.go`) routes per app: apps the
+sidecar source **owns** (Testcontainers apps always; every reachable non-aspire sidecar
+with a gRPC port when no store is openable) read via gRPC, everything else via the store;
+all-apps queries merge both (sidecar wins collisions, first page only), and the no-store /
+unreachable-store banners still fire when nothing is sidecar-eligible. The reconciler's
+`ServiceFor` builds this composite (`cmd/reconciler.go`); sidecar gRPC connections are
+cached per address in a `SidecarPool` closed on shutdown.
+
+**To add a workflow field:** add it to the types (`types.go`) and extract it in
 `decode.go`. **To add a store backend:** add a case in `statestore.New` and satisfy the
 components-contrib `state.Store` (+ `KeysLiker`) interface.
 
@@ -344,10 +370,18 @@ stdout+stderr onto one channel for the SSE handler. **To add an action:** extend
 ### Resources (`pkg/resources`)
 
 Loads `Component` and `Configuration` YAML (multi-doc) from the reconciler's scan paths,
-deduped by absolute path. The HTTP layer enriches each component with `LoadedBy` — which
-running apps loaded it — by cross-referencing discovery. `Get` returns the raw YAML for the
-detail view. **To add a resource kind:** extend the `Kind` type + `kindFromString` and the
-API validation in `pkg/server/resources.go`.
+deduped by absolute path, merged with an **extras provider** — entries that exist outside
+the host filesystem, today the YAML extracted from Testcontainers daprd containers. Extras
+carry their raw YAML inline and a container-prefixed display path
+(`crazy_lamport:/dapr-resources/kvstore.yaml`), so `Get` never reads a display path from
+disk. **Load-bearing isolation rule:** extracted YAML feeds ONLY this resources service —
+never `statestore.Detect`, the reconciler's paths, or store election. An extracted
+`state.in-memory` component with `actorStateStore: true` would otherwise win the election
+and break other apps' workflow views; a guard test
+(`TestVirtualPathsDoNotFeedStoreDetection`) pins this. The HTTP layer enriches each
+component with `LoadedBy` — which running apps loaded it — by cross-referencing discovery.
+`Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
+`Kind` type + `kindFromString` and the API validation in `pkg/server/resources.go`.
 
 ### Logs (`pkg/logs`)
 
@@ -452,13 +486,16 @@ styleguide.
 
 ## 8. End-to-end flows
 
-- **An app appears:** SPA polls `/api/apps` → discovery scans the process table
-  (`standalone.List`) → enriches each with `/v1.0/metadata` + `/v1.0/healthz` in parallel →
-  the `reconcilingApps` decorator fingerprints the app set and, if changed, kicks a
-  background reconcile → the table renders.
+- **An app appears:** SPA polls `/api/apps` → discovery merges the three scanners (process
+  table via `standalone.List`, compose containers, Testcontainers containers) → enriches
+  each with `/v1.0/metadata` + `/v1.0/healthz` in parallel → the `reconcilingApps`
+  decorator fingerprints the app set and, if changed, kicks a background reconcile → the
+  table renders.
 - **Workflows load:** SPA polls `/api/workflows?store=<id>` → reconciler resolves the id to
-  a workflow service (elected active store if empty) via the connection pool → the service
-  enumerates + decodes instances from the state store → paginated JSON.
+  a workflow service (elected active store if empty) via the connection pool, composed with
+  the sidecar-gRPC source (`NewComposite`) → store-backed apps enumerate + decode instances
+  from the state store, sidecar-owned apps (Testcontainers; all reachable sidecars when no
+  store is openable) read live over gRPC → merged, paginated JSON.
 - **A store is elected:** reconcile detects `state.*` components across scan paths, resolves
   secrets, upserts them into the registry, and elects the active one by the 6-level
   precedence, then pre-warms it.
