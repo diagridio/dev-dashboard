@@ -34,19 +34,20 @@ type Manager interface {
 type manager struct {
 	runtime RuntimeKind
 	run     containerruntime.Runner
+	src     Sources
 
 	mu           sync.Mutex
 	composeNames map[string]bool // compose CP containers found by the last List
 }
 
 // New resolves the container runtime from the environment and PATH.
-func New() Manager {
+func New(src Sources) Manager {
 	kind, run := containerruntime.Detect()
-	return newManager(kind, run)
+	return newManager(kind, run, src)
 }
 
-func newManager(kind RuntimeKind, run containerruntime.Runner) *manager {
-	return &manager{runtime: kind, run: run}
+func newManager(kind RuntimeKind, run containerruntime.Runner, src Sources) *manager {
+	return &manager{runtime: kind, run: run, src: src}
 }
 
 func (m *manager) List(ctx context.Context) (ListResult, error) {
@@ -57,12 +58,19 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 	if _, err := m.run.Run(ctx, "info"); err != nil {
 		return ListResult{Runtime: m.runtime, Available: true, Reachable: false}, nil
 	}
-	composeSvcs := m.composeControlPlane(ctx)
-	statNames := append(append([]string{}, LiveServiceNames...), serviceNames(composeSvcs)...)
+	var composeSvcs []Service
+	if m.src.Compose {
+		composeSvcs = m.composeControlPlane(ctx)
+	}
+	var liveNames []string
+	if m.src.Init {
+		liveNames = LiveServiceNames
+	}
+	statNames := append(append([]string{}, liveNames...), serviceNames(composeSvcs)...)
 	mem := m.memory(ctx, statNames)
-	services := make([]Service, 0, len(LiveServiceNames)+len(composeSvcs))
+	services := make([]Service, 0, len(liveNames)+len(composeSvcs))
 	present := false
-	for _, name := range LiveServiceNames {
+	for _, name := range liveNames {
 		svc := Service{Name: name, Status: StatusStopped, Actionable: true}
 		out, err := m.run.Run(ctx, "inspect", name)
 		if err == nil {
@@ -159,11 +167,16 @@ func (m *manager) isComposeName(name string) bool {
 	return m.composeNames[name]
 }
 
+// allowed reports whether name belongs to a family this manager serves.
+func (m *manager) allowed(name string) bool {
+	return (m.src.Init && IsLiveName(name)) || (m.src.Compose && m.isComposeName(name))
+}
+
 func (m *manager) Do(ctx context.Context, action, name string) error {
 	if !ValidAction(action) {
 		return ErrInvalidAction
 	}
-	if !IsLiveName(name) && !m.isComposeName(name) {
+	if !m.allowed(name) {
 		return ErrUnknownService
 	}
 	if m.runtime == RuntimeNone {
@@ -174,7 +187,7 @@ func (m *manager) Do(ctx context.Context, action, name string) error {
 }
 
 func (m *manager) LogStream(ctx context.Context, name string) (<-chan string, error) {
-	if !IsLiveName(name) && !m.isComposeName(name) {
+	if !m.allowed(name) {
 		return nil, ErrUnknownService
 	}
 	if m.runtime == RuntimeNone {

@@ -40,7 +40,7 @@ func (f *fakeRunner) Stream(_ context.Context, args ...string) (<-chan string, e
 }
 
 func TestListUnavailableWhenNoRuntime(t *testing.T) {
-	m := newManager(RuntimeNone, nil)
+	m := newManager(RuntimeNone, nil, AllSources())
 	res, err := m.List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -60,7 +60,7 @@ func TestListRunningService(t *testing.T) {
 			"stats --no-stream":      stats,
 		},
 	}
-	m := newManager(RuntimeDocker, f)
+	m := newManager(RuntimeDocker, f, AllSources())
 	res, err := m.List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -87,11 +87,11 @@ func TestListRunningService(t *testing.T) {
 }
 
 func TestLogStreamValidation(t *testing.T) {
-	m := newManager(RuntimeDocker, &fakeRunner{outputs: map[string][]byte{}})
+	m := newManager(RuntimeDocker, &fakeRunner{outputs: map[string][]byte{}}, AllSources())
 	if _, err := m.LogStream(context.Background(), "dapr_redis"); err != ErrUnknownService {
 		t.Errorf("unknown name: got %v, want ErrUnknownService", err)
 	}
-	none := newManager(RuntimeNone, nil)
+	none := newManager(RuntimeNone, nil, AllSources())
 	if _, err := none.LogStream(context.Background(), "dapr_scheduler"); err != ErrRuntimeUnavailable {
 		t.Errorf("no runtime: got %v, want ErrRuntimeUnavailable", err)
 	}
@@ -99,7 +99,7 @@ func TestLogStreamValidation(t *testing.T) {
 
 func TestLogStreamEmitsLines(t *testing.T) {
 	f := &fakeRunner{streamLines: []string{"line one", "line two"}}
-	m := newManager(RuntimeDocker, f)
+	m := newManager(RuntimeDocker, f, AllSources())
 	ch, err := m.LogStream(context.Background(), "dapr_scheduler")
 	if err != nil {
 		t.Fatalf("LogStream: %v", err)
@@ -124,7 +124,7 @@ func TestListUnreachableDaemon(t *testing.T) {
 			"info": errors.New("cannot connect to docker daemon"),
 		},
 	}
-	m := newManager(RuntimeDocker, f)
+	m := newManager(RuntimeDocker, f, AllSources())
 	res, err := m.List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -151,7 +151,7 @@ func TestListReachableButNoContainers(t *testing.T) {
 			"inspect dapr_placement": errors.New("no such container"),
 		},
 	}
-	m := newManager(RuntimeDocker, f)
+	m := newManager(RuntimeDocker, f, AllSources())
 	res, err := m.List(context.Background())
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -191,7 +191,7 @@ func TestListIncludesComposeControlPlane(t *testing.T) {
 			"stats --no-stream": stats,
 		},
 	}
-	m := newManager(RuntimeDocker, f)
+	m := newManager(RuntimeDocker, f, AllSources())
 	res, err := m.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -227,7 +227,7 @@ func TestDoAllowsDiscoveredComposeNames(t *testing.T) {
 			"stats --no-stream": stats,
 		},
 	}
-	m := newManager(RuntimeDocker, f)
+	m := newManager(RuntimeDocker, f, AllSources())
 	// Call List first to populate the allowlist.
 	if _, err := m.List(context.Background()); err != nil {
 		t.Fatal(err)
@@ -250,7 +250,7 @@ func TestDoRejectsComposeNamesBeforeList(t *testing.T) {
 	f := &fakeRunner{
 		outputs: map[string][]byte{},
 	}
-	m := newManager(RuntimeDocker, f)
+	m := newManager(RuntimeDocker, f, AllSources())
 	// No List call — compose names must be rejected.
 	if err := m.Do(context.Background(), "restart", "saga-placement-1"); !errors.Is(err, ErrUnknownService) {
 		t.Errorf("before List: got %v, want ErrUnknownService", err)
@@ -259,7 +259,7 @@ func TestDoRejectsComposeNamesBeforeList(t *testing.T) {
 
 func TestDoValidation(t *testing.T) {
 	f := &fakeRunner{outputs: map[string][]byte{}}
-	m := newManager(RuntimeDocker, f)
+	m := newManager(RuntimeDocker, f, AllSources())
 	if err := m.Do(context.Background(), "kill", "dapr_scheduler"); !errors.Is(err, ErrInvalidAction) {
 		t.Errorf("kill: got %v, want ErrInvalidAction", err)
 	}
@@ -272,5 +272,63 @@ func TestDoValidation(t *testing.T) {
 	last := f.calls[len(f.calls)-1]
 	if last[0] != "restart" || last[1] != "dapr_scheduler" {
 		t.Errorf("ran %v, want [restart dapr_scheduler]", last)
+	}
+}
+
+func TestListInitOnlyExcludesCompose(t *testing.T) {
+	f := &fakeRunner{outputs: map[string][]byte{
+		"info":                   []byte("ok"),
+		"inspect dapr_scheduler": []byte("[]"),
+		"inspect dapr_placement": []byte("[]"),
+	}}
+	m := newManager(RuntimeDocker, f, Sources{Init: true})
+	res, err := m.List(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	for _, s := range res.Services {
+		if s.ComposeProject != "" {
+			t.Fatalf("init-only sources must not list compose services, got %+v", s)
+		}
+	}
+	if len(res.Services) != len(LiveServiceNames) {
+		t.Fatalf("want the %d init services, got %d", len(LiveServiceNames), len(res.Services))
+	}
+}
+
+func TestListComposeOnlyExcludesInit(t *testing.T) {
+	f := &fakeRunner{outputs: map[string][]byte{
+		"info":   []byte("ok"),
+		"ps -aq": []byte(""), // no compose containers running
+	}}
+	m := newManager(RuntimeDocker, f, Sources{Compose: true})
+	res, err := m.List(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(res.Services) != 0 {
+		t.Fatalf("compose-only sources must not list the dapr_* init services, got %+v", res.Services)
+	}
+}
+
+func TestListEmptySourcesIsHonestEmpty(t *testing.T) {
+	f := &fakeRunner{outputs: map[string][]byte{"info": []byte("ok")}}
+	m := newManager(RuntimeDocker, f, Sources{})
+	res, err := m.List(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.Available || !res.Reachable || len(res.Services) != 0 {
+		t.Fatalf("want available+reachable with zero services, got %+v", res)
+	}
+}
+
+func TestDoAndLogStreamRespectSources(t *testing.T) {
+	m := newManager(RuntimeDocker, &fakeRunner{outputs: map[string][]byte{}}, Sources{Compose: true})
+	if err := m.Do(context.Background(), "restart", "dapr_placement"); !errors.Is(err, ErrUnknownService) {
+		t.Fatalf("Do must reject a filtered-out init service, got %v", err)
+	}
+	if _, err := m.LogStream(context.Background(), "dapr_scheduler"); !errors.Is(err, ErrUnknownService) {
+		t.Fatalf("LogStream must reject a filtered-out init service, got %v", err)
 	}
 }

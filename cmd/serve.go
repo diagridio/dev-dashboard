@@ -147,7 +147,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		Stores:           rc,
 		Resources:        resources.New(rc.Paths, deps.ExtraResources),
 		News:             newsSvc,
-		ControlPlane:     controlplane.New(),
+		ControlPlane:     controlplane.New(controlplane.AllSources()),
 		TelemetryEnabled: deps.TelemetryEnabled,
 		UpdateCheck:      deps.UpdateCheck,
 		AllowNonLoopback: deps.AllowNonLoopback,

@@ -40,6 +40,17 @@ func IsLiveName(name string) bool {
 	return contains(LiveServiceNames, name)
 }
 
+// Sources selects which control-plane families List reports and Do/LogStream
+// accept. The zero value shows nothing — e.g. test-containers mode, which has
+// no control-plane detection yet (deferred to a future iteration).
+type Sources struct {
+	Init    bool // fixed dapr_* containers created by `dapr init`
+	Compose bool // compose-labeled placement/scheduler containers
+}
+
+// AllSources is the mode-unset default: every family.
+func AllSources() Sources { return Sources{Init: true, Compose: true} }
+
 // ValidAction reports whether action is one of the allowed lifecycle verbs.
 func ValidAction(action string) bool {
 	switch action {
