@@ -583,6 +583,8 @@ func (fakeAspireResolver) CommandForPort(port int) (string, bool) {
 	return "/path/to/dcp run-controllers", true
 }
 
+func (fakeAspireResolver) PIDForPort(int) (int, bool) { return 0, false }
+
 func TestSidecarOrphanedDetection(t *testing.T) {
 	newSvc := func(cliPID int) *service {
 		port := stubSidecar(t, "") // no appPID, no cliPID in metadata
@@ -647,9 +649,23 @@ func TestEnrichZeroCreatedShowsNoTimestamp(t *testing.T) {
 	require.Equal(t, "", items[0].Age)
 }
 
-type fakeAppProc struct{ cmd string }
+type fakeAppProc struct {
+	cmd string
+	pid int
+}
 
 func (f fakeAppProc) CommandForPort(int) (string, bool) { return f.cmd, f.cmd != "" }
+func (f fakeAppProc) PIDForPort(int) (int, bool)        { return f.pid, f.pid != 0 }
+
+// portOf parses the port out of an httptest server URL.
+func portOf(t *testing.T, rawURL string) int {
+	t.Helper()
+	u, err := url.Parse(rawURL)
+	require.NoError(t, err)
+	p, err := strconv.Atoi(u.Port())
+	require.NoError(t, err)
+	return p
+}
 
 func TestEnrich_TestcontainersHostAppPairing(t *testing.T) {
 	scan := func() ([]ScanResult, error) {
@@ -688,6 +704,44 @@ func TestEnrich_TestcontainersStoppedApp(t *testing.T) {
 	out, err := svc.List(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, StatusStopped, out[0].AppStatus)
+}
+
+func TestEnrich_TestcontainersAppPIDAndUptime(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/v1.0/metadata") {
+			_, _ = w.Write([]byte(`{"id":"workflow-patterns-app"}`))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent) // healthz
+	}))
+	defer srv.Close()
+	port := portOf(t, srv.URL)
+
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID: "workflow-patterns-app", Source: SourceTestcontainers,
+			AppPort: 8080, HTTPPort: port, SidecarReachable: true,
+			DaprdContainerName: "crazy_lamport",
+		}}, nil
+	}
+	started := time.Date(2026, 7, 13, 10, 0, 0, 0, time.UTC)
+	svc := &service{
+		scan:     scan,
+		client:   srv.Client(),
+		appProc:  fakeAppProc{cmd: "/usr/bin/java -jar app.jar", pid: 4242},
+		portOpen: func(int) bool { return true },
+		procStart: func(pid int) (time.Time, bool) {
+			if pid == 4242 {
+				return started, true
+			}
+			return time.Time{}, false
+		},
+	}
+	out, err := svc.List(context.Background())
+	require.NoError(t, err)
+	in := out[0]
+	require.Equal(t, 4242, in.AppPID)
+	require.Equal(t, started.Format(time.RFC3339), in.AppStartedAt)
 }
 
 func TestEnrich_AppProtocolFromScanResult(t *testing.T) {

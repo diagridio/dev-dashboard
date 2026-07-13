@@ -14,6 +14,7 @@ type fakeResolver struct {
 }
 
 func (f fakeResolver) CommandForPort(int) (string, bool) { return f.cmd, f.ok }
+func (f fakeResolver) PIDForPort(int) (int, bool)        { return 0, false }
 
 func TestAppRuntime(t *testing.T) {
 	t.Run("known primary command — no fallback needed", func(t *testing.T) {

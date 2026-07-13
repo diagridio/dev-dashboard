@@ -329,6 +329,18 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		// Container sidecar + host app: metadata Extended PIDs/log paths
 		// describe the container's own view; daprd logs stream from the
 		// container runtime, and the app's stdout belongs to the test process.
+		// The app PID comes from the host's app-port listener instead
+		// (metadata's appPID, if any, is container-scoped and was just
+		// copied over it — override).
+		in.AppPID = 0
+		if in.AppStatus == StatusRunning && s.appProc != nil && in.AppPort != 0 {
+			if pid, ok := s.appProc.PIDForPort(in.AppPort); ok {
+				in.AppPID = pid
+				if t, ok := s.procStartTime(pid); ok {
+					in.AppStartedAt = t.UTC().Format(time.RFC3339)
+				}
+			}
+		}
 		if md.RunTemplate != "" {
 			in.RunTemplate = md.RunTemplate
 		}
