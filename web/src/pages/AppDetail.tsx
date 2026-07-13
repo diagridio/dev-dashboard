@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../hooks/useApps'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useAppAction, useAppForget, type AppTarget, type AppLifecycleAction } from '../hooks/useAppAction'
 import type { AppDetail as AppDetailType } from '../types/api'
 import { copyText } from '../lib/clipboard'
@@ -40,19 +42,32 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const daprdRunning = app.daprdStatus === 'running'
 
   const action = useAppAction(key)
+  const [confirm, setConfirm] = useState<{
+    title: string
+    body?: string
+    label: string
+    danger: boolean
+    run: () => void
+  } | null>(null)
   const runAction = (target: AppTarget, act: AppLifecycleAction, what: string) => {
-    if (!window.confirm(`${act.charAt(0).toUpperCase() + act.slice(1)} ${what}?`)) return
-    action.mutate(
-      { target, action: act },
-      {
-        onError: (e) => toast.show(e instanceof Error ? e.message : 'Action failed'),
-        onSuccess: () => {
-          // A stopped orphan records nothing and vanishes from discovery, so
-          // this page would dead-end on "App not found" — return to the list.
-          if (orphaned && act === 'stop') navigate('/')
-        },
-      },
-    )
+    const actLabel = act.charAt(0).toUpperCase() + act.slice(1)
+    setConfirm({
+      title: `${actLabel} ${what}?`,
+      label: actLabel,
+      danger: act === 'stop',
+      run: () =>
+        action.mutate(
+          { target, action: act },
+          {
+            onError: (e) => toast.show(e instanceof Error ? e.message : 'Action failed'),
+            onSuccess: () => {
+              // A stopped orphan records nothing and vanishes from discovery, so
+              // this page would dead-end on "App not found" — return to the list.
+              if (orphaned && act === 'stop') navigate('/')
+            },
+          },
+        ),
+    })
   }
   const appStopped = app.appStatus === 'stopped'
   const daprdStopped = app.daprdStatus === 'stopped'
@@ -66,10 +81,16 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const removable = !isCompose && appStopped && daprdStopped
   const forget = useAppForget(key)
   const removeFromList = () => {
-    if (!window.confirm(`Remove "${app.appId}" from the list? The stopped instance will no longer be shown.`)) return
-    forget.mutate(undefined, {
-      onError: (e) => toast.show(e instanceof Error ? e.message : 'Remove failed'),
-      onSuccess: () => navigate('/'),
+    setConfirm({
+      title: `Remove "${app.appId}" from the list?`,
+      body: 'The stopped instance will no longer be shown.',
+      label: 'Remove',
+      danger: true,
+      run: () =>
+        forget.mutate(undefined, {
+          onError: (e) => toast.show(e instanceof Error ? e.message : 'Remove failed'),
+          onSuccess: () => navigate('/'),
+        }),
     })
   }
 
@@ -444,6 +465,20 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirm !== null}
+        title={confirm?.title ?? ''}
+        confirmLabel={confirm?.label ?? ''}
+        danger={confirm?.danger}
+        onConfirm={() => {
+          confirm?.run()
+          setConfirm(null)
+        }}
+        onCancel={() => setConfirm(null)}
+      >
+        {confirm?.body && <p style={{ margin: 0, color: 'var(--muted)', fontSize: 14 }}>{confirm.body}</p>}
+      </ConfirmDialog>
 
       {toastNode}
     </div>

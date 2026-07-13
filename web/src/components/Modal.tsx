@@ -6,12 +6,16 @@ interface Props {
   title: string
   onClose: () => void
   children: React.ReactNode
+  /** Element to focus when the dialog opens (defaults to the dialog itself). */
+  initialFocusRef?: React.RefObject<HTMLElement | null>
+  /** Confirm-style dialogs use a narrower card than form dialogs. */
+  narrow?: boolean
 }
 
-export function Modal({ open, title, onClose, children }: Props) {
+export function Modal({ open, title, onClose, children, initialFocusRef, narrow }: Props) {
   const dialogRef = useRef<HTMLDivElement>(null)
 
-  useModalFocus(open, onClose, dialogRef)
+  useModalFocus(open, onClose, dialogRef, initialFocusRef)
 
   if (!open) return null
 
@@ -29,7 +33,7 @@ export function Modal({ open, title, onClose, children }: Props) {
         aria-modal="true"
         aria-labelledby="modal-title"
         tabIndex={-1}
-        className="card modal-card"
+        className={`card modal-card${narrow ? ' narrow' : ''}`}
       >
         <h2 id="modal-title" className="modal-title">{title}</h2>
         {children}

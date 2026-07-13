@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RefreshProvider } from '../lib/refresh'
@@ -65,6 +65,39 @@ describe('ControlPlane', () => {
     renderPage()
     expect(await screen.findByText('dapr_scheduler')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^start$/i })).toBeInTheDocument()
+  })
+
+  it('confirms an action through the styled dialog before posting', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(
+        JSON.stringify({
+          runtime: 'docker', available: true, reachable: true, controlPlanePresent: true,
+          services: [{ name: 'dapr_scheduler', status: 'running', healthy: true, ports: [], memoryBytes: 0, memoryHuman: '', logPath: '', actionable: true }],
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderPage()
+    expect(await screen.findByText('dapr_scheduler')).toBeInTheDocument()
+
+    // Restart opens the dialog; Cancel must not post.
+    screen.getByRole('button', { name: /restart/i }).click()
+    let dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('Restart dapr_scheduler?')
+    expect(dialog).toHaveTextContent('docker restart dapr_scheduler')
+    within(dialog).getByRole('button', { name: 'Cancel' }).click()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false)
+
+    // Confirming posts the action.
+    screen.getByRole('button', { name: /restart/i }).click()
+    dialog = await screen.findByRole('dialog')
+    within(dialog).getByRole('button', { name: 'Restart' }).click()
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true))
   })
 
   it('groups compose-run control-plane services under their project', async () => {

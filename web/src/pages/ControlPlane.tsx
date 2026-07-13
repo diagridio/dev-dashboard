@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useControlPlane, useControlPlaneAction } from '../hooks/useControlPlane'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import type { ControlPlaneService, ControlPlaneAction } from '../types/controlplane'
@@ -7,6 +9,7 @@ export function ControlPlane() {
   useDocumentTitle('Control Plane')
   const { data, isLoading } = useControlPlane()
   const action = useControlPlaneAction()
+  const [confirm, setConfirm] = useState<{ name: string; act: ControlPlaneAction } | null>(null)
 
   const header = (
     <div className="phead">
@@ -56,9 +59,7 @@ export function ControlPlane() {
   }
 
   const runAction = (name: string, act: ControlPlaneAction) => {
-    if (window.confirm(`Run "${data.runtime} ${act} ${name}"?`)) {
-      action.mutate({ name, action: act })
-    }
+    setConfirm({ name, act })
   }
 
   const initServices = data.services.filter((s) => !s.composeProject)
@@ -89,6 +90,24 @@ export function ControlPlane() {
           </div>
         </div>
       ))}
+
+      <ConfirmDialog
+        open={confirm !== null}
+        title={confirm ? `${confirm.act.charAt(0).toUpperCase() + confirm.act.slice(1)} ${confirm.name}?` : ''}
+        confirmLabel={confirm ? confirm.act.charAt(0).toUpperCase() + confirm.act.slice(1) : ''}
+        danger={confirm?.act === 'stop'}
+        onConfirm={() => {
+          if (confirm) action.mutate({ name: confirm.name, action: confirm.act })
+          setConfirm(null)
+        }}
+        onCancel={() => setConfirm(null)}
+      >
+        {confirm && (
+          <p style={{ margin: 0, color: 'var(--muted)', fontSize: 14 }}>
+            Runs <span className="mono">{`${data.runtime} ${confirm.act} ${confirm.name}`}</span>.
+          </p>
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

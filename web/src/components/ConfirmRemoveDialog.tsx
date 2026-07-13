@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { WorkflowStatus } from '../types/workflow'
-import { useModalFocus } from '../hooks/useModalFocus'
+import { ConfirmDialog } from './ConfirmDialog'
 
 const TERMINAL: WorkflowStatus[] = ['Completed', 'Failed', 'Terminated']
 
@@ -26,18 +26,11 @@ interface Props {
 
 export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel, initialForce = false }: Props) {
   const [force, setForce] = useState(initialForce)
-  const cancelRef = useRef<HTMLButtonElement>(null)
-  const dialogRef = useRef<HTMLDivElement>(null)
 
   // Reset force when dialog opens/closes
   useEffect(() => {
     if (open) setForce(initialForce)
   }, [open, initialForce])
-
-  // Escape-to-close, focus trap, initial focus on Cancel, restore on close
-  useModalFocus(open, onCancel, dialogRef, cancelRef)
-
-  if (!open) return null
 
   // Compute mechanism summary
   const counts: Record<string, number> = {}
@@ -59,63 +52,33 @@ export function ConfirmRemoveDialog({ open, targets, onConfirm, onCancel, initia
   }
 
   return (
-    <div
-      role="none"
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onCancel()
-      }}
+    <ConfirmDialog
+      open={open}
+      title={`Remove ${targets.length} workflow${targets.length !== 1 ? 's' : ''}?`}
+      confirmLabel="Remove"
+      confirmDataCy="confirm-remove"
+      onConfirm={() => onConfirm(force)}
+      onCancel={onCancel}
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="confirm-remove-title"
-        className="card"
-        style={{ maxWidth: 420, width: '100%', padding: 28, display: 'flex', flexDirection: 'column', gap: 18 }}
+      <p style={{ margin: 0, color: 'var(--muted)', fontSize: 14 }}>{mechanismSummary}.</p>
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          fontSize: 14,
+          cursor: 'pointer',
+          marginTop: 14,
+        }}
       >
-        <h2 id="confirm-remove-title" style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>
-          Remove {targets.length} workflow{targets.length !== 1 ? 's' : ''}?
-        </h2>
-        <p style={{ margin: 0, color: 'var(--muted)', fontSize: 14 }}>{mechanismSummary}.</p>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            fontSize: 14,
-            cursor: 'pointer',
-          }}
-        >
-          <input
-            type="checkbox"
-            data-cy="confirm-force"
-            checked={force}
-            onChange={(e) => setForce(e.target.checked)}
-          />
-          Force delete (bypass sidecar)
-        </label>
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-          <button ref={cancelRef} className="btn ghost" onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            data-cy="confirm-remove"
-            className="btn danger"
-            onClick={() => onConfirm(force)}
-          >
-            Remove
-          </button>
-        </div>
-      </div>
-    </div>
+        <input
+          type="checkbox"
+          data-cy="confirm-force"
+          checked={force}
+          onChange={(e) => setForce(e.target.checked)}
+        />
+        Force delete (bypass sidecar)
+      </label>
+    </ConfirmDialog>
   )
 }

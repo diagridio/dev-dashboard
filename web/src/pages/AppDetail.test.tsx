@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect, vi, afterEach } from 'vitest'
@@ -6,6 +6,12 @@ import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { AppDetail } from './AppDetail'
+
+// Click the confirm (or Cancel) button inside the styled confirmation dialog.
+async function answerConfirmDialog(label: string) {
+  const dialog = await screen.findByRole('dialog')
+  within(dialog).getByRole('button', { name: label }).click()
+}
 
 function renderDetail() {
   const client = makeQueryClient()
@@ -57,13 +63,12 @@ describe('AppDetail', () => {
         return HttpResponse.json({ status: 'ok' })
       }),
     )
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     const stopButtons = screen.getAllByRole('button', { name: 'Stop' })
     stopButtons[0].click() // header button renders first
+    await answerConfirmDialog('Stop')
     await waitFor(() => expect(posted).toBe('all/stop'))
-    confirmSpy.mockRestore()
   })
 
   it('does not act when confirm is declined', async () => {
@@ -75,13 +80,13 @@ describe('AppDetail', () => {
         return HttpResponse.json({ status: 'ok' })
       }),
     )
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     screen.getAllByRole('button', { name: 'Stop' })[0].click()
+    await answerConfirmDialog('Cancel')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await new Promise((r) => setTimeout(r, 50))
     expect(posted).toBe(false)
-    confirmSpy.mockRestore()
   })
 
   it('offers Start for a stopped target and hides Start for Aspire', async () => {
@@ -393,16 +398,16 @@ describe('AppDetail', () => {
         return HttpResponse.json({ status: 'ok' })
       }),
     )
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     // Buttons render header-first, then app panel, then daprd panel — the
     // last Stop button is the daprd panel's.
     const stops = screen.getAllByRole('button', { name: 'Stop' })
     stops[stops.length - 1].click()
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('app + sidecar together')
+    within(dialog).getByRole('button', { name: 'Stop' }).click()
     await waitFor(() => expect(posted).toBe('all/stop'))
-    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('app + sidecar together'))
-    confirmSpy.mockRestore()
   })
 
   it('renders app protocol when reported', async () => {
@@ -485,13 +490,12 @@ describe('AppDetail', () => {
         return HttpResponse.json({ status: 'ok' })
       }),
     )
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     const stops = screen.getAllByRole('button', { name: 'Stop' })
     stops[stops.length - 1].click()
+    await answerConfirmDialog('Stop')
     await waitFor(() => expect(posted).toBe('daprd/stop'))
-    confirmSpy.mockRestore()
   })
 
   it('offers only Stop for an orphaned sidecar', async () => {
@@ -528,14 +532,13 @@ describe('AppDetail', () => {
       ),
       http.post('/api/apps/order/all/stop', () => HttpResponse.json({ status: 'ok' })),
     )
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     screen.getAllByRole('button', { name: 'Stop' })[0].click()
+    await answerConfirmDialog('Stop')
     // The stopped orphan vanishes from discovery; the page must not dead-end
     // on "App not found" but return to the overview.
     await waitFor(() => expect(screen.getByText('Applications index')).toBeInTheDocument())
-    confirmSpy.mockRestore()
   })
 
 
@@ -577,13 +580,12 @@ describe('AppDetail', () => {
         return new HttpResponse(null, { status: 204 })
       }),
     )
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     screen.getByRole('button', { name: 'Remove from list' }).click()
+    await answerConfirmDialog('Remove')
     await waitFor(() => expect(screen.getByText('Applications index')).toBeInTheDocument())
     expect(deleted).toBe(true)
-    confirmSpy.mockRestore()
   })
 
   it('offers Remove from list for a fully stopped Aspire ghost, not for running or compose apps', async () => {
@@ -643,12 +645,11 @@ describe('AppDetail', () => {
         HttpResponse.json({ error: 'boom from backend' }, { status: 502 }),
       ),
     )
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     screen.getAllByRole('button', { name: 'Stop' })[0].click()
+    await answerConfirmDialog('Stop')
     await waitFor(() => expect(screen.getByText('boom from backend')).toBeInTheDocument())
-    confirmSpy.mockRestore()
   })
 
   it('disables lifecycle buttons while an action is in flight', async () => {
@@ -663,14 +664,13 @@ describe('AppDetail', () => {
         return HttpResponse.json({ status: 'ok' })
       }),
     )
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     const stop = screen.getAllByRole('button', { name: 'Stop' })[0]
     stop.click()
+    await answerConfirmDialog('Stop')
     await waitFor(() => expect(stop).toBeDisabled())
     release()
     await waitFor(() => expect(stop).toBeEnabled())
-    confirmSpy.mockRestore()
   })
 })

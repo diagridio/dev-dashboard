@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStateStores } from '../hooks/useWorkflows'
 import { useStoreMutations } from '../hooks/useStoreMutations'
 import { StateStoreConnectionDialog } from './StateStoreConnectionDialog'
-import { Modal } from './Modal'
+import { ConfirmDialog } from './ConfirmDialog'
 import { storeTypeLabel } from '../lib/storeTypes'
 import { useToast } from '../lib/toast'
 import type { StateStore } from '../types/workflow'
@@ -90,7 +90,13 @@ export function StateStoreConnectionsPanel() {
         />
       )}
 
-      <Modal open={pendingDelete !== null} title="Disconnect state store?" onClose={closeDeleteConfirm}>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="Disconnect state store?"
+        confirmLabel="Disconnect"
+        onConfirm={handleConfirmDelete}
+        onCancel={closeDeleteConfirm}
+      >
         <p style={{ margin: '0 0 8px', color: 'var(--muted)', fontSize: 14 }}>
           Disconnect <b>{pendingDelete?.name}</b>? The component YAML file on disk is not deleted.{' '}
           {pendingDelete?.source === 'auto'
@@ -98,11 +104,7 @@ export function StateStoreConnectionsPanel() {
             : 'This only removes it from the dashboard registry.'}
         </p>
         {deleteError && <p className="field-err">{deleteError}</p>}
-        <div className="modal-actions">
-          <button className="btn ghost" onClick={closeDeleteConfirm}>Cancel</button>
-          <button className="btn danger" onClick={handleConfirmDelete}>Disconnect</button>
-        </div>
-      </Modal>
+      </ConfirmDialog>
 
       {toastNode}
     </div>
