@@ -55,11 +55,12 @@ func NewRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			settings, err := resolveServeSettings(mode, cmd.Flags().Changed, port, bind, stateStore, namespace, os.Getenv)
+			posture := containerPosture(mode, os.Getenv)
+			settings, err := resolveServeSettings(posture, cmd.Flags().Changed, port, bind, stateStore, namespace, os.Getenv)
 			if err != nil {
 				return err
 			}
-			return runServe(cmd.Context(), mode, settings, basePath, noOpen, verbose)
+			return runServe(cmd.Context(), mode, posture, settings, basePath, noOpen, verbose)
 		},
 	}
 	c.SetVersionTemplate(fmt.Sprintf("dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
@@ -82,7 +83,7 @@ func Execute() error {
 	return NewRootCmd().ExecuteContext(ctx)
 }
 
-func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath string, noOpen, verbose bool) error {
+func runServe(ctx context.Context, mode Mode, containerPosture bool, settings serveSettings, basePath string, noOpen, verbose bool) error {
 	logger := logging.New(verbose)
 	slog.SetDefault(logger)
 	statestore.SetVerbose(verbose)
@@ -97,8 +98,8 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		return fmt.Errorf("init component metadata: %w", err)
 	}
 	addr := listenAddr(settings.Bind, settings.Port)
-	if mode == ModeDefault && !isLoopbackBind(settings.Bind) {
-		logger.Warn("binding a non-loopback address without aspire mode; the loopback Host guard will reject remote clients (set --mode aspire for container serving posture)", "bind", settings.Bind)
+	if !containerPosture && !isLoopbackBind(settings.Bind) {
+		logger.Warn("binding a non-loopback address without container posture; the loopback Host guard will reject remote clients (set --mode aspire for container serving posture)", "bind", settings.Bind)
 	}
 	urlPath := ""
 	if trimmed := trimSlash(basePath); trimmed != "" {
@@ -113,7 +114,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 	// Aspire/container mode disables registry persistence entirely (no home
 	// directory), so the "no home" warning is suppressed via QuietRegistry.
 	home := ""
-	if mode != ModeAspire {
+	if !containerPosture {
 		home, err = os.UserHomeDir()
 		if err != nil {
 			// An empty home disables registry persistence in assembleOptions rather
@@ -134,8 +135,8 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		appNS         map[string]string
 		extraRes      func() []resources.Resource
 	)
-	switch mode {
-	case ModeAspire:
+	switch {
+	case containerPosture:
 		scan, err := discovery.NewAspireScanner(os.Getenv)
 		if err != nil {
 			return err
@@ -180,12 +181,12 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		ContainerLogs:    containerLogs,
 		TelemetryEnabled: telemetry,
 		UpdateCheck:      updateCheck,
-		AllowNonLoopback: mode == ModeAspire,
+		AllowNonLoopback: containerPosture,
 		AllowedHosts:     settings.AllowedHosts,
 		ListenPort:       settings.Port,
 		Capabilities:     caps,
 		ResourcesPaths:   settings.ResourcesPaths,
-		QuietRegistry:    mode == ModeAspire,
+		QuietRegistry:    containerPosture,
 		AppNamespaces:    appNS,
 		ExtraResources:   extraRes,
 	}, dist)
@@ -207,7 +208,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 	} else {
 		fmt.Println("Anonymous usage telemetry is disabled (DEVDASHBOARD_TELEMETRY_OPTOUT=true).")
 	}
-	if !noOpen && mode != ModeAspire {
+	if !noOpen && !containerPosture {
 		go func() { time.Sleep(400 * time.Millisecond); _ = openBrowser(url) }()
 	}
 
