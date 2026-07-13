@@ -4,6 +4,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { runtimeSwatch } from '../lib/runtimeSwatch'
 import { appKey } from '../lib/appKey'
 import { appDisplayState } from '../lib/appDisplayState'
+import { modeLabel } from '../lib/modeLabel'
 import type { AppSummary } from '../types/api'
 
 // Fully stopped: both the app process/container and its daprd sidecar report 'stopped'.
@@ -93,7 +94,7 @@ export function Applications() {
                 <th>daprd PID</th>
                 <th>App PID</th>
                 <th>Age</th>
-                <th>Run template</th>
+                <th>Mode</th>
                 <th></th>
               </tr>
             </thead>
@@ -113,15 +114,6 @@ export function Applications() {
 function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
   const num = (v: number) =>
     v ? <td className="mono tabnum">{v}</td> : <td className="mono tabnum faint">—</td>
-  const sourceLabel =
-    app.runTemplate ||
-    (app.isAspire
-      ? 'Aspire'
-      : app.source === 'compose'
-        ? 'Compose'
-        : app.source === 'testcontainers'
-          ? 'Testcontainers'
-          : '—')
   const state = appDisplayState(app)
   const unreachable = app.source === 'compose' && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
   const key = appKey(app)
@@ -165,8 +157,17 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       {num(app.daprdPid)}
       {num(app.appPid)}
       <td className="muted mono tabnum">{app.age}</td>
-      <td className="mono muted" title={app.composeProject ? `compose project: ${app.composeProject}` : undefined}>
-        {sourceLabel}
+      <td
+        className="mono muted"
+        title={
+          app.runTemplate
+            ? `run template: ${app.runTemplate}`
+            : app.composeProject
+              ? `compose project: ${app.composeProject}`
+              : undefined
+        }
+      >
+        {modeLabel(app)}
       </td>
       <td className="kebab">⋯</td>
     </tr>

@@ -12,6 +12,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { appKey } from '../lib/appKey'
 import { formatUptime, useNow } from '../lib/uptime'
 import { getCapabilities } from '../lib/capabilities'
+import { modeLabel } from '../lib/modeLabel'
 
 // ---------- content ----------
 
@@ -256,6 +257,9 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
             <div className="kk">Runtime</div>
             <div className="vv">{app.runtime || <span className="faint">—</span>}</div>
+
+            <div className="kk">Mode</div>
+            <div className="vv">{modeLabel(app)}</div>
 
             <div className="kk">App port</div>
             <div className="vv mono">{app.appPort || <span className="faint">—</span>}</div>
