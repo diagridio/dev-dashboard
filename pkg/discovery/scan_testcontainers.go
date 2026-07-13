@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"sort"
@@ -183,6 +184,14 @@ func (s *TestcontainersSource) extractResources(ctx context.Context, c composeCo
 	}
 	raw, err := s.run.Run(ctx, "cp", c.ID+":"+dir, "-")
 	if err != nil {
+		if extractionRetryable(ctx, err) {
+			// The cp call shares scanOnce's single scan-wide context with ps
+			// and inspect; a slow docker round-trip can expire the deadline
+			// mid-cp. That's transient, not a genuine extraction failure —
+			// leave extractFailed unset so the next scan retries.
+			logger().Warn("testcontainers resource extraction timed out, will retry", "container", c.Name, "err", err)
+			return
+		}
 		logger().Warn("testcontainers resource extraction failed", "container", c.Name, "err", err)
 		s.extractFailed[c.ID] = true
 		return
@@ -202,4 +211,17 @@ func (s *TestcontainersSource) extractResources(ctx context.Context, c composeCo
 		out = append(out, ExtractedFile{Container: c.Name, Path: dir + "/" + rel, Content: content})
 	}
 	s.extracted[c.ID] = out
+}
+
+// extractionRetryable classifies a failed extraction call as transient
+// (caused by the scan's shared context expiring or being cancelled, rather
+// than a genuine failure like a missing container or corrupt tar). scanCtx
+// is the context passed to the runner for this scan; it is checked directly
+// because a container runtime may return its own error type instead of (or
+// in addition to) propagating ctx.Err() verbatim.
+func extractionRetryable(scanCtx context.Context, err error) bool {
+	if scanCtx.Err() != nil {
+		return true
+	}
+	return errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled)
 }

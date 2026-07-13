@@ -3,7 +3,9 @@
 package discovery
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -161,4 +163,89 @@ func TestTestcontainersScanner_ExtractionFailureDegrades(t *testing.T) {
 	require.NoError(t, err) // scan itself still succeeds
 	require.Len(t, results, 1)
 	require.Empty(t, src.Files())
+
+	// A genuine failure (bad container, garbage tar) is pinned: a second scan
+	// (cache TTL bypassed) must NOT retry the cp.
+	base := time.Now()
+	src.clock = func() time.Time { base = base.Add(3 * time.Second); return base }
+	_, err = src.Scanner()()
+	require.NoError(t, err)
+	cpCalls := 0
+	for _, c := range crt.calls {
+		if strings.HasPrefix(c, "cp ") {
+			cpCalls++
+		}
+	}
+	require.Equal(t, 1, cpCalls, "genuine extraction failure must not be retried")
+}
+
+// TestTestcontainersScanner_ExtractionRetriesAfterContextExpiry pins the fix
+// for a transient cp failure caused by the shared scan context expiring
+// mid-extraction (all cp calls share scanOnce's single 3s context with ps and
+// inspect; a slow docker round-trip can expire the deadline mid-cp). Such a
+// failure must NOT be pinned in extractFailed — the next scan must retry.
+// The fake runtime models this by returning an error wrapping
+// context.DeadlineExceeded on the first cp call (a runner reporting the
+// scan context's expiry), then succeeding on retry.
+func TestTestcontainersScanner_ExtractionRetriesAfterContextExpiry(t *testing.T) {
+	crt := fakeTestcontainersRunner(t)
+	crt.responses["cp 28af628017d1:/dapr-resources"] = resourcesTar(t)
+	crt.errs = map[string]error{
+		"cp 28af628017d1:/dapr-resources": fmt.Errorf("cp: %w", context.DeadlineExceeded),
+	}
+	src := NewTestcontainersSource(crt)
+
+	// First scan: cp fails with a context-expiry error. Scan itself still
+	// succeeds, and the container's resources are just not yet extracted.
+	results, err := src.Scanner()()
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Empty(t, src.Files(), "extraction not yet retried")
+
+	// Second scan (cache TTL bypassed, and the transient error cleared, as a
+	// real retry would find the docker daemon responsive again): the cp call
+	// must be re-attempted and succeed this time.
+	delete(crt.errs, "cp 28af628017d1:/dapr-resources")
+	base := time.Now()
+	src.clock = func() time.Time { base = base.Add(3 * time.Second); return base }
+	_, err = src.Scanner()()
+	require.NoError(t, err)
+
+	cpCalls := 0
+	for _, c := range crt.calls {
+		if strings.HasPrefix(c, "cp ") {
+			cpCalls++
+		}
+	}
+	require.Equal(t, 2, cpCalls, "transient context-expiry failure must be retried, not pinned")
+
+	files := src.Files()
+	require.Len(t, files, 1)
+	require.Equal(t, "/dapr-resources/kvstore.yaml", files[0].Path)
+}
+
+func TestExtractionRetryable(t *testing.T) {
+	t.Run("live context, generic error -> not retryable", func(t *testing.T) {
+		require.False(t, extractionRetryable(context.Background(), errors.New("no such container")))
+	})
+	t.Run("live context, no error -> not retryable", func(t *testing.T) {
+		require.False(t, extractionRetryable(context.Background(), nil))
+	})
+	t.Run("cancelled scan context -> retryable regardless of error", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		require.True(t, extractionRetryable(ctx, errors.New("no such container")))
+	})
+	t.Run("expired scan context -> retryable", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 0)
+		defer cancel()
+		<-ctx.Done()
+		require.True(t, extractionRetryable(ctx, errors.New("client is closed")))
+	})
+	t.Run("live context, error wraps DeadlineExceeded -> retryable", func(t *testing.T) {
+		require.True(t, extractionRetryable(context.Background(), fmt.Errorf("wrap: %w", context.DeadlineExceeded)))
+	})
+	t.Run("live context, error wraps Canceled -> retryable", func(t *testing.T) {
+		require.True(t, extractionRetryable(context.Background(), fmt.Errorf("wrap: %w", context.Canceled)))
+	})
 }
