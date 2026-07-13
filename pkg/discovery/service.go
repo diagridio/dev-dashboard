@@ -40,6 +40,7 @@ type ScanResult struct {
 	ResourcePaths []string
 	ConfigPath    string
 	Command       string
+	AppProtocol   string
 
 	// Source is SourceStandalone (process table) or SourceCompose (containers).
 	Source             string
@@ -194,8 +195,9 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		AppID: r.AppID, InstanceKey: r.Key(), HTTPPort: r.HTTPPort, GRPCPort: r.GRPCPort, AppPort: r.AppPort,
 		DaprdPID: r.DaprdPID, CLIPID: r.CLIPID, RunTemplate: r.RunTemplate,
 		ResourcePaths: r.ResourcePaths, ConfigPath: r.ConfigPath, Command: r.Command,
-		Age:     humanAge(r.Created),
-		Runtime: InferRuntime(r.Command), Health: HealthUnknown,
+		AppProtocol: r.AppProtocol,
+		Age:         humanAge(r.Created),
+		Runtime:     InferRuntime(r.Command), Health: HealthUnknown,
 		Source: r.Source, ComposeProject: r.ComposeProject, ComposeService: r.ComposeService,
 		DaprdContainerID: r.DaprdContainerID, DaprdContainerName: r.DaprdContainerName,
 		AppContainerID: r.AppContainerID, AppContainerName: r.AppContainerName,
@@ -281,6 +283,9 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	in.Components = md.Components
 	in.EnabledFeatures = md.EnabledFeatures
 	in.Placement = md.Placement
+	if md.AppProtocol != "" {
+		in.AppProtocol = md.AppProtocol
+	}
 	if in.Source == SourceStandalone {
 		switch {
 		case in.AppPID != 0:

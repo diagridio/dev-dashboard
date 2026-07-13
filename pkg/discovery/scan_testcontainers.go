@@ -131,6 +131,7 @@ func (s *TestcontainersSource) scanOnce() ([]ScanResult, error) {
 			AppPort:               args.AppPort,
 			Created:               c.StartedAt,
 			Command:               strings.Join(c.Argv, " "),
+			AppProtocol:           args.AppProtocol,
 			Source:                SourceTestcontainers,
 			TestcontainersSession: c.Labels[labelTestcontainersSessionID],
 			DaprdContainerID:      c.ID,

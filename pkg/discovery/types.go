@@ -47,6 +47,7 @@ type Instance struct {
 	HTTPPort       int    `json:"httpPort"`
 	GRPCPort       int    `json:"grpcPort"`
 	AppPort        int    `json:"appPort"`
+	AppProtocol    string `json:"appProtocol,omitempty"`
 	DaprdPID       int    `json:"daprdPid"`
 	AppPID         int    `json:"appPid"` // 0 = unknown
 	CLIPID         int    `json:"cliPid"`

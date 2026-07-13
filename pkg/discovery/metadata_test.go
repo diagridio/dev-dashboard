@@ -79,3 +79,14 @@ func TestFetchMetadataRunTemplateEmptyWhenNeitherFieldSet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "", md.RunTemplate)
 }
+
+func TestFetchMetadata_AppProtocol(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"id":"a","appConnectionProperties":{"port":8080,"protocol":"http","channelAddress":"host.testcontainers.internal"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	md, err := FetchMetadata(context.Background(), &http.Client{Timeout: 2 * time.Second}, srv.URL)
+	require.NoError(t, err)
+	require.Equal(t, "http", md.AppProtocol)
+}

@@ -689,3 +689,16 @@ func TestEnrich_TestcontainersStoppedApp(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, StatusStopped, out[0].AppStatus)
 }
+
+func TestEnrich_AppProtocolFromScanResult(t *testing.T) {
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID: "a", Source: SourceTestcontainers, AppProtocol: "http",
+			DaprdContainerName: "c1",
+		}}, nil
+	}
+	svc := &service{scan: scan}
+	out, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "http", out[0].AppProtocol)
+}

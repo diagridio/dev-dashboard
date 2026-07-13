@@ -154,6 +154,7 @@ func (s *ComposeSource) scanOnce() ([]ScanResult, ComposeEnv, error) {
 			AppPort:            args.AppPort,
 			Created:            c.StartedAt,
 			Command:            strings.Join(c.Argv, " "),
+			AppProtocol:        args.AppProtocol,
 			Source:             SourceCompose,
 			ComposeProject:     c.Project,
 			ComposeService:     c.Service,
