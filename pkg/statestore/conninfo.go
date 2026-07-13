@@ -99,6 +99,11 @@ func mongoConnInfo(hostField, dbName string) string {
 		if db == "" {
 			db = strings.TrimPrefix(u.Path, "/")
 		}
+	} else if idx := strings.LastIndex(host, "@"); idx != -1 {
+		// SECURITY: a bare (non-URI) host may still smuggle "user:pass@host:port"
+		// userinfo; discard everything up to and including the last "@" so
+		// credentials never reach the summary.
+		host = host[idx+1:]
 	}
 	switch {
 	case host != "" && db != "":

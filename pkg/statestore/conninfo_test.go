@@ -56,6 +56,11 @@ func TestConnInfo(t *testing.T) {
 			want: "localhost:27017",
 		},
 		{
+			name: "mongodb bare host strips userinfo",
+			comp: Component{Type: "state.mongodb", Metadata: map[string]string{"host": "admin:s3cret@db:27017", "databaseName": "orders"}},
+			want: "db:27017/orders",
+		},
+		{
 			name: "unsupported type yields empty",
 			comp: Component{Type: "state.cosmosdb", Metadata: map[string]string{"url": "https://secret.example"}},
 			want: "",
