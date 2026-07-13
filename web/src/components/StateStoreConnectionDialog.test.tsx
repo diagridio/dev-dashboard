@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect, vi } from 'vitest'
 import { server } from '../test/setup'
@@ -93,5 +93,34 @@ describe('StateStoreConnectionDialog', () => {
 
     const save = screen.getByRole('button', { name: /save/i })
     expect(save).toBeDisabled()
+
+    // Filling Name and host alone must not be enough — databaseName still
+    // participates in the required-field gate.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'orders' } })
+    fireEvent.change(screen.getByLabelText('host'), { target: { value: 'localhost:27017' } })
+    expect(save).toBeDisabled()
+
+    // Filling databaseName completes the required set and enables Save.
+    fireEvent.change(screen.getByLabelText('databaseName'), { target: { value: 'orders' } })
+    expect(save).toBeEnabled()
+  })
+
+  it('keeps collectionName optional (not inline-required) for MongoDB', async () => {
+    server.use(http.get('/api/metadata/components', () => HttpResponse.json(catalogWithMongo)))
+
+    setup(<StateStoreConnectionDialog open onClose={() => {}} onSaved={() => {}} />)
+
+    await waitFor(() => expect(screen.getByLabelText('redisHost')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'state.mongodb' } })
+
+    // collectionName must not appear as an inline required field...
+    expect(screen.queryByLabelText('collectionName')).toBeNull()
+
+    // ...but must still be reachable through the optional-field picker.
+    const addOptional = screen.getByRole('combobox', { name: 'add optional field' })
+    expect(within(addOptional).getByText('collectionName')).toBeInTheDocument()
+
+    fireEvent.change(addOptional, { target: { value: 'collectionName' } })
+    expect(screen.getByLabelText('collectionName')).toBeInTheDocument()
   })
 })

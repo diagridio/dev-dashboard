@@ -6,6 +6,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/stretchr/testify/require"
@@ -60,7 +61,8 @@ func TestSQLiteStoreContract(t *testing.T) {
 
 func TestRedisStoreContract(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	c, err := tcredis.Run(ctx, "redis:7")
 	require.NoError(t, err)
@@ -84,7 +86,8 @@ func TestRedisStoreContract(t *testing.T) {
 
 func TestPostgresStoreContract(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	c, err := tcpostgres.Run(ctx, "postgres:16-alpine",
 		tcpostgres.WithDatabase("dapr"),
@@ -114,7 +117,8 @@ func TestPostgresStoreContract(t *testing.T) {
 
 func TestMongoStoreContract(t *testing.T) {
 	testcontainers.SkipIfProviderIsNotHealthy(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 
 	c, err := tcmongo.Run(ctx, "mongo:7")
 	require.NoError(t, err)
