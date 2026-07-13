@@ -86,7 +86,7 @@ func TestTranslateNilLookupsNoop(t *testing.T) {
 	}
 }
 
-func TestTranslate_MongoHostRewrite(t *testing.T) {
+func TestTranslateMongoHostRewrite(t *testing.T) {
 	hosts := func(host string, port int) (string, bool) {
 		if host == "mongo" && port == 27017 {
 			return "127.0.0.1:55017", true
@@ -100,11 +100,27 @@ func TestTranslate_MongoHostRewrite(t *testing.T) {
 	}
 }
 
-func TestTranslate_MongoForeignHostPassthrough(t *testing.T) {
+func TestTranslateMongoForeignHostUntouched(t *testing.T) {
 	hosts := func(string, int) (string, bool) { return "", false }
 	c := Component{Type: "state.mongodb", Metadata: map[string]string{"host": "prod.example.com:27017"}}
 	got := Translate(c, hosts, nil)
 	if got.Metadata["host"] != "prod.example.com:27017" {
 		t.Fatalf("host: expected %q, got %q", "prod.example.com:27017", got.Metadata["host"])
+	}
+}
+
+func TestTranslateMongoNonHostPortFormsUntouched(t *testing.T) {
+	// A lookup that would rewrite anything it is consulted with: proves the
+	// mongodb branch never even attempts translation for these forms.
+	hosts := func(string, int) (string, bool) { return "localhost:99999", true }
+	for _, host := range []string{
+		"mongodb://user:pass@db:27017/orders",
+		"mongodb+srv://cluster.example.com",
+		"host1:27017,host2:27017",
+	} {
+		c := Component{Type: "state.mongodb", Metadata: map[string]string{"host": host}}
+		if got := Translate(c, hosts, nil); got.Metadata["host"] != host {
+			t.Fatalf("host %q must pass through unchanged, got %q", host, got.Metadata["host"])
+		}
 	}
 }
