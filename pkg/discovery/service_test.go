@@ -709,7 +709,12 @@ func TestEnrich_TestcontainersStoppedApp(t *testing.T) {
 func TestEnrich_TestcontainersAppPIDAndUptime(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/v1.0/metadata") {
-			_, _ = w.Write([]byte(`{"id":"workflow-patterns-app"}`))
+			// extended.appPID is container-scoped (daprd's own view inside the
+			// sidecar container) and must be discarded in favor of the host
+			// app-port listener's PID (4242 below) — service.go's
+			// testcontainers branch does `in.AppPID = 0` before resolving the
+			// PID from appProc.PIDForPort.
+			_, _ = w.Write([]byte(`{"id":"workflow-patterns-app","extended":{"appPID":"99999"}}`))
 			return
 		}
 		w.WriteHeader(http.StatusNoContent) // healthz
@@ -740,6 +745,9 @@ func TestEnrich_TestcontainersAppPIDAndUptime(t *testing.T) {
 	out, err := svc.List(context.Background())
 	require.NoError(t, err)
 	in := out[0]
+	// 4242 (the host app-port listener) must win over metadata's
+	// container-scoped appPID (99999) — proves the testcontainers branch's
+	// override discards the sidecar-local PID.
 	require.Equal(t, 4242, in.AppPID)
 	require.Equal(t, started.Format(time.RFC3339), in.AppStartedAt)
 }
