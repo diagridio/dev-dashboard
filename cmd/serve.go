@@ -127,7 +127,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		ContainerLogs:    deps.ContainerLogs,
 		Backend:          rc,
 		Stores:           rc,
-		Resources:        resources.New(rc.Paths),
+		Resources:        resources.New(rc.Paths, nil),
 		News:             newsSvc,
 		ControlPlane:     controlplane.New(),
 		TelemetryEnabled: deps.TelemetryEnabled,

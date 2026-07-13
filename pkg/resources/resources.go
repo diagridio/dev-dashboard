@@ -82,14 +82,20 @@ type rawResource struct {
 }
 
 type service struct {
-	paths func() []string
+	paths  func() []string
+	extras func() []Resource
 }
 
-// New returns a Service that scans the paths returned by the provider for Dapr
-// resource YAMLs. The provider is called on every List/Get so callers can change
-// the scan locations at runtime.
-func New(paths func() []string) Service {
-	return &service{paths: paths}
+// New returns a Service that scans the paths returned by the provider for
+// Dapr resource YAMLs, merged with the extras provider's entries (resources
+// that exist outside the host filesystem, e.g. extracted from containers).
+// Either provider may be nil. Both are called on every List/Get so callers
+// can change sources at runtime.
+func New(paths func() []string, extras func() []Resource) Service {
+	if paths == nil {
+		paths = func() []string { return nil }
+	}
+	return &service{paths: paths, extras: extras}
 }
 
 // kindFromString maps a YAML kind string to a Kind constant.
@@ -102,6 +108,35 @@ func kindFromString(s string) (Kind, bool) {
 	default:
 		return "", false
 	}
+}
+
+// FromRaw parses multi-document YAML content into fully-populated Resources
+// carrying Raw. displayPath is the entry's Path verbatim (for container
+// sources use "<containerName>:<inContainerPath>") and feeds the ID hash,
+// so same-named components from different containers stay distinct.
+// Unparseable documents and unknown kinds are skipped.
+func FromRaw(displayPath string, content []byte) []Resource {
+	var out []Resource
+	for _, doc := range splitYAMLDocs(content) {
+		var rr rawResource
+		if err := yaml.Unmarshal(doc, &rr); err != nil {
+			continue
+		}
+		k, ok := kindFromString(rr.Kind)
+		if !ok {
+			continue
+		}
+		out = append(out, Resource{
+			ID:      resourceID(rr.Metadata.Name, rr.Spec.Type, displayPath),
+			Name:    rr.Metadata.Name,
+			Kind:    k,
+			Type:    rr.Spec.Type,
+			Version: rr.Spec.Version,
+			Path:    displayPath,
+			Raw:     string(content),
+		})
+	}
+	return out
 }
 
 // scan walks all configured paths and returns resources matching the requested kind.
@@ -162,18 +197,48 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 	return out, nil
 }
 
+// extraByKind returns the extras entries of the given kind.
+func (s *service) extraByKind(kind Kind) []Resource {
+	if s.extras == nil {
+		return nil
+	}
+	var out []Resource
+	for _, r := range s.extras() {
+		if r.Kind == kind {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 // List returns all resources of the given kind, without Raw content.
 func (s *service) List(ctx context.Context, kind Kind) ([]Resource, error) {
-	return s.scan(kind)
+	out, err := s.scan(kind)
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range s.extraByKind(kind) {
+		r.Raw = ""
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Name != out[j].Name {
+			return out[i].Name < out[j].Name
+		}
+		return out[i].Path < out[j].Path
+	})
+	return out, nil
 }
 
 // Get returns the resource matching idOrName (ID first, then first name
-// match), with Raw populated from the file. Returns ErrNotFound if none match.
+// match). File entries load Raw from disk; extras entries already carry it.
+// Returns ErrNotFound if none match.
 func (s *service) Get(ctx context.Context, kind Kind, idOrName string) (Resource, error) {
-	resources, err := s.scan(kind)
+	scanned, err := s.scan(kind)
 	if err != nil {
 		return Resource{}, err
 	}
+	extras := s.extraByKind(kind)
 	withRaw := func(r Resource) (Resource, error) {
 		data, err := os.ReadFile(r.Path)
 		if err != nil {
@@ -182,14 +247,24 @@ func (s *service) Get(ctx context.Context, kind Kind, idOrName string) (Resource
 		r.Raw = string(data)
 		return r, nil
 	}
-	for _, r := range resources {
+	for _, r := range scanned {
 		if r.ID == idOrName {
 			return withRaw(r)
 		}
 	}
-	for _, r := range resources {
+	for _, r := range extras {
+		if r.ID == idOrName {
+			return r, nil
+		}
+	}
+	for _, r := range scanned {
 		if r.Name == idOrName {
 			return withRaw(r)
+		}
+	}
+	for _, r := range extras {
+		if r.Name == idOrName {
+			return r, nil
 		}
 	}
 	return Resource{}, ErrNotFound
