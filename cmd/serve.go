@@ -67,6 +67,24 @@ type serveDeps struct {
 	// Workflow reads resolve per-app namespaces from it by map lookup, never
 	// via discovery enrichment (sidecar probes).
 	AppNamespaces map[string]string
+	// ExtraResources supplies resource entries that exist outside the host
+	// filesystem (testcontainers-extracted component YAML); nil when the
+	// testcontainers scanner is disabled (aspire mode, tests).
+	ExtraResources func() []resources.Resource
+}
+
+// tcExtraResources adapts the testcontainers scanner's extracted files into
+// resources entries with container-prefixed display paths. The entries feed
+// ONLY the resources service — never state-store detection or election (an
+// extracted in-memory actor store would otherwise win the election).
+func tcExtraResources(src *discovery.TestcontainersSource) func() []resources.Resource {
+	return func() []resources.Resource {
+		var out []resources.Resource
+		for _, f := range src.Files() {
+			out = append(out, resources.FromRaw(f.Container+":"+f.Path, f.Content)...)
+		}
+		return out
+	}
 }
 
 // containerLogStream adapts a runtime Runner into the log-stream dependency.
@@ -127,7 +145,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		ContainerLogs:    deps.ContainerLogs,
 		Backend:          rc,
 		Stores:           rc,
-		Resources:        resources.New(rc.Paths),
+		Resources:        resources.New(rc.Paths, deps.ExtraResources),
 		News:             newsSvc,
 		ControlPlane:     controlplane.New(),
 		TelemetryEnabled: deps.TelemetryEnabled,

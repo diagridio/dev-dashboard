@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/resources"
+	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/stretchr/testify/require"
 )
@@ -89,4 +91,37 @@ func TestAssembleOptionsPropagatesUpdateCheck(t *testing.T) {
 		defer func(c func() error) { _ = c() }(c)
 	}
 	require.Same(t, uc, opts.UpdateCheck)
+}
+
+// TestTCExtraResources_AdaptsExtractedFiles verifies the tcExtraResources
+// adapter: a source with no runner (thus no extracted files) yields no
+// extras, and the mapping contract it relies on — FromRaw producing a
+// Resource keyed by the container-prefixed display path — is pinned directly.
+func TestTCExtraResources_AdaptsExtractedFiles(t *testing.T) {
+	// A TestcontainersSource whose fake runner serves one daprd container
+	// with a resources tar — reuse the discovery test fixtures via a tiny
+	// local stand-in instead: tcExtraResources only needs Files(), so give
+	// it a source primed by a fake scan. Simplest honest setup: construct
+	// the source against a fake runner exactly as pkg/discovery tests do is
+	// not possible from cmd (fakeCRT is package-private), so this test uses
+	// a real TestcontainersSource with a nil runner (no files) plus a unit
+	// test of the adapter's mapping via FromRaw directly:
+	src := discovery.NewTestcontainersSource(nil)
+	extras := tcExtraResources(src)
+	require.Empty(t, extras()) // nil runner -> no files -> no extras
+
+	// Mapping contract is pinned at the resources level:
+	rs := resources.FromRaw("crazy_lamport:/dapr-resources/kvstore.yaml",
+		[]byte("kind: Component\nmetadata:\n  name: kvstore\nspec:\n  type: state.in-memory\n"))
+	require.Len(t, rs, 1)
+	require.Equal(t, "crazy_lamport:/dapr-resources/kvstore.yaml", rs[0].Path)
+}
+
+// TestVirtualPathsDoNotFeedStoreDetection guards the spec's isolation rule:
+// container-prefixed virtual resource paths must be harmless no-ops for
+// state-store detection (they are not host paths).
+func TestVirtualPathsDoNotFeedStoreDetection(t *testing.T) {
+	comps, err := statestore.Detect([]string{"crazy_lamport:/dapr-resources"})
+	require.NoError(t, err)
+	require.Empty(t, comps)
 }

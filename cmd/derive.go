@@ -30,6 +30,14 @@ func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string, extr
 				loaded[c.Name] = true
 			}
 		}
+		// Testcontainers apps' ResourcePaths are virtual (e.g.
+		// "crazy_lamport:/dapr-resources", a container name + in-container
+		// path, not a host path). They intentionally flow through here
+		// unchanged: every walker below (state-store detection, resource
+		// loading) treats a nonexistent host path as a no-op, so mixing
+		// virtual and real paths is harmless. See
+		// TestVirtualPathsDoNotFeedStoreDetection in cmd/serve_test.go, which
+		// pins that a virtual path yields zero detected components.
 		appPaths = append(appPaths, a.ResourcePaths...)
 	}
 

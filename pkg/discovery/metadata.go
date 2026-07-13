@@ -42,6 +42,7 @@ type Metadata struct {
 	AppLogPath      string
 	DaprdLogPath    string
 	RunTemplate     string
+	AppProtocol     string
 	Actors          []ActorType
 	Subscriptions   []Subscription
 	Components      []Component
@@ -68,6 +69,9 @@ type rawMetadata struct {
 	ActorRuntime    struct {
 		Placement string `json:"placement"`
 	} `json:"actorRuntime"`
+	AppConnectionProperties struct {
+		Protocol string `json:"protocol"`
+	} `json:"appConnectionProperties"`
 }
 
 // runTemplateFromExtended returns the run template's display name. The
@@ -125,6 +129,7 @@ func FetchMetadata(ctx context.Context, client *http.Client, baseURL string) (Me
 		AppLogPath:      raw.Extended["appLogPath"],
 		DaprdLogPath:    raw.Extended["daprdLogPath"],
 		RunTemplate:     runTemplateFromExtended(raw.Extended),
+		AppProtocol:     raw.AppConnectionProperties.Protocol,
 		Actors:          raw.Actors,
 		Components:      raw.Components,
 		Subscriptions:   subs,

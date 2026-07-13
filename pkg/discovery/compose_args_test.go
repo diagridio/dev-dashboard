@@ -5,6 +5,8 @@ package discovery
 import (
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestParseDaprdArgs(t *testing.T) {
@@ -60,4 +62,10 @@ func TestParseDaprdArgs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseDaprdArgs_AppProtocol(t *testing.T) {
+	args, ok := parseDaprdArgs([]string{"./daprd", "--app-id", "a", "--app-protocol", "grpc"})
+	require.True(t, ok)
+	require.Equal(t, "grpc", args.AppProtocol)
 }

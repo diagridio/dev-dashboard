@@ -20,7 +20,7 @@ func TestResourcesListAndGet(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "statestore.yaml"), []byte(compYAML), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "appconfig.yaml"), []byte(cfgYAML), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "orders-sub.yaml"), []byte(subYAML), 0o600))
-	svc := New(func() []string { return []string{dir} })
+	svc := New(func() []string { return []string{dir} }, nil)
 
 	comps, err := svc.List(context.Background(), KindComponent)
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestResourcesMultiDocFile(t *testing.T) {
 	dir := t.TempDir()
 	multi := comp2YAML + "---\n" + cfgYAML + "---\n" + compYAML
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "resources.yaml"), []byte(multi), 0o600))
-	svc := New(func() []string { return []string{dir} })
+	svc := New(func() []string { return []string{dir} }, nil)
 
 	comps, err := svc.List(context.Background(), KindComponent)
 	require.NoError(t, err)
@@ -75,7 +75,7 @@ func TestResourcesStableIDsAndDuplicateNames(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dirA, "statestore.yaml"), []byte(compYAML), 0o600))
 	dupYAML := "apiVersion: dapr.io/v1alpha1\nkind: Component\nmetadata:\n  name: statestore\nspec:\n  type: state.sqlite\n  version: v1\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dirB, "statestore.yaml"), []byte(dupYAML), 0o600))
-	svc := New(func() []string { return []string{dirA, dirB} })
+	svc := New(func() []string { return []string{dirA, dirB} }, nil)
 
 	comps, err := svc.List(context.Background(), KindComponent)
 	require.NoError(t, err)
@@ -105,4 +105,49 @@ func TestResourcesStableIDsAndDuplicateNames(t *testing.T) {
 	// Unknown id-or-name -> ErrNotFound.
 	_, err = svc.Get(context.Background(), KindComponent, "nosuchthing")
 	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestExtras_MergedListedAndFetched(t *testing.T) {
+	content := []byte("apiVersion: dapr.io/v1alpha1\nkind: Component\nmetadata:\n  name: kvstore\nspec:\n  type: state.in-memory\n  version: v1\n  metadata:\n  - name: actorStateStore\n    value: \"true\"\n")
+	extras := func() []Resource { return FromRaw("crazy_lamport:/dapr-resources/kvstore.yaml", content) }
+	svc := New(func() []string { return nil }, extras)
+
+	list, err := svc.List(context.Background(), KindComponent)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, "kvstore", list[0].Name)
+	require.Equal(t, "state.in-memory", list[0].Type)
+	require.Equal(t, "v1", list[0].Version)
+	require.Equal(t, "crazy_lamport:/dapr-resources/kvstore.yaml", list[0].Path)
+	require.Empty(t, list[0].Raw, "List strips Raw")
+
+	got, err := svc.Get(context.Background(), KindComponent, list[0].ID)
+	require.NoError(t, err)
+	require.Contains(t, got.Raw, "actorStateStore")
+
+	// Name-based lookup works too.
+	got, err = svc.Get(context.Background(), KindComponent, "kvstore")
+	require.NoError(t, err)
+	require.Equal(t, list[0].ID, got.ID)
+}
+
+func TestExtras_ConfigurationDocRoutedByKind(t *testing.T) {
+	content := []byte("kind: Component\nmetadata:\n  name: a\nspec:\n  type: state.in-memory\n---\nkind: Configuration\nmetadata:\n  name: cfg\n")
+	extras := func() []Resource { return FromRaw("c1:/res/multi.yaml", content) }
+	svc := New(func() []string { return nil }, extras)
+
+	comps, err := svc.List(context.Background(), KindComponent)
+	require.NoError(t, err)
+	require.Len(t, comps, 1)
+	cfgs, err := svc.List(context.Background(), KindConfiguration)
+	require.NoError(t, err)
+	require.Len(t, cfgs, 1)
+	require.Equal(t, "cfg", cfgs[0].Name)
+}
+
+func TestExtras_NilProviderKeepsFileBehavior(t *testing.T) {
+	svc := New(func() []string { return nil }, nil)
+	list, err := svc.List(context.Background(), KindComponent)
+	require.NoError(t, err)
+	require.Empty(t, list)
 }

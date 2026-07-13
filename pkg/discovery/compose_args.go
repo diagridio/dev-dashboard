@@ -12,6 +12,7 @@ type daprdArgs struct {
 	AppChannelAddress string
 	ResourcesPath     string
 	ConfigPath        string
+	AppProtocol       string
 	AppPort           int
 	HTTPPort          int // container-internal; defaults to 3500 like daprd itself
 	GRPCPort          int // container-internal; defaults to 50001 like daprd itself
@@ -54,6 +55,7 @@ func parseDaprdArgs(argv []string) (daprdArgs, bool) {
 		AppChannelAddress: flags["app-channel-address"],
 		ResourcesPath:     flags["resources-path"],
 		ConfigPath:        flags["config"],
+		AppProtocol:       flags["app-protocol"],
 		AppPort:           atoi(flags["app-port"]),
 		HTTPPort:          atoi(flags["dapr-http-port"]),
 		GRPCPort:          atoi(flags["dapr-grpc-port"]),

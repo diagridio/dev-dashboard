@@ -21,6 +21,7 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/lifecycle"
 	"github.com/diagridio/dev-dashboard/pkg/logging"
 	"github.com/diagridio/dev-dashboard/pkg/metadata"
+	"github.com/diagridio/dev-dashboard/pkg/resources"
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
@@ -131,6 +132,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		updateCheck   updatecheck.Service
 		caps          *server.Capabilities
 		appNS         map[string]string
+		extraRes      func() []resources.Resource
 	)
 	switch mode {
 	case ModeAspire:
@@ -145,6 +147,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		_, crtRunner := containerruntime.Detect()
 		composeSrc := discovery.NewComposeSource(crtRunner)
 		tcSrc := discovery.NewTestcontainersSource(crtRunner)
+		extraRes = tcExtraResources(tcSrc)
 		scanners := []discovery.Scanner{discovery.StandaloneScanner(), composeSrc.Scanner(), tcSrc.Scanner()}
 		if discovery.AspireContractPresent(os.Getenv) {
 			as, err := discovery.NewAspireScanner(os.Getenv)
@@ -184,6 +187,7 @@ func runServe(ctx context.Context, mode Mode, settings serveSettings, basePath s
 		ResourcesPaths:   settings.ResourcesPaths,
 		QuietRegistry:    mode == ModeAspire,
 		AppNamespaces:    appNS,
+		ExtraResources:   extraRes,
 	}, dist)
 	for _, close := range closers {
 		close := close

@@ -405,6 +405,43 @@ describe('AppDetail', () => {
     confirmSpy.mockRestore()
   })
 
+  it('renders app protocol when reported', async () => {
+    server.use(
+      http.get('/api/apps/order', () => HttpResponse.json({ ...runningApp, appProtocol: 'http' })),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getByText('http')).toBeInTheDocument()
+  })
+
+  it('renders Container and Session rows for testcontainers apps', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          source: 'testcontainers',
+          daprdContainerName: 'crazy_lamport',
+          testcontainersSession: 'efeba7ba-5fdd-4713-ae0c-38f4a462cf46',
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getByText('crazy_lamport')).toBeInTheDocument()
+    expect(screen.getByText('Session')).toBeInTheDocument()
+    expect(screen.getByText('efeba7ba')).toBeInTheDocument()
+    expect(screen.queryByText('daprd PID')).not.toBeInTheDocument()
+    expect(screen.queryByText('CLI PID')).not.toBeInTheDocument()
+  })
+
+  it('keeps CLI PID and daprd PID rows for standalone apps', async () => {
+    server.use(http.get('/api/apps/order', () => HttpResponse.json(runningApp)))
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getByText('CLI PID')).toBeInTheDocument()
+    expect(screen.getByText('daprd PID')).toBeInTheDocument()
+  })
+
   it('hides all lifecycle controls for testcontainers apps', async () => {
     server.use(
       http.get('/api/apps/order', () =>

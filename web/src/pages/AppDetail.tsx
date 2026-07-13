@@ -240,7 +240,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             <div className="vv mono">{app.appPort || <span className="faint">—</span>}</div>
 
             <div className="kk">App protocol</div>
-            <div className="vv mono"><span className="faint">—</span></div>
+            <div className="vv mono">{app.appProtocol || <span className="faint">—</span>}</div>
 
             {isCompose ? (
               <>
@@ -258,8 +258,19 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
                 <div className="kk">App PID</div>
                 <div className="vv mono">{appPidDisplay}</div>
 
-                <div className="kk">CLI PID</div>
-                <div className="vv mono">{app.cliPid || <span className="faint">—</span>}</div>
+                {isTestcontainers ? (
+                  <>
+                    <div className="kk">Session</div>
+                    <div className="vv mono" title={app.testcontainersSession}>
+                      {app.testcontainersSession ? app.testcontainersSession.slice(0, 8) : <span className="faint">—</span>}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="kk">CLI PID</div>
+                    <div className="vv mono">{app.cliPid || <span className="faint">—</span>}</div>
+                  </>
+                )}
               </>
             )}
 
@@ -294,7 +305,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             <div className="kk">Metrics port</div>
             <div className="vv mono"><span className="faint">—</span></div>
 
-            {isCompose ? (
+            {isCompose || isTestcontainers ? (
               <>
                 <div className="kk">Container</div>
                 <div className="vv mono">{app.daprdContainerName || <span className="faint">—</span>}</div>

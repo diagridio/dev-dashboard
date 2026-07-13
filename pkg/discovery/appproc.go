@@ -10,10 +10,12 @@ import (
 	gproc "github.com/shirou/gopsutil/process"
 )
 
-// appProcResolver resolves the full command line of the local process listening
-// on a TCP port. It isolates the OS-level lookup so it can be faked in tests.
+// appProcResolver resolves the local process listening on a TCP port. It
+// isolates the OS-level lookup so it can be faked in tests.
 type appProcResolver interface {
 	CommandForPort(port int) (string, bool)
+	// PIDForPort returns the PID of the port's LISTEN process.
+	PIDForPort(port int) (int, bool)
 }
 
 // isAspireProxy reports whether cmd is the .NET Aspire Developer Control Plane
@@ -76,6 +78,19 @@ func (gopsutilResolver) CommandForPort(port int) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func (gopsutilResolver) PIDForPort(port int) (int, bool) {
+	conns, err := gnet.Connections("inet")
+	if err != nil {
+		return 0, false
+	}
+	for _, c := range conns {
+		if c.Status == "LISTEN" && int(c.Laddr.Port) == port && c.Pid != 0 {
+			return int(c.Pid), true
+		}
+	}
+	return 0, false
 }
 
 // gopsutilProcStart resolves a process's start time from its PID.
