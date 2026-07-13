@@ -104,7 +104,7 @@ func New(ctx context.Context, c Component) (Store, error) {
 }
 
 // Keys lists state-store keys matching a SQL LIKE pattern.
-// The backend must implement state.KeysLiker; redis, sqlite, and postgres v2 all do.
+// The backend must implement state.KeysLiker; redis, sqlite, postgres v2, and mongodb all do.
 func (s *ccStore) Keys(ctx context.Context, pattern, token string, pageSize int) ([]string, string, error) {
 	kl, ok := s.inner.(state.KeysLiker)
 	if !ok {
