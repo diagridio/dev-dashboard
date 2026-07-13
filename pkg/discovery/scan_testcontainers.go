@@ -174,10 +174,11 @@ func (s *TestcontainersSource) scanOnce() ([]ScanResult, error) {
 
 // extractResources copies the container's resources dir out as a tar stream
 // (`cp <id>:<dir> -`, no shell needed — works on distroless images) and
-// caches the YAML files per container ID. Runs once per container; a
-// failure logs once and is not retried. Caller holds s.mu (extractResources
-// is only ever called from scanOnce, which is only ever called from scan
-// while s.mu is held).
+// caches the YAML files per container ID. Runs once per container; genuine
+// failures are pinned and not retried, while context-expiry failures are
+// retried on the next scan. Caller holds s.mu (extractResources is only ever
+// called from scanOnce, which is only ever called from scan while s.mu is
+// held).
 func (s *TestcontainersSource) extractResources(ctx context.Context, c composeContainer, dir string) {
 	if _, done := s.extracted[c.ID]; done || s.extractFailed[c.ID] {
 		return

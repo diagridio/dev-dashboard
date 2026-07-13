@@ -752,6 +752,48 @@ func TestEnrich_TestcontainersAppPIDAndUptime(t *testing.T) {
 	require.Equal(t, started.Format(time.RFC3339), in.AppStartedAt)
 }
 
+func TestEnrich_TestcontainersAppPIDLeakGuardOnFailedResolution(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/v1.0/metadata") {
+			// metadata provides container-scoped appPID (99999), but PID
+			// resolution will fail, so the leak-guard `in.AppPID = 0` in
+			// service.go's testcontainers branch ensures 99999 does not leak
+			// through.
+			_, _ = w.Write([]byte(`{"id":"workflow-patterns-app","extended":{"appPID":"99999"}}`))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent) // healthz
+	}))
+	defer srv.Close()
+	port := portOf(t, srv.URL)
+
+	scan := func() ([]ScanResult, error) {
+		return []ScanResult{{
+			AppID: "workflow-patterns-app", Source: SourceTestcontainers,
+			AppPort: 8080, HTTPPort: port, SidecarReachable: true,
+			DaprdContainerName: "crazy_lamport",
+		}}, nil
+	}
+	svc := &service{
+		scan:     scan,
+		client:   srv.Client(),
+		appProc:  fakeAppProc{cmd: "", pid: 0}, // PID resolution fails
+		portOpen: func(int) bool { return true },
+		procStart: func(pid int) (time.Time, bool) {
+			// No live process found
+			return time.Time{}, false
+		},
+	}
+	out, err := svc.List(context.Background())
+	require.NoError(t, err)
+	in := out[0]
+	// When PID resolution fails, AppPID must be 0, not the metadata's
+	// container-scoped 99999 — proves the testcontainers branch's override
+	// guards against leaking container-local PIDs.
+	require.Equal(t, 0, in.AppPID)
+	require.Equal(t, "", in.AppStartedAt)
+}
+
 func TestEnrich_AppProtocolFromScanResult(t *testing.T) {
 	scan := func() ([]ScanResult, error) {
 		return []ScanResult{{
