@@ -168,7 +168,7 @@ func (s *ccStore) Set(ctx context.Context, key string, value []byte) error {
 }
 
 // Close shuts down the underlying store. state.BaseStore already embeds io.Closer
-// so the type-assert will succeed for all three supported backends; the io.Closer
+// so the type-assert will succeed for all four supported backends; the io.Closer
 // fallback is kept as a defensive belt-and-braces guard.
 func (s *ccStore) Close() error {
 	if c, ok := s.inner.(io.Closer); ok {
