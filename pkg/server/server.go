@@ -64,6 +64,10 @@ type Capabilities struct {
 	ControlPlane bool `json:"controlPlane"`
 	Logs         bool `json:"logs"`
 	Workflows    bool `json:"workflows"`
+	// Mode echoes the CLI --mode value ("" = complete scan) so the SPA can
+	// adapt static fallbacks (e.g. the Logs page's dapr_* targets) to the
+	// server's discovery filter.
+	Mode string `json:"mode"`
 }
 
 // FullCapabilities is the host-mode default: everything on.

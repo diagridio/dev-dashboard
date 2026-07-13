@@ -28,9 +28,12 @@ type serveDeps struct {
 	Apps           discovery.Service
 	// Lifecycle starts/stops/restarts discovered apps; nil disables the actions
 	// API (routes return 503).
-	Lifecycle  lifecycle.Manager
-	HomeDir    string
-	HTTPClient *http.Client // workflow HTTP client (remover/purge)
+	Lifecycle lifecycle.Manager
+	// ControlPlane lists/controls the placement+scheduler services, already
+	// filtered to the mode's families (cpSourcesFor).
+	ControlPlane controlplane.Manager
+	HomeDir      string
+	HTTPClient   *http.Client // workflow HTTP client (remover/purge)
 	// ComposeEnv returns the compose endpoint/mount context from the last
 	// compose scan; nil when compose discovery is disabled (tests, no runtime).
 	ComposeEnv func() discovery.ComposeEnv
@@ -147,7 +150,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		Stores:           rc,
 		Resources:        resources.New(rc.Paths, deps.ExtraResources),
 		News:             newsSvc,
-		ControlPlane:     controlplane.New(controlplane.AllSources()),
+		ControlPlane:     deps.ControlPlane,
 		TelemetryEnabled: deps.TelemetryEnabled,
 		UpdateCheck:      deps.UpdateCheck,
 		AllowNonLoopback: deps.AllowNonLoopback,

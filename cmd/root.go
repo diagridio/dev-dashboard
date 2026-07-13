@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
+	"github.com/diagridio/dev-dashboard/pkg/controlplane"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/lifecycle"
 	"github.com/diagridio/dev-dashboard/pkg/logging"
@@ -66,7 +67,7 @@ func NewRootCmd() *cobra.Command {
 	c.SetVersionTemplate(fmt.Sprintf("dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
 	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (aspire mode defaults to 0.0.0.0); binding a non-loopback address without aspire mode leaves the loopback Host guard in place, which rejects remote clients")
-	c.Flags().StringVar(&modeFlag, "mode", "", `serving/discovery mode: "aspire", or unset for the complete scan`)
+	c.Flags().StringVar(&modeFlag, "mode", "", `discovery filter: "dapr-run", "compose", "test-containers", or "aspire" show only that source's resources ("aspire" also switches to container posture when the DEVDASHBOARD_APP_* contract is present); unset scans every source`)
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")
 	c.Flags().StringVar(&stateStore, "statestore", "", "path to a state-store component YAML (overrides auto-detect)")
@@ -143,14 +144,28 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		}
 		appNS = contractNamespaces(scan)
 		appsSvc = discovery.New(scan, client)
-		caps = &server.Capabilities{Workflows: settings.StateStore != ""}
+		caps = &server.Capabilities{Workflows: settings.StateStore != "", Mode: string(ModeAspire)}
 	default:
+		src := sourcesFor(mode, discovery.AspireContractPresent(os.Getenv))
 		_, crtRunner := containerruntime.Detect()
-		composeSrc := discovery.NewComposeSource(crtRunner)
-		tcSrc := discovery.NewTestcontainersSource(crtRunner)
-		extraRes = tcExtraResources(tcSrc)
-		scanners := []discovery.Scanner{discovery.StandaloneScanner(), composeSrc.Scanner(), tcSrc.Scanner()}
-		if discovery.AspireContractPresent(os.Getenv) {
+		if src.NeedsRuntime && crtRunner == nil {
+			return fmt.Errorf("--mode %s requires a container runtime: install docker or podman (or set DASH_CONTAINER_RUNTIME)", mode)
+		}
+		var scanners []discovery.Scanner
+		if src.Standalone {
+			scanners = append(scanners, discovery.StandaloneScanner())
+		}
+		if src.Compose {
+			composeSrc := discovery.NewComposeSource(crtRunner)
+			scanners = append(scanners, composeSrc.Scanner())
+			composeEnv = composeSrc.Env
+		}
+		if src.Testcontainers {
+			tcSrc := discovery.NewTestcontainersSource(crtRunner)
+			scanners = append(scanners, tcSrc.Scanner())
+			extraRes = tcExtraResources(tcSrc)
+		}
+		if src.AspireContract {
 			as, err := discovery.NewAspireScanner(os.Getenv)
 			if err != nil {
 				return err
@@ -162,10 +177,17 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		lifeProc := lifecycle.NewProcController()
 		appsSvc = lifecycle.Overlay(
 			discovery.New(discovery.Merge(scanners...), client), lifeReg, lifeProc)
+		if src.AspireFilter {
+			appsSvc = discovery.FilterAspire(appsSvc)
+		}
 		lifeMgr = lifecycle.New(appsSvc, lifeReg, crtRunner, lifeProc, lifecycle.NewStarter())
-		composeEnv = composeSrc.Env
-		containerLogs = containerLogStream(crtRunner)
+		if src.Compose || src.Testcontainers {
+			containerLogs = containerLogStream(crtRunner)
+		}
 		updateCheck = updatecheck.New(&http.Client{Timeout: 5 * time.Second}, "https://api.github.com", "diagridio/dev-dashboard", version.Get().Version, time.Hour)
+		c := server.FullCapabilities()
+		c.Mode = string(mode)
+		caps = &c
 	}
 
 	telemetry := telemetryEnabled(os.Getenv)
@@ -175,6 +197,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		Namespace:        settings.Namespace,
 		Apps:             appsSvc,
 		Lifecycle:        lifeMgr,
+		ControlPlane:     controlplane.New(cpSourcesFor(mode)),
 		HomeDir:          home,
 		HTTPClient:       &http.Client{Timeout: 10 * time.Second},
 		ComposeEnv:       composeEnv,
