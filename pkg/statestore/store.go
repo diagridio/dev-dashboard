@@ -55,7 +55,7 @@ type Store interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	BulkGet(ctx context.Context, keys []string) (map[string][]byte, error)
 	Delete(ctx context.Context, key string) error
-	// Set upserts a raw byte value at key. Required by integration tests (Task 10).
+	// Set upserts a raw byte value at key. Used by integration tests to seed state.
 	Set(ctx context.Context, key string, value []byte) error
 	Close() error
 }
@@ -162,7 +162,7 @@ func (s *ccStore) Delete(ctx context.Context, key string) error {
 }
 
 // Set upserts a raw byte value at the given key.
-// This is used by integration tests (Task 10) to seed state.
+// This is used by integration tests to seed state.
 func (s *ccStore) Set(ctx context.Context, key string, value []byte) error {
 	return s.inner.Set(ctx, &state.SetRequest{Key: key, Value: value})
 }
@@ -177,7 +177,7 @@ func (s *ccStore) Close() error {
 	return nil
 }
 
-// SeedForTest is a helper for integration tests (Task 10) that upserts a
+// SeedForTest is a helper for integration tests that upserts a
 // raw byte value through the public Store interface.
 func SeedForTest(ctx context.Context, s Store, key string, value []byte) error {
 	return s.Set(ctx, key, value)
