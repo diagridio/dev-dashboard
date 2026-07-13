@@ -906,6 +906,39 @@ describe('Logs', () => {
     expect(names.filter(n => n === 'dapr_placement')).toHaveLength(1)
   })
 
+  // Mode-aware static fallback: only host-mode-ish modes (complete scan / dapr-run
+  // / aspire) get the dapr_* fallback entries — compose (and test-containers) must
+  // not offer them, since those sidecars never run as `dapr init` containers.
+  it('CP — compose mode omits the static dapr_* control-plane targets', async () => {
+    window.__DASH_CAPABILITIES__ = { lifecycle: true, controlPlane: true, logs: true, workflows: true, mode: 'compose' }
+    try {
+      server.use(
+        http.get('/api/apps', () => HttpResponse.json([])),
+        http.get('/api/controlplane', () => HttpResponse.json({ ...CP_LIST_BASE, services: [] })),
+      )
+
+      renderAt('/logs')
+
+      await waitFor(() => expect(screen.getByRole('heading', { name: 'Logs' })).toBeInTheDocument())
+      expect(screen.queryByRole('option', { name: 'dapr_scheduler' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('option', { name: 'dapr_placement' })).not.toBeInTheDocument()
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
+  })
+
+  it('CP — default mode (no injected capabilities) offers the static dapr_scheduler target', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([])),
+      http.get('/api/controlplane', () => HttpResponse.json({ ...CP_LIST_BASE, services: [] })),
+    )
+
+    renderAt('/logs')
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Logs' })).toBeInTheDocument())
+    expect(screen.getByRole('option', { name: 'dapr_scheduler' })).toBeInTheDocument()
+  })
+
   it('CP — ?cp=<compose service> streams its container logs', async () => {
     server.use(
       http.get('/api/apps', () => HttpResponse.json([])),

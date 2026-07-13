@@ -18,6 +18,7 @@ describe('getCapabilities', () => {
       controlPlane: true,
       logs: true,
       workflows: true,
+      mode: '',
     })
   })
 

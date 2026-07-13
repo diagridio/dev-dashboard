@@ -9,6 +9,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { parseLogTime } from '../lib/logtime'
 import { parseEnum } from '../lib/parseEnum'
 import { appKey } from '../lib/appKey'
+import { getCapabilities } from '../lib/capabilities'
 
 // LogSource is wider than the hook's 'daprd' | 'app'; 'both' composes two streams.
 const LOG_SOURCES = ['both', 'daprd', 'app'] as const
@@ -16,7 +17,12 @@ type LogSource = (typeof LOG_SOURCES)[number]
 
 // Static fallback so the selector renders before /api/controlplane answers;
 // compose-managed placement/scheduler containers are merged in from the API.
+// Only modes whose sidecars use the `dapr init` containers get the fallback —
+// compose / test-containers modes must not offer dapr_* targets.
 const CP_SERVICES = ['dapr_scheduler', 'dapr_placement'] as const
+const NO_CP_SERVICES: readonly string[] = []
+const staticCpForMode = (mode: string): readonly string[] =>
+  mode === '' || mode === 'dapr-run' || mode === 'aspire' ? CP_SERVICES : NO_CP_SERVICES
 
 /** A merged row carries the original LogLine plus its tagged source. */
 interface MergedLine {
@@ -372,10 +378,11 @@ export function Logs() {
   // is validated against this list; until the fetch lands a compose name is
   // simply "not yet valid" and no stream opens.
   const { data: cpList, isError: cpListError } = useControlPlane()
+  const staticCp = staticCpForMode(getCapabilities().mode ?? '')
   const cpNames = useMemo(() => {
     const fetched = (cpList?.services ?? []).filter(s => s.actionable).map(s => s.name)
-    return [...new Set<string>([...CP_SERVICES, ...fetched])]
-  }, [cpList])
+    return [...new Set<string>([...staticCp, ...fetched])]
+  }, [cpList, staticCp])
   const cpParam = searchParams.get('cp') ?? ''
   const cp = cpNames.includes(cpParam) ? cpParam : ''
   // A cp target that isn't (yet) in the list is pending until the fetch
