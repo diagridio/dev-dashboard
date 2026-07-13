@@ -3,7 +3,10 @@
 package discovery
 
 import (
+	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -84,4 +87,78 @@ func TestTestcontainersScanner_NilRunnerIsEmptyAndErrorFree(t *testing.T) {
 	results, err := src.Scanner()()
 	require.NoError(t, err)
 	require.Empty(t, results)
+}
+
+// resourcesTar returns a docker-cp-style tar of /dapr-resources with one
+// component file. Reuses buildTar from tar_extract_test.go (same package).
+func resourcesTar(t *testing.T) []byte {
+	t.Helper()
+	return buildTar(t, map[string]string{
+		"dapr-resources/kvstore.yaml": "apiVersion: dapr.io/v1alpha1\nkind: Component\nmetadata:\n  name: kvstore\nspec:\n  type: state.in-memory\n  version: v1\n",
+	})
+}
+
+func TestTestcontainersScanner_ExtractsResourceFiles(t *testing.T) {
+	crt := fakeTestcontainersRunner(t)
+	crt.responses["cp 28af628017d1:/dapr-resources"] = resourcesTar(t)
+	src := NewTestcontainersSource(crt)
+
+	results, err := src.Scanner()()
+	require.NoError(t, err)
+	require.Len(t, results, 1)
+	require.Equal(t, []string{"crazy_lamport:/dapr-resources"}, results[0].ResourcePaths)
+
+	files := src.Files()
+	require.Len(t, files, 1)
+	require.Equal(t, "crazy_lamport", files[0].Container)
+	require.Equal(t, "/dapr-resources/kvstore.yaml", files[0].Path)
+	require.Contains(t, string(files[0].Content), "state.in-memory")
+}
+
+func TestTestcontainersScanner_ExtractionCachedAndEvicted(t *testing.T) {
+	crt := fakeTestcontainersRunner(t)
+	crt.responses["cp 28af628017d1:/dapr-resources"] = resourcesTar(t)
+	src := NewTestcontainersSource(crt)
+	src.clock = func() time.Time { return time.Now() } // will be swapped below
+
+	// First scan extracts.
+	_, err := src.Scanner()()
+	require.NoError(t, err)
+	cpCalls := 0
+	for _, c := range crt.calls {
+		if strings.HasPrefix(c, "cp ") {
+			cpCalls++
+		}
+	}
+	require.Equal(t, 1, cpCalls)
+
+	// Second scan (cache TTL bypassed by advancing the clock) must NOT re-cp.
+	base := time.Now()
+	src.clock = func() time.Time { base = base.Add(3 * time.Second); return base }
+	_, err = src.Scanner()()
+	require.NoError(t, err)
+	cpCalls = 0
+	for _, c := range crt.calls {
+		if strings.HasPrefix(c, "cp ") {
+			cpCalls++
+		}
+	}
+	require.Equal(t, 1, cpCalls, "extraction must be cached per container ID")
+
+	// Container disappears -> cache evicted, Files() empty.
+	crt.responses["ps -aq"] = []byte("")
+	_, err = src.Scanner()()
+	require.NoError(t, err)
+	require.Empty(t, src.Files())
+}
+
+func TestTestcontainersScanner_ExtractionFailureDegrades(t *testing.T) {
+	crt := fakeTestcontainersRunner(t)
+	crt.errs = map[string]error{"cp 28af628017d1:/dapr-resources": errors.New("no such container")}
+	src := NewTestcontainersSource(crt)
+
+	results, err := src.Scanner()()
+	require.NoError(t, err) // scan itself still succeeds
+	require.Len(t, results, 1)
+	require.Empty(t, src.Files())
 }
