@@ -90,10 +90,22 @@ func TestStateStores_PostValidType(t *testing.T) {
 	// ID assignment is the registry's responsibility, not the handler's — not asserted here.
 }
 
+func TestStateStores_PostMongoDB(t *testing.T) {
+	reg := &mutableStoreRegistry{}
+	h := newAPI(reg)
+	res, _ := postJSON(t, h, "/statestores",
+		`{"name":"mongo","type":"state.mongodb","metadata":{"host":"localhost:27017","databaseName":"daprStore"}}`)
+	// Handler contract: 201 Created on success.
+	require.Equal(t, http.StatusCreated, res.StatusCode)
+	// AddStore must have been called once with the posted values.
+	require.Len(t, reg.added, 1)
+	require.Equal(t, "state.mongodb", reg.added[0].Type)
+}
+
 func TestStateStores_PostUnsupportedType(t *testing.T) {
 	reg := &mutableStoreRegistry{}
 	h := newAPI(reg)
-	res, _ := postJSON(t, h, "/statestores", `{"name":"x","type":"state.mongodb","metadata":{}}`)
+	res, _ := postJSON(t, h, "/statestores", `{"name":"x","type":"state.cosmosdb","metadata":{}}`)
 	require.Equal(t, http.StatusBadRequest, res.StatusCode)
 	require.Len(t, reg.added, 0)
 }
