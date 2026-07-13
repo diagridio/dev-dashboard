@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect, vi } from 'vitest'
 import { server } from '../test/setup'
-import { QueryProvider } from '../lib/query'
+import { QueryProvider, makeQueryClient } from '../lib/query'
 import { StateStoreConnectionDialog } from './StateStoreConnectionDialog'
 
 const catalog = {
@@ -12,8 +12,20 @@ const catalog = {
   ],
 }
 
+const catalogWithMongo = {
+  ...catalog,
+  components: [
+    ...catalog.components,
+    { type: 'state', name: 'mongodb', version: 'v1', title: 'MongoDB', status: 'stable',
+      metadata: [{ name: 'databaseName', type: 'string' }, { name: 'collectionName', type: 'string' }] },
+  ],
+}
+
+// Fresh QueryClient per call — the module-singleton default caches
+// /metadata/components for an hour, which would otherwise leak one test's
+// catalog mock into the next.
 function setup(ui: React.ReactNode) {
-  return render(<QueryProvider>{ui}</QueryProvider>)
+  return render(<QueryProvider client={makeQueryClient()}>{ui}</QueryProvider>)
 }
 
 describe('StateStoreConnectionDialog', () => {
@@ -63,5 +75,23 @@ describe('StateStoreConnectionDialog', () => {
     // Closing is the owner's job (it shows the toast, then closes) — the dialog must not
     // race it with its own onClose.
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('marks host and databaseName required for MongoDB', async () => {
+    server.use(http.get('/api/metadata/components', () => HttpResponse.json(catalogWithMongo)))
+
+    setup(<StateStoreConnectionDialog open onClose={() => {}} onSaved={() => {}} />)
+
+    // Wait for the catalog to load before switching types.
+    await waitFor(() => expect(screen.getByLabelText('redisHost')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'state.mongodb' } })
+
+    // host is a synthetic required field; databaseName is promoted to required.
+    expect(screen.getByLabelText('host')).toBeInTheDocument()
+    expect(screen.getByLabelText('databaseName')).toBeInTheDocument()
+
+    const save = screen.getByRole('button', { name: /save/i })
+    expect(save).toBeDisabled()
   })
 })
