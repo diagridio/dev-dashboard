@@ -85,3 +85,26 @@ func TestTranslateNilLookupsNoop(t *testing.T) {
 		t.Fatal("nil lookups must be a no-op")
 	}
 }
+
+func TestTranslate_MongoHostRewrite(t *testing.T) {
+	hosts := func(host string, port int) (string, bool) {
+		if host == "mongo" && port == 27017 {
+			return "127.0.0.1:55017", true
+		}
+		return "", false
+	}
+	c := Component{Type: "state.mongodb", Metadata: map[string]string{"host": "mongo:27017"}}
+	got := Translate(c, hosts, nil)
+	if got.Metadata["host"] != "127.0.0.1:55017" {
+		t.Fatalf("host: expected %q, got %q", "127.0.0.1:55017", got.Metadata["host"])
+	}
+}
+
+func TestTranslate_MongoForeignHostPassthrough(t *testing.T) {
+	hosts := func(string, int) (string, bool) { return "", false }
+	c := Component{Type: "state.mongodb", Metadata: map[string]string{"host": "prod.example.com:27017"}}
+	got := Translate(c, hosts, nil)
+	if got.Metadata["host"] != "prod.example.com:27017" {
+		t.Fatalf("host: expected %q, got %q", "prod.example.com:27017", got.Metadata["host"])
+	}
+}
