@@ -12,7 +12,6 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // Real Dapr workflow key shape: <appId>||<actorType>||<instanceId>||<suffix>.
@@ -90,9 +89,10 @@ func TestPostgresStoreContract(t *testing.T) {
 		tcpostgres.WithDatabase("dapr"),
 		tcpostgres.WithUsername("dapr"),
 		tcpostgres.WithPassword("dapr"),
-		testcontainers.WithWaitStrategy(
-			wait.ForListeningPort("5432/tcp"),
-		),
+		// BasicWaitStrategies waits for the "ready to accept connections" log
+		// twice (the official image restarts once during initdb) plus the port,
+		// avoiding the connect-during-initdb race a bare port wait allows.
+		tcpostgres.BasicWaitStrategies(),
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = c.Terminate(ctx) })
