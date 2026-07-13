@@ -31,6 +31,8 @@ export interface AppSummary {
   httpPort: number
   grpcPort: number
   appPort: number
+  /** app channel protocol reported by daprd (http, grpc, https, ...) */
+  appProtocol?: string
   daprdPid: number
   appPid: number
   cliPid: number
