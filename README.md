@@ -3,6 +3,10 @@
 A local dashboard for Dapr developers that offers a live view of everything Dapr running on
 your machine, plus guided builders for authoring Dapr component and resiliency YAML.
 
+![Dev Dashboard - Applications](docs/images/applications-light.png)
+
+![Dev Dashboard - Workflows](docs/images/workflow-overview-light.png)
+
 ## Goal
 
 The Diagrid Dev Dashboard is a companion for local Dapr development. It inspects the
