@@ -153,6 +153,7 @@ var supportedStoreTypes = map[string]bool{
 	"state.redis":      true,
 	"state.sqlite":     true,
 	"state.postgresql": true,
+	"state.mongodb":    true,
 }
 
 // validateStoreBody enforces required fields and the supported-type allowlist.

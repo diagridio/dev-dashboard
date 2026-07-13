@@ -18,6 +18,17 @@ func ConnInfo(c Component) string {
 		return strings.TrimSpace(c.Metadata["connectionString"])
 	case "state.postgresql", "state.postgres":
 		return pgConnInfo(c.Metadata["connectionString"])
+	case "state.mongodb":
+		// Dapr's mongodb component accepts either "host" (host:port / URI) or
+		// "server" (a DNS SRV name, no port); the two are mutually exclusive in
+		// the underlying component. Prefer host when both are somehow present,
+		// mirroring that precedence; both forms share the same credential-free
+		// summary logic below.
+		hostField := c.Metadata["host"]
+		if strings.TrimSpace(hostField) == "" {
+			hostField = c.Metadata["server"]
+		}
+		return mongoConnInfo(hostField, c.Metadata["databaseName"])
 	default:
 		return ""
 	}
@@ -71,6 +82,43 @@ func pgConnInfo(cs string) string {
 		return hostPort + "/" + db
 	case hostPort != "":
 		return hostPort
+	default:
+		return db
+	}
+}
+
+// mongoConnInfo builds a credentials-free "host[:port][/dbname]" summary for a
+// MongoDB component. The host field may be a bare "host:port" or a full
+// mongodb:// URI; userinfo (user:password) is always discarded.
+func mongoConnInfo(hostField, dbName string) string {
+	hostField = strings.TrimSpace(hostField)
+	if hostField == "" {
+		return ""
+	}
+	host := hostField
+	db := strings.TrimSpace(dbName)
+	if strings.HasPrefix(hostField, "mongodb://") || strings.HasPrefix(hostField, "mongodb+srv://") {
+		u, err := url.Parse(hostField)
+		if err != nil {
+			return ""
+		}
+		// SECURITY: u.Host is host[:port] only; Go's net/url keeps userinfo in
+		// u.User, which we never read. Do not rebuild this from raw strings.
+		host = u.Host
+		if db == "" {
+			db = strings.TrimPrefix(u.Path, "/")
+		}
+	} else if idx := strings.LastIndex(host, "@"); idx != -1 {
+		// SECURITY: a bare (non-URI) host may still smuggle "user:pass@host:port"
+		// userinfo; discard everything up to and including the last "@" so
+		// credentials never reach the summary.
+		host = host[idx+1:]
+	}
+	switch {
+	case host != "" && db != "":
+		return host + "/" + db
+	case host != "":
+		return host
 	default:
 		return db
 	}

@@ -69,8 +69,10 @@ describe('useComponentCatalog', () => {
   it('keeps only supported state.* types and resolves fields', async () => {
     server.use(http.get('/api/metadata/components', () => HttpResponse.json(bundle)))
     render(<QueryProvider><Probe /></QueryProvider>)
-    // mongodb is filtered out (unsupported); pubsub.redis excluded (not state).
-    await waitFor(() => expect(screen.getByTestId('types')).toHaveTextContent('state.redis,state.postgresql'))
+    // mongodb is supported (kept); pubsub.redis excluded (not state).
+    await waitFor(() =>
+      expect(screen.getByTestId('types')).toHaveTextContent('state.redis,state.postgresql,state.mongodb'),
+    )
     expect(screen.getByTestId('redis-fields')).toHaveTextContent('redisHost,redisPassword')
   })
 

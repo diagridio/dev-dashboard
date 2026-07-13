@@ -9,6 +9,7 @@ import (
 
 	"github.com/dapr/components-contrib/metadata"
 	"github.com/dapr/components-contrib/state"
+	"github.com/dapr/components-contrib/state/mongodb"
 	postgresql "github.com/dapr/components-contrib/state/postgresql/v2"
 	"github.com/dapr/components-contrib/state/redis"
 	"github.com/dapr/components-contrib/state/sqlite"
@@ -26,7 +27,8 @@ var verbose atomic.Bool
 func SetVerbose(v bool) { verbose.Store(v) }
 
 // ErrUnsupported is returned by New when the component type is not one of the
-// three supported backends (state.redis, state.sqlite, state.postgresql/postgres).
+// four supported backends (state.redis, state.sqlite,
+// state.postgresql/postgres, state.mongodb).
 var ErrUnsupported = errors.New("unsupported state store type")
 
 // SecretRef is a Dapr secretKeyRef: the secret name and the key within it.
@@ -53,7 +55,7 @@ type Store interface {
 	Get(ctx context.Context, key string) ([]byte, error)
 	BulkGet(ctx context.Context, keys []string) (map[string][]byte, error)
 	Delete(ctx context.Context, key string) error
-	// Set upserts a raw byte value at key. Required by integration tests (Task 10).
+	// Set upserts a raw byte value at key. Used by integration tests to seed state.
 	Set(ctx context.Context, key string, value []byte) error
 	Close() error
 }
@@ -65,7 +67,7 @@ type ccStore struct {
 }
 
 // New builds and initialises a components-contrib state store from a component spec.
-// Supports state.redis, state.sqlite, and state.postgresql / state.postgres.
+// Supports state.redis, state.sqlite, state.postgresql / state.postgres, and state.mongodb.
 // Returns ErrUnsupported for any other type.
 func New(ctx context.Context, c Component) (Store, error) {
 	log := logger.NewLogger("dev-dashboard")
@@ -83,6 +85,8 @@ func New(ctx context.Context, c Component) (Store, error) {
 		inner = sqlite.NewSQLiteStateStore(log)
 	case "state.postgresql", "state.postgres":
 		inner = postgresql.NewPostgreSQLStateStore(log)
+	case "state.mongodb":
+		inner = mongodb.NewMongoDB(log)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupported, c.Type)
 	}
@@ -100,7 +104,7 @@ func New(ctx context.Context, c Component) (Store, error) {
 }
 
 // Keys lists state-store keys matching a SQL LIKE pattern.
-// The backend must implement state.KeysLiker; redis, sqlite, and postgres v2 all do.
+// The backend must implement state.KeysLiker; redis, sqlite, postgres v2, and mongodb all do.
 func (s *ccStore) Keys(ctx context.Context, pattern, token string, pageSize int) ([]string, string, error) {
 	kl, ok := s.inner.(state.KeysLiker)
 	if !ok {
@@ -158,13 +162,13 @@ func (s *ccStore) Delete(ctx context.Context, key string) error {
 }
 
 // Set upserts a raw byte value at the given key.
-// This is used by integration tests (Task 10) to seed state.
+// This is used by integration tests to seed state.
 func (s *ccStore) Set(ctx context.Context, key string, value []byte) error {
 	return s.inner.Set(ctx, &state.SetRequest{Key: key, Value: value})
 }
 
 // Close shuts down the underlying store. state.BaseStore already embeds io.Closer
-// so the type-assert will succeed for all three supported backends; the io.Closer
+// so the type-assert will succeed for all four supported backends; the io.Closer
 // fallback is kept as a defensive belt-and-braces guard.
 func (s *ccStore) Close() error {
 	if c, ok := s.inner.(io.Closer); ok {
@@ -173,7 +177,7 @@ func (s *ccStore) Close() error {
 	return nil
 }
 
-// SeedForTest is a helper for integration tests (Task 10) that upserts a
+// SeedForTest is a helper for integration tests that upserts a
 // raw byte value through the public Store interface.
 func SeedForTest(ctx context.Context, s Store, key string, value []byte) error {
 	return s.Set(ctx, key, value)

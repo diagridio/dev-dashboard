@@ -65,6 +65,23 @@ func Translate(c Component, hosts HostLookup, paths PathLookup) Component {
 			}
 			set("connectionString", hostPath)
 		}
+	case "state.mongodb":
+		if hosts == nil {
+			return c
+		}
+		// Only the bare host:port form is translatable. A mongodb:// URI or
+		// mongodb+srv address passes through untouched (SRV has no host:port).
+		host, portStr, ok := strings.Cut(c.Metadata["host"], ":")
+		if !ok {
+			return c
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			return c
+		}
+		if translated, ok := hosts(host, port); ok {
+			set("host", translated)
+		}
 	}
 	return c
 }

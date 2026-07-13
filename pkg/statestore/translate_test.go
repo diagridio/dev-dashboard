@@ -2,7 +2,10 @@
 
 package statestore
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func sagaHosts(host string, port int) (string, bool) {
 	if host == "redis" && port == 6379 {
@@ -83,5 +86,58 @@ func TestTranslateNilLookupsNoop(t *testing.T) {
 	c := Component{Type: "state.redis", Metadata: map[string]string{"redisHost": "redis:6379"}}
 	if got := Translate(c, nil, nil); got.Metadata["redisHost"] != "redis:6379" {
 		t.Fatal("nil lookups must be a no-op")
+	}
+}
+
+func TestTranslateMongoHostRewrite(t *testing.T) {
+	hosts := func(host string, port int) (string, bool) {
+		if host == "mongo" && port == 27017 {
+			return "127.0.0.1:55017", true
+		}
+		return "", false
+	}
+	c := Component{Type: "state.mongodb", Metadata: map[string]string{"host": "mongo:27017"}}
+	got := Translate(c, hosts, nil)
+	if got.Metadata["host"] != "127.0.0.1:55017" {
+		t.Fatalf("host: expected %q, got %q", "127.0.0.1:55017", got.Metadata["host"])
+	}
+}
+
+func TestTranslateMongoForeignHostUntouched(t *testing.T) {
+	hosts := func(string, int) (string, bool) { return "", false }
+	c := Component{Type: "state.mongodb", Metadata: map[string]string{"host": "prod.example.com:27017"}}
+	got := Translate(c, hosts, nil)
+	if got.Metadata["host"] != "prod.example.com:27017" {
+		t.Fatalf("host: expected %q, got %q", "prod.example.com:27017", got.Metadata["host"])
+	}
+}
+
+func TestTranslateMongoNonHostPortFormsUntouched(t *testing.T) {
+	// A lookup that would rewrite anything it is consulted with: proves the
+	// mongodb branch never even attempts translation for these forms.
+	hosts := func(string, int) (string, bool) { return "localhost:99999", true }
+	for _, host := range []string{
+		"mongodb://user:pass@db:27017/orders",
+		"mongodb+srv://cluster.example.com",
+		"host1:27017,host2:27017",
+	} {
+		c := Component{Type: "state.mongodb", Metadata: map[string]string{"host": host}}
+		if got := Translate(c, hosts, nil); got.Metadata["host"] != host {
+			t.Fatalf("host %q must pass through unchanged, got %q", host, got.Metadata["host"])
+		}
+	}
+}
+
+func TestTranslateMongoServerFormUntouched(t *testing.T) {
+	// A "server" (DNS SRV name, no port) component has no "host" key at all, so
+	// the mongodb branch — which only ever inspects "host" — must leave it
+	// byte-for-byte unchanged, even against a lookup that would rewrite anything
+	// it's consulted with.
+	hosts := func(string, int) (string, bool) { return "localhost:99999", true }
+	orig := map[string]string{"server": "cluster.example.com", "databaseName": "orders"}
+	c := Component{Type: "state.mongodb", Metadata: orig}
+	got := Translate(c, hosts, nil)
+	if !reflect.DeepEqual(got.Metadata, orig) {
+		t.Fatalf("server form must pass through unchanged: got %v, want %v", got.Metadata, orig)
 	}
 }

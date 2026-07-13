@@ -1,8 +1,8 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect, vi } from 'vitest'
 import { server } from '../test/setup'
-import { QueryProvider } from '../lib/query'
+import { QueryProvider, makeQueryClient } from '../lib/query'
 import { StateStoreConnectionDialog } from './StateStoreConnectionDialog'
 
 const catalog = {
@@ -12,8 +12,20 @@ const catalog = {
   ],
 }
 
+const catalogWithMongo = {
+  ...catalog,
+  components: [
+    ...catalog.components,
+    { type: 'state', name: 'mongodb', version: 'v1', title: 'MongoDB', status: 'stable',
+      metadata: [{ name: 'databaseName', type: 'string' }, { name: 'collectionName', type: 'string' }] },
+  ],
+}
+
+// Fresh QueryClient per call — the module-singleton default caches
+// /metadata/components for an hour, which would otherwise leak one test's
+// catalog mock into the next.
 function setup(ui: React.ReactNode) {
-  return render(<QueryProvider>{ui}</QueryProvider>)
+  return render(<QueryProvider client={makeQueryClient()}>{ui}</QueryProvider>)
 }
 
 describe('StateStoreConnectionDialog', () => {
@@ -63,5 +75,52 @@ describe('StateStoreConnectionDialog', () => {
     // Closing is the owner's job (it shows the toast, then closes) — the dialog must not
     // race it with its own onClose.
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('marks host and databaseName required for MongoDB', async () => {
+    server.use(http.get('/api/metadata/components', () => HttpResponse.json(catalogWithMongo)))
+
+    setup(<StateStoreConnectionDialog open onClose={() => {}} onSaved={() => {}} />)
+
+    // Wait for the catalog to load before switching types.
+    await waitFor(() => expect(screen.getByLabelText('redisHost')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'state.mongodb' } })
+
+    // host is a synthetic required field; databaseName is promoted to required.
+    expect(screen.getByLabelText('host')).toBeInTheDocument()
+    expect(screen.getByLabelText('databaseName')).toBeInTheDocument()
+
+    const save = screen.getByRole('button', { name: /save/i })
+    expect(save).toBeDisabled()
+
+    // Filling Name and host alone must not be enough — databaseName still
+    // participates in the required-field gate.
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'orders' } })
+    fireEvent.change(screen.getByLabelText('host'), { target: { value: 'localhost:27017' } })
+    expect(save).toBeDisabled()
+
+    // Filling databaseName completes the required set and enables Save.
+    fireEvent.change(screen.getByLabelText('databaseName'), { target: { value: 'orders' } })
+    expect(save).toBeEnabled()
+  })
+
+  it('keeps collectionName optional (not inline-required) for MongoDB', async () => {
+    server.use(http.get('/api/metadata/components', () => HttpResponse.json(catalogWithMongo)))
+
+    setup(<StateStoreConnectionDialog open onClose={() => {}} onSaved={() => {}} />)
+
+    await waitFor(() => expect(screen.getByLabelText('redisHost')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'state.mongodb' } })
+
+    // collectionName must not appear as an inline required field...
+    expect(screen.queryByLabelText('collectionName')).toBeNull()
+
+    // ...but must still be reachable through the optional-field picker.
+    const addOptional = screen.getByRole('combobox', { name: 'add optional field' })
+    expect(within(addOptional).getByText('collectionName')).toBeInTheDocument()
+
+    fireEvent.change(addOptional, { target: { value: 'collectionName' } })
+    expect(screen.getByLabelText('collectionName')).toBeInTheDocument()
   })
 })
