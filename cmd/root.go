@@ -66,7 +66,7 @@ func NewRootCmd() *cobra.Command {
 	}
 	c.SetVersionTemplate(fmt.Sprintf("dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
-	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (aspire mode defaults to 0.0.0.0); binding a non-loopback address without aspire mode leaves the loopback Host guard in place, which rejects remote clients")
+	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (aspire container posture defaults to 0.0.0.0); binding a non-loopback address outside container posture leaves the loopback Host guard in place, which rejects remote clients")
 	c.Flags().StringVar(&modeFlag, "mode", "", `discovery filter: "dapr-run", "compose", "test-containers", or "aspire" show only that source's resources ("aspire" also switches to container posture when the DEVDASHBOARD_APP_* contract is present); unset scans every source`)
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")

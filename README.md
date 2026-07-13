@@ -101,7 +101,7 @@ docker run --rm -p 8080:8080 \
 
 | Source | Values | Default |
 |---|---|---|
-| `--mode` flag / `DEVDASHBOARD_MODE` env | `aspire` (reserved for future work: `dapr`, `compose`) | unset |
+| `--mode` flag / `DEVDASHBOARD_MODE` env | `dapr-run`, `compose`, `test-containers`, `aspire` | unset (complete scan) |
 
 **App discovery** — one set of `_<i>_*` vars per app, for `i = 0..DEVDASHBOARD_APP_COUNT-1`:
 
@@ -164,11 +164,20 @@ dashboard finds the Testcontainers-managed daprd container, pairs it with your h
 process, and even reads workflows from an in-memory state store via the sidecar itself.
 
 With `--mode`/`DEVDASHBOARD_MODE` unset (the default for host use), the dashboard performs the
-complete scan across all discovery sources described above. `--mode=aspire` restricts
-discovery to the container env contract and switches to container serving posture — see
-[Run as a container](#run-as-a-container-net-aspire) above. `dapr` and `compose` are reserved
-mode values for future single-source filtering and are not implemented yet. `--bind` (default
-`127.0.0.1`, `0.0.0.0` in aspire mode) controls the listen address alongside `--port`.
+complete scan across all discovery sources described above. Setting a mode restricts every
+dashboard surface — applications, workflows, state stores, the Control Plane view, and log
+targets — to a single source; filters are exclusive and never combined:
+
+- `--mode dapr-run` — host `dapr run` processes only (Control Plane shows the `dapr init` containers).
+- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler).
+- `--mode test-containers` — Testcontainers discovery only (no control-plane detection yet).
+- `--mode aspire` — Aspire resources only. Inside an AppHost-managed container (the
+  `DEVDASHBOARD_APP_*` contract is present) this is the container serving posture described
+  below; on a plain host it filters the process scan to Aspire-managed apps.
+
+`compose` and `test-containers` require a container runtime (docker or podman) and fail at
+startup without one. `--bind` (default `127.0.0.1`, `0.0.0.0` in aspire container posture)
+controls the listen address alongside `--port`.
 
 ## Updating the dashboard
 

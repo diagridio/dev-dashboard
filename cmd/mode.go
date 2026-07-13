@@ -58,8 +58,8 @@ func containerPosture(mode Mode, getenv func(string) string) bool {
 	return mode == ModeAspire && discovery.AspireContractPresent(getenv)
 }
 
-// serveSettings is the fully resolved serve configuration: flag > env > mode
-// default, per the spec's precedence rule.
+// serveSettings is the fully resolved serve configuration: flag > env >
+// posture default, per the spec's precedence rule.
 type serveSettings struct {
 	Port           int
 	Bind           string

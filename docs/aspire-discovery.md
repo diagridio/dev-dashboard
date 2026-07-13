@@ -35,6 +35,14 @@ and **the Aspire entry wins** (it carries the reachable base URL) —
 
 The rest of this document describes **Aspire mode** specifically.
 
+**Note on `--mode aspire` without the env contract:** `--mode aspire` without the
+`DEVDASHBOARD_APP_*` contract runs the dashboard on the host with normal host
+defaults and filters the standalone process scan to instances flagged
+`IsAspire` (DCP-proxy heuristic); the env-contract container flow described
+above is unchanged. Heuristic limitations (apps without an app port are
+missed; stopped apps drop out) are listed in
+[2026-07-13-mode-filter-design.md](superpowers/specs/2026-07-13-mode-filter-design.md).
+
 ---
 
 ## 2. The contract — the single source of truth
