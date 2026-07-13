@@ -45,6 +45,34 @@ describe('ControlPlane', () => {
     expect(await screen.findByText(/no dapr control plane found/i)).toBeInTheDocument()
   })
 
+  it('shows test-containers-specific copy (no dapr init suggestion) in test-containers mode', async () => {
+    window.__DASH_CAPABILITIES__ = { lifecycle: true, controlPlane: true, logs: true, workflows: true, mode: 'test-containers' }
+    try {
+      mockList({ runtime: 'docker', available: true, reachable: true, controlPlanePresent: false, services: [] })
+      renderPage()
+      expect(
+        await screen.findByText(/control-plane detection is not available in test-containers mode/i),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/dapr init/i)).not.toBeInTheDocument()
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
+  })
+
+  it('shows compose-specific copy (no dapr init suggestion) in compose mode', async () => {
+    window.__DASH_CAPABILITIES__ = { lifecycle: true, controlPlane: true, logs: true, workflows: true, mode: 'compose' }
+    try {
+      mockList({ runtime: 'docker', available: true, reachable: true, controlPlanePresent: false, services: [] })
+      renderPage()
+      expect(
+        await screen.findByText(/no compose-managed placement\/scheduler containers were found/i),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/dapr init/i)).not.toBeInTheDocument()
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
+  })
+
   it('renders a running service with a Restart action', async () => {
     mockList({
       runtime: 'docker', available: true, reachable: true, controlPlanePresent: true,

@@ -137,7 +137,7 @@ development tool — never expose it publicly.
 | `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, aspire mode only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
 | `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
 
-Precedence everywhere is **flag > env > mode default**.
+Precedence everywhere is **flag > env > posture default**.
 
 ## Run the dashboard
 

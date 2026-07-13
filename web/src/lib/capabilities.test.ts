@@ -28,8 +28,10 @@ describe('getCapabilities', () => {
       controlPlane: false,
       logs: false,
       workflows: true,
+      mode: 'compose',
     }
     expect(getCapabilities().lifecycle).toBe(false)
     expect(getCapabilities().workflows).toBe(true)
+    expect(getCapabilities().mode).toBe('compose')
   })
 })

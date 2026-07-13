@@ -323,6 +323,30 @@ func TestListEmptySourcesIsHonestEmpty(t *testing.T) {
 	}
 }
 
+func TestListEmptySourcesNeverCallsStats(t *testing.T) {
+	// docker stats --no-stream with no names samples ALL running containers
+	// (~1-2s block) and the result would be discarded — with Sources{} (e.g.
+	// test-containers mode) List must skip the call entirely. Deliberately
+	// give the fakeRunner NO "stats --no-stream" output key: if List called
+	// it anyway, memory() would just return an empty map (masking the bug),
+	// so we additionally assert on f.calls that the runner was never invoked
+	// with a stats command.
+	f := &fakeRunner{outputs: map[string][]byte{"info": []byte("ok")}}
+	m := newManager(RuntimeDocker, f, Sources{})
+	res, err := m.List(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !res.Available || !res.Reachable || len(res.Services) != 0 {
+		t.Fatalf("want available+reachable with zero services, got %+v", res)
+	}
+	for _, call := range f.calls {
+		if len(call) > 0 && call[0] == "stats" {
+			t.Fatalf("List invoked stats with Sources{}, want no stats call: %v", call)
+		}
+	}
+}
+
 func TestDoAndLogStreamRespectSources(t *testing.T) {
 	m := newManager(RuntimeDocker, &fakeRunner{outputs: map[string][]byte{}}, Sources{Compose: true})
 	if err := m.Do(context.Background(), "restart", "dapr_placement"); !errors.Is(err, ErrUnknownService) {

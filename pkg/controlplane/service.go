@@ -67,7 +67,14 @@ func (m *manager) List(ctx context.Context) (ListResult, error) {
 		liveNames = LiveServiceNames
 	}
 	statNames := append(append([]string{}, liveNames...), serviceNames(composeSvcs)...)
-	mem := m.memory(ctx, statNames)
+	// docker stats --no-stream with zero names samples ALL running containers
+	// (a ~1-2s block) and the result would be discarded anyway — skip the call
+	// entirely rather than pay that cost every poll (e.g. Sources{} in
+	// test-containers mode, where neither Init nor Compose containers exist).
+	mem := map[string]memStat{}
+	if len(statNames) > 0 {
+		mem = m.memory(ctx, statNames)
+	}
 	services := make([]Service, 0, len(liveNames)+len(composeSvcs))
 	present := false
 	for _, name := range liveNames {

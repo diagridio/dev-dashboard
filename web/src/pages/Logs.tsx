@@ -455,7 +455,7 @@ export function Logs() {
     setFollowing(f => !f)
   }
 
-  // cp is already validated against CP_SERVICES above (garbage → '').
+  // cp is already validated against cpNames above (garbage → '').
   const isCpView = cp !== ''
 
   useDocumentTitle(
