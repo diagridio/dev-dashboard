@@ -22,10 +22,14 @@ func TestResolveMode(t *testing.T) {
 	}{
 		{name: "unset everywhere is default", flag: "", env: nil, want: ModeDefault},
 		{name: "flag aspire", flag: "aspire", env: nil, want: ModeAspire},
+		{name: "flag dapr-run", flag: "dapr-run", env: nil, want: ModeDaprRun},
+		{name: "flag compose", flag: "compose", env: nil, want: ModeCompose},
+		{name: "flag test-containers", flag: "test-containers", env: nil, want: ModeTestcontainers},
 		{name: "env aspire", flag: "", env: map[string]string{"DEVDASHBOARD_MODE": "aspire"}, want: ModeAspire},
+		{name: "env compose", flag: "", env: map[string]string{"DEVDASHBOARD_MODE": "compose"}, want: ModeCompose},
 		{name: "flag wins over env", flag: "aspire", env: map[string]string{"DEVDASHBOARD_MODE": "bogus"}, want: ModeAspire},
-		{name: "unknown flag value errors", flag: "compose", wantErr: true},
-		{name: "unknown env value errors", env: map[string]string{"DEVDASHBOARD_MODE": "dapr"}, wantErr: true},
+		{name: "unknown flag value errors", flag: "dapr", wantErr: true},
+		{name: "unknown env value errors", env: map[string]string{"DEVDASHBOARD_MODE": "docker"}, wantErr: true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
