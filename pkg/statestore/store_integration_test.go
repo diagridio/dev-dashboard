@@ -10,6 +10,7 @@ import (
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
@@ -105,6 +106,33 @@ func TestPostgresStoreContract(t *testing.T) {
 		Type:     "state.postgresql",
 		Version:  "v1",
 		Metadata: map[string]string{"connectionString": cs},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
+	runStoreContract(t, store)
+}
+
+func TestMongoStoreContract(t *testing.T) {
+	testcontainers.SkipIfProviderIsNotHealthy(t)
+	ctx := context.Background()
+
+	c, err := tcmongo.Run(ctx, "mongo:7")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = c.Terminate(ctx) })
+
+	host, err := c.Host(ctx)
+	require.NoError(t, err)
+	port, err := c.MappedPort(ctx, "27017/tcp")
+	require.NoError(t, err)
+
+	store, err := statestore.New(ctx, statestore.Component{
+		Name:    "statestore",
+		Type:    "state.mongodb",
+		Version: "v1",
+		Metadata: map[string]string{
+			"host":         host + ":" + port.Port(),
+			"databaseName": "daprStore",
+		},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })

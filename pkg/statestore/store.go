@@ -9,6 +9,7 @@ import (
 
 	"github.com/dapr/components-contrib/metadata"
 	"github.com/dapr/components-contrib/state"
+	"github.com/dapr/components-contrib/state/mongodb"
 	postgresql "github.com/dapr/components-contrib/state/postgresql/v2"
 	"github.com/dapr/components-contrib/state/redis"
 	"github.com/dapr/components-contrib/state/sqlite"
@@ -26,7 +27,8 @@ var verbose atomic.Bool
 func SetVerbose(v bool) { verbose.Store(v) }
 
 // ErrUnsupported is returned by New when the component type is not one of the
-// three supported backends (state.redis, state.sqlite, state.postgresql/postgres).
+// four supported backends (state.redis, state.sqlite,
+// state.postgresql/postgres, state.mongodb).
 var ErrUnsupported = errors.New("unsupported state store type")
 
 // SecretRef is a Dapr secretKeyRef: the secret name and the key within it.
@@ -65,7 +67,7 @@ type ccStore struct {
 }
 
 // New builds and initialises a components-contrib state store from a component spec.
-// Supports state.redis, state.sqlite, and state.postgresql / state.postgres.
+// Supports state.redis, state.sqlite, state.postgresql / state.postgres, and state.mongodb.
 // Returns ErrUnsupported for any other type.
 func New(ctx context.Context, c Component) (Store, error) {
 	log := logger.NewLogger("dev-dashboard")
@@ -83,6 +85,8 @@ func New(ctx context.Context, c Component) (Store, error) {
 		inner = sqlite.NewSQLiteStateStore(log)
 	case "state.postgresql", "state.postgres":
 		inner = postgresql.NewPostgreSQLStateStore(log)
+	case "state.mongodb":
+		inner = mongodb.NewMongoDB(log)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupported, c.Type)
 	}
