@@ -19,7 +19,16 @@ func ConnInfo(c Component) string {
 	case "state.postgresql", "state.postgres":
 		return pgConnInfo(c.Metadata["connectionString"])
 	case "state.mongodb":
-		return mongoConnInfo(c.Metadata["host"], c.Metadata["databaseName"])
+		// Dapr's mongodb component accepts either "host" (host:port / URI) or
+		// "server" (a DNS SRV name, no port); the two are mutually exclusive in
+		// the underlying component. Prefer host when both are somehow present,
+		// mirroring that precedence; both forms share the same credential-free
+		// summary logic below.
+		hostField := c.Metadata["host"]
+		if strings.TrimSpace(hostField) == "" {
+			hostField = c.Metadata["server"]
+		}
+		return mongoConnInfo(hostField, c.Metadata["databaseName"])
 	default:
 		return ""
 	}
@@ -108,7 +117,9 @@ func mongoConnInfo(hostField, dbName string) string {
 	switch {
 	case host != "" && db != "":
 		return host + "/" + db
-	default:
+	case host != "":
 		return host
+	default:
+		return db
 	}
 }

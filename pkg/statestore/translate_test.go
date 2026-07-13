@@ -2,7 +2,10 @@
 
 package statestore
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func sagaHosts(host string, port int) (string, bool) {
 	if host == "redis" && port == 6379 {
@@ -122,5 +125,19 @@ func TestTranslateMongoNonHostPortFormsUntouched(t *testing.T) {
 		if got := Translate(c, hosts, nil); got.Metadata["host"] != host {
 			t.Fatalf("host %q must pass through unchanged, got %q", host, got.Metadata["host"])
 		}
+	}
+}
+
+func TestTranslateMongoServerFormUntouched(t *testing.T) {
+	// A "server" (DNS SRV name, no port) component has no "host" key at all, so
+	// the mongodb branch — which only ever inspects "host" — must leave it
+	// byte-for-byte unchanged, even against a lookup that would rewrite anything
+	// it's consulted with.
+	hosts := func(string, int) (string, bool) { return "localhost:99999", true }
+	orig := map[string]string{"server": "cluster.example.com", "databaseName": "orders"}
+	c := Component{Type: "state.mongodb", Metadata: orig}
+	got := Translate(c, hosts, nil)
+	if !reflect.DeepEqual(got.Metadata, orig) {
+		t.Fatalf("server form must pass through unchanged: got %v, want %v", got.Metadata, orig)
 	}
 }
