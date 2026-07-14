@@ -6,18 +6,34 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/diagridio/dev-dashboard/pkg/discovery"
 )
 
 // Mode selects the dashboard's discovery and serving posture. ModeDefault
 // (the zero value, mode unset) is the complete scan across all discovery
-// sources with today's host behavior; ModeAspire restricts discovery to the
-// DEVDASHBOARD_APP_* env contract and switches to container posture.
-// "dapr" and "compose" are reserved for future single-source filter modes.
+// sources with today's host behavior. Every other value is an exclusive
+// single-source filter — they are never combined:
+//
+//   - ModeDaprRun: host `dapr run` process scan only.
+//   - ModeCompose: Docker Compose container discovery only.
+//   - ModeTestcontainers: Testcontainers container discovery only.
+//   - ModeAspire: Aspire resources only. With the DEVDASHBOARD_APP_* env
+//     contract present the dashboard is the AppHost-managed container
+//     (container posture); without it the dashboard runs on the host and
+//     filters the process scan to Aspire-managed instances.
+//
+// CLI values ("dapr-run", "test-containers") are user-facing names and
+// intentionally differ from the discovery Source wire values ("standalone",
+// "testcontainers") — do not unify them.
 type Mode string
 
 const (
-	ModeDefault Mode = ""
-	ModeAspire  Mode = "aspire"
+	ModeDefault        Mode = ""
+	ModeAspire         Mode = "aspire"
+	ModeDaprRun        Mode = "dapr-run"
+	ModeCompose        Mode = "compose"
+	ModeTestcontainers Mode = "test-containers"
 )
 
 // resolveMode picks the mode from the --mode flag value and the
@@ -28,14 +44,22 @@ func resolveMode(flagValue string, getenv func(string) string) (Mode, error) {
 		v = getenv("DEVDASHBOARD_MODE")
 	}
 	switch Mode(v) {
-	case ModeDefault, ModeAspire:
+	case ModeDefault, ModeAspire, ModeDaprRun, ModeCompose, ModeTestcontainers:
 		return Mode(v), nil
 	}
-	return ModeDefault, fmt.Errorf("unknown mode %q: supported values are \"aspire\" (or unset for the complete scan)", v)
+	return ModeDefault, fmt.Errorf("unknown mode %q: supported values are \"dapr-run\", \"compose\", \"test-containers\", \"aspire\" (or unset for the complete scan)", v)
 }
 
-// serveSettings is the fully resolved serve configuration: flag > env > mode
-// default, per the spec's precedence rule.
+// containerPosture reports whether the dashboard serves as the
+// AppHost-managed container: aspire mode with the DEVDASHBOARD_APP_* env
+// contract present. Aspire mode without the contract is a host-run dashboard
+// filtered to Aspire resources and keeps host serving defaults.
+func containerPosture(mode Mode, getenv func(string) string) bool {
+	return mode == ModeAspire && discovery.AspireContractPresent(getenv)
+}
+
+// serveSettings is the fully resolved serve configuration: flag > env >
+// posture default, per the spec's precedence rule.
 type serveSettings struct {
 	Port           int
 	Bind           string
@@ -47,11 +71,11 @@ type serveSettings struct {
 	AllowedHosts []string
 }
 
-// resolveServeSettings applies the flag > env > mode-default precedence.
+// resolveServeSettings applies the flag > env > posture-default precedence.
 // flagChanged reports whether the named cobra flag was set explicitly; port,
 // bind, stateStore, namespace carry the flag values (which hold cobra
 // defaults when unchanged).
-func resolveServeSettings(mode Mode, flagChanged func(string) bool, port int, bind, stateStore, namespace string, getenv func(string) string) (serveSettings, error) {
+func resolveServeSettings(containerPosture bool, flagChanged func(string) bool, port int, bind, stateStore, namespace string, getenv func(string) string) (serveSettings, error) {
 	s := serveSettings{Port: port, Bind: bind, StateStore: stateStore, Namespace: namespace}
 
 	if !flagChanged("port") {
@@ -61,14 +85,14 @@ func resolveServeSettings(mode Mode, flagChanged func(string) bool, port int, bi
 				return s, fmt.Errorf("DEVDASHBOARD_PORT: expected a port number, got %q", v)
 			}
 			s.Port = p
-		} else if mode == ModeAspire {
+		} else if containerPosture {
 			s.Port = 8080
 		}
 	}
 	if !flagChanged("bind") {
 		if v := getenv("DEVDASHBOARD_BIND"); v != "" {
 			s.Bind = v
-		} else if mode == ModeAspire {
+		} else if containerPosture {
 			s.Bind = "0.0.0.0"
 		}
 	}
@@ -86,7 +110,7 @@ func resolveServeSettings(mode Mode, flagChanged func(string) bool, port int, bi
 				s.ResourcesPaths = append(s.ResourcesPaths, p)
 			}
 		}
-	} else if mode == ModeAspire && s.StateStore != "" {
+	} else if containerPosture && s.StateStore != "" {
 		s.ResourcesPaths = []string{filepath.Dir(s.StateStore)}
 	}
 	if v := getenv("DEVDASHBOARD_ALLOWED_HOSTS"); v != "" {

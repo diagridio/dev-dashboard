@@ -3,6 +3,8 @@ export interface Capabilities {
   controlPlane: boolean
   logs: boolean
   workflows: boolean
+  /** CLI --mode value ('' = complete scan); lets the UI adapt static fallbacks. */
+  mode?: string
 }
 
 declare global {
@@ -11,7 +13,7 @@ declare global {
   }
 }
 
-const FULL: Capabilities = { lifecycle: true, controlPlane: true, logs: true, workflows: true }
+const FULL: Capabilities = { lifecycle: true, controlPlane: true, logs: true, workflows: true, mode: '' }
 
 // getCapabilities reads the server-injected capability flags. Absent flag
 // (Vite dev server, tests) means everything on — matching the host-mode

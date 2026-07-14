@@ -82,8 +82,8 @@ describe('Applications', () => {
     expect(screen.getAllByText(/^healthy$/i).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/^starting$/i).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('Unhealthy')).toBeInTheDocument()
-    // The run-template stat card is gone; only the table column header remains.
-    expect(screen.getAllByText(/run template/i)).toHaveLength(1)
+    // The run-template stat card is gone; only the Mode table column header remains.
+    expect(screen.getAllByText(/^mode$/i)).toHaveLength(1)
   })
 
   it('unhealthy stat shows 0 without the bad class when all apps are fine', async () => {
@@ -145,7 +145,7 @@ describe('Applications', () => {
       { ...baseApp, appId: 'workflow-patterns-app', source: 'testcontainers', runTemplate: '' },
     ])
     renderAt()
-    const cells = await screen.findAllByText('Testcontainers')
+    const cells = await screen.findAllByText('TestContainers')
     expect(cells.length).toBeGreaterThanOrEqual(1)
   })
 

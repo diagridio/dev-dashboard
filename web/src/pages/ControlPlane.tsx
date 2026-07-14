@@ -2,8 +2,27 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { useControlPlane, useControlPlaneAction } from '../hooks/useControlPlane'
+import { getCapabilities } from '../lib/capabilities'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import type { ControlPlaneService, ControlPlaneAction } from '../types/controlplane'
+
+// noControlPlaneCopy tailors the "no control plane found" message to the
+// active discovery mode: test-containers has no dapr_* containers to find and
+// no compose-managed placement/scheduler containers to look for either, so
+// suggesting `dapr init` would be actively misleading in both cases.
+function noControlPlaneCopy(mode: string | undefined) {
+  if (mode === 'test-containers') {
+    return 'Control-plane detection is not available in test-containers mode yet.'
+  }
+  if (mode === 'compose') {
+    return 'No compose-managed placement/scheduler containers were found.'
+  }
+  return (
+    <>
+      No Dapr control plane found. Run <span className="mono">dapr init</span> to start it.
+    </>
+  )
+}
 
 export function ControlPlane() {
   useDocumentTitle('Control Plane')
@@ -48,12 +67,11 @@ export function ControlPlane() {
   }
 
   if (data.available && data.reachable && !data.controlPlanePresent) {
+    const mode = getCapabilities().mode
     return (
       <div className="page">
         {header}
-        <p className="muted">
-          No Dapr control plane found. Run <span className="mono">dapr init</span> to start it.
-        </p>
+        <p className="muted">{noControlPlaneCopy(mode)}</p>
       </div>
     )
   }

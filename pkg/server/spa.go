@@ -61,7 +61,7 @@ func serveIndex(w http.ResponseWriter, _ *http.Request, fsys fs.FS, telemetryEna
 	if telemetryEnabled {
 		flag = "true"
 	}
-	// caps is a bool-only struct, so marshaling cannot fail.
+	// caps holds only bools and a plain string, so marshaling cannot fail.
 	capsJSON, _ := json.Marshal(caps)
 	// strconv.Quote produces a safely-escaped JS string literal for the version.
 	script := []byte("<script>window.__DASH_TELEMETRY_ENABLED__=" + flag +

@@ -20,7 +20,7 @@ There are two entry paths, both centered on the same env contract:
 
 | Path | Trigger | Discovery sources | Serving posture |
 |---|---|---|---|
-| **Aspire mode** | `--mode aspire` / `DEVDASHBOARD_MODE=aspire` | **Only** the `DEVDASHBOARD_APP_*` env contract | Container posture (bind `0.0.0.0:8080`, non-loopback Host allowed, host features off) |
+| **Aspire mode** | `--mode aspire` / `DEVDASHBOARD_MODE=aspire` | **Only** the `DEVDASHBOARD_APP_*` env contract | Container posture (bind `0.0.0.0:8080`, non-loopback Host allowed, host features off) — with the env contract; host posture without it |
 | **Mode unset (default)** | no mode flag | Full merge: standalone process scan + compose + testcontainers + Aspire contract (if present) | Host posture (loopback `127.0.0.1:9090`, all features on) |
 
 Mode is resolved once at startup in [`cmd/mode.go`](../cmd/mode.go) (`resolveMode`,
@@ -34,6 +34,14 @@ and **the Aspire entry wins** (it carries the reachable base URL) —
 [`pkg/discovery/merge.go`](../pkg/discovery/merge.go) (`dedupAspireWins`).
 
 The rest of this document describes **Aspire mode** specifically.
+
+**Note on `--mode aspire` without the env contract:** `--mode aspire` without the
+`DEVDASHBOARD_APP_*` contract runs the dashboard on the host with normal host
+defaults and filters the standalone process scan to instances flagged
+`IsAspire` (DCP-proxy heuristic); the env-contract container flow described
+above is unchanged. Heuristic limitations (apps without an app port are
+missed; stopped apps drop out) are listed in
+[2026-07-13-mode-filter-design.md](superpowers/specs/2026-07-13-mode-filter-design.md).
 
 ---
 

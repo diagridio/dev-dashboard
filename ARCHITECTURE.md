@@ -120,7 +120,9 @@ threads through everything.
 
 | Flag | Default | Controls |
 |------|---------|----------|
-| `--port` | `9090` | HTTP listen port (always bound to `127.0.0.1`) |
+| `--port` | `9090` | HTTP listen port (`8080` default in aspire container posture) |
+| `--bind` | `127.0.0.1` | Listen address (`0.0.0.0` default in aspire container posture) |
+| `--mode` | unset | Exclusive discovery filter: `dapr-run`, `compose`, `test-containers`, `aspire`; unset = complete scan (env: `DEVDASHBOARD_MODE`, flag wins) |
 | `--base-path` | `""` | Sub-path mount, e.g. `/dashboard` (must match the SPA's `DASH_BASE_PATH` build var) |
 | `--no-open` | `false` | Skip auto-opening the browser |
 | `--statestore` | `""` | Explicit state-store component YAML; disables auto-detection |
@@ -133,19 +135,31 @@ reconciler.)
 
 ### `serve` boot sequence (`cmd/root.go` `runServe` → `cmd/serve.go` `assembleOptions`)
 
-1. `logging.New(verbose)` → set as the default `slog.Logger`.
-2. Load the embedded SPA (`web.DistFS()`) and the component catalog (`metadata.Init()`).
-3. Resolve the bind address (`127.0.0.1:<port>`) and the browser URL (base-path aware).
-4. Resolve `~` (`os.UserHomeDir()`); if unavailable, warn and run with registry
+1. Resolve the mode and posture (`cmd/mode.go`): `resolveMode` validates
+   `--mode`/`DEVDASHBOARD_MODE`; **container posture** = aspire mode *with* the
+   `DEVDASHBOARD_APP_*` env contract present, and drives the port/bind defaults
+   (`resolveServeSettings`, flag > env > posture default), Host-guard relaxation,
+   registry persistence, and browser auto-open. Aspire *without* the contract is a
+   host-posture run filtered to Aspire-managed apps.
+2. `logging.New(verbose)` → set as the default `slog.Logger`.
+3. Load the embedded SPA (`web.DistFS()`) and the component catalog (`metadata.Init()`).
+4. Resolve the bind address and the browser URL (base-path aware).
+5. Select discovery sources by mode (`cmd/sources.go` `sourcesFor`): mode-unset runs
+   every scanner; a filter mode runs exactly one (aspire host mode additionally wraps
+   the service in `discovery.FilterAspire`). `compose` and `test-containers` **fail
+   startup here** when no container runtime is found. The control-plane manager gets
+   the matching family filter (`cpSourcesFor` → `controlplane.Sources`), and the mode
+   is echoed to the SPA via the capabilities flags.
+6. Resolve `~` (`os.UserHomeDir()`); if unavailable, warn and run with registry
    persistence disabled (features degrade to in-memory no-ops rather than writing a
    CWD-relative `.dapr/`).
-5. `assembleOptions`: load the connection registry (`LoadRegistry`), build the lazy
+7. `assembleOptions`: load the connection registry (`LoadRegistry`), build the lazy
    connection pool (`newConnPool`), build the reconciler, and **synchronously seed** it
    with one reconcile against the boot apps snapshot (so the active store is elected and
    pre-warmed before the first request). The discovery service is wrapped in a
    `reconcilingApps` decorator (see §4).
-6. `server.New(addr, opts)` builds the chi router; start it in a goroutine.
-7. Open the browser (unless `--no-open`), then block on `select`:
+8. `server.New(addr, opts)` builds the chi router; start it in a goroutine.
+9. Open the browser (unless `--no-open` or container posture), then block on `select`:
    server error → log + exit non-zero; signal → 5-second graceful `Shutdown`.
 
 ---
@@ -311,6 +325,8 @@ A second scanner, `ComposeSource` (`scan_compose.go`), discovers Dapr apps runni
 
 A third scanner, `TestcontainersSource` (`scan_testcontainers.go`), discovers **Dapr Testcontainers** sessions (e.g. Spring Boot apps run with `mvn spring-boot:test-run` and `dapr-spring-boot-starter-test`): it lists `org.testcontainers=true`-labelled containers and keeps those whose argv invokes `daprd` (which naturally excludes ryuk/placement/scheduler helpers). The daprd container publishes its HTTP/gRPC ports to **random host ports on every run**, so port mappings are re-read each poll. Unlike compose, the paired app is a **host process** (reached via `host.testcontainers.internal`): enrichment probes the app port for liveness and resolves the listener's command and PID (`appproc.go`) for runtime inference, App PID, and uptime. The scanner also extracts the container's `--resources-path` YAML as a tar stream (`cp <id>:<dir> -`, `tar_extract.go` — no shell needed, distroless-safe; cached per container ID, evicted on departure, transient failures retried) and exposes it via `Files()` for the resources extras provider (see Resources below). Lifecycle actions are refused for these apps — ryuk owns the containers, the test process owns the app. All scanners are combined with `Merge` (one failing source never hides the others).
 
+Which scanners run is decided by `--mode` (`cmd/sources.go` `sourcesFor`): unset merges all of the above (plus the Aspire env-contract scanner when `DEVDASHBOARD_APP_COUNT` is set); `dapr-run`, `compose`, and `test-containers` run exactly one scanner each. `--mode aspire` without the env contract runs the standalone scan and wraps the **outermost** service (after the lifecycle overlay) in `FilterAspire` (`filter.go`), which keeps only instances flagged `IsAspire` by enrichment — the flag comes from the DCP-proxy heuristic (`appproc.go`), so it cannot be filtered at scan time.
+
 Derived fields include a human-friendly `Age` and an inferred runtime language.
 **To add a per-app field:** add it to `Instance` (`types.go`), populate it in `enrich`
 (`service.go`) from either the scan result or the parsed metadata, and it serializes
@@ -354,14 +370,20 @@ components-contrib `state.Store` (+ `KeysLiker`) interface.
 
 ### Control plane (`pkg/controlplane`)
 
-`New()` resolves a container runtime — `DASH_CONTAINER_RUNTIME` override, else `docker`,
-else `podman`, else none. `List()` probes reachability, then `docker inspect` +
-`docker stats` each known container: `dapr_scheduler` and `dapr_placement` are the
-**actionable** self-hosted containers (`LiveServiceNames`). It returns status,
-health, port bindings, memory, and log path per service. `List()` additionally detects
-compose containers whose command is `placement`/`scheduler`, surfaces them with a
-`composeProject`, and `Do`/`LogStream` accept the compose names discovered by the most
-recent `List` (still never arbitrary names). `Do(name, action)` runs a
+`New(src Sources)` resolves a container runtime — `DASH_CONTAINER_RUNTIME` override, else
+`docker`, else `podman`, else none. The `Sources` selector (`Init`, `Compose` — derived
+from `--mode` via `cpSourcesFor`) gates both which families `List` reports and which
+names `Do`/`LogStream` accept: `dapr-run`/`aspire` show only the `dapr init` containers,
+`compose` only the compose-run ones, `test-containers` the zero value (no control-plane
+detection yet — honest empty list), and mode-unset both. `List()` probes reachability,
+then `docker inspect` + `docker stats` each enabled container (the stats sampling is
+skipped entirely when no names are enabled — a bare `docker stats` would sample every
+container on the host): `dapr_scheduler` and `dapr_placement` are the **actionable**
+self-hosted containers (`LiveServiceNames`). It returns status, health, port bindings,
+memory, and log path per service. `List()` additionally detects compose containers whose
+command is `placement`/`scheduler`, surfaces them with a `composeProject`, and
+`Do`/`LogStream` accept the compose names discovered by the most recent `List` (still
+never arbitrary names). `Do(name, action)` runs a
 lifecycle verb **allowlisted** to `start`/`stop`/`restart` on the actionable names only
 (`ValidAction` + `IsLiveName`). `LogStream` runs `docker logs -f --tail 200` and demuxes
 stdout+stderr onto one channel for the SSE handler. **To add an action:** extend

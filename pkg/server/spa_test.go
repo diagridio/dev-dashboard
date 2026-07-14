@@ -99,7 +99,7 @@ func TestServeIndexInjectsCapabilities(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	h.ServeHTTP(rec, req)
 	body := rec.Body.String()
-	want := `window.__DASH_CAPABILITIES__={"lifecycle":false,"controlPlane":false,"logs":false,"workflows":true}`
+	want := `window.__DASH_CAPABILITIES__={"lifecycle":false,"controlPlane":false,"logs":false,"workflows":true,"mode":""}`
 	if !strings.Contains(body, want) {
 		t.Fatalf("body missing %q:\n%s", want, body)
 	}
