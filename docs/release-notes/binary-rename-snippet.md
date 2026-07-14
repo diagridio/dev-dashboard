@@ -17,5 +17,5 @@ iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts
 
 then delete the old `dev-dashboard` binary (the installer prints its location if
 one is found). The GitHub repo, Go module path, container image names
-(`ghcr.io/diagridio/dev-dashboard`), and `DEVDASHBOARD_*` environment variables
-are unchanged.
+(`ghcr.io/diagridio/dev-dashboard`), `DEVDASHBOARD_*` environment variables,
+and your saved state-store connections in `~/.dapr/dev-dashboard/` are unchanged.
