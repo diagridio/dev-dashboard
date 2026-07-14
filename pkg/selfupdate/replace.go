@@ -14,7 +14,7 @@ import (
 // restored if the install fails.
 func replaceExecutable(path string, newBin []byte) error {
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".dev-dashboard-update-*")
+	tmp, err := os.CreateTemp(dir, ".diagrid-dev-dashboard-update-*")
 	if err != nil {
 		return fmt.Errorf("create temp file in %s: %w", dir, err)
 	}

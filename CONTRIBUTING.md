@@ -9,8 +9,8 @@ docs improvements, and features.
 Open a [GitHub issue](https://github.com/diagridio/dev-dashboard/issues) with:
 
 - What you did, what you expected, and what happened instead.
-- Your OS, dashboard version (`dev-dashboard --version`), and Dapr version (`dapr --version`).
-- If relevant, diagnostic output from `dev-dashboard --verbose` (logs go to stderr).
+- Your OS, dashboard version (`diagrid-dev-dashboard --version`), and Dapr version (`dapr --version`).
+- If relevant, diagnostic output from `diagrid-dev-dashboard --verbose` (logs go to stderr).
 
 For feature requests, describe the use case rather than a specific implementation —
 it helps us evaluate the best way to fit it into the dashboard.
@@ -35,8 +35,8 @@ Pull requests with unsigned commits cannot be merged.
 ```sh
 git clone https://github.com/diagridio/dev-dashboard.git
 cd dev-dashboard
-make build            # builds web/dist, then the Go binary at bin/dev-dashboard
-./bin/dev-dashboard
+make build            # builds web/dist, then the Go binary at bin/diagrid-dev-dashboard
+./bin/diagrid-dev-dashboard
 ```
 
 See [Building from source](README.md#building-from-source) in the README for manual steps

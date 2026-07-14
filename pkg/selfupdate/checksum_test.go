@@ -14,7 +14,7 @@ func TestVerifyChecksum(t *testing.T) {
 	archive := []byte("the archive bytes")
 	sum := sha256.Sum256(archive)
 	hexSum := hex.EncodeToString(sum[:])
-	name := "dev-dashboard_1.2.0_linux_amd64.tar.gz"
+	name := "diagrid-dev-dashboard_1.2.0_linux_amd64.tar.gz"
 	checksums := "deadbeef  other-file.zip\n" + hexSum + "  " + name + "\n"
 
 	require.NoError(t, verifyChecksum(archive, name, checksums))

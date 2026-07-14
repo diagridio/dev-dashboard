@@ -4,7 +4,7 @@ web:
 	cd web && npm install && npm run build
 
 build: web
-	go build -o bin/dev-dashboard .
+	go build -o bin/diagrid-dev-dashboard .
 
 lint: lint-go lint-web
 

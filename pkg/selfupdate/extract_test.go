@@ -39,7 +39,7 @@ func makeZip(t *testing.T, name string, content []byte) []byte {
 
 func TestExtractBinaryTarGz(t *testing.T) {
 	content := []byte("fake-linux-binary")
-	archive := makeTarGz(t, "dev-dashboard", content)
+	archive := makeTarGz(t, "diagrid-dev-dashboard", content)
 	got, err := extractBinary(archive, "linux")
 	require.NoError(t, err)
 	require.Equal(t, content, got)
@@ -47,7 +47,7 @@ func TestExtractBinaryTarGz(t *testing.T) {
 
 func TestExtractBinaryZip(t *testing.T) {
 	content := []byte("fake-windows-binary")
-	archive := makeZip(t, "dev-dashboard.exe", content)
+	archive := makeZip(t, "diagrid-dev-dashboard.exe", content)
 	got, err := extractBinary(archive, "windows")
 	require.NoError(t, err)
 	require.Equal(t, content, got)

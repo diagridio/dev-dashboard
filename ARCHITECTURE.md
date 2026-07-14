@@ -39,18 +39,18 @@ apps, whose containers belong to ryuk and whose app belongs to the test process)
 ### Top-level data flow
 
 ```
-                         ┌──────────────────────────────────────────────┐
-   Browser (SPA) ──HTTP──▶  dev-dashboard binary (127.0.0.1:9090)        │
-        ▲   ▲             │                                              │
-        │   │  SSE        │  cmd/         cobra root, flags, serve boot  │
-        │   └─────────────┤  pkg/server   chi router + go:embed SPA      │
-        │                 │  reconciler   apps → stores → active store   │
-        │  static assets  │  pkg/discovery standalone.List + metadata    │
-        └─────────────────┤  pkg/workflow list / history / purge         │
-                          │  pkg/statestore redis / postgres / sqlite    │
-                          │  pkg/controlplane docker/podman inspect+logs │
-                          │  pkg/resources / logs / news / metadata      │
-                          └───────┬───────────────────────┬──────────────┘
+                         ┌──────────────────────────────────────────────────────┐
+   Browser (SPA) ──HTTP──▶  diagrid-dev-dashboard binary (127.0.0.1:9090)        │
+        ▲   ▲             │                                                      │
+        │   │  SSE        │  cmd/         cobra root, flags, serve boot          │
+        │   └─────────────┤  pkg/server   chi router + go:embed SPA              │
+        │                 │  reconciler   apps → stores → active store           │
+        │  static assets  │  pkg/discovery standalone.List + metadata            │
+        └─────────────────┤  pkg/workflow list / history / purge                 │
+                          │  pkg/statestore redis / postgres / sqlite            │
+                          │  pkg/controlplane docker/podman inspect+logs         │
+                          │  pkg/resources / logs / news / metadata              │
+                          └───────┬───────────────────────┬──────────────────────┘
                     HTTP /v1.0/*  │                        │ files / TCP / exec
                                   ▼                        ▼
                        running daprd sidecars   ~/.dapr, resource paths,

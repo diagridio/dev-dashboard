@@ -259,7 +259,7 @@ Aspire inputs it does much less:
  .NET AppHost + hosting integration
         │  injects DEVDASHBOARD_APP_* (static, once)
         ▼
- dev-dashboard (container, mode=aspire)
+ diagrid-dev-dashboard (container, mode=aspire)
         │  NewAspireScanner → []ScanResult (Source=aspire, DaprHTTPBaseURL set)
         ▼
  discovery.List  ──(per poll, parallel)──▶  each sidecar:

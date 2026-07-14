@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Install dev-dashboard to ~/.local/bin (no sudo).
+# Install diagrid-dev-dashboard to ~/.local/bin (no sudo).
 #   curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
 # Env: VERSION=vX.Y.Z (default: latest), BIN_DIR (default: ~/.local/bin), DRY_RUN=1
 set -eu
@@ -27,7 +27,7 @@ fi
 [ -n "$VERSION" ] || { echo "could not resolve latest version" >&2; exit 1; }
 
 num="${VERSION#v}"
-file="dev-dashboard_${num}_${os}_${arch}.tar.gz"
+file="diagrid-dev-dashboard_${num}_${os}_${arch}.tar.gz"
 url="https://github.com/$REPO/releases/download/$VERSION/$file"
 
 if [ "${DRY_RUN:-}" = "1" ]; then
@@ -41,8 +41,11 @@ trap 'rm -rf "$tmp"' EXIT
 curl -fsSL "$url" -o "$tmp/$file"
 tar -xzf "$tmp/$file" -C "$tmp"
 mkdir -p "$BIN_DIR"
-install -m 0755 "$tmp/dev-dashboard" "$BIN_DIR/dev-dashboard"
-echo "installed dev-dashboard $VERSION → $BIN_DIR/dev-dashboard"
+install -m 0755 "$tmp/diagrid-dev-dashboard" "$BIN_DIR/diagrid-dev-dashboard"
+echo "installed diagrid-dev-dashboard $VERSION → $BIN_DIR/diagrid-dev-dashboard"
+if [ -e "$BIN_DIR/dev-dashboard" ]; then
+  echo "note: found a previous install under the old name; remove it with: rm \"$BIN_DIR/dev-dashboard\""
+fi
 
 case ":$PATH:" in
   *":$BIN_DIR:"*) : ;;

@@ -21,16 +21,16 @@ import (
 // archive bytes plus a matching checksums.txt body.
 func newFakeRelease(t *testing.T, binary []byte) (archive []byte, checksums string) {
 	t.Helper()
-	archive = makeTarGz(t, "dev-dashboard", binary) // helper from extract_test.go
+	archive = makeTarGz(t, "diagrid-dev-dashboard", binary) // helper from extract_test.go
 	sum := sha256.Sum256(archive)
-	name := "dev-dashboard_1.2.0_linux_amd64.tar.gz"
+	name := "diagrid-dev-dashboard_1.2.0_linux_amd64.tar.gz"
 	checksums = hex.EncodeToString(sum[:]) + "  " + name + "\n"
 	return archive, checksums
 }
 
 func newUpdater(t *testing.T, srvURL, current string) (*Updater, string) {
 	t.Helper()
-	exe := filepath.Join(t.TempDir(), "dev-dashboard")
+	exe := filepath.Join(t.TempDir(), "diagrid-dev-dashboard")
 	require.NoError(t, os.WriteFile(exe, []byte("old-binary"), 0o755))
 	return &Updater{
 		Repo:           "diagridio/dev-dashboard",
@@ -99,7 +99,7 @@ func TestRunAlreadyCurrent(t *testing.T) {
 
 func TestRunChecksumMismatch(t *testing.T) {
 	archive, _ := newFakeRelease(t, []byte("new"))
-	badChecksums := "0000  dev-dashboard_1.2.0_linux_amd64.tar.gz\n"
+	badChecksums := "0000  diagrid-dev-dashboard_1.2.0_linux_amd64.tar.gz\n"
 	srv := releaseServer(t, archive, badChecksums, http.StatusOK)
 	defer srv.Close()
 

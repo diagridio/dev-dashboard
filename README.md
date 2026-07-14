@@ -33,7 +33,7 @@ The dashboard ships as a standalone binary published on GitHub Releases.
 curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
 ```
 
-*Windows (PowerShell) — installs to %LOCALAPPDATA%\Programs\dev-dashboard*
+*Windows (PowerShell) — installs to %LOCALAPPDATA%\Programs\diagrid-dev-dashboard*
 
 ```powershell
 iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
@@ -61,29 +61,34 @@ If the install directory is not on your `PATH`, the script prints the export lin
 go install github.com/diagridio/dev-dashboard@latest
 ```
 
+> **Note:** `go install` names the binary after the module path, so it produces
+> `dev-dashboard`, not `diagrid-dev-dashboard` — rename it afterwards
+> (`mv "$(go env GOPATH)/bin/dev-dashboard" "$(go env GOPATH)/bin/diagrid-dev-dashboard"`)
+> or use the install script above.
+
 **Manual download:**
 
-Download the archive for your platform from the [GitHub Releases](https://github.com/diagridio/dev-dashboard/releases) page, extract it, and place `dev-dashboard` (or `dev-dashboard.exe`) on your `PATH`. Verify with:
+Download the archive for your platform from the [GitHub Releases](https://github.com/diagridio/dev-dashboard/releases) page, extract it, and place `diagrid-dev-dashboard` (or `diagrid-dev-dashboard.exe`) on your `PATH`. Verify with:
 
 ```sh
-dev-dashboard --version
+diagrid-dev-dashboard --version
 ```
 
 ## Run the dashboard
 
 ```sh
 # Start on the default port (9090) and open your browser automatically
-dev-dashboard
+diagrid-dev-dashboard
 ```
 
 ```sh
 # Start on a custom port
-dev-dashboard --port 8080
+diagrid-dev-dashboard --port 8080
 ```
 
 ```sh
 # Enable diagnostic logging to stderr (server startup, app discovery, state-store connection, log streams, workflow operations)
-dev-dashboard --verbose
+diagrid-dev-dashboard --verbose
 ```
 
 No additional setup is needed: the dashboard discovers running Dapr apps the same way
@@ -189,13 +194,13 @@ it is skipped for source/dev builds and fails silently when offline.
 Update to the latest release (no-op if already current)
 
 ```sh
-dev-dashboard update
+diagrid-dev-dashboard update
 ```
 
 Install a specific version (can downgrade or reinstall)
 
 ```sh
-dev-dashboard update 1.2.0
+diagrid-dev-dashboard update 1.2.0
 ```
 
 `update` downloads the release archive for your platform, verifies its SHA256
@@ -207,7 +212,7 @@ Restart any running dashboard to use the new version.
 If the dashboard does not behave as expected, run it with `--verbose` to print diagnostic logs to stderr:
 
 ```sh
-dev-dashboard --verbose
+diagrid-dev-dashboard --verbose
 ```
 
 Logs are grouped by `component=` (values: `server`, `discovery`, `workflow`, `registry`, `reconciler`) and use levels INFO (normal milestones), WARN (degraded but still working, e.g. a state store that failed to initialise), and ERROR (an operation failed, e.g. the server could not bind its port). Without `--verbose`, no diagnostic logs are emitted.
@@ -276,24 +281,24 @@ does both in the right order.
 **macOS / Linux:**
 
 ```sh
-make build            # builds web/dist, then the Go binary at bin/dev-dashboard
-./bin/dev-dashboard
+make build            # builds web/dist, then the Go binary at bin/diagrid-dev-dashboard
+./bin/diagrid-dev-dashboard
 ```
 
 Equivalent manual steps (if you don't have `make`):
 
 ```sh
 cd web && npm install && npm run build && cd ..
-go build -o bin/dev-dashboard .
-./bin/dev-dashboard
+go build -o bin/diagrid-dev-dashboard .
+./bin/diagrid-dev-dashboard
 ```
 
 **Windows (PowerShell):** `make` is usually unavailable, so run the steps directly:
 
 ```powershell
 cd web; npm install; npm run build; cd ..
-go build -o bin/dev-dashboard.exe .
-.\bin\dev-dashboard.exe
+go build -o bin/diagrid-dev-dashboard.exe .
+.\bin\diagrid-dev-dashboard.exe
 ```
 
 To build for a sub-path mount, set `DASH_BASE_PATH` before building (see
@@ -330,7 +335,7 @@ you just run both on the same machine.
    dashboard only shows state that already exists — an idle store shows an empty list.
 3. Start your from-source build:
    ```sh
-   ./bin/dev-dashboard            # opens http://localhost:9090
+   ./bin/diagrid-dev-dashboard    # opens http://localhost:9090
    ```
 4. In the UI: the **Apps** table shows your app (health, ports, PIDs); the **Workflows** page
    lists instances read from the state store — open one for its live event history, input/output,
@@ -343,7 +348,7 @@ marked `actorStateStore: "true"` (falling back to the first detected). Check:
 
 - If detection is ambiguous (several stores), either pick one with the store selector on the
   Workflows page, or point it explicitly:
-  `./bin/dev-dashboard --statestore ~/.dapr/components/statestore.yaml`. You can also add a
+  `./bin/diagrid-dev-dashboard --statestore ~/.dapr/components/statestore.yaml`. You can also add a
   store by hand via the connection manager on the Components page.
 - Workflow keys are namespaced; the dashboard defaults to `default`. For another namespace, pass
   `--namespace <ns>`.
@@ -460,7 +465,7 @@ single commit with `git commit --no-verify`.
 > For maintainers with push access. Releases are built and published by the
 > [`release` GitHub Actions workflow](.github/workflows/release.yaml): pushing a `vX.Y.Z` tag
 > runs [GoReleaser](https://goreleaser.com), which compiles the cross-platform archives plus
-> `checksums.txt` and publishes them to a GitHub Release. The version (`dev-dashboard --version`)
+> `checksums.txt` and publishes them to a GitHub Release. The version (`diagrid-dev-dashboard --version`)
 > is injected from the tag via build-time ldflags. The same tag-driven run also builds and
 > pushes the multi-arch container image to `ghcr.io/diagridio/dev-dashboard` via goreleaser.
 > Prerelease tags (any `-suffix`, e.g. `v1.5.0-rc.1`) push their version-tagged image but
@@ -508,21 +513,21 @@ sidecars and state store.
 > [ARCHITECTURE.md](ARCHITECTURE.md). The summary below is the quick tour.
 
 ```
-┌───────────────────────────────────────────────────────┐
-│  dev-dashboard (single Go binary)                     │
-│                                                       │
-│  cmd/            cobra root, flags, serve boot,       │
-│                  connection registry + reconciler     │
-│  pkg/server      chi router + go:embed SPA            │
-│  pkg/discovery   standalone.List() + /v1.0/metadata   │
-│  pkg/workflow    list / history / purge               │
-│  pkg/statestore  client (redis / postgres / sqlite)   │
-│  pkg/controlplane docker/podman inspect + lifecycle   │
-│  pkg/metadata    component metadata catalog           │
-│  pkg/resources   component + configuration YAML loader│
-│  pkg/logs        file tail → SSE                      │
-│  web/            React + Vite SPA → dist/ (embedded)  │
-└───────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│  diagrid-dev-dashboard (single Go binary)                     │
+│                                                               │
+│  cmd/            cobra root, flags, serve boot,               │
+│                  connection registry + reconciler             │
+│  pkg/server      chi router + go:embed SPA                    │
+│  pkg/discovery   standalone.List() + /v1.0/metadata           │
+│  pkg/workflow    list / history / purge                       │
+│  pkg/statestore  client (redis / postgres / sqlite)           │
+│  pkg/controlplane docker/podman inspect + lifecycle           │
+│  pkg/metadata    component metadata catalog                   │
+│  pkg/resources   component + configuration YAML loader        │
+│  pkg/logs        file tail → SSE                              │
+│  web/            React + Vite SPA → dist/ (embedded)          │
+└───────────────────────────────────────────────────────────────┘
    │ HTTP /v1.0/*   │ files / TCP        │ docker/podman
    ▼                ▼                    ▼
  running daprd   ~/.dapr, resource paths,   control-plane
