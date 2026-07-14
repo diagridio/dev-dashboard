@@ -1,7 +1,22 @@
 name: ci
 on:
-  push: { branches: [main] }
+  push:
+    branches: [main]
+    paths: &source-paths
+      - 'cmd/**'
+      - 'internal/**'
+      - 'pkg/**'
+      - 'test/**'
+      - 'main.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'web/**'
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'Makefile'
+      - '.github/workflows/ci.yaml'
   pull_request:
+    paths: *source-paths
 jobs:
   go:
     runs-on: ubuntu-latest
