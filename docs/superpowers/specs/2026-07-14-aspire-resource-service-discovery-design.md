@@ -50,6 +50,7 @@ resource-service gRPC (`dashboard_service.proto`). It:
 | Stream-down behavior | **Serve last-known snapshot**, reconnect with exponential backoff |
 | Console logs | **In scope this iteration** (Aspire apps get logs for the first time) |
 | Client structure | **Approach A** — one package owns both streams behind narrow interfaces |
+| Deployment | Works **both** as an AppHost container resource (zero-config) and **standalone on the host** (manual config); base-URL resolution is deployment-aware (§5.3) |
 
 ---
 
@@ -122,13 +123,29 @@ Each `WatchResources` update mutates the cached snapshot under a lock. On
    `dapr-http-port`, `dapr-grpc-port`, `resources-path`.
 2. **Pair app ↔ sidecar & name.** Recover the pairing and display name from the
    sidecar's `"Parent"` relationship + `display_name` (replaces `_LABEL`).
-3. **Resolve the container-reachable base URL** (the reachability crux):
-   - Prefer the sidecar's Aspire-rewritten `urls` entry for the daprd HTTP
-     endpoint.
-   - If absent, fall back to the injected `DEVDASHBOARD_APP_*` `_DAPR_HTTP` for
-     the matching app-id (consult the env-contract map during projection).
-   - If neither exists, emit the app with an empty base URL and log it; the
-     health/metadata probe marks it unreachable.
+3. **Resolve the reachable base URL** — a **deployment-aware** ladder, because
+   the reachable address differs by where the dashboard runs (see the Deployment
+   row in §2 and the config paths in §7):
+   1. **Explicit injected value.** If `DEVDASHBOARD_APP_*` `_DAPR_HTTP` is set for
+      the matching app-id, use it — whoever configured it (container integration
+      or a human) made it reachable for that deployment. Consult the env-contract
+      map during projection.
+   2. **Aspire-rewritten `urls`.** Else use the sidecar's `urls` entry for the
+      daprd HTTP endpoint. Container-reachable when Aspire registers the endpoint
+      (the deciding spike, §10).
+   3. **Host-perspective argv fallback.** Else, **only when the dashboard runs as
+      a host process** (not containerized), use `127.0.0.1:<dapr-http-port>` from
+      the daprd argv (via `parseDaprdArgs`). A host-run dashboard shares the host
+      with the daprd executables, so this is directly reachable and needs no
+      perspective rewrite. Gated on a deployment signal (the containerized
+      dashboard bakes `DEVDASHBOARD_MODE=aspire`; a host process does not) — exact
+      detection is an implementation detail for the plan.
+   4. **Give up.** Else emit the app with an empty base URL and log it; the
+      health/metadata probe marks it unreachable.
+
+   Net effect: **container mode** relies on steps 1–2 (the perspective rewrite);
+   **standalone-on-host mode** is served by step 3 with zero rewrite, which is
+   what makes standalone the easiest configuration to test against a real AppHost.
 4. **Emit** `ScanResult{Source: SourceAspireRS, AppID, DaprHTTPBaseURL,
    Namespace: "default", Label, SidecarReachable: true}`.
 
@@ -173,7 +190,18 @@ Activate when Aspire's standard vars are present on the dashboard container:
   for local dev certs and defaults off.
 - `AuthMode=Certificate` is unsupported this iteration → **fail fast** at startup
   with an error naming the unsupported mode.
-- Depends on the hosting integration injecting these vars (out of scope, §1).
+
+The **same activation vars** cover both deployments — only *who sets them*
+differs:
+
+- **Container resource in the AppHost** — the hosting integration injects the
+  vars automatically (zero-config; out of scope, §1). Base URL resolved via
+  §5.3 steps 1–2.
+- **Standalone on the host** — the user sets the vars by hand, reading the URL +
+  API key from the AppHost's startup output/config (the standard standalone
+  Aspire-dashboard workflow). No hosting integration required. Base URL resolved
+  via §5.3 step 3 (`127.0.0.1:<dapr-http-port>`), so this is the simplest setup
+  to test against a real AppHost.
 
 ---
 
@@ -192,8 +220,13 @@ Activate when Aspire's standard vars are present on the dashboard container:
 ## 9. Testing
 
 - **Projection** — table tests over snapshot fixtures: executable sidecar,
-  container sidecar, non-dapr resource, missing `urls` (fallback path), missing
-  `"Parent"` relationship → expected `ScanResult`s.
+  container sidecar, non-dapr resource, missing `"Parent"` relationship →
+  expected `ScanResult`s.
+- **Deployment-aware base URL (§5.3)** — for one fixture, assert each rung of the
+  ladder: injected `_DAPR_HTTP` wins when present; `urls` used next; argv
+  `127.0.0.1:<dapr-http-port>` used when the host-process signal is set and both
+  explicit sources are absent; empty (not argv) when the containerized signal is
+  set and both are absent.
 - **Client lifecycle** — in-process fake `DashboardService` over `bufconn`
   driving initial snapshot + deltas, disconnect/reconnect, and API-key header
   assertion.
