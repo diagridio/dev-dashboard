@@ -1,5 +1,5 @@
 version: 2
-project_name: dev-dashboard
+project_name: diagrid-dev-dashboard
 
 before:
   hooks:
@@ -7,9 +7,9 @@ before:
     - sh -c "cd web && npm ci && npm run build"
 
 builds:
-  - id: dev-dashboard
+  - id: diagrid-dev-dashboard
     main: .
-    binary: dev-dashboard
+    binary: diagrid-dev-dashboard
     env:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]
@@ -33,7 +33,7 @@ archives:
 
 dockers:
   - id: linux-amd64
-    ids: [dev-dashboard]
+    ids: [diagrid-dev-dashboard]
     goos: linux
     goarch: amd64
     dockerfile: Dockerfile.goreleaser
@@ -43,7 +43,7 @@ dockers:
     build_flag_templates:
       - "--platform=linux/amd64"
   - id: linux-arm64
-    ids: [dev-dashboard]
+    ids: [diagrid-dev-dashboard]
     goos: linux
     goarch: arm64
     dockerfile: Dockerfile.goreleaser
@@ -75,7 +75,7 @@ snapshot:
 release:
   github:
     owner: diagridio
-    name: dev-dashboard
+    name: dev-dashboard   # GitHub REPO name — not the binary
   draft: false
   prerelease: auto
 

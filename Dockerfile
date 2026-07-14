@@ -21,10 +21,10 @@ RUN CGO_ENABLED=0 go build \
     -X github.com/diagridio/dev-dashboard/pkg/version.Version=${VERSION} \
     -X github.com/diagridio/dev-dashboard/pkg/version.Commit=${COMMIT} \
     -X github.com/diagridio/dev-dashboard/pkg/version.Date=${DATE}" \
-    -o /out/dev-dashboard .
+    -o /out/diagrid-dev-dashboard .
 
 FROM gcr.io/distroless/static:nonroot
-COPY --from=build /out/dev-dashboard /dev-dashboard
+COPY --from=build /out/diagrid-dev-dashboard /diagrid-dev-dashboard
 ENV DEVDASHBOARD_MODE=aspire
 EXPOSE 8080
-ENTRYPOINT ["/dev-dashboard"]
+ENTRYPOINT ["/diagrid-dev-dashboard"]
