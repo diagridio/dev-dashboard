@@ -5,7 +5,7 @@ For how the system fits together and where to extend it, see [ARCHITECTURE.md](A
 
 ## What this is
 
-`dev-dashboard` is a **single Go binary** that embeds a React + Vite SPA (via `go:embed`) and
+`diagrid-dev-dashboard` is a **single Go binary** that embeds a React + Vite SPA (via `go:embed`) and
 acts as a passive, read-only observer for local Dapr development. There is **no Node.js at
 runtime** — the frontend is compiled to `web/dist` and baked into the binary at build time.
 
@@ -48,17 +48,17 @@ The SPA must be built **before** the Go binary (the binary embeds `web/dist`). `
 does both in order.
 
 ```sh
-make build                    # builds web/dist, then bin/dev-dashboard
+make build                    # builds web/dist, then bin/diagrid-dev-dashboard
 make web                      # build the SPA only (cd web && npm install && npm run build)
-./bin/dev-dashboard           # run it (serves http://localhost:9090, opens browser)
-./bin/dev-dashboard --no-open --verbose   # no browser, diagnostic logs to stderr
+./bin/diagrid-dev-dashboard   # run it (serves http://localhost:9090, opens browser)
+./bin/diagrid-dev-dashboard --no-open --verbose   # no browser, diagnostic logs to stderr
 ```
 
 Manual equivalent (no `make`):
 
 ```sh
 cd web && npm install && npm run build && cd ..
-go build -o bin/dev-dashboard .
+go build -o bin/diagrid-dev-dashboard .
 ```
 
 Sub-path mount: `DASH_BASE_PATH=/dashboard/ make build` then run with `--base-path /dashboard`
@@ -120,7 +120,7 @@ make release-snapshot         # = goreleaser release --snapshot --clean --skip=p
 
 Release matrix is **5 archives**: macOS + Linux (amd64 + arm64) and Windows (amd64). No native
 Windows/arm64 — it runs the amd64 build via emulation. Version string is injected from the tag
-via ldflags (`dev-dashboard --version`).
+via ldflags (`diagrid-dev-dashboard --version`).
 
 ## Conventions for agents
 
