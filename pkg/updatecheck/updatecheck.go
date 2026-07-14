@@ -1,4 +1,4 @@
-// Package updatecheck reports whether a newer dev-dashboard release exists.
+// Package updatecheck reports whether a newer diagrid-dev-dashboard release exists.
 package updatecheck
 
 import (

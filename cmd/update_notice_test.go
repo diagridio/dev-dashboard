@@ -18,7 +18,7 @@ func TestFormatUpdateNotice(t *testing.T) {
 	// The trailing blank line separates the notice from the startup message.
 	require.Equal(t,
 		"A new version of the Dapr Dev Dashboard is available: v1.2.0 → v1.3.0 (https://github.com/diagridio/dev-dashboard/releases/tag/v1.3.0)\n"+
-			"Run `dev-dashboard update` to upgrade.\n\n",
+			"Run `diagrid-dev-dashboard update` to upgrade.\n\n",
 		got)
 }
 
@@ -26,7 +26,7 @@ func TestFormatUpdateNoticeWithoutReleaseURL(t *testing.T) {
 	got := formatUpdateNotice("v1.2.0", "v1.3.0", "")
 	require.Equal(t,
 		"A new version of the Dapr Dev Dashboard is available: v1.2.0 → v1.3.0\n"+
-			"Run `dev-dashboard update` to upgrade.\n\n",
+			"Run `diagrid-dev-dashboard update` to upgrade.\n\n",
 		got)
 }
 
@@ -39,7 +39,7 @@ func TestPrintUpdateNoticeWhenAvailable(t *testing.T) {
 		ReleaseURL:      "https://github.com/diagridio/dev-dashboard/releases/tag/v1.3.0",
 	})
 	require.Contains(t, buf.String(), "v1.2.0 → v1.3.0 (https://github.com/diagridio/dev-dashboard/releases/tag/v1.3.0)")
-	require.Contains(t, buf.String(), "dev-dashboard update")
+	require.Contains(t, buf.String(), "diagrid-dev-dashboard update")
 }
 
 func TestPrintUpdateNoticeSuppressedWhenNotAvailable(t *testing.T) {

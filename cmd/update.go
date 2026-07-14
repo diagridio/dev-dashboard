@@ -10,9 +10,9 @@ import (
 func newUpdateCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "update [version]",
-		Short: "Update dev-dashboard to the latest or a specific release",
-		Long: "Download and install the latest dev-dashboard release in place, or a " +
-			"specific version (e.g. `dev-dashboard update 1.2.0`). Restart any running " +
+		Short: "Update diagrid-dev-dashboard to the latest or a specific release",
+		Long: "Download and install the latest diagrid-dev-dashboard release in place, or a " +
+			"specific version (e.g. `diagrid-dev-dashboard update 1.2.0`). Restart any running " +
 			"instance to use the new binary.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

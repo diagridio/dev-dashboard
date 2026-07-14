@@ -25,7 +25,7 @@ func formatUpdateNotice(current, latest, releaseURL string) string {
 	}
 	return fmt.Sprintf(
 		"A new version of the Dapr Dev Dashboard is available: %s → %s%s\n"+
-			"Run `dev-dashboard update` to upgrade.\n\n",
+			"Run `diagrid-dev-dashboard update` to upgrade.\n\n",
 		current, latest, link)
 }
 
