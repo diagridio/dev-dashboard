@@ -277,6 +277,37 @@ sentinel-based (`errors.Is`): e.g. store CRUD maps duplicate → 409, deleting t
 workflow store (`ErrActiveStore`) → 409, missing → 404, I/O → 500; control-plane maps
 invalid action → 400, runtime unavailable → 503, exec failure → 502.
 
+### Capabilities — per-posture feature gating (`pkg/server/server.go` `Capabilities`)
+
+Not every route in the table above always exists. One binary serves two very different
+postures, and a `Capabilities` struct (`Lifecycle`, `ControlPlane`, `Logs`, `Workflows`,
+plus a `Mode` echo of the `--mode` value) decides which feature surfaces are on. The
+layer has three tiers:
+
+1. **Decided at boot** (`cmd/root.go` `runServe`): host modes get `FullCapabilities()`
+   with `Mode` set to the CLI value; aspire **container posture** gets only `Workflows`
+   (and that only when a state store is configured) — inside the AppHost container there
+   is no host process table for lifecycle, no docker socket for the control plane, and
+   no `~/.dapr` log files to tail. A nil `Options.Capabilities` defaults to full host
+   capabilities.
+2. **Enforced server-side** (`pkg/server/api.go`): route *registration* is conditional —
+   `caps.Workflows` gates the workflow routes, `caps.ControlPlane` gates
+   `/api/controlplane`. This is the design rule to keep: **the JSON flags are advisory
+   UX; absent routes are the real boundary.** A disabled feature is unroutable, not
+   merely hidden.
+3. **Advertised to the SPA** (`pkg/server/spa.go` `serveIndex`): the struct is marshaled
+   into the served `index.html` as `window.__DASH_CAPABILITIES__` (alongside the
+   telemetry flag and version). The frontend reads it via `getCapabilities()`
+   (`web/src/lib/capabilities.ts`, falling back to everything-on for the Vite dev server
+   and tests); consumers include `router.tsx` (routes mount only for enabled features),
+   `TopNav` (nav entries), `AppDetail` (lifecycle actions), and the mode-adaptive pages
+   (`Logs` gates its static `dapr_*` fallback on `mode`; `ControlPlane` picks
+   mode-specific empty-state copy).
+
+**To add a feature route:** decide whether it works in container posture; if not, add a
+flag to `Capabilities`, gate the route registration in `api.go`, and gate the SPA
+surface via `getCapabilities()`.
+
 ### SPA embedding & fallback (`web/embed.go`, `pkg/server/spa.go`)
 
 `//go:embed all:dist` bakes the built SPA into the binary; `DistFS()` returns it rooted at
@@ -468,7 +499,9 @@ Client-side History-API routing; the router `basename` and all API URLs derive f
 (`/apps/:id`), **Workflows** + **WorkflowDetail**, **Actors**, **Subscriptions**,
 **ResourceList/Detail** (`/components`, `/configurations`), **ComponentBuilder**
 (`/components/new`), **Resiliency** + **ResiliencyBuilder** (`/resiliency/new`),
-**ControlPlane**, and **Logs**.
+**ControlPlane**, and **Logs**. Feature-gated pages (Logs, ControlPlane, lifecycle
+surfaces) mount only when their server-injected capability flag is on — see
+*Capabilities* in §5.
 
 ### Data fetching & live data
 
