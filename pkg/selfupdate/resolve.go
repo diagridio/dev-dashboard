@@ -1,4 +1,4 @@
-// Package selfupdate updates the dev-dashboard binary in place from GitHub Releases.
+// Package selfupdate updates the diagrid-dev-dashboard binary in place from GitHub Releases.
 package selfupdate
 
 import (

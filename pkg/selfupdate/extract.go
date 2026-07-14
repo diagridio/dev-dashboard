@@ -10,16 +10,16 @@ import (
 	"io"
 )
 
-// binaryFileName returns the name of the dev-dashboard binary inside a release
+// binaryFileName returns the name of the diagrid-dev-dashboard binary inside a release
 // archive for the given OS.
 func binaryFileName(goos string) string {
 	if goos == "windows" {
-		return "dev-dashboard.exe"
+		return "diagrid-dev-dashboard.exe"
 	}
-	return "dev-dashboard"
+	return "diagrid-dev-dashboard"
 }
 
-// extractBinary pulls the dev-dashboard binary bytes out of a release archive:
+// extractBinary pulls the diagrid-dev-dashboard binary bytes out of a release archive:
 // a .zip on windows, a .tar.gz elsewhere.
 func extractBinary(archive []byte, goos string) ([]byte, error) {
 	name := binaryFileName(goos)

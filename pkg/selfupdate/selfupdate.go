@@ -83,7 +83,7 @@ func (u *Updater) Run(ctx context.Context, requested string) (Result, error) {
 	archiveURL := base + "/" + name
 	checksumsURL := base + "/checksums.txt"
 
-	fmt.Fprintf(u.Out, "downloading dev-dashboard %s (%s/%s)…\n", target, u.GOOS, u.GOARCH)
+	fmt.Fprintf(u.Out, "downloading diagrid-dev-dashboard %s (%s/%s)…\n", target, u.GOOS, u.GOARCH)
 	archive, err := httpGet(ctx, u.HTTP, archiveURL)
 	if err != nil {
 		if errors.Is(err, errNotFound) {

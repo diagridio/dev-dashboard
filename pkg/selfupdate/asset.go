@@ -7,7 +7,7 @@ import (
 
 // assetName reproduces the GoReleaser name_template for a release archive:
 //
-//	dev-dashboard_{num}_{os}_{arch}.tar.gz   (.zip on windows)
+//	diagrid-dev-dashboard_{num}_{os}_{arch}.tar.gz   (.zip on windows)
 //
 // where num is the version without a leading "v".
 func assetName(version, goos, goarch string) string {
@@ -16,5 +16,5 @@ func assetName(version, goos, goarch string) string {
 	if goos == "windows" {
 		ext = "zip"
 	}
-	return fmt.Sprintf("dev-dashboard_%s_%s_%s.%s", num, goos, goarch, ext)
+	return fmt.Sprintf("diagrid-dev-dashboard_%s_%s_%s.%s", num, goos, goarch, ext)
 }

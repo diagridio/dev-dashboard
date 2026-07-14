@@ -13,7 +13,7 @@ import (
 
 func TestReplaceExecutable(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "dev-dashboard")
+	path := filepath.Join(dir, "diagrid-dev-dashboard")
 	require.NoError(t, os.WriteFile(path, []byte("old-binary"), 0o755))
 
 	require.NoError(t, replaceExecutable(path, []byte("new-binary")))
