@@ -69,6 +69,46 @@ Download the archive for your platform from the [GitHub Releases](https://github
 dev-dashboard --version
 ```
 
+## Run the dashboard
+
+```sh
+# Start on the default port (9090) and open your browser automatically
+dev-dashboard
+```
+
+```sh
+# Start on a custom port
+dev-dashboard --port 8080
+```
+
+```sh
+# Enable diagnostic logging to stderr (server startup, app discovery, state-store connection, log streams, workflow operations)
+dev-dashboard --verbose
+```
+
+No additional setup is needed: the dashboard discovers running Dapr apps the same way
+`dapr list` does, so anything started with `dapr run` / `dapr run -f`, Aspire, Docker
+Compose, or Dapr Testcontainers shows up within one refresh cycle. Testcontainers apps
+(e.g. a Spring Boot app under `mvn spring-boot:test-run`) need zero configuration: the
+dashboard finds the Testcontainers-managed daprd container, pairs it with your host app
+process, and even reads workflows from an in-memory state store via the sidecar itself.
+
+With `--mode`/`DEVDASHBOARD_MODE` unset (the default for host use), the dashboard performs the
+complete scan across all discovery sources described above. Setting a mode restricts every
+dashboard surface — applications, workflows, state stores, the Control Plane view, and log
+targets — to a single source; filters are exclusive and never combined:
+
+- `--mode dapr-run` — host `dapr run` processes only (Control Plane shows the `dapr init` containers).
+- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler).
+- `--mode test-containers` — Testcontainers discovery only (no control-plane detection yet).
+- `--mode aspire` — Aspire resources only. Inside an AppHost-managed container (the
+  `DEVDASHBOARD_APP_*` contract is present) this is the container serving posture described
+  below; on a plain host it filters the process scan to Aspire-managed apps.
+
+`compose` and `test-containers` require a container runtime (docker or podman) and fail at
+startup without one. `--bind` (default `127.0.0.1`, `0.0.0.0` in aspire container posture)
+controls the listen address alongside `--port`.
+
 ## Run as a container (.NET Aspire)
 
 The dashboard also ships as a container image, purpose-built for embedding inside a
@@ -138,46 +178,6 @@ development tool — never expose it publicly.
 | `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
 
 Precedence everywhere is **flag > env > posture default**.
-
-## Run the dashboard
-
-```sh
-# Start on the default port (9090) and open your browser automatically
-dev-dashboard
-```
-
-```sh
-# Start on a custom port
-dev-dashboard --port 8080
-```
-
-```sh
-# Enable diagnostic logging to stderr (server startup, app discovery, state-store connection, log streams, workflow operations)
-dev-dashboard --verbose
-```
-
-No additional setup is needed: the dashboard discovers running Dapr apps the same way
-`dapr list` does, so anything started with `dapr run` / `dapr run -f`, Aspire, Docker
-Compose, or Dapr Testcontainers shows up within one refresh cycle. Testcontainers apps
-(e.g. a Spring Boot app under `mvn spring-boot:test-run`) need zero configuration: the
-dashboard finds the Testcontainers-managed daprd container, pairs it with your host app
-process, and even reads workflows from an in-memory state store via the sidecar itself.
-
-With `--mode`/`DEVDASHBOARD_MODE` unset (the default for host use), the dashboard performs the
-complete scan across all discovery sources described above. Setting a mode restricts every
-dashboard surface — applications, workflows, state stores, the Control Plane view, and log
-targets — to a single source; filters are exclusive and never combined:
-
-- `--mode dapr-run` — host `dapr run` processes only (Control Plane shows the `dapr init` containers).
-- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler).
-- `--mode test-containers` — Testcontainers discovery only (no control-plane detection yet).
-- `--mode aspire` — Aspire resources only. Inside an AppHost-managed container (the
-  `DEVDASHBOARD_APP_*` contract is present) this is the container serving posture described
-  below; on a plain host it filters the process scan to Aspire-managed apps.
-
-`compose` and `test-containers` require a container runtime (docker or podman) and fail at
-startup without one. `--bind` (default `127.0.0.1`, `0.0.0.0` in aspire container posture)
-controls the listen address alongside `--port`.
 
 ## Updating the dashboard
 
