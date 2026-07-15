@@ -83,6 +83,8 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
       </nav>
 
       <div className="topright">
+        <RefreshControl />
+        <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
         <button
           type="button"
           className="tbtn"
@@ -91,8 +93,6 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
         >
           ↗ Share
         </button>
-        <RefreshControl />
-        <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
       </div>
 
       <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
