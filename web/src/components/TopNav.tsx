@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
 import { RefreshControl } from './RefreshControl'
+import { ShareDialog } from './ShareDialog'
 import type { Theme } from '../lib/prefs'
 import { trackAction } from '../lib/telemetry'
 import { getCapabilities, type Capabilities } from '../lib/capabilities'
@@ -34,6 +35,13 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
   const headerRef = useRef<HTMLElement>(null)
   const caps = getCapabilities()
   const items = NAV_ITEMS.filter((item) => !item.cap || caps[item.cap])
+
+  const [shareOpen, setShareOpen] = useState(false)
+
+  function openShare() {
+    setShareOpen(true)
+    trackAction('share_open')
+  }
 
   // The nav can wrap onto extra rows on narrow/zoomed windows; the fixed
   // sidebar reads --topbar-h to start below the topbar's real height.
@@ -77,7 +85,17 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
       <div className="topright">
         <RefreshControl />
         <ThemeToggle theme={theme} onThemeChange={onThemeChange} />
+        <button
+          type="button"
+          className="tbtn"
+          aria-label="Share the dashboard"
+          onClick={openShare}
+        >
+          ↗ Share
+        </button>
       </div>
+
+      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
     </header>
   )
 }

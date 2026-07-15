@@ -86,6 +86,25 @@ describe('TopNav', () => {
     expect(screen.getByRole('button', { name: /pause auto-refresh/i })).toBeInTheDocument()
   })
 
+  it('renders a Share button', () => {
+    renderNav()
+    expect(
+      screen.getByRole('button', { name: 'Share the dashboard' }),
+    ).toBeInTheDocument()
+  })
+
+  it('opens the Share dialog and tracks share_open', () => {
+    renderNav()
+    expect(
+      screen.queryByText('Enjoying the dashboard? Send it to a colleague.'),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Share the dashboard' }))
+    expect(
+      screen.getByText('Enjoying the dashboard? Send it to a colleague.'),
+    ).toBeInTheDocument()
+    expect(trackAction).toHaveBeenCalledWith('share_open')
+  })
+
   it('does not render DensityToggle', () => {
     renderNav()
     expect(screen.queryByRole('button', { name: /toggle density/i })).not.toBeInTheDocument()
