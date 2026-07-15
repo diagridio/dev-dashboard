@@ -1,0 +1,5 @@
+bin/
+obj/
+# Written at AppHost startup by Program.cs; content is deterministic
+# (derived from the compile-time-pinned redis port), so it is not checked in.
+AppHost/components/*.yaml
