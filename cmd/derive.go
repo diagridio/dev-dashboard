@@ -25,6 +25,14 @@ import (
 func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string, extraResPaths []string) (resPaths, scanPaths []string, loaded map[string]bool, appPaths []string) {
 	loaded = make(map[string]bool)
 	for _, a := range apps {
+		// Election inputs (loaded, appPaths) count only running apps: a stopped
+		// app's daprd no longer serves its store, so it must not provide the
+		// active store (a stopped compose project would otherwise win election
+		// over a running app's own store). The store still stays detectable and
+		// listable via scanPaths/resPaths below, which include every app.
+		if !appRunning(a) {
+			continue
+		}
 		for _, c := range a.Components {
 			if strings.HasPrefix(c.Type, "state.") {
 				loaded[c.Name] = true
@@ -65,14 +73,25 @@ func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string, extr
 	return resPaths, scanPaths, loaded, appPaths
 }
 
+// appRunning reports whether an app's daprd sidecar is live enough for its
+// state store to count toward active-store election. A daprd reported
+// "stopped" is excluded; an unknown ("") status counts as running, preserving
+// behavior for discovery sources that don't report daprd status.
+func appRunning(a discovery.Instance) bool {
+	return a.DaprdStatus != "stopped"
+}
+
 // appsFingerprint hashes the apps-derived inputs that the reconciler depends on:
 // the set of app IDs, the list (multiset, no dedup) of resource paths +
-// config-file dirs, and the set of loaded state-store component names.
+// config-file dirs, the set of loaded state-store component names, and the set
+// of currently-running app IDs. The running set is included so a running->
+// stopped flip re-triggers reconcile (and thus re-election), even when ids,
+// paths, and stores are otherwise unchanged.
 // Deduplication of paths happens downstream in statestore.Detect.
 // Order-independent: same content yields the same fingerprint regardless of
 // app ordering.
 func appsFingerprint(apps []discovery.Instance) string {
-	var ids, paths, stores []string
+	var ids, paths, stores, running []string
 	for _, a := range apps {
 		ids = append(ids, a.AppID)
 		paths = append(paths, a.ResourcePaths...)
@@ -84,10 +103,14 @@ func appsFingerprint(apps []discovery.Instance) string {
 				stores = append(stores, c.Name)
 			}
 		}
+		if appRunning(a) {
+			running = append(running, a.AppID)
+		}
 	}
 	sort.Strings(ids)
 	sort.Strings(paths)
 	sort.Strings(stores)
+	sort.Strings(running)
 
 	// Sentinel bytes keep the encoding unambiguous: every item is terminated by
 	// 0x00 and every group boundary is a bare 0x01, so a group separator can
@@ -95,7 +118,7 @@ func appsFingerprint(apps []discovery.Instance) string {
 	// Fingerprints are compared only in-memory within one process run (rc.fp),
 	// never persisted, so changing the encoding is safe.
 	h := sha256.New()
-	for gi, group := range [][]string{ids, paths, stores} {
+	for gi, group := range [][]string{ids, paths, stores, running} {
 		if gi > 0 {
 			h.Write([]byte{1})
 		}
