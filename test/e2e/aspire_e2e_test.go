@@ -129,6 +129,18 @@ spec:
 			strings.Contains(body, `"source":"aspire"`)
 	})
 
+	// The daprd sidecar must actually be up before workflows can run — its
+	// health is enriched from a live /v1.0/metadata call. Assert it here (with
+	// a generous window for the placement/scheduler handshake) so a sidecar
+	// that never initializes its actor/workflow runtime fails at this
+	// diagnostic point rather than silently timing out at the workflow step
+	// below. App discovery above is satisfied by the env contract alone and
+	// does not prove the sidecar works.
+	waitFor(t, 3*time.Minute, func() bool {
+		body, _ := getJSON(t, base, "/api/apps/")
+		return strings.Contains(body, `"health":"healthy"`)
+	})
+
 	// Components: e2easpirestatestore from DEVDASHBOARD_RESOURCES_PATH.
 	waitFor(t, 30*time.Second, func() bool {
 		body, _ := getJSON(t, base, "/api/resources/?kind=component")
