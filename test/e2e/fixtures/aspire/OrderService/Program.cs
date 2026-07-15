@@ -1,11 +1,9 @@
 using Dapr.Workflow;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddDaprWorkflow(options =>
-{
-    options.RegisterWorkflow<OrderWorkflow>();
-    options.RegisterActivity<NotifyActivity>();
-});
+// Dapr 1.18+ auto-discovers workflows and activities; no explicit
+// RegisterWorkflow/RegisterActivity calls are required.
+builder.Services.AddDaprWorkflow();
 
 var app = builder.Build();
 
