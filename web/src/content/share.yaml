@@ -1,0 +1,26 @@
+# Copy shown by the Share dialog. Edit wording here — no code changes needed.
+# NOTE: keep the install commands in sync with the README (the source of truth).
+
+emailSubject: "Check out the Diagrid Dev Dashboard for local Dapr development"
+
+# Full message — used by Copy and Email. Install commands included.
+fullMessage: |
+  Hi!
+
+  I'm using the Diagrid Dev Dashboard, a practical companion for local Dapr development. It gives you a live view of everything Dapr running locally — apps, workflows, actors, components, logs, plus guided builders for Dapr component files and resiliency policies. It's free & open source.
+
+  GitHub: https://github.com/diagridio/dev-dashboard
+
+  Install (macOS / Linux):
+  curl -sSL https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.sh | sh
+
+  Install (Windows, PowerShell):
+  iwr -useb https://raw.githubusercontent.com/diagridio/dev-dashboard/main/scripts/install.ps1 | iex
+
+  Give it a try!
+
+# Short blurb for X — repo URL is appended by the builder via ?url=.
+shortX: "I'm using the Diagrid Dev Dashboard — a practical companion for local Dapr development. A live view of everything Dapr running locally plus guided builders for component files & resiliency policies. Free & open source 👇"
+
+# Short blurb for BlueSky — repo URL is appended to the text by the builder.
+shortBluesky: "I'm using the Diagrid Dev Dashboard — a practical companion for local Dapr development. A live view of everything Dapr running locally (apps, workflows, actors, components, logs) plus guided builders for component files & resiliency policies. Free & open source 👇"
