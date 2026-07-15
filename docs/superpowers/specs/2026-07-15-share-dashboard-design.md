@@ -43,6 +43,26 @@ Built on the existing `Modal` component (`web/src/components/Modal.tsx`), narrow
 
 ## Message content
 
+All copy lives in a single editable content file — **`web/src/content/share.yaml`** —
+so wording can be changed later without touching TypeScript. It is imported at build time
+(`import shareYaml from '../content/share.yaml?raw'`) and parsed with the already-present
+`js-yaml`. Multi-line messages use YAML `|` block scalars, which preserve newlines and need
+no escaping. `lib/share.ts` parses it once into a typed object and exposes the strings +
+builders.
+
+Required YAML keys:
+
+| Key | Used by |
+|-----|---------|
+| `emailSubject` | Email builder |
+| `fullMessage` | Copy + Email (full text incl. install commands) |
+| `shortX` | X builder |
+| `shortBluesky` | BlueSky builder |
+
+The install one-liners live inside `fullMessage` (plain text), so they are editable in the
+same file. A test asserts the parsed object has all required keys (guards against edit
+typos / bad indentation). Loading is build-time only — editing the file requires a rebuild.
+
 ### Full message (Copy + Email)
 
 ```
@@ -81,10 +101,12 @@ components, logs)` dropped, so the text plus the appended URL fits X's limit.
 All content and URL construction lives in one pure, unit-tested module:
 `web/src/lib/share.ts`.
 
-Constants:
+Constants (in `lib/share.ts`):
 - `REPO_URL = "https://github.com/diagridio/dev-dashboard"`
-- The two install one-liners, kept verbatim in sync with the README (`main`-branch raw
-  URLs).
+
+Message strings (`emailSubject`, `fullMessage`, `shortX`, `shortBluesky`) come from
+`web/src/content/share.yaml` (see Message content above). The install one-liners live
+inside `fullMessage` there, kept in sync with the README (`main`-branch raw URLs).
 
 Builders (all values URL-encoded):
 
@@ -101,8 +123,9 @@ Email subject: "Check out the Diagrid Dev Dashboard for local Dapr development".
 
 | File | Responsibility |
 |------|----------------|
-| `web/src/lib/share.ts` (new) | Message constants + variants + channel URL builder functions. Pure, no React. |
-| `web/src/lib/share.test.ts` (new) | Unit tests: message content, encoding, each builder's URL shape. |
+| `web/src/content/share.yaml` (new) | Editable copy: `emailSubject`, `fullMessage`, `shortX`, `shortBluesky`. Source of truth for wording. |
+| `web/src/lib/share.ts` (new) | Imports + parses `share.yaml`, `REPO_URL` constant, channel URL builder functions. Pure, no React. |
+| `web/src/lib/share.test.ts` (new) | Unit tests: YAML has all required keys, encoding, each builder's URL shape. |
 | `web/src/components/ShareDialog.tsx` (new) | The modal: preview + channel buttons + telemetry. |
 | `web/src/components/ShareDialog.test.tsx` (new) | Renders, copy path, each button opens/encodes correctly (mock `window.open` / clipboard). |
 | `web/src/components/TopNav.tsx` (edit) | Add Share icon button + dialog open state. |
@@ -125,14 +148,18 @@ Email subject: "Check out the Diagrid Dev Dashboard for local Dapr development".
   new handling.
 - **Popup blocked** — `window.open` may return null; acceptable (user can still Copy). No
   special UI in v1.
-- **Message drift** — install commands are duplicated between README and `share.ts`. A
-  code comment in `share.ts` notes the README as the source of truth; a follow-up test
-  could assert parity, but that's out of scope for v1.
+- **Message drift** — install commands are duplicated between the README and
+  `share.yaml`. A comment in `share.yaml` notes the README as the source of truth; a
+  follow-up test could assert parity, but that's out of scope for v1.
+- **Malformed YAML edit** — a bad edit (wrong indentation, missing key) would break the
+  build-time import. The required-keys test catches missing keys; a syntax error fails the
+  build loudly, which is acceptable.
 
 ## Testing
 
-- `lib/share.ts` — pure unit tests for message content and each URL builder (correct host,
-  correct params, proper encoding of spaces/newlines/emoji).
+- `lib/share.ts` — the parsed `share.yaml` exposes all required keys (`emailSubject`,
+  `fullMessage`, `shortX`, `shortBluesky`); each URL builder produces the correct host,
+  params, and proper encoding of spaces/newlines/emoji.
 - `ShareDialog.tsx` — component tests: preview renders the full message; Copy calls the
   clipboard helper + toast; each channel button invokes `window.open` with the expected
   URL and fires the telemetry event.
