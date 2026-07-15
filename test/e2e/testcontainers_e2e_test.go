@@ -95,10 +95,10 @@ func TestTestcontainersDiscovery(t *testing.T) {
 		return strings.Contains(body, "e2etcstatestore")
 	})
 
-	// Workflows: instance visible through the store read path. Generous
-	// timeout because the fixture reports ready as soon as the containers
-	// have started, not once the workflow has actually completed inside
-	// wfapp.
+	// Workflows: instance visible via the daprd sidecar's gRPC
+	// workflow-management API (not the store read path). Generous timeout
+	// because the fixture reports ready as soon as the containers have
+	// started, not once the workflow has actually completed inside wfapp.
 	waitFor(t, 90*time.Second, func() bool {
 		body, status := getJSON(t, base, "/api/workflows/")
 		return status == 200 && strings.Contains(body, "e2e-order-1")

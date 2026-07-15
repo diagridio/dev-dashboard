@@ -123,18 +123,3 @@ func requireDotnet(t *testing.T) {
 		t.Skip("dotnet not on PATH; skipping e2e")
 	}
 }
-
-// requireDapr skips the test if daprd is not available on PATH or in ~/.dapr/bin.
-func requireDapr(t *testing.T) {
-	t.Helper()
-	if _, err := exec.LookPath("daprd"); err == nil {
-		return
-	}
-	home, _ := os.UserHomeDir()
-	if home != "" {
-		if _, err := os.Stat(filepath.Join(home, ".dapr", "bin", "daprd")); err == nil {
-			return
-		}
-	}
-	t.Skip("daprd not found on PATH or in ~/.dapr/bin; skipping e2e")
-}

@@ -28,6 +28,15 @@ func TestComposeDiscovery(t *testing.T) {
 		return c
 	}
 
+	// Register teardown before bringing the project up: if `up` partially
+	// starts services and then errors, the require below aborts the test
+	// immediately, and cleanup must still run to avoid leaking containers
+	// and networks from the partial start.
+	t.Cleanup(func() {
+		down := compose("down", "-v")
+		_, _ = down.CombinedOutput()
+	})
+
 	upCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
@@ -35,10 +44,6 @@ func TestComposeDiscovery(t *testing.T) {
 	up.Dir = dir
 	out, err := up.CombinedOutput()
 	require.NoErrorf(t, err, "compose up: %s", out)
-	t.Cleanup(func() {
-		down := compose("down", "-v")
-		_, _ = down.CombinedOutput()
-	})
 
 	// Wait for wfapp to schedule and complete its workflow (marker line).
 	waitFor(t, 90*time.Second, func() bool {
