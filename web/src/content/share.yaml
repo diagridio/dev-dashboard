@@ -23,4 +23,4 @@ fullMessage: |
 shortX: "I'm using the Diagrid Dev Dashboard — a practical companion for local Dapr development. A live view of everything Dapr running locally plus guided builders for component files & resiliency policies. Free & open source 👇"
 
 # Short blurb for BlueSky — repo URL is appended to the text by the builder.
-shortBluesky: "I'm using the Diagrid Dev Dashboard — a practical companion for local Dapr development. A live view of everything Dapr running locally (apps, workflows, actors, components, logs) plus guided builders for component files & resiliency policies. Free & open source 👇"
+shortBluesky: "I'm using the Diagrid Dev Dashboard — a practical companion for local Dapr development. A live view of everything Dapr running locally plus guided builders for component files & resiliency policies. Free & open source 👇"

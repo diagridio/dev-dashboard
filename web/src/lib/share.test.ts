@@ -50,4 +50,12 @@ describe('channel URL builders', () => {
     expect(url.startsWith('https://www.linkedin.com/sharing/share-offsite/?')).toBe(true)
     expect(url).toContain(`url=${encodeURIComponent(REPO_URL)}`)
   })
+
+  it('composed social messages fit their platform character limits', () => {
+    const graphemes = (s: string) => [...new Intl.Segmenter().segment(s)].length
+    const bluesky = `${shareContent.shortBluesky}\n${REPO_URL}`
+    expect(graphemes(bluesky)).toBeLessThanOrEqual(300)
+    const x = `${shareContent.shortX} ${REPO_URL}`
+    expect(graphemes(x)).toBeLessThanOrEqual(280)
+  })
 })
