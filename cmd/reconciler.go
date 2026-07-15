@@ -159,6 +159,11 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	newReg := newStoreRegistry(detected, loaded, appPaths)
 
 	rc.undismissActive(newReg.active())
+	// A store a running app provides must never stay hidden — even when it is
+	// not the one elected active (undismissActive only rescues the elected
+	// store). loaded/appPaths are already running-only (see derivePaths), so
+	// "app-provided" here means "provided by a running app".
+	rc.undismissAppProvided(detected, loaded, appPaths)
 
 	rc.mu.Lock()
 	if rc.closed {
@@ -190,6 +195,28 @@ func (rc *reconciler) undismissActive(active *statestore.Component) {
 	}
 	if err := rc.registry.Undismiss(active.Path); err != nil {
 		slog.Default().With("component", "reconciler").Warn("un-dismiss active store failed", "store", active.Name, "err", err)
+	}
+}
+
+// undismissAppProvided clears the dismissal tombstone for every detected store
+// a running app provides: loaded by name AND located under a running app's
+// resource path (the same "app-provided" test the election uses). Because
+// loaded/appPaths are running-only, this rescues stores a live app is using
+// but that lost election to another store, which undismissActive alone misses.
+// A nil registry is a no-op.
+func (rc *reconciler) undismissAppProvided(detected []statestore.Component, loaded map[string]bool, appPaths []string) {
+	if rc.registry == nil {
+		return
+	}
+	log := slog.Default().With("component", "reconciler")
+	for i := range detected {
+		c := detected[i]
+		if c.Path == "" || !loaded[c.Name] || !pathUnder(c.Path, appPaths) {
+			continue
+		}
+		if err := rc.registry.Undismiss(c.Path); err != nil {
+			log.Warn("un-dismiss app-provided store failed", "store", c.Name, "err", err)
+		}
 	}
 }
 

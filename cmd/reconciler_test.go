@@ -601,3 +601,58 @@ func TestReconciler_UndismissActiveStore(t *testing.T) {
 	rc.undismissActive(nil)
 	rc.undismissActive(&statestore.Component{Name: "manual-ish"})
 }
+
+// A store provided by a RUNNING app must be un-dismissed on reconcile even
+// when it is not the one elected active — otherwise a store a live app is
+// using stays hidden forever (undismissActive only rescues the elected store).
+func TestReconciler_UndismissAppProvidedRunningStore(t *testing.T) {
+	home := t.TempDir()
+	dirA := t.TempDir()
+	dirB := t.TempDir()
+
+	pathA := seedAutoComponentYAML(t, dirA, "storea", filepath.Join(dirA, "a.db"))
+	pathB := seedAutoComponentYAML(t, dirB, "storeb", filepath.Join(dirB, "b.db"))
+
+	reg := LoadRegistry(home)
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "storea", Type: "state.sqlite", Source: SourceAuto, Path: pathA}))
+	require.NoError(t, reg.UpsertAuto(ConnEntry{Name: "storeb", Type: "state.sqlite", Source: SourceAuto, Path: pathB}))
+
+	dismissed := func(path string) bool {
+		for _, e := range reg.List() {
+			if e.Path == path {
+				return e.Dismissed
+			}
+		}
+		return false
+	}
+	var idB string
+	for _, e := range reg.List() {
+		if e.Path == pathB {
+			idB = e.ID
+		}
+	}
+	require.NoError(t, reg.Delete(idB)) // user dismissed store B earlier
+	require.True(t, dismissed(pathB))
+
+	o := &fakeOpener{}
+	pool := newConnPool("default", &http.Client{}, nil, o.open, nil)
+	rc := newReconciler(context.Background(), nil, "default", home, "", &http.Client{}, reg, pool, nil, nil)
+	t.Cleanup(func() { _ = rc.Close() })
+
+	// Two RUNNING apps, each providing its own store. App A's store wins
+	// election (first in scan order); app B's is provided but not active.
+	apps := []discovery.Instance{
+		{AppID: "a", DaprdStatus: "running", ResourcePaths: []string{dirA},
+			Components: []discovery.Component{{Name: "storea", Type: "state.sqlite"}}},
+		{AppID: "b", DaprdStatus: "running", ResourcePaths: []string{dirB},
+			Components: []discovery.Component{{Name: "storeb", Type: "state.sqlite"}}},
+	}
+	rc.reconcile(apps, "fp1")
+
+	require.False(t, dismissed(pathB), "a store provided by a running app must be un-dismissed even when not active")
+	var names []string
+	for _, i := range rc.Stores() {
+		names = append(names, i.Name)
+	}
+	require.Contains(t, names, "storeb", "the un-dismissed store must reappear in the panel")
+}

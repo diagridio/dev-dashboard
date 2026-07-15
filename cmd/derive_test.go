@@ -44,6 +44,41 @@ func TestDerivePaths_AppPaths(t *testing.T) {
 	require.NotContains(t, appPaths, "/home/me/.dapr/components")
 }
 
+// A stopped app must not provide the active store: a dead project's state
+// store keeps polluting election otherwise (e.g. a stopped compose project
+// winning over a running Aspire app's own store). Election inputs (loaded,
+// appPaths) exclude stopped apps; detection/resource paths keep them so the
+// stopped store stays inspectable in the panel.
+func TestDerivePaths_ExcludesStoppedAppsFromElectionInputs(t *testing.T) {
+	apps := []discovery.Instance{
+		{AppID: "running", DaprdStatus: "running", ResourcePaths: []string{"/run/resources"},
+			Components: []discovery.Component{{Name: "runstore", Type: "state.redis"}}},
+		{AppID: "stopped", DaprdStatus: "stopped", ResourcePaths: []string{"/stop/resources"},
+			Components: []discovery.Component{{Name: "stopstore", Type: "state.postgresql"}}},
+	}
+	resPaths, scanPaths, loaded, appPaths := derivePaths(apps, "/home/me", "", nil)
+
+	// Election inputs exclude the stopped app.
+	require.True(t, loaded["runstore"])
+	require.False(t, loaded["stopstore"], "a stopped app's store must not count as loaded")
+	require.Contains(t, appPaths, "/run/resources")
+	require.NotContains(t, appPaths, "/stop/resources", "a stopped app's paths must not feed election")
+
+	// Detection + resource paths still include the stopped app so its store
+	// remains detectable and listable in the panel.
+	require.Contains(t, scanPaths, "/stop/resources")
+	require.Contains(t, resPaths, "/stop/resources")
+}
+
+func TestAppsFingerprint_SensitiveToRunningStatus(t *testing.T) {
+	running := []discovery.Instance{{AppID: "a", DaprdStatus: "running",
+		ResourcePaths: []string{"/p"}, Components: []discovery.Component{{Name: "s", Type: "state.redis"}}}}
+	stopped := []discovery.Instance{{AppID: "a", DaprdStatus: "stopped",
+		ResourcePaths: []string{"/p"}, Components: []discovery.Component{{Name: "s", Type: "state.redis"}}}}
+	require.NotEqual(t, appsFingerprint(running), appsFingerprint(stopped),
+		"a running->stopped flip must change the fingerprint so re-election runs")
+}
+
 func TestAppsFingerprint_StableAndChangeSensitive(t *testing.T) {
 	a := []discovery.Instance{
 		{AppID: "b", ResourcePaths: []string{"/p2"}, Components: []discovery.Component{{Name: "s", Type: "state.redis"}}},
