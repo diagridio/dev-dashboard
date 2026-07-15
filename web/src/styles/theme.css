@@ -515,3 +515,8 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cp-label { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
 .cp-value { font-size: 12.5px; }
 .cp-logpath { word-break: break-all; }
+
+/* ---- Share dialog ---- */
+.share-intro { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+.share-preview { width: 100%; box-sizing: border-box; font: inherit; font-size: 12.5px; line-height: 1.5; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; resize: vertical; }
+.share-actions { flex-wrap: wrap; justify-content: flex-start; }
