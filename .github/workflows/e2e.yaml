@@ -1,0 +1,68 @@
+name: e2e
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Which mode(s) to run"
+        type: choice
+        default: all
+        options: [all, compose, testcontainers, aspire]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [compose, testcontainers, aspire]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip unselected modes
+        id: gate
+        run: |
+          want='${{ github.event.inputs.mode }}'
+          if [ "$want" = "all" ] || [ "$want" = "${{ matrix.mode }}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-go@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          node-version: 20
+
+      - name: Setup .NET
+        if: steps.gate.outputs.run == 'true' && matrix.mode == 'aspire'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Install Dapr CLI
+        if: steps.gate.outputs.run == 'true' && matrix.mode == 'aspire'
+        run: wget -q https://raw.githubusercontent.com/dapr/cli/master/install/install.sh -O - | /bin/bash
+
+      - name: dapr init (full)
+        if: steps.gate.outputs.run == 'true' && matrix.mode == 'aspire'
+        run: dapr init
+
+      - name: Build dashboard
+        if: steps.gate.outputs.run == 'true'
+        run: make build
+
+      - name: Run e2e (${{ matrix.mode }})
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          case "${{ matrix.mode }}" in
+            compose)        run=TestComposeDiscovery ;;
+            testcontainers) run=TestTestcontainersDiscovery ;;
+            aspire)         run=TestAspireDiscovery ;;
+          esac
+          go test -tags e2e -run "$run" -timeout 20m -v ./test/e2e/...

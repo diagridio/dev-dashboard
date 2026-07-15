@@ -1,0 +1,20 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  # Named distinctively (not "statestore") so this fixture's actor-state-store
+  # election can't collide, by component name, with an unrelated same-named
+  # store from another compose project the dashboard also discovers on this
+  # host — the dashboard's active-store election keys its "loaded" set by
+  # component name only, so two different projects' actor stores sharing the
+  # generic name "statestore" can make it elect the wrong one.
+  name: e2ecomposestatestore
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+  - name: redisHost
+    value: redis:6379
+  - name: redisPassword
+    value: ""
+  - name: actorStateStore
+    value: "true"

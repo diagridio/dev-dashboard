@@ -1,0 +1,64 @@
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379"
+
+  placement:
+    image: "daprio/placement:1.18.1"
+    command: ["./placement", "-port", "50005"]
+    ports:
+      - "50005"
+
+  scheduler:
+    image: "daprio/scheduler:1.18.1"
+    command: ["./scheduler", "--port", "50006", "--etcd-data-dir", "/tmp/scheduler-data"]
+    ports:
+      - "50006"
+
+  # daprd owns the network namespace: it is the container the dashboard's
+  # compose scanner inspects for published ports (`docker inspect` only
+  # reports NetworkSettings.Ports on the namespace owner, never on a
+  # container joined via network_mode: service:X), so the published ports
+  # must live here rather than on wfapp.
+  daprd:
+    image: "daprio/daprd:1.18.1"
+    command:
+      - "./daprd"
+      - "-app-id"
+      - "wfapp"
+      - "-dapr-http-port"
+      - "3500"
+      - "-dapr-grpc-port"
+      - "50001"
+      - "-resources-path"
+      - "/components"
+      - "-placement-host-address"
+      - "placement:50005"
+      - "-scheduler-host-address"
+      - "scheduler:50006"
+    depends_on:
+      - redis
+      - placement
+      - scheduler
+    ports:
+      - "3500"
+      - "50001"
+    volumes:
+      - "./components:/components"
+
+  # wfapp is a pure workflow client/worker (it never listens on a port for
+  # daprd to invoke), so it joins daprd's network namespace to reach it on
+  # localhost; it deliberately omits -app-channel-address/-app-port on the
+  # daprd side above, since specifying an app port daprd can never reach
+  # blocks the sidecar's placement-client startup indefinitely.
+  wfapp:
+    build:
+      context: ../..
+      dockerfile: fixtures/compose/Dockerfile.wfapp
+    depends_on:
+      - daprd
+    environment:
+      DAPR_GRPC_ENDPOINT: "127.0.0.1:50001"
+      DAPR_HTTP_ENDPOINT: "http://127.0.0.1:3500"
+    network_mode: "service:daprd"
