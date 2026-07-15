@@ -1,0 +1,10 @@
+FROM golang:1.26 AS build
+WORKDIR /src
+COPY wfapp/go.mod wfapp/go.sum ./
+RUN go mod download
+COPY wfapp/ ./
+RUN CGO_ENABLED=0 go build -o /wfapp .
+
+FROM gcr.io/distroless/static-debian12
+COPY --from=build /wfapp /wfapp
+ENTRYPOINT ["/wfapp"]
