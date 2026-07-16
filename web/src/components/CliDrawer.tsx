@@ -42,7 +42,7 @@ export function CliDrawer({ context, values }: CliDrawerProps) {
         aria-label="CLI commands"
         onClick={toggle}
       >
-        CLI
+        <span className="cli-vtext">CLI</span>
       </button>
       <aside className="cli-panel" inert={!open} aria-hidden={!open} aria-label="CLI commands panel">
         <div className="cli-panel-head">

@@ -526,10 +526,14 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cli-tab {
   pointer-events: auto; position: fixed; right: 0; top: calc(var(--topbar-h, 46px) + 40px);
   z-index: 41; writing-mode: vertical-rl;
-  background: var(--surface-2); color: var(--text); border: 1px solid var(--line);
-  border-radius: 8px 0 0 8px; padding: 14px 6px; font-size: 12px; font-weight: 600;
-  letter-spacing: .1em; cursor: pointer; box-shadow: var(--shadow);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 8px 0 0 8px; padding: 14px 6px; cursor: pointer; box-shadow: var(--shadow);
   transition: right .18s ease;
+}
+.cli-tab .cli-vtext {
+  display: inline-block; transform: rotate(180deg);
+  font-family: var(--mono); font-size: 11px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--muted);
 }
 .cli-drawer.open .cli-tab { right: min(33vw, 33%); }
 .cli-panel {
@@ -546,10 +550,8 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cli-commands { padding: 14px 16px; display: flex; flex-direction: column; gap: 16px; }
 .cli-command-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .cli-command-title { font-size: 12.5px; font-weight: 600; }
-.cli-command-docs { margin-left: auto; text-decoration: none; }
-.cli-command-docs .ext { color: var(--faint); font-size: 11px; opacity: 0; }
-.cli-command:hover .cli-command-docs .ext,
-.cli-command-docs:focus-visible .ext { opacity: 1; }
+.cli-command-docs { text-decoration: none; display: inline-flex; align-items: center; }
+.cli-command-docs .ext { color: var(--faint); font-size: 11px; }
 .cli-command-row { display: flex; align-items: stretch; gap: 8px; }
 .cli-command-code { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-all; }
 .cli-copy { white-space: nowrap; align-self: flex-start; }
