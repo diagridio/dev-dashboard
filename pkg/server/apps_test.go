@@ -7,8 +7,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -167,4 +169,91 @@ func TestAppsForgetRouteNilManager(t *testing.T) {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestPublishProxiesToSidecar(t *testing.T) {
+	var gotPath, gotCT, gotBody, gotQuery string
+	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotQuery = r.URL.RawQuery
+		gotCT = r.Header.Get("Content-Type")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer sidecar.Close()
+
+	apps := &fakeApps{instances: []discovery.Instance{{
+		AppID:            "order",
+		SidecarReachable: true,
+		DaprHTTPBaseURL:  sidecar.URL,
+		Components:       []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
+	}}}
+	h := appsRouter(apps, nil, nil, FullCapabilities())
+
+	body := `{"pubsubName":"pubsub","topic":"orders","data":"{\"id\":1}","contentType":"application/json","metadata":{"ttlInSeconds":"60"}}`
+	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(body))
+	res, respBody := doReq(t, h, req)
+
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, respBody, `"status":"published"`)
+	require.Equal(t, "/v1.0/publish/pubsub/orders", gotPath)
+	require.Equal(t, "application/json", gotCT)
+	require.Equal(t, `{"id":1}`, gotBody)
+	require.Equal(t, "metadata.ttlInSeconds=60", gotQuery)
+}
+
+func TestPublishRejectsUnknownPubsub(t *testing.T) {
+	apps := &fakeApps{instances: []discovery.Instance{{
+		AppID: "order", SidecarReachable: true,
+		Components: []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
+	}}}
+	h := appsRouter(apps, nil, nil, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"nope","topic":"orders"}`))
+	res, body := doReq(t, h, req)
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+	require.Contains(t, body, "unknown pub/sub component")
+}
+
+func TestPublishRejectsEmptyTopic(t *testing.T) {
+	apps := &fakeApps{instances: []discovery.Instance{{
+		AppID: "order", SidecarReachable: true,
+		Components: []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
+	}}}
+	h := appsRouter(apps, nil, nil, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":""}`))
+	res, _ := doReq(t, h, req)
+	require.Equal(t, http.StatusBadRequest, res.StatusCode)
+}
+
+func TestPublishUnreachableSidecar(t *testing.T) {
+	apps := &fakeApps{instances: []discovery.Instance{{AppID: "order", SidecarReachable: false}}}
+	h := appsRouter(apps, nil, nil, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
+	res, _ := doReq(t, h, req)
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+}
+
+func TestPublishUnknownApp(t *testing.T) {
+	h := appsRouter(&fakeApps{}, nil, nil, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/ghost/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
+	res, _ := doReq(t, h, req)
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+}
+
+func TestPublishPassesThroughDaprdError(t *testing.T) {
+	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"errorCode":"ERR","message":"denied"}`))
+	}))
+	defer sidecar.Close()
+	apps := &fakeApps{instances: []discovery.Instance{{
+		AppID: "order", SidecarReachable: true, DaprHTTPBaseURL: sidecar.URL,
+		Components: []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
+	}}}
+	h := appsRouter(apps, nil, nil, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
+	res, body := doReq(t, h, req)
+	require.Equal(t, http.StatusForbidden, res.StatusCode)
+	require.Contains(t, body, "denied")
 }

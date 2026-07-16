@@ -2,8 +2,14 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
+	"strings"
+	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/lifecycle"
@@ -37,6 +43,8 @@ func appsRouter(svc discovery.Service, containerLogs func(context.Context, strin
 		}
 		writeJSON(w, http.StatusOK, in)
 	})
+
+	r.Post("/{appId}/publish", publishHandler(svc))
 
 	if caps.Logs {
 		r.Get("/{appId}/logs", logsHandler(svc, containerLogs))
@@ -84,4 +92,91 @@ func appsRouter(svc discovery.Service, containerLogs func(context.Context, strin
 	})
 
 	return r
+}
+
+// publishClient proxies publish requests to sidecars. Its timeout bounds a
+// single publish; the sidecar is always local (loopback or aspire proxy).
+var publishClient = &http.Client{Timeout: 10 * time.Second}
+
+// publishBody is the POST /api/apps/{appId}/publish request body.
+type publishBody struct {
+	PubsubName  string            `json:"pubsubName"`
+	Topic       string            `json:"topic"`
+	Data        string            `json:"data"`
+	ContentType string            `json:"contentType"`
+	Metadata    map[string]string `json:"metadata"`
+}
+
+// publishHandler proxies a message to the resolved instance's sidecar
+// /v1.0/publish/{pubsub}/{topic}. daprd errors are surfaced verbatim.
+func publishHandler(svc discovery.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		in, err := svc.Get(req.Context(), chi.URLParam(req, "appId"))
+		if errors.Is(err, discovery.ErrNotFound) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "app not found"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		if !in.SidecarReachable {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "sidecar unreachable"})
+			return
+		}
+		var body publishBody
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON body"})
+			return
+		}
+		if body.Topic == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "topic is required"})
+			return
+		}
+		if !hasPubsubComponent(in, body.PubsubName) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("unknown pub/sub component: %s", body.PubsubName)})
+			return
+		}
+		contentType := body.ContentType
+		if contentType == "" {
+			contentType = "application/json"
+		}
+		u := fmt.Sprintf("%s/v1.0/publish/%s/%s", in.BaseURL(), url.PathEscape(body.PubsubName), url.PathEscape(body.Topic))
+		if len(body.Metadata) > 0 {
+			q := make(url.Values)
+			for k, v := range body.Metadata {
+				q.Set("metadata."+k, v)
+			}
+			u += "?" + q.Encode()
+		}
+		preq, err := http.NewRequestWithContext(req.Context(), http.MethodPost, u, strings.NewReader(body.Data))
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		preq.Header.Set("Content-Type", contentType)
+		resp, err := publishClient.Do(preq)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "published"})
+			return
+		}
+		msg, _ := io.ReadAll(resp.Body)
+		writeJSON(w, resp.StatusCode, map[string]string{"error": strings.TrimSpace(string(msg))})
+	}
+}
+
+// hasPubsubComponent reports whether the instance exposes a pub/sub component
+// with the given name (type prefixed "pubsub.").
+func hasPubsubComponent(in discovery.Instance, name string) bool {
+	for _, c := range in.Components {
+		if c.Name == name && strings.HasPrefix(c.Type, "pubsub.") {
+			return true
+		}
+	}
+	return false
 }
