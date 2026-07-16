@@ -52,6 +52,10 @@ describe('channel URL builders', () => {
     expect(url).toContain(encodeURIComponent(REPO_URL))
   })
 
+  it('social copy avoids literal ampersands (LinkedIn truncates its text param there)', () => {
+    expect(shareContent.shortSocial).not.toContain('&')
+  })
+
   it('composed social messages fit their platform character limits', () => {
     const graphemes = (s: string) => [...new Intl.Segmenter().segment(s)].length
     const bluesky = `${shareContent.shortSocial}\n${REPO_URL}`
