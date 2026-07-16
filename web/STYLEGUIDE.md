@@ -276,7 +276,9 @@ component fails the suite until the doc is updated.
 | Multi-step builder shell | `components/wizard/` (`Wizard`, `Stepper`, `StepNav`) — see §6. |
 | YAML output step | `components/YamlPreview.tsx` — highlighted preview + Copy/Download — see §6. |
 | Connection manager | `components/StateStoreConnectionDialog.tsx` (a `Modal` of `.field` rows driven by `MetadataFieldInput`) + `components/StateStoreConnectionsPanel.tsx`. |
-| Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh, whose dot is also the backend-offline indicator — never mount a per-page one) and `components/ThemeToggle.tsx`. |
+| Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh, whose dot is also the backend-offline indicator — never mount a per-page one), `components/ThemeToggle.tsx`, and the `↗ Share` button (opens `ShareDialog`). `components/CliDrawer.tsx` is mounted once in the `App.tsx` shell as a fixed right-edge overlay (outside `.body`) — like `RefreshControl` it's global; don't mount a per-page one. |
+| Share dialog | `components/ShareDialog.tsx` — a `narrow` `Modal` with an intro line, a read-only message-preview `<textarea>`, and a `.modal-actions` row of channel buttons: Copy (`.btn.primary` + `copyText`/toast, initial focus) and Email / X / LinkedIn / BlueSky (`.btn.ghost` links built by `lib/share.ts`). |
+| CLI command drawer | `components/CliDrawer.tsx` — right-edge overlay panel with a vertical `CLI` edge tab; open state persists via `lib/safeStorage.ts`. Its rows are `components/CliCommand.tsx` — a titled command with an optional docs `↗` link and a `⧉ Copy` `.copybtn`. Context-sensitive command sets and placeholder substitution come from `lib/cli.ts` (`getCliContent` / `resolvePlaceholders`). |
 | Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. |
 | Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx` → `<pre className="json">` / `<pre className="code">`. |
 
@@ -372,6 +374,20 @@ service card: `.cp-card` (padding), `.cp-field` (stack), `.cp-label` (the
 standard mono/uppercase label), `.cp-value`, `.cp-logpath` (break-all). This is
 the model for page-scoped structural CSS: short page prefix as namespace,
 structure only, every color still a token.
+
+**Share dialog** — `.share-*`: the body of `ShareDialog`. `.share-intro` (muted
+lead line), `.share-preview` (the read-only message `<textarea>` — `--surface-2`
+fill, `--line` border, 8px radius, vertically resizable), and `.share-actions`
+(the `.modal-actions` footer, made to wrap and left-align its channel buttons).
+
+**CLI command drawer** — `.cli-*`: a fixed right-edge overlay (own stacking
+context via `.cli-drawer`; `.cli-drawer.open` slides it in). The always-visible
+handle is `.cli-tab` > `.cli-vtext` (vertical `writing-mode`, mono/uppercase
+label). The panel is `.cli-panel` (`.cli-panel-head` heading row + `.cli-close`
+✕). Each command renders as `.cli-command`: `.cli-command-head` >
+`.cli-command-title` + a `.cli-command-docs` `↗` doc link, then `.cli-command-row`
+> `.cli-command-code` (the command text) + a `.copybtn.cli-copy`. Geometry keys
+off `--topbar-h` so the panel and tab sit below the topbar.
 
 ---
 
