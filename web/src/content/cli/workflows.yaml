@@ -1,0 +1,14 @@
+context: Workflows
+tools:
+  dapr:
+    label: Dapr
+    commands:
+      - title: List workflows for this app
+        command: dapr workflow list --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: List running workflows
+        command: dapr workflow list --app-id {{appId}} --filter-status RUNNING
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: List scheduled jobs
+        command: dapr scheduler list
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/

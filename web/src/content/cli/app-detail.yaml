@@ -1,0 +1,11 @@
+context: AppDetail
+tools:
+  dapr:
+    label: Dapr
+    commands:
+      - title: Stop this app
+        command: dapr stop --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-stop/
+      - title: Invoke a method on this app
+        command: dapr invoke --app-id {{appId}} --method <method> --data '{"key":"value"}'
+        docs: https://docs.dapr.io/reference/cli/dapr-invoke/

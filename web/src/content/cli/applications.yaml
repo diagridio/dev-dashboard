@@ -1,0 +1,11 @@
+# CLI commands shown in the drawer on the Applications overview page.
+# Edit wording/commands here — no code changes needed.
+# Constraint: self-hosted only, never a `-k` / `--kubernetes` command.
+context: Applications
+tools:
+  dapr:
+    label: Dapr
+    commands:
+      - title: List running Dapr apps
+        command: dapr list
+        docs: https://docs.dapr.io/reference/cli/dapr-list/

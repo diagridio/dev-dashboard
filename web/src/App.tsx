@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useMatches } from 'react-router-dom'
+import { Outlet, useMatches, useSearchParams } from 'react-router-dom'
 import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
 import { ResourcesSidebar } from './components/ResourcesSidebar'
+import { CliDrawer } from './components/CliDrawer'
 import { getTheme, type Theme } from './lib/prefs'
 import { safeGet } from './lib/safeStorage'
 import { trackAction, trackView } from './lib/telemetry'
@@ -29,6 +30,13 @@ export function App() {
     .map((m) => (m.handle as RouteHandle | undefined)?.rumView)
     .find(Boolean)
 
+  const [searchParams] = useSearchParams()
+  const leafParams = (matches[matches.length - 1]?.params ?? {}) as Record<string, string | undefined>
+  const cliValues = {
+    appId: leafParams.appId ?? searchParams.get('app') ?? undefined,
+    instanceId: leafParams.instanceId ?? undefined,
+  }
+
   useEffect(() => {
     trackAction('app_startup')
   }, [])
@@ -54,6 +62,7 @@ export function App() {
         <main className="body">
           <Outlet />
         </main>
+        <CliDrawer context={rumView} values={cliValues} />
       </div>
     </SmallScreenGuard>
   )

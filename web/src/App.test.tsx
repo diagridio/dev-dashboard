@@ -1,8 +1,9 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { server } from './test/setup'
+import { App } from './App'
 import { Placeholder } from './pages/Placeholder'
 import { routes } from './router'
 import { QueryProvider, makeQueryClient } from './lib/query'
@@ -136,5 +137,44 @@ describe('RUM tracking', () => {
       </QueryProvider>,
     )
     expect(trackView).toHaveBeenCalledWith('Workflows')
+  })
+})
+
+describe('App CLI drawer wiring', () => {
+  function renderAppAt(path: string) {
+    const client = makeQueryClient()
+    const router = createMemoryRouter(
+      [
+        {
+          path: '/',
+          element: <App />,
+          children: [
+            { path: 'apps/:appId', element: <div>app detail</div>, handle: { rumView: 'AppDetail' } },
+            { path: 'configurations', element: <div>configs</div>, handle: { rumView: 'Configurations' } },
+          ],
+        },
+      ],
+      { initialEntries: [path], future: { v7_relativeSplatPath: true } },
+    )
+    return render(
+      <QueryProvider client={client}>
+        <RefreshProvider>
+          <ConnectionContext value={{ online: true }}>
+            <RouterProvider router={router} future={{ v7_startTransition: true }} />
+          </ConnectionContext>
+        </RefreshProvider>
+      </QueryProvider>,
+    )
+  }
+
+  it('shows the CLI tab with the route appId resolved on AppDetail', () => {
+    renderAppAt('/apps/order')
+    fireEvent.click(screen.getByRole('button', { name: 'CLI commands' }))
+    expect(screen.getByText('dapr stop --app-id order')).toBeInTheDocument()
+  })
+
+  it('does not render the CLI tab on a context without content', () => {
+    renderAppAt('/configurations')
+    expect(screen.queryByRole('button', { name: 'CLI commands' })).toBeNull()
   })
 })
