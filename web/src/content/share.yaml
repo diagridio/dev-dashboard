@@ -19,8 +19,8 @@ fullMessage: |
 
   Give it a try!
 
-# Short blurb for X — repo URL is appended by the builder via ?url=.
-shortX: "I'm using the Diagrid Dev Dashboard — a practical companion for local Dapr development. A live view of everything Dapr running locally plus guided builders for component files & resiliency policies. Free & open source 👇"
-
-# Short blurb for BlueSky — repo URL is appended to the text by the builder.
-shortBluesky: "I'm using the Diagrid Dev Dashboard — a practical companion for local Dapr development. A live view of everything Dapr running locally plus guided builders for component files & resiliency policies. Free & open source 👇"
+# Short blurb for social posts (X, BlueSky, LinkedIn) — the repo URL is
+# appended by each builder. Keep it under 254 chars so it still fits X's
+# 280-char limit once the repo URL is added. Avoid literal "&": LinkedIn's
+# feed composer truncates its text param at the first ampersand (write "and").
+shortSocial: "I'm using the Diagrid Dev Dashboard — a practical companion for local Dapr development. A live view of everything Dapr running locally plus guided builders for component files and resiliency policies. Free and open source 👇"
