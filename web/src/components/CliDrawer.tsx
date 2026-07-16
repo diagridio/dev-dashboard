@@ -23,6 +23,8 @@ export function CliDrawer({ context, values }: CliDrawerProps) {
   const toolIds = Object.keys(content.tools)
   const tool = content.tools[toolIds[0]]
 
+  if (!tool) return null
+
   function toggle() {
     setOpen((prev) => {
       const next = !prev
@@ -42,7 +44,7 @@ export function CliDrawer({ context, values }: CliDrawerProps) {
       >
         CLI
       </button>
-      <aside className="cli-panel" aria-hidden={!open} aria-label="CLI commands panel">
+      <aside className="cli-panel" inert={!open} aria-hidden={!open} aria-label="CLI commands panel">
         <div className="cli-panel-head">
           <h2>CLI</h2>
           <button type="button" className="cli-close" aria-label="Close CLI drawer" onClick={toggle}>
