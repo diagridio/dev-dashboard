@@ -10,7 +10,7 @@ import {
 
 describe('shareContent', () => {
   it('has all required non-empty keys', () => {
-    for (const key of ['emailSubject', 'fullMessage', 'shortX', 'shortBluesky'] as const) {
+    for (const key of ['emailSubject', 'fullMessage', 'shortSocial'] as const) {
       expect(typeof shareContent[key]).toBe('string')
       expect(shareContent[key].trim().length).toBeGreaterThan(0)
     }
@@ -34,28 +34,29 @@ describe('channel URL builders', () => {
   it('xUrl points at the intent endpoint with short text and repo url', () => {
     const url = xUrl()
     expect(url.startsWith('https://x.com/intent/tweet?')).toBe(true)
-    expect(url).toContain(`text=${encodeURIComponent(shareContent.shortX)}`)
+    expect(url).toContain(`text=${encodeURIComponent(shareContent.shortSocial)}`)
     expect(url).toContain(`url=${encodeURIComponent(REPO_URL)}`)
   })
 
   it('blueskyUrl includes short text and the repo url in the text', () => {
     const url = blueskyUrl()
     expect(url.startsWith('https://bsky.app/intent/compose?')).toBe(true)
-    expect(url).toContain(encodeURIComponent(shareContent.shortBluesky))
+    expect(url).toContain(encodeURIComponent(shareContent.shortSocial))
     expect(url).toContain(encodeURIComponent(REPO_URL))
   })
 
-  it('linkedinUrl shares the repo url only', () => {
+  it('linkedinUrl opens the feed composer with prefilled text and the repo url', () => {
     const url = linkedinUrl()
-    expect(url.startsWith('https://www.linkedin.com/sharing/share-offsite/?')).toBe(true)
-    expect(url).toContain(`url=${encodeURIComponent(REPO_URL)}`)
+    expect(url.startsWith('https://www.linkedin.com/feed/?shareActive=true&text=')).toBe(true)
+    expect(url).toContain(encodeURIComponent(shareContent.shortSocial))
+    expect(url).toContain(encodeURIComponent(REPO_URL))
   })
 
   it('composed social messages fit their platform character limits', () => {
     const graphemes = (s: string) => [...new Intl.Segmenter().segment(s)].length
-    const bluesky = `${shareContent.shortBluesky}\n${REPO_URL}`
+    const bluesky = `${shareContent.shortSocial}\n${REPO_URL}`
     expect(graphemes(bluesky)).toBeLessThanOrEqual(300)
-    const x = `${shareContent.shortX} ${REPO_URL}`
+    const x = `${shareContent.shortSocial} ${REPO_URL}`
     expect(graphemes(x)).toBeLessThanOrEqual(280)
   })
 })

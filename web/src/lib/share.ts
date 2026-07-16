@@ -6,8 +6,7 @@ export const REPO_URL = 'https://github.com/diagridio/dev-dashboard'
 export interface ShareContent {
   emailSubject: string
   fullMessage: string
-  shortX: string
-  shortBluesky: string
+  shortSocial: string
 }
 
 /** Parsed at module load from the editable YAML content file. */
@@ -24,18 +23,24 @@ export function emailUrl(): string {
 
 /** X intent — short text plus repo URL as a separate param. */
 export function xUrl(): string {
-  const text = encodeURIComponent(shareContent.shortX)
+  const text = encodeURIComponent(shareContent.shortSocial)
   const url = encodeURIComponent(REPO_URL)
   return `https://x.com/intent/tweet?text=${text}&url=${url}`
 }
 
 /** BlueSky compose intent — repo URL appended to the text (no url param). */
 export function blueskyUrl(): string {
-  const text = encodeURIComponent(`${shareContent.shortBluesky}\n${REPO_URL}`)
+  const text = encodeURIComponent(`${shareContent.shortSocial}\n${REPO_URL}`)
   return `https://bsky.app/intent/compose?text=${text}`
 }
 
-/** LinkedIn share — URL only; LinkedIn ignores prefilled text. */
+/**
+ * LinkedIn — open the feed composer prefilled with the message. The older
+ * share-offsite endpoint accepts a URL only (title/summary params were
+ * deprecated), so we use the feed composer, which prefills body text and
+ * auto-generates a link preview from the repo URL embedded in it.
+ */
 export function linkedinUrl(): string {
-  return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(REPO_URL)}`
+  const text = encodeURIComponent(`${shareContent.shortSocial}\n${REPO_URL}`)
+  return `https://www.linkedin.com/feed/?shareActive=true&text=${text}`
 }
