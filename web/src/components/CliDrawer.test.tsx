@@ -54,6 +54,7 @@ describe('CliDrawer', () => {
 
   it('copies the resolved command and shows a Copied toast', () => {
     render(<CliDrawer context="AppDetail" values={{ appId: 'order' }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'CLI commands' }))
     fireEvent.click(screen.getByRole('button', { name: 'Copy command: dapr stop --app-id order' }))
     expect(copyText).toHaveBeenCalledWith('dapr stop --app-id order')
     expect(screen.getByText('Copied')).toBeInTheDocument()

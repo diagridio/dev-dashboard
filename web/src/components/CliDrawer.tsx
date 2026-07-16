@@ -42,7 +42,7 @@ export function CliDrawer({ context, values }: CliDrawerProps) {
       >
         CLI
       </button>
-      <aside className="cli-panel" aria-label="CLI commands panel">
+      <aside className="cli-panel" aria-hidden={!open} aria-label="CLI commands panel">
         <div className="cli-panel-head">
           <h2>CLI</h2>
           <button type="button" className="cli-close" aria-label="Close CLI drawer" onClick={toggle}>
