@@ -33,11 +33,11 @@ export function CliCommand({ title, command, docs, onCopied }: CliCommandProps) 
         <code className="cli-command-code">{command}</code>
         <button
           type="button"
-          className="btn ghost cli-copy"
+          className="copybtn cli-copy"
           aria-label={`Copy command: ${command}`}
           onClick={handleCopy}
         >
-          Copy
+          ⧉ Copy
         </button>
       </div>
     </div>
