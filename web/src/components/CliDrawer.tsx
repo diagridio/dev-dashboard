@@ -46,7 +46,7 @@ export function CliDrawer({ context, values }: CliDrawerProps) {
       </button>
       <aside className="cli-panel" inert={!open} aria-hidden={!open} aria-label="CLI commands panel">
         <div className="cli-panel-head">
-          <h2>CLI</h2>
+          <h2>Dapr CLI</h2>
           <button type="button" className="cli-close" aria-label="Close CLI drawer" onClick={toggle}>
             ✕
           </button>
