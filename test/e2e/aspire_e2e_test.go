@@ -4,6 +4,8 @@ package e2e_test
 
 import (
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -70,12 +72,38 @@ spec:
   version: v1
   metadata:
   - name: redisHost
-    value: localhost:%d
+    value: 127.0.0.1:%d
   - name: actorStateStore
     value: "true"
 `, redisPort)
 	require.NoError(t, os.WriteFile(
 		filepath.Join(componentsDir, "e2easpirestatestore.yaml"), []byte(component), 0o644))
+
+	// Start Redis (the actor state store) and wait until it accepts connections
+	// BEFORE launching the AppHost. The daprd sidecar loads the state-store
+	// component at startup and fatally exits if Redis isn't reachable, and
+	// Aspire starts the sidecar outside its WaitFor graph — so an
+	// Aspire-managed Redis container races the sidecar and loses under load
+	// (the sidecar dies with "connection refused" and the app never becomes
+	// healthy). Owning Redis here, ready-first, makes that init race-free.
+	redisName := fmt.Sprintf("e2e-aspire-redis-%d", redisPort)
+	_ = exec.Command("docker", "rm", "-f", redisName).Run() // clear any stale container
+	runRedis := exec.Command("docker", "run", "-d", "--rm",
+		"--name", redisName,
+		"-p", fmt.Sprintf("127.0.0.1:%d:6379", redisPort),
+		"redis:7-alpine")
+	if out, err := runRedis.CombinedOutput(); err != nil {
+		t.Fatalf("docker run redis: %v: %s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", redisName).Run() })
+	waitFor(t, 30*time.Second, func() bool {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", redisPort), time.Second)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	})
 
 	// Build first, then run the compiled native apphost binary directly rather
 	// than `dotnet run --project AppHost`: `dotnet run` spawns the apphost as a
@@ -98,7 +126,6 @@ spec:
 	apphost.Env = append(os.Environ(),
 		"DASH_BIN="+bin,
 		"DASH_PORT="+fmt.Sprint(port),
-		"REDIS_PORT="+fmt.Sprint(redisPort),
 		"ORDERSERVICE_DAPR_HTTP_PORT="+fmt.Sprint(daprHTTPPort),
 		"COMPONENTS_DIR="+componentsDir,
 	)
@@ -129,6 +156,53 @@ spec:
 			strings.Contains(body, `"source":"aspire"`)
 	})
 
+	// dumpDiag surfaces why the orderservice sidecar isn't working: the
+	// dashboard's view of the app (health + any recorded error) and a direct
+	// probe of the sidecar's own HTTP port. Aspire runs headless here
+	// (DisableDashboard) and does not forward daprd/OrderService logs, so
+	// this is the only window into the sidecar's state from CI.
+	dumpDiag := func(context string) {
+		t.Logf("DIAG [%s] --------------------------------", context)
+		body, status := getJSON(t, base, "/api/apps/")
+		t.Logf("DIAG /api/apps/ (status %d): %s", status, body)
+		// Bounded client: the sidecar accepts connections even while its runtime
+		// is stuck initializing, so an unbounded GET to /v1.0/metadata hangs.
+		probe := &http.Client{Timeout: 5 * time.Second}
+		for _, path := range []string{"/v1.0/metadata", "/v1.0/healthz"} {
+			url := fmt.Sprintf("http://127.0.0.1:%d%s", daprHTTPPort, path)
+			res, err := probe.Get(url)
+			if err != nil {
+				t.Logf("DIAG sidecar %s: ERROR %v", path, err)
+				continue
+			}
+			b, _ := io.ReadAll(res.Body)
+			_ = res.Body.Close()
+			t.Logf("DIAG sidecar %s: status %d body %s", path, res.StatusCode, string(b))
+		}
+	}
+
+	// The daprd sidecar must actually be up before workflows can run — its
+	// health is enriched from a live /v1.0/metadata call. Assert it here (with
+	// a generous window for the placement/scheduler handshake) so a sidecar
+	// that never initializes its actor/workflow runtime fails at this
+	// diagnostic point rather than silently timing out at the workflow step
+	// below. App discovery above is satisfied by the env contract alone and
+	// does not prove the sidecar works.
+	healthy := false
+	healthDeadline := time.Now().Add(3 * time.Minute)
+	for time.Now().Before(healthDeadline) {
+		body, _ := getJSON(t, base, "/api/apps/")
+		if strings.Contains(body, `"health":"healthy"`) {
+			healthy = true
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	if !healthy {
+		dumpDiag("sidecar never healthy")
+		t.Fatal("orderservice sidecar never became healthy within 3m")
+	}
+
 	// Components: e2easpirestatestore from DEVDASHBOARD_RESOURCES_PATH.
 	waitFor(t, 30*time.Second, func() bool {
 		body, _ := getJSON(t, base, "/api/resources/?kind=component")
@@ -136,10 +210,20 @@ spec:
 	})
 
 	// Workflows: instance from the Aspire-managed Redis.
-	waitFor(t, 90*time.Second, func() bool {
+	scheduled := false
+	wfDeadline := time.Now().Add(90 * time.Second)
+	for time.Now().Before(wfDeadline) {
 		body, status := getJSON(t, base, "/api/workflows/")
-		return status == 200 && strings.Contains(body, "e2e-order-1")
-	})
+		if status == 200 && strings.Contains(body, "e2e-order-1") {
+			scheduled = true
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	if !scheduled {
+		dumpDiag("workflow instance never appeared")
+		t.Fatal("workflow instance e2e-order-1 never appeared within 90s")
+	}
 
 	// Negative: controlplane and per-app logs are gated off in aspire mode.
 	_, status := getJSON(t, base, "/api/controlplane/")

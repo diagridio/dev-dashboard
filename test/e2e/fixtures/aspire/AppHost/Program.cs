@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
+using Aspire.Hosting.ApplicationModel;
 using CommunityToolkit.Aspire.Hosting.Dapr;
+using Microsoft.Extensions.DependencyInjection;
 
 // Every host-facing port and path is chosen by the Go e2e test (which uses
 // the harness's freePort helper, matching the compose/testcontainers
@@ -18,7 +20,6 @@ static string Required(string name) =>
     Environment.GetEnvironmentVariable(name)
     ?? throw new InvalidOperationException($"{name} not set");
 
-var redisPort = RequiredPort("REDIS_PORT");
 var orderServiceDaprHttpPort = RequiredPort("ORDERSERVICE_DAPR_HTTP_PORT");
 // Directory the Go test wrote e2easpirestatestore.yaml into (redisHost
 // already points at the chosen redis port). Shared by the daprd sidecar
@@ -37,14 +38,15 @@ var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOpt
     DisableDashboard = true,
 });
 
-// Redis for the Dapr state store component. AddContainer + WithEndpoint(...,
-// isProxied: false) publishes the chosen host port straight through to the
-// container so the component YAML (written by the Go test) can name it;
-// Aspire.Hosting.Redis's AddRedis() helper instead enables TLS and a random
-// per-run password by default, which daprd would then need extra wiring to
-// trust/authenticate against.
-builder.AddContainer("statestore-redis", "redis", "7-alpine")
-    .WithEndpoint(port: redisPort, targetPort: 6379, scheme: "tcp", name: "tcp", isProxied: false);
+// NOTE: Redis (the actor state store) is intentionally NOT an Aspire resource.
+// The daprd sidecar loads the state-store component during startup and FATALLY
+// EXITS if Redis isn't yet accepting connections. Aspire starts the sidecar as
+// its own resource outside the WaitFor graph (WaitFor on the sidecar is not
+// honored), so it always races an Aspire-managed Redis container and loses
+// under load. Instead the Go test starts Redis and waits for it to accept
+// connections BEFORE launching this AppHost, and the component YAML it writes
+// points daprd at 127.0.0.1:<redisPort>. That makes the sidecar's component
+// init race-free by construction.
 
 // The OrderService Dapr workflow app, with its sidecar HTTP port pinned to
 // the test-chosen port so the dashboard's env contract (below) can name it.
@@ -86,4 +88,35 @@ builder.AddExecutable("dashboard", dashBin, componentsDir,
     // enough here.
     .WithEnvironment("DEVDASHBOARD_STATESTORE_FILE", stateStoreFile);
 
-builder.Build().Run();
+var app = builder.Build();
+
+// Aspire runs headless here (DisableDashboard) and does not otherwise surface
+// child-resource logs. Forward every resource's logs to the AppHost's stdout so
+// CI captures daprd/OrderService output — the only window into why the sidecar
+// fails to initialize on the runner.
+_ = Task.Run(async () =>
+{
+    var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+    var loggers = app.Services.GetRequiredService<ResourceLoggerService>();
+    var watched = new HashSet<string>();
+    await foreach (var evt in notifications.WatchAsync())
+    {
+        if (!watched.Add(evt.ResourceId))
+        {
+            continue;
+        }
+        var resourceId = evt.ResourceId;
+        _ = Task.Run(async () =>
+        {
+            await foreach (var batch in loggers.WatchAsync(resourceId))
+            {
+                foreach (var line in batch)
+                {
+                    Console.WriteLine($"[resource:{resourceId}] {line.Content}");
+                }
+            }
+        });
+    }
+});
+
+app.Run();

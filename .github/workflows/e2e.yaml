@@ -51,7 +51,12 @@ jobs:
 
       - name: dapr init (full)
         if: steps.gate.outputs.run == 'true' && matrix.mode == 'aspire'
-        run: dapr init
+        # Pin the runtime so the placement/scheduler containers and the daprd
+        # the Aspire sidecar launches match the Dapr.Workflow 1.18.4 SDK the
+        # fixture is built against. An unpinned `dapr init` installs whatever is
+        # latest, which can skew against the SDK and break workflow scheduling
+        # (the sidecar never brings up its actor/workflow runtime).
+        run: dapr init --runtime-version 1.18.1
 
       - name: Build dashboard
         if: steps.gate.outputs.run == 'true'
