@@ -16,6 +16,12 @@ func sidecarBaseURL(base string, httpPort int) string {
 	return fmt.Sprintf("http://127.0.0.1:%d", httpPort)
 }
 
+// BaseURL resolves this instance's daprd HTTP endpoint (aspire base URL wins,
+// else the loopback-port form).
+func (in Instance) BaseURL() string {
+	return sidecarBaseURL(in.DaprHTTPBaseURL, in.HTTPPort)
+}
+
 // CheckHealth probes a sidecar's /v1.0/healthz endpoint at baseURL.
 func CheckHealth(ctx context.Context, client *http.Client, baseURL string) Health {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1.0/healthz", nil)

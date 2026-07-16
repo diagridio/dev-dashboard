@@ -33,3 +33,8 @@ func TestSidecarBaseURL(t *testing.T) {
 		t.Fatalf("trailing slash: %q", got)
 	}
 }
+
+func TestInstanceBaseURL(t *testing.T) {
+	require.Equal(t, "http://127.0.0.1:3500", Instance{HTTPPort: 3500}.BaseURL())
+	require.Equal(t, "http://proxy:8080", Instance{DaprHTTPBaseURL: "http://proxy:8080/", HTTPPort: 3500}.BaseURL())
+}
