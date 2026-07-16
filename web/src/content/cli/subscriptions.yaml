@@ -1,0 +1,8 @@
+context: Subscriptions
+tools:
+  dapr:
+    label: Dapr
+    commands:
+      - title: Publish a test event
+        command: dapr publish --publish-app-id <app-id> --pubsub <pubsub> --topic <topic> --data '{"key":"value"}'
+        docs: https://docs.dapr.io/reference/cli/dapr-publish/

@@ -1,0 +1,23 @@
+context: WorkflowDetail
+tools:
+  dapr:
+    label: Dapr
+    commands:
+      - title: View execution history
+        command: dapr workflow history {{instanceId}} --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: Terminate this instance
+        command: dapr workflow terminate {{instanceId}} --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: Pause (suspend) this instance
+        command: dapr workflow suspend {{instanceId}} --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: Resume this instance
+        command: dapr workflow resume {{instanceId}} --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: Purge this instance
+        command: dapr workflow purge {{instanceId}} --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: Inspect this instance's scheduler reminder
+        command: dapr scheduler get workflow/{{appId}}/{{instanceId}}/<reminder-name> -o yaml
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/

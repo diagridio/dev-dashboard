@@ -1,0 +1,11 @@
+context: Actors
+tools:
+  dapr:
+    label: Dapr
+    commands:
+      - title: List scheduled jobs and reminders
+        command: dapr scheduler list
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: Get an actor reminder
+        command: dapr scheduler get actor/<actor-type>/<actor-id>/<reminder-name> -o yaml
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
