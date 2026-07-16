@@ -166,8 +166,29 @@ func publishHandler(svc discovery.Service) http.HandlerFunc {
 			return
 		}
 		msg, _ := io.ReadAll(resp.Body)
-		writeJSON(w, resp.StatusCode, map[string]string{"error": strings.TrimSpace(string(msg))})
+		writeJSON(w, resp.StatusCode, map[string]string{"error": daprdErrorMessage(msg)})
 	}
+}
+
+// daprdErrorMessage extracts a human-readable message from a daprd error
+// response body, which is normally JSON of the form
+// {"errorCode":"...","message":"..."}. It falls back to the error code, then
+// the trimmed raw body, if the message field is empty or the body isn't the
+// expected shape.
+func daprdErrorMessage(body []byte) string {
+	var parsed struct {
+		Message   string `json:"message"`
+		ErrorCode string `json:"errorCode"`
+	}
+	if err := json.Unmarshal(body, &parsed); err == nil {
+		if parsed.Message != "" {
+			return parsed.Message
+		}
+		if parsed.ErrorCode != "" {
+			return parsed.ErrorCode
+		}
+	}
+	return strings.TrimSpace(string(body))
 }
 
 // hasPubsubComponent reports whether the instance exposes a pub/sub component

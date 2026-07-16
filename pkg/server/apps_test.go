@@ -237,8 +237,9 @@ func TestPublishUnreachableSidecar(t *testing.T) {
 func TestPublishUnknownApp(t *testing.T) {
 	h := appsRouter(&fakeApps{}, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/ghost/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
-	res, _ := doReq(t, h, req)
+	res, body := doReq(t, h, req)
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
+	require.Contains(t, body, "app not found")
 }
 
 func TestPublishPassesThroughDaprdError(t *testing.T) {
@@ -255,5 +256,25 @@ func TestPublishPassesThroughDaprdError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
 	res, body := doReq(t, h, req)
 	require.Equal(t, http.StatusForbidden, res.StatusCode)
-	require.Contains(t, body, "denied")
+
+	var got map[string]string
+	require.NoError(t, json.Unmarshal([]byte(body), &got))
+	require.Equal(t, "denied", got["error"])
+}
+
+func TestPublishNetworkFailure(t *testing.T) {
+	// A closed server's address will refuse connections, simulating a
+	// dial/network failure distinct from a daprd-returned error status.
+	sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	unreachableURL := sidecar.URL
+	sidecar.Close()
+
+	apps := &fakeApps{instances: []discovery.Instance{{
+		AppID: "order", SidecarReachable: true, DaprHTTPBaseURL: unreachableURL,
+		Components: []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
+	}}}
+	h := appsRouter(apps, nil, nil, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
+	res, _ := doReq(t, h, req)
+	require.Equal(t, http.StatusBadGateway, res.StatusCode)
 }
