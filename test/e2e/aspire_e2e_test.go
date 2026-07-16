@@ -5,6 +5,7 @@ package e2e_test
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -71,12 +72,38 @@ spec:
   version: v1
   metadata:
   - name: redisHost
-    value: localhost:%d
+    value: 127.0.0.1:%d
   - name: actorStateStore
     value: "true"
 `, redisPort)
 	require.NoError(t, os.WriteFile(
 		filepath.Join(componentsDir, "e2easpirestatestore.yaml"), []byte(component), 0o644))
+
+	// Start Redis (the actor state store) and wait until it accepts connections
+	// BEFORE launching the AppHost. The daprd sidecar loads the state-store
+	// component at startup and fatally exits if Redis isn't reachable, and
+	// Aspire starts the sidecar outside its WaitFor graph — so an
+	// Aspire-managed Redis container races the sidecar and loses under load
+	// (the sidecar dies with "connection refused" and the app never becomes
+	// healthy). Owning Redis here, ready-first, makes that init race-free.
+	redisName := fmt.Sprintf("e2e-aspire-redis-%d", redisPort)
+	_ = exec.Command("docker", "rm", "-f", redisName).Run() // clear any stale container
+	runRedis := exec.Command("docker", "run", "-d", "--rm",
+		"--name", redisName,
+		"-p", fmt.Sprintf("127.0.0.1:%d:6379", redisPort),
+		"redis:7-alpine")
+	if out, err := runRedis.CombinedOutput(); err != nil {
+		t.Fatalf("docker run redis: %v: %s", err, out)
+	}
+	t.Cleanup(func() { _ = exec.Command("docker", "rm", "-f", redisName).Run() })
+	waitFor(t, 30*time.Second, func() bool {
+		conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", redisPort), time.Second)
+		if err != nil {
+			return false
+		}
+		_ = conn.Close()
+		return true
+	})
 
 	// Build first, then run the compiled native apphost binary directly rather
 	// than `dotnet run --project AppHost`: `dotnet run` spawns the apphost as a
@@ -99,7 +126,6 @@ spec:
 	apphost.Env = append(os.Environ(),
 		"DASH_BIN="+bin,
 		"DASH_PORT="+fmt.Sprint(port),
-		"REDIS_PORT="+fmt.Sprint(redisPort),
 		"ORDERSERVICE_DAPR_HTTP_PORT="+fmt.Sprint(daprHTTPPort),
 		"COMPONENTS_DIR="+componentsDir,
 	)
@@ -139,9 +165,12 @@ spec:
 		t.Logf("DIAG [%s] --------------------------------", context)
 		body, status := getJSON(t, base, "/api/apps/")
 		t.Logf("DIAG /api/apps/ (status %d): %s", status, body)
+		// Bounded client: the sidecar accepts connections even while its runtime
+		// is stuck initializing, so an unbounded GET to /v1.0/metadata hangs.
+		probe := &http.Client{Timeout: 5 * time.Second}
 		for _, path := range []string{"/v1.0/metadata", "/v1.0/healthz"} {
 			url := fmt.Sprintf("http://127.0.0.1:%d%s", daprHTTPPort, path)
-			res, err := http.Get(url)
+			res, err := probe.Get(url)
 			if err != nil {
 				t.Logf("DIAG sidecar %s: ERROR %v", path, err)
 				continue
