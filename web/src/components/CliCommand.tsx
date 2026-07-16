@@ -25,7 +25,7 @@ export function CliCommand({ title, command, docs, onCopied }: CliCommandProps) 
             rel="noopener noreferrer"
             aria-label={`${title} — Dapr CLI docs`}
           >
-            ↗
+            <span className="ext">↗</span>
           </a>
         )}
       </div>
