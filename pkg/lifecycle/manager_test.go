@@ -223,6 +223,37 @@ func (s *stubbornProc) Terminate(pid int) error {
 }
 func (s *stubbornProc) Kill(pid int) error { return s.fakeProc.Kill(pid) }
 
+// Start and restart are Compose-only: dapr-run (standalone) instances reject
+// both with ErrUnsupported and touch no process or starter, even when a stop
+// snapshot exists that could tempt a re-run. Stop stays supported (covered by
+// the standalone stop tests).
+func TestStandaloneStartRestartRejected(t *testing.T) {
+	proc := newFakeProc()
+	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"}
+	proc.alive[100] = true
+	st := &fakeStarter{}
+	reg := NewRegistry()
+	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
+		TargetAll: {PID: 300, Argv: []string{"dapr", "run", "--app-id", "orders"}, Dir: "/src"},
+	})
+	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, proc, st)
+
+	cases := []struct {
+		target Target
+		action Action
+	}{
+		{TargetAll, ActionStart},
+		{TargetApp, ActionStart},
+		{TargetAll, ActionRestart},
+		{TargetDaprd, ActionRestart},
+	}
+	for _, tc := range cases {
+		require.ErrorIs(t, m.Do(context.Background(), "orders", tc.target, tc.action), ErrUnsupported)
+	}
+	require.Empty(t, st.started, "standalone start machinery must not run")
+	require.Empty(t, proc.terminated, "restart must not signal any process")
+}
+
 func TestAspireStartRejectedStopAllowed(t *testing.T) {
 	in := standaloneInst()
 	in.IsAspire = true
@@ -255,59 +286,6 @@ func (f *fakeStarter) Start(argv []string, dir, logPath string) error {
 	return nil
 }
 
-func TestStandaloneStartAllRerunsCLICommand(t *testing.T) {
-	reg := NewRegistry()
-	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
-		TargetAll:   {PID: 300, Argv: []string{"dapr", "run", "--app-id", "orders"}, Dir: "/src"},
-		TargetApp:   {PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"},
-		TargetDaprd: {PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"},
-	})
-	st := &fakeStarter{}
-	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, newFakeProc(), st)
-
-	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStart))
-	require.Equal(t, [][]string{{"dapr", "run", "--app-id", "orders"}}, st.started)
-	require.Equal(t, []string{"/src"}, st.dirs)
-	_, ok := reg.Get("orders")
-	require.True(t, ok, "entry survives start; the overlay drops it once discovery sees the instance live")
-}
-
-func TestStandaloneStartSingleTarget(t *testing.T) {
-	reg := NewRegistry()
-	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
-		TargetApp:   {PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src", LogPath: "/tmp/app.log"},
-		TargetDaprd: {PID: 200, Argv: []string{"daprd", "--app-id", "orders"}},
-	})
-	st := &fakeStarter{}
-	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, newFakeProc(), st)
-
-	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionStart))
-	require.Equal(t, [][]string{{"go", "run", "."}}, st.started)
-	e, ok := reg.Get("orders")
-	require.True(t, ok, "entry survives start; live reconciliation cleans it up")
-	require.Len(t, e.Procs, 2)
-}
-
-func TestStandaloneStartWithoutSnapshotRejected(t *testing.T) {
-	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}},
-		NewRegistry(), nil, newFakeProc(), &fakeStarter{})
-	require.ErrorIs(t, m.Do(context.Background(), "orders", TargetApp, ActionStart), ErrUnsupported)
-}
-
-func TestStandaloneRestartStopsThenStarts(t *testing.T) {
-	proc := newFakeProc()
-	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"}
-	proc.alive[100] = true
-	st := &fakeStarter{}
-	reg := NewRegistry()
-	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, proc, st).(*manager)
-	m.grace = 10 * time.Millisecond
-
-	require.NoError(t, m.Do(context.Background(), "orders", TargetApp, ActionRestart))
-	require.Equal(t, []int{100}, proc.terminated)
-	require.Equal(t, [][]string{{"go", "run", "."}}, st.started)
-}
-
 func TestStandaloneDaprdTargetFunnelsToAll(t *testing.T) {
 	proc := newFakeProc()
 	proc.snaps[100] = ProcSnapshot{PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"}
@@ -337,25 +315,6 @@ func TestAspireDaprdStopNotFunneled(t *testing.T) {
 
 	require.NoError(t, m.Do(context.Background(), "orders", TargetDaprd, ActionStop))
 	require.Equal(t, []int{200}, proc.terminated, "Aspire keeps per-PID daprd stop")
-}
-
-// Pins the TargetAll start fallback: with no CLI snapshot (e.g. the CLI was
-// never captured), the halves start individually, sidecar first, and each
-// started target leaves the registry.
-func TestStandaloneStartAllWithoutCLISnapshotStartsHalvesInOrder(t *testing.T) {
-	reg := NewRegistry()
-	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{
-		TargetDaprd: {PID: 200, Argv: []string{"daprd", "--app-id", "orders"}, Dir: "/src"},
-		TargetApp:   {PID: 100, Argv: []string{"go", "run", "."}, Dir: "/src"},
-	})
-	st := &fakeStarter{}
-	m := New(fakeApps{items: map[string]discovery.Instance{"orders": standaloneInst()}}, reg, nil, newFakeProc(), st)
-
-	require.NoError(t, m.Do(context.Background(), "orders", TargetAll, ActionStart))
-	require.Equal(t, [][]string{{"daprd", "--app-id", "orders"}, {"go", "run", "."}}, st.started, "sidecar starts before the app")
-	e, ok := reg.Get("orders")
-	require.True(t, ok, "entry survives start; live reconciliation cleans it up")
-	require.Len(t, e.Procs, 2)
 }
 
 // An orphaned sidecar (no supervising CLI, app gone) supports only stop:
