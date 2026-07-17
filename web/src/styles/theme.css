@@ -157,6 +157,7 @@ body {
 @keyframes beat { 0% { box-shadow: 0 0 0 0 rgba(11,221,163,.5); } 70% { box-shadow: 0 0 0 7px rgba(11,221,163,0); } 100% { box-shadow: 0 0 0 0 rgba(11,221,163,0); } }
 .crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); margin-bottom: 14px; }
 .crumbs a { color: var(--text); text-decoration: none; cursor: pointer; }
+.crumbs a:hover { text-decoration: underline; }
 .crumbs .sep { color: var(--faint); }
 .crumbs .cur { color: var(--text); font-family: var(--mono); font-size: 12px; word-break: break-all; }
 /* In-table entity links (App ID, Instance ID): default text color, never the browser's blue/purple link color. */
@@ -200,10 +201,15 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .chip.k { color: var(--text); }
 .chip b { color: var(--text); font-weight: 600; }
 .chip .led { width: 7px; height: 7px; border-radius: 50%; background: var(--done-fg); }
+/* Link chips (a.chip, rendered by <Link>): high-contrast text, no fill, no underline
+   at rest; hover adds a green border + underline. Static <span> chips keep the muted
+   text + faded fill and have no hover (informational only). */
+a.chip { color: var(--text); background: transparent; text-decoration: none; }
+a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .typechip { font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .appref { font-family: var(--mono); font-size: 11px; padding: 1px 7px; border-radius: 5px; border: 1px solid var(--line); color: var(--text); }
-.appref.link { cursor: pointer; }
-.appref.link:hover { border-color: var(--accent-bright); color: var(--link); }
+.appref.link { cursor: pointer; text-decoration: none; }
+.appref.link:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .kebab { color: var(--faint); font-weight: 700; letter-spacing: 1px; padding: 0 4px; }
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
 .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; box-shadow: var(--shadow); }
@@ -404,21 +410,21 @@ details.evd > summary { list-style: none; cursor: pointer; }
 details.evd > summary::-webkit-details-marker { display: none; }
 .caret, .caretspace { grid-column: 1; }
 .evtype { grid-column: 2; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.evname { grid-column: 3; font-family: var(--mono); font-size: 12px; color: var(--link); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evname { grid-column: 3; font-family: var(--mono); font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* Name column for static rows: keeps the child name and the SubOrchestration
    instance link together on one line, left-aligned, so the id-tag still pins to
    column 4 like every other row. */
 .evnamecell { grid-column: 3; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.evchildlink { font-family: var(--mono); font-size: 10px; color: var(--muted); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.evchildlink:hover { color: var(--text); text-decoration: underline; }
+.evchildlink { font-family: var(--mono); font-size: 10px; color: var(--text); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.evchildlink:hover { text-decoration: underline; }
 .evtag { grid-column: 4; font-family: var(--mono); font-size: 10px; color: var(--muted); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
 a.pairchip, span.pairchip {
   font-family: var(--mono); font-size: 10px; color: var(--muted);
   text-decoration: none; border: 1px solid var(--line); border-radius: 6px;
   padding: 1px 6px; display: inline-flex; gap: 5px; align-items: center; white-space: nowrap;
 }
-a.pairchip { cursor: pointer; }
-a.pairchip:hover { color: var(--text); border-color: var(--accent-bright); }
+a.pairchip { cursor: pointer; color: var(--text); }
+a.pairchip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 a.pairchip:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 span.pairchip.pending { border-style: dashed; color: var(--faint); cursor: default; }
 .ev.pair-hover::after {

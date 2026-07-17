@@ -315,10 +315,14 @@ component fails the suite until the doc is updated.
 - `.pill .s-*` — status pill (use `StatusPill`).
 - `.health` + `.led.{ok,warn,bad}` — colored LED + label.
 - `.chip`, `.typechip`, `.appref`, `.dprchip`, `.rulebadge`, `.tag-int` — small
-  mono badges for types, app refs, Dapr tags. `.appref.link` adds a hover
-  affordance (border/colour change, **no arrow**). **There is no `.chip.link`** —
-  a chip that navigates renders as a plain `.chip` wrapped in a `<Link>` (internal
-  navigation, no `↗`); see §7. The old `.chip.link` appended an `↗` that read as an
+  mono badges for types, app refs, Dapr tags. **Link chip vs. info chip is a hard
+  visual split (see §7 "Link system"):** an *info* chip (static `<span>`) keeps its
+  muted text + faded `--surface-2` fill and has no hover; a *link* chip (rendered by
+  `<Link>`, so `a.chip`/`.appref.link`/`a.pairchip`) is always high-contrast
+  (`--text`, never muted) on a transparent fill, with no underline at rest and a
+  hover of green border (`--accent-bright`) + underline. **There is no `.chip.link`**
+  — a chip that navigates renders as a plain `.chip` wrapped in a `<Link>` (internal
+  navigation, **no `↗`**); the old `.chip.link` appended an `↗` that read as an
   *external* link, which these never are, so it was removed.
 - `.lang .sw` — language label with a color swatch.
 - `.kebab` — the `⋯` row-actions glyph.
@@ -447,6 +451,18 @@ copy/download buttons per builder.
 
 ## 7. Recurring patterns
 
+- **Link system (canonical):** every link is high-contrast (`--text`, never muted)
+  with **no underline at rest**. There are two shapes, split by hover:
+  - **Text links** (in prose / tables / breadcrumbs — `.celllink`, `.crumbs a`,
+    `.pw a`, `.evchildlink`): hover adds **underline only**.
+  - **Chip links** (bordered — `a.chip`, `.appref.link`, `a.pairchip`): hover adds
+    a **green border (`--accent-bright`) + underline**, on a transparent fill.
+
+  **Muted text and faded (`--surface-2`) fills are reserved for *informational*
+  chips** (static `<span className="chip">`, `.typechip`, `.badge`, `.dprchip`) —
+  these never hover. Never render a link with muted text or as a filled chip.
+  Exceptions: `.upbadge` is the special green "Update ↗" external badge; app
+  navigation (`.nav a`, `.sblink`) uses its own active/hover background pattern.
 - **In-table entity links:** use `.celllink` (not a bare `<a>`) so links render in
   `--text`, not browser blue/purple, and only underline on hover. Stop propagation
   if the row is also clickable:
@@ -461,7 +477,10 @@ copy/download buttons per builder.
   <Link className="chip" to={`/components/${name}`}>component</Link>
   ```
   The App-detail component chips follow the same rule (`.chip.k` wrapped in a
-  `<Link>`). In tables, prefer `.celllink` (above).
+  `<Link>`). In tables, prefer `.celllink` (above). Because `<Link>` renders an
+  `<a>`, `a.chip` gets the chip-link hover automatically (green border + underline);
+  static `<span>` chips stay muted/filled with no hover — see the Link system rule
+  above.
 - **Confirmations:** any action that needs a "are you sure?" — destructive or
   disruptive — opens `ConfirmDialog` (see §5), never the native `window.confirm`.
   Title is the question (*"Stop "order" (app + sidecar)?"*), optional body copy is
