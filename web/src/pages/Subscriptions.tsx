@@ -151,7 +151,7 @@ function SubscriptionRow({ sub, onPublish }: { sub: Subscription; onPublish: () 
         <td>
           <button
             type="button"
-            className="rowbtn"
+            className="btn ghost"
             disabled={sub.reachable === false}
             title={sub.reachable === false ? 'Sidecar unreachable' : 'Publish a test message'}
             onClick={onPublish}

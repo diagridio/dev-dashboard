@@ -108,7 +108,8 @@ type publishBody struct {
 }
 
 // publishHandler proxies a message to the resolved instance's sidecar
-// /v1.0/publish/{pubsub}/{topic}. daprd errors are surfaced verbatim.
+// /v1.0/publish/{pubsub}/{topic}. On a daprd error the response status is
+// passed through and the body is reduced to its message via daprdErrorMessage.
 func publishHandler(svc discovery.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		in, err := svc.Get(req.Context(), chi.URLParam(req, "appId"))
