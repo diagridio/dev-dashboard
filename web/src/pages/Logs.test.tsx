@@ -453,7 +453,7 @@ describe('Logs', () => {
     await waitFor(() => expect(target.value).toBe('app:order'))
   })
 
-  it('reflects a ?cp deep link as the selected Target and clears app on switch', async () => {
+  it('reflects a ?cp deep link as the selected Target', async () => {
     server.use(
       http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
       http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
@@ -462,6 +462,23 @@ describe('Logs', () => {
     renderAt('/logs?cp=dapr_scheduler')
     const target = (await screen.findByRole('combobox', { name: /Target/i })) as HTMLSelectElement
     await waitFor(() => expect(target.value).toBe('cp:dapr_scheduler'))
+  })
+
+  it('switching Target from an app to a control-plane service clears ?app', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+      http.get('/api/controlplane', () => HttpResponse.json(CP_LIST_BASE)),
+    )
+    renderAt('/logs?app=order&source=daprd')
+    const target = (await screen.findByRole('combobox', { name: /Target/i })) as HTMLSelectElement
+
+    fireEvent.change(target, { target: { value: 'cp:dapr_scheduler' } })
+
+    await waitFor(() => expect(target.value).toBe('cp:dapr_scheduler'))
+    // App cleared → CP view, so the source chips (app-only UI) disappear.
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'daprd' })).toBeNull())
+    expect(screen.queryByRole('button', { name: 'app' })).toBeNull()
   })
 
   it('renders daprd|app source chips reflecting ?source=daprd (no Source select)', async () => {
@@ -514,6 +531,9 @@ describe('Logs', () => {
     await user.click(daprd)
     // still pressed — cannot turn off the last active stream
     expect(daprd).toHaveAttribute('aria-pressed', 'true')
+    // and the state must not have been silently promoted to "both" (which would
+    // also show daprd pressed) — app must remain unpressed.
+    expect(screen.getByRole('button', { name: 'app' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('hides the source chips in control-plane view', async () => {
@@ -522,6 +542,16 @@ describe('Logs', () => {
       http.get('/api/controlplane', () => HttpResponse.json(CP_LIST_BASE)),
     )
     renderAt('/logs?cp=dapr_scheduler')
+    await screen.findByRole('combobox', { name: /Target/i })
+    expect(screen.queryByRole('button', { name: 'daprd' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'app' })).toBeNull()
+  })
+
+  it('hides the source chips before any target is chosen', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+    )
+    renderAt('/logs')
     await screen.findByRole('combobox', { name: /Target/i })
     expect(screen.queryByRole('button', { name: 'daprd' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'app' })).toBeNull()
@@ -1129,7 +1159,7 @@ describe('Logs', () => {
     expect(logfoot?.textContent).toMatch(/tail \d+ KB/)
   })
 
-  it('app dropdown lists duplicate-app-id compose instances as distinct options keyed by instanceKey', async () => {
+  it('Target dropdown lists duplicate-app-id compose instances as distinct options keyed by instanceKey', async () => {
     const host1 = { ...COMPOSE_SUMMARY, appId: 'daprmq-service', instanceKey: 'daprmq-host-1' }
     const host2 = { ...COMPOSE_SUMMARY, appId: 'daprmq-service', instanceKey: 'daprmq-host-2' }
     server.use(
