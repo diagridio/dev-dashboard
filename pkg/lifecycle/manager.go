@@ -149,6 +149,14 @@ func (m *manager) doStandalone(ctx context.Context, in discovery.Instance, targe
 	if in.SidecarOrphaned && action != ActionStop {
 		return fmt.Errorf("%w: orphaned sidecar — only stop is supported", ErrUnsupported)
 	}
+	// Restart and start only work reliably for Docker Compose apps, where the
+	// container runtime restarts containers cleanly. For dapr-run instances the
+	// re-run-from-snapshot path is unreliable, so only stop is offered. The
+	// standaloneStart machinery below stays in place, dormant behind this gate,
+	// for when standalone start becomes reliable.
+	if action != ActionStop {
+		return fmt.Errorf("%w: restart and start are only supported for Docker Compose apps", ErrUnsupported)
+	}
 	switch action {
 	case ActionStop:
 		return m.standaloneStop(ctx, in, target)

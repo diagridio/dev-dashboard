@@ -89,7 +89,7 @@ describe('AppDetail', () => {
     expect(posted).toBe(false)
   })
 
-  it('offers Start for a stopped target and hides Start for Aspire', async () => {
+  it('hides Start for a fully stopped Aspire app', async () => {
     server.use(
       http.get('/api/apps/order', () =>
         HttpResponse.json({ ...runningApp, appStatus: 'stopped', daprdStatus: 'stopped', isAspire: true }),
@@ -101,10 +101,10 @@ describe('AppDetail', () => {
     expect(screen.getByText(/Managed by Aspire/)).toBeInTheDocument()
   })
 
-  it('offers per-panel Start for a stopped non-Aspire target', async () => {
+  it('offers per-panel Start for a stopped compose target', async () => {
     server.use(
       http.get('/api/apps/order', () =>
-        HttpResponse.json({ ...runningApp, daprdStatus: 'stopped' }),
+        HttpResponse.json({ ...runningApp, source: 'compose', daprdStatus: 'stopped' }),
       ),
     )
     renderDetail()
@@ -410,6 +410,45 @@ describe('AppDetail', () => {
     await waitFor(() => expect(posted).toBe('all/stop'))
   })
 
+  it('hides Restart and Start for a running dapr run app but keeps Stop and shows a hint', async () => {
+    server.use(http.get('/api/apps/order', () => HttpResponse.json({ ...runningApp, source: 'standalone' })))
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Restart' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Stop' }).length).toBeGreaterThan(0)
+    expect(screen.getByText(/restart and start it from your terminal/i)).toBeInTheDocument()
+  })
+
+  it('keeps Restart for a running compose app', async () => {
+    server.use(http.get('/api/apps/order', () => HttpResponse.json({ ...runningApp, source: 'compose' })))
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getAllByRole('button', { name: 'Restart' }).length).toBeGreaterThan(0)
+    // Nothing is stopped, so no Start button; and no dapr-run hint for compose.
+    expect(screen.queryByText(/restart and start it from your terminal/i)).not.toBeInTheDocument()
+  })
+
+  it('hides Start for a fully stopped dapr run app, offering Remove instead', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          ...runningApp,
+          source: 'standalone',
+          health: 'unknown',
+          appStatus: 'stopped',
+          daprdStatus: 'stopped',
+          appPid: 0,
+          daprdPid: 0,
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: 'Start' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove from list' })).toBeInTheDocument()
+  })
+
   it('renders app protocol when reported', async () => {
     server.use(
       http.get('/api/apps/order', () => HttpResponse.json({ ...runningApp, appProtocol: 'http' })),
@@ -539,27 +578,6 @@ describe('AppDetail', () => {
     // The stopped orphan vanishes from discovery; the page must not dead-end
     // on "App not found" but return to the overview.
     await waitFor(() => expect(screen.getByText('Applications index')).toBeInTheDocument())
-  })
-
-
-  it('offers a single whole-instance Start when a dapr run app is fully stopped', async () => {
-    server.use(
-      http.get('/api/apps/order', () =>
-        HttpResponse.json({
-          ...runningApp,
-          health: 'unknown',
-          appStatus: 'stopped',
-          daprdStatus: 'stopped',
-          appPid: 0,
-          daprdPid: 0,
-        }),
-      ),
-    )
-    renderDetail()
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
-    // Per-panel Starts are hidden: a bare app or bare daprd restart is not
-    // discoverable/useful — the header whole-instance Start is the affordance.
-    expect(screen.getAllByRole('button', { name: 'Start' })).toHaveLength(1)
   })
 
   it('removes a fully stopped instance from the list and returns to the overview', async () => {

@@ -124,7 +124,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
         {status === 'running' && (
           <>
-            {!app.isAspire && !orphaned && (
+            {isCompose && (
               <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'restart', what)}>
                 Restart
               </button>
@@ -134,10 +134,10 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             </button>
           </>
         )}
-        {/* Per-panel Start is hidden for fully-stopped dapr run apps: a bare
-            half-restart is not discoverable — the header's whole-instance Start
-            is the affordance. Compose keeps per-container starts. */}
-        {status === 'stopped' && !app.isAspire && !orphaned && (isCompose || !allStopped) && (
+        {/* Restart and Start are Compose-only: they only work reliably for
+            containers driven by the runtime. dapr-run/Aspire panels show Stop
+            only. */}
+        {status === 'stopped' && isCompose && (
           <button className="btn ghost" disabled={busy} onClick={() => runAction(target, 'start', what)}>
             Start
           </button>
@@ -182,7 +182,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         <div style={{ display: 'flex', gap: 8 }}>
           {caps.lifecycle && !isTestcontainers && anyRunning && (
             <>
-              {!app.isAspire && !orphaned && (
+              {isCompose && (
                 <button
                   className="btn ghost"
                   disabled={busy}
@@ -205,7 +205,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               Remove from list
             </button>
           )}
-          {caps.lifecycle && !isTestcontainers && allStopped && !app.isAspire && !orphaned && (
+          {caps.lifecycle && isCompose && allStopped && (
             <button
               className="btn ghost"
               disabled={busy}
@@ -236,6 +236,11 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       {app.sidecarOrphaned && (
         <div className="hint">
           Orphaned sidecar — this daprd has no supervising dapr CLI and its app is gone. Stopping it is safe.
+        </div>
+      )}
+      {caps.lifecycle && app.source === 'standalone' && !app.isAspire && !orphaned && anyRunning && (
+        <div className="hint">
+          Started with <span className="mono">dapr run</span> — restart and start it from your terminal.
         </div>
       )}
 
