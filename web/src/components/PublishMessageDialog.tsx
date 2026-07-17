@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Modal } from './Modal'
 import { usePublishMessage } from '../hooks/usePublishMessage'
@@ -26,6 +26,19 @@ export function PublishMessageDialog({ open, onClose, instanceKey, appId, pubsub
   const [rawPayload, setRawPayload] = useState(false)
   const [jsonError, setJsonError] = useState('')
   const pub = usePublishMessage(instanceKey)
+
+  // Reset form whenever the dialog opens.
+  useEffect(() => {
+    if (!open) return
+    setData('{}')
+    setContentType('application/json')
+    setShowAdvanced(false)
+    setTtl('')
+    setRawPayload(false)
+    setJsonError('')
+    pub.reset()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   function submit() {
     setJsonError('')
