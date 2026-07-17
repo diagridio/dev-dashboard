@@ -478,6 +478,18 @@ describe('Logs', () => {
     expect(app).toHaveAttribute('aria-pressed', 'false')
   })
 
+  it('reflects ?source=app as only the app chip pressed', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+    renderAt('/logs?app=order&source=app')
+    const daprd = await screen.findByRole('button', { name: 'daprd' })
+    const app = screen.getByRole('button', { name: 'app' })
+    await waitFor(() => expect(app).toHaveAttribute('aria-pressed', 'true'))
+    expect(daprd).toHaveAttribute('aria-pressed', 'false')
+  })
+
   it('toggling the app chip while on daprd yields source=both (adds the stream)', async () => {
     const user = userEvent.setup()
     server.use(
