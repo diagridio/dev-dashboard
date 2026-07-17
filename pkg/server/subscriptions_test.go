@@ -39,3 +39,13 @@ func TestSubscriptionsRowsCarryInstanceKey(t *testing.T) {
 	require.Contains(t, body, `"instanceKey":"daprmq-host-1"`)
 	require.Contains(t, body, `"instanceKey":"cart"`)
 }
+
+func TestSubscriptionsCarryReachable(t *testing.T) {
+	apps := &fakeApps{instances: []discovery.Instance{
+		{AppID: "order", SidecarReachable: true, Subscriptions: []discovery.Subscription{{PubsubName: "pubsub", Topic: "orders"}}},
+	}}
+	h := subscriptionsRouter(apps)
+	res, body := get(t, h, "/")
+	require.Equal(t, http.StatusOK, res.StatusCode)
+	require.Contains(t, body, `"reachable":true`)
+}

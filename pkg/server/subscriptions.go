@@ -17,6 +17,7 @@ type SubscriptionRow struct {
 	Rules           []discovery.SubRule `json:"rules,omitempty"`
 	DeadLetterTopic string              `json:"deadLetterTopic,omitempty"`
 	Type            string              `json:"type,omitempty"`
+	Reachable       bool                `json:"reachable"`
 }
 
 func subscriptionsRouter(apps discovery.Service) http.Handler {
@@ -42,6 +43,7 @@ func subscriptionsRouter(apps discovery.Service) http.Handler {
 					Rules:           s.Rules,
 					DeadLetterTopic: s.DeadLetterTopic,
 					Type:            s.Type,
+					Reachable:       in.SidecarReachable,
 				})
 			}
 		}

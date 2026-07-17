@@ -51,8 +51,8 @@ describe('Subscriptions', () => {
     expect(row.getByText('orders')).toBeInTheDocument()
     expect(row.getByText('pubsub')).toBeInTheDocument()
     expect(row.getByText('/orders')).toBeInTheDocument()
-    // Scopes absent → em-dash(s) rendered as .none (dead-letter + scopes both show —)
-    expect(row.getAllByText('—').length).toBeGreaterThanOrEqual(1)
+    // programmatic type badge is shown
+    expect(row.getByText('programmatic')).toBeInTheDocument()
   })
 
   it('shows a rules badge when subscription has more than one rule', async () => {
@@ -96,27 +96,39 @@ describe('Subscriptions', () => {
     expect(row.getByText('orders-dlq')).toBeInTheDocument()
   })
 
-  it('renders scope chips when scopes are present', async () => {
+  it('does not render a Scopes column', async () => {
+    server.use(
+      http.get('/api/subscriptions', () =>
+        HttpResponse.json([{ appId: 'order', pubsubName: 'pubsub', topic: 'orders' }]),
+      ),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'order' })
+    expect(screen.queryByRole('columnheader', { name: /scopes/i })).not.toBeInTheDocument()
+  })
+
+  it('expands multi-rule subscriptions to show match/path', async () => {
     server.use(
       http.get('/api/subscriptions', () =>
         HttpResponse.json([
           {
-            appId: 'billing',
+            appId: 'order',
             pubsubName: 'pubsub',
-            topic: 'payments',
-            rules: [{ match: '', path: '/payments' }],
-            scopes: ['billing'],
+            topic: 'orders',
+            rules: [
+              { match: 'event.type == "A"', path: '/orders/a' },
+              { match: 'event.type == "B"', path: '/orders/b' },
+            ],
           },
         ]),
       ),
     )
     renderAt()
-    const link = await screen.findByRole('link', { name: 'billing' })
-    const rowEl = link.closest('tr') as HTMLElement
-    // Scope chip is a .appref span; the app link also contains "billing" — query by class
-    const scopeChip = rowEl.querySelector('.appref')
-    expect(scopeChip).toBeInTheDocument()
-    expect(scopeChip?.textContent).toBe('billing')
+    await screen.findByRole('link', { name: 'order' })
+    const badge = screen.getByRole('button', { name: /2 rules/i })
+    await userEvent.click(badge)
+    expect(await screen.findByText('event.type == "A"')).toBeInTheDocument()
+    expect(screen.getByText('/orders/b')).toBeInTheDocument()
   })
 
   it('shows friendly empty state when no subscriptions exist', async () => {
@@ -178,5 +190,29 @@ describe('Subscriptions', () => {
     renderAt()
     const links = await screen.findAllByRole('link', { name: /daprmq-service/ })
     expect(links.map(l => l.getAttribute('href'))).toEqual(['/apps/daprmq-host-1', '/apps/daprmq-host-2'])
+  })
+
+  it('opens the publish dialog from a reachable row', async () => {
+    server.use(
+      http.get('/api/subscriptions', () =>
+        HttpResponse.json([{ appId: 'order', pubsubName: 'pubsub', topic: 'orders', reachable: true }]),
+      ),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'order' })
+    await userEvent.click(screen.getByRole('button', { name: /publish/i }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/publish a message/i)).toBeInTheDocument()
+  })
+
+  it('disables Publish when the sidecar is unreachable', async () => {
+    server.use(
+      http.get('/api/subscriptions', () =>
+        HttpResponse.json([{ appId: 'order', pubsubName: 'pubsub', topic: 'orders', reachable: false }]),
+      ),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'order' })
+    expect(screen.getByRole('button', { name: /publish/i })).toBeDisabled()
   })
 })

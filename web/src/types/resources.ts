@@ -21,7 +21,7 @@ export interface Subscription {
   rules?: SubRule[]
   deadLetterTopic?: string
   type?: string
-  scopes?: string[]
+  reachable?: boolean
 }
 
 export type ResourceKind = 'component' | 'configuration'
