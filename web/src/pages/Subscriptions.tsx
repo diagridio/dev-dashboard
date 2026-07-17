@@ -118,7 +118,7 @@ function SubscriptionRow({ sub, onPublish }: { sub: Subscription; onPublish: () 
     <>
       <tr>
         <td className="b">
-          <Link to={`/apps/${key}`}>
+          <Link className="celllink" to={`/apps/${key}`}>
             {sub.appId}
             {key !== sub.appId && (
               <span className="muted" style={{ fontSize: 11, fontWeight: 400, marginLeft: 6 }}>({key})</span>

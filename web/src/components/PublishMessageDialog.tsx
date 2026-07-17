@@ -65,53 +65,59 @@ export function PublishMessageDialog({ open, onClose, instanceKey, appId, pubsub
 
       {pub.isSuccess ? (
         <div>
-          <p className="ok">Published to {topic}.</p>
+          <p>Published to <span className="mono">{topic}</span>.</p>
           <p>
-            <Link to={`/logs?app=${encodeURIComponent(appId)}&source=app`}>Open {appId} logs</Link> to watch it get
-            handled.
+            <Link className="celllink" to={`/logs?app=${encodeURIComponent(appId)}&source=app`}>Open {appId} logs</Link> to
+            watch it get handled.
           </p>
           <div className="modal-actions">
-            <button type="button" onClick={onClose}>Close</button>
+            <button type="button" className="btn ghost" onClick={onClose}>Close</button>
           </div>
         </div>
       ) : (
         <div>
-          <label htmlFor="pub-data">Payload</label>
-          <textarea
-            id="pub-data"
-            className="mono"
-            rows={6}
-            value={data}
-            onChange={(e) => setData(e.target.value)}
-          />
-          {jsonError && <p className="err">{jsonError}</p>}
+          <div className="field">
+            <label htmlFor="pub-data">Payload</label>
+            <textarea
+              id="pub-data"
+              className="inp mono"
+              rows={6}
+              value={data}
+              onChange={(e) => setData(e.target.value)}
+            />
+            {jsonError && <p className="field-err">{jsonError}</p>}
+          </div>
 
-          <label htmlFor="pub-ct">Content-Type</label>
-          <select id="pub-ct" value={contentType} onChange={(e) => setContentType(e.target.value)}>
-            {CONTENT_TYPES.map((ct) => (
-              <option key={ct} value={ct}>{ct}</option>
-            ))}
-          </select>
+          <div className="field">
+            <label htmlFor="pub-ct">Content-Type</label>
+            <select id="pub-ct" className="inp" value={contentType} onChange={(e) => setContentType(e.target.value)}>
+              {CONTENT_TYPES.map((ct) => (
+                <option key={ct} value={ct}>{ct}</option>
+              ))}
+            </select>
+          </div>
 
-          <button type="button" className="linklike" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((v) => !v)}>
+          <button type="button" className="btn ghost" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((v) => !v)}>
             {showAdvanced ? 'Hide' : 'Show'} advanced
           </button>
           {showAdvanced && (
-            <div>
-              <label htmlFor="pub-ttl">ttlInSeconds</label>
-              <input id="pub-ttl" type="number" min="0" value={ttl} onChange={(e) => setTtl(e.target.value)} />
-              <label>
+            <>
+              <div className="field">
+                <label htmlFor="pub-ttl">ttlInSeconds</label>
+                <input id="pub-ttl" className="inp" type="number" min="0" value={ttl} onChange={(e) => setTtl(e.target.value)} />
+              </div>
+              <label className="childtoggle">
                 <input type="checkbox" checked={rawPayload} onChange={(e) => setRawPayload(e.target.checked)} /> rawPayload
                 (bypass CloudEvent wrapping)
               </label>
-            </div>
+            </>
           )}
 
           {pub.isError && <p className="err">{(pub.error as Error).message}</p>}
 
           <div className="modal-actions">
-            <button type="button" onClick={onClose}>Cancel</button>
-            <button type="button" className="primary" disabled={pub.isPending} onClick={submit}>
+            <button type="button" className="btn ghost" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn primary" disabled={pub.isPending} onClick={submit}>
               Publish
             </button>
           </div>
