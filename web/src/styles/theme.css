@@ -292,6 +292,7 @@ pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; 
 .lvchips { display: inline-flex; gap: 5px; }
 .lvchip { font: inherit; font-family: var(--mono); font-size: 10.5px; padding: 6px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; text-transform: uppercase; letter-spacing: .05em; }
 .lvchip[aria-pressed="true"] { color: var(--text); border-color: var(--faint); background: var(--surface-2); }
+.srcchips { margin-right: 2px; }
 .followbtn { font: inherit; font-size: 12.5px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 9px; padding: 7px 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
 .followbtn .d { width: 8px; height: 8px; border-radius: 50%; background: var(--done-fg); animation: beat 2.4s ease-out infinite; }
 .followbtn.on { color: var(--text); border-color: color-mix(in srgb, var(--done-fg) 45%, transparent); }

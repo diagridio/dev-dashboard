@@ -432,6 +432,20 @@ export function Logs() {
     })
   }
 
+  function toggleSource(stream: 'daprd' | 'app') {
+    const active = new Set<'daprd' | 'app'>(
+      source === 'both' ? ['daprd', 'app'] : [source],
+    )
+    if (active.has(stream)) {
+      if (active.size === 1) return // at-least-one-on invariant
+      active.delete(stream)
+    } else {
+      active.add(stream)
+    }
+    const next: LogSource = active.size === 2 ? 'both' : active.has('daprd') ? 'daprd' : 'app'
+    onSourceChange(next)
+  }
+
   function toggleLevel(level: LogLevel) {
     setActiveLevels(prev => {
       const next = new Set(prev)
@@ -493,7 +507,7 @@ export function Logs() {
         </div>
       </div>
 
-      {/* Single unified logbar: target select · source select · lvchips · search · followbtn */}
+      {/* Single unified logbar: target select · source chips · lvchips · search · followbtn */}
       <div className="logbar">
         <select
           className="select"
@@ -523,17 +537,24 @@ export function Logs() {
           )}
         </select>
 
-        <select
-          className="select"
-          data-cy="log-source"
-          value={source}
-          onChange={e => onSourceChange(e.target.value as LogSource)}
-          aria-label="Source"
-        >
-          <option value="both">daprd + app</option>
-          <option value="daprd">daprd only</option>
-          <option value="app">app only</option>
-        </select>
+        {!isCpView && appId && (
+          <div className="lvchips srcchips" role="group" aria-label="Source">
+            {(['daprd', 'app'] as const).map(stream => {
+              const active = source === 'both' || source === stream
+              return (
+                <button
+                  key={stream}
+                  className="lvchip"
+                  data-cy={`log-source-${stream}`}
+                  aria-pressed={active}
+                  onClick={() => toggleSource(stream)}
+                >
+                  {stream}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         <div className="lvchips" role="group" aria-label="Levels">
           {ALL_LEVELS.map(level => (
