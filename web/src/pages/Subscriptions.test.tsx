@@ -191,4 +191,28 @@ describe('Subscriptions', () => {
     const links = await screen.findAllByRole('link', { name: /daprmq-service/ })
     expect(links.map(l => l.getAttribute('href'))).toEqual(['/apps/daprmq-host-1', '/apps/daprmq-host-2'])
   })
+
+  it('opens the publish dialog from a reachable row', async () => {
+    server.use(
+      http.get('/api/subscriptions', () =>
+        HttpResponse.json([{ appId: 'order', pubsubName: 'pubsub', topic: 'orders', reachable: true }]),
+      ),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'order' })
+    await userEvent.click(screen.getByRole('button', { name: /publish/i }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByText(/publish a message/i)).toBeInTheDocument()
+  })
+
+  it('disables Publish when the sidecar is unreachable', async () => {
+    server.use(
+      http.get('/api/subscriptions', () =>
+        HttpResponse.json([{ appId: 'order', pubsubName: 'pubsub', topic: 'orders', reachable: false }]),
+      ),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'order' })
+    expect(screen.getByRole('button', { name: /publish/i })).toBeDisabled()
+  })
 })

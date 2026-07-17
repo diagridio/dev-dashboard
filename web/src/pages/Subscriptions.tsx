@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useSubscriptions } from '../hooks/useResources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
+import { PublishMessageDialog } from '../components/PublishMessageDialog'
 import type { Subscription } from '../types/resources'
 
 export function Subscriptions() {
   const [searchParams, setSearchParams] = useSearchParams()
   const appIdFilter = searchParams.get('appId') ?? undefined
+  const [publishTarget, setPublishTarget] = useState<Subscription | null>(null)
 
   useDocumentTitle(appIdFilter ? `Subscriptions — ${appIdFilter}` : 'Subscriptions')
 
@@ -73,11 +75,16 @@ export function Subscriptions() {
                 <th>Route(s)</th>
                 <th>Type</th>
                 <th>Dead-letter topic</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {subscriptions.map((sub) => (
-                <SubscriptionRow key={`${sub.instanceKey ?? sub.appId}/${sub.pubsubName}/${sub.topic}`} sub={sub} />
+                <SubscriptionRow
+                  key={`${sub.instanceKey ?? sub.appId}/${sub.pubsubName}/${sub.topic}`}
+                  sub={sub}
+                  onPublish={() => setPublishTarget(sub)}
+                />
               ))}
             </tbody>
           </table>
@@ -86,11 +93,21 @@ export function Subscriptions() {
       <p className="hint">
         Topics with routing rules show a <span className="rulebadge">rules</span> badge — click it to inspect match expressions.
       </p>
+      {publishTarget && (
+        <PublishMessageDialog
+          open
+          onClose={() => setPublishTarget(null)}
+          instanceKey={publishTarget.instanceKey ?? publishTarget.appId}
+          appId={publishTarget.appId}
+          pubsubName={publishTarget.pubsubName}
+          topic={publishTarget.topic}
+        />
+      )}
     </div>
   )
 }
 
-function SubscriptionRow({ sub }: { sub: Subscription }) {
+function SubscriptionRow({ sub, onPublish }: { sub: Subscription; onPublish: () => void }) {
   const [expanded, setExpanded] = useState(false)
   const rules = sub.rules ?? []
   const firstPath = rules[0]?.path
@@ -131,10 +148,21 @@ function SubscriptionRow({ sub }: { sub: Subscription }) {
             <span className="none">—</span>
           )}
         </td>
+        <td>
+          <button
+            type="button"
+            className="rowbtn"
+            disabled={sub.reachable === false}
+            title={sub.reachable === false ? 'Sidecar unreachable' : 'Publish a test message'}
+            onClick={onPublish}
+          >
+            Publish
+          </button>
+        </td>
       </tr>
       {expanded && (
         <tr className="subrules">
-          <td colSpan={6}>
+          <td colSpan={7}>
             <ul className="rulelist">
               {rules.map((r, i) => (
                 <li key={i}>
