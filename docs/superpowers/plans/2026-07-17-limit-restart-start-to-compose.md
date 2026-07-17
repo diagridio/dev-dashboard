@@ -121,7 +121,7 @@ Keep `fakeStarter` (still used by `TestStandaloneStartRestartRejected`). Keep al
 
 - [ ] **Step 6: Run the full lifecycle package tests**
 
-Run: `go test ./pkg/lifecycle/... ./pkg/server/...`
+Run: `make test-go` (server tests sit behind the `//go:build unit` tag, so `make test-go` / `go test -tags unit ./...` is required; a plain `go test ./pkg/server/...` silently reports "no test files").
 Expected: PASS. (`pkg/server/apps_test.go` already maps `ErrUnsupported` → HTTP 400 via a `fakeLifecycle` double, so no server test changes are needed.)
 
 - [ ] **Step 7: Build the Go module**
