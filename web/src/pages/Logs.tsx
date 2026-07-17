@@ -387,7 +387,7 @@ export function Logs() {
   const cp = cpNames.includes(cpParam) ? cpParam : ''
   // A cp target that isn't (yet) in the list is pending until the fetch
   // settles — /api/controlplane shells out to docker and can take seconds, and
-  // we must not claim "Select an app" for a valid compose deep link meanwhile.
+  // we must not claim "Select a target" for a valid compose deep link meanwhile.
   const cpPending = cpParam !== '' && cp === '' && cpList === undefined && !cpListError
 
   const [activeLevels, setActiveLevels] = useState<Set<LogLevel>>(new Set(ALL_LEVELS))
@@ -402,13 +402,24 @@ export function Logs() {
 
   const { data: app, isLoading } = useApp(appId)
 
-  function onAppChange(id: string) {
+  const targetValue = cp ? `cp:${cp}` : appId ? `app:${appId}` : ''
+
+  function onTargetChange(value: string) {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
-      if (id) next.set('app', id)
-      else next.delete('app')
-      // Clear cp when switching to an app
-      next.delete('cp')
+      const sep = value.indexOf(':')
+      const kind = sep === -1 ? '' : value.slice(0, sep)
+      const name = sep === -1 ? '' : value.slice(sep + 1)
+      if (kind === 'app') {
+        next.set('app', name)
+        next.delete('cp')
+      } else if (kind === 'cp') {
+        next.set('cp', name)
+        next.delete('app')
+      } else {
+        next.delete('app')
+        next.delete('cp')
+      }
       return next
     })
   }
@@ -417,24 +428,6 @@ export function Logs() {
     setSearchParams(prev => {
       const next = new URLSearchParams(prev)
       next.set('source', s)
-      return next
-    })
-  }
-
-  function onCpChange(name: string) {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      next.set('cp', name)
-      // Clear app selection when switching to control-plane view
-      next.delete('app')
-      return next
-    })
-  }
-
-  function clearCp() {
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev)
-      next.delete('cp')
       return next
     })
   }
@@ -500,21 +493,34 @@ export function Logs() {
         </div>
       </div>
 
-      {/* Single unified logbar: app select · source select · lvchips · search · followbtn */}
+      {/* Single unified logbar: target select · source select · lvchips · search · followbtn */}
       <div className="logbar">
         <select
           className="select"
-          data-cy="log-app"
-          value={appId}
-          onChange={e => onAppChange(e.target.value)}
-          aria-label="App"
+          data-cy="log-target"
+          value={targetValue}
+          onChange={e => onTargetChange(e.target.value)}
+          aria-label="Target"
         >
-          <option value="">— select app —</option>
-          {appOptions.map(o => (
-            <option key={o.key} value={o.key}>
-              {o.label}
-            </option>
-          ))}
+          <option value="">— select target —</option>
+          {appOptions.length > 0 && (
+            <optgroup label="Applications">
+              {appOptions.map(o => (
+                <option key={`app:${o.key}`} value={`app:${o.key}`}>
+                  {o.label}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {cpNames.length > 0 && (
+            <optgroup label="Control plane">
+              {cpNames.map(name => (
+                <option key={`cp:${name}`} value={`cp:${name}`}>
+                  {name}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
 
         <select
@@ -527,26 +533,6 @@ export function Logs() {
           <option value="both">daprd + app</option>
           <option value="daprd">daprd only</option>
           <option value="app">app only</option>
-        </select>
-
-        {/* Control-plane service selector — slots alongside the existing source selector */}
-        <select
-          className="select"
-          data-cy="log-cp"
-          value={cp}
-          onChange={e => {
-            const val = e.target.value
-            if (val === '') clearCp()
-            else onCpChange(val)
-          }}
-          aria-label="Control Plane"
-        >
-          <option value="">— control plane —</option>
-          {cpNames.map(name => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
         </select>
 
         <div className="lvchips" role="group" aria-label="Levels">
@@ -601,7 +587,7 @@ export function Logs() {
       )}
 
       {!isCpView && !appId && !cpPending && (
-        <p className="muted">Select an app to view logs.</p>
+        <p className="muted">Select a target to view logs.</p>
       )}
 
       {!isCpView && appId && isLoading && (

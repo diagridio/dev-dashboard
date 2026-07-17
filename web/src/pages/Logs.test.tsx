@@ -217,8 +217,8 @@ describe('Logs', () => {
 
     const bar = logbars[0]
 
-    // app select
-    expect(bar.querySelector('[aria-label="App"]')).not.toBeNull()
+    // target select
+    expect(bar.querySelector('[aria-label="Target"]')).not.toBeNull()
     // source select
     expect(bar.querySelector('[aria-label="Source"]')).not.toBeNull()
     // .lvchips group
@@ -396,11 +396,11 @@ describe('Logs', () => {
 
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Logs' })).toBeInTheDocument())
 
-    expect(screen.getByText(/Select an app/)).toBeInTheDocument()
+    expect(screen.getByText(/Select a target/)).toBeInTheDocument()
     expect(FakeES.instances).toHaveLength(0)
   })
 
-  it('renders app and source selects in .logbar', async () => {
+  it('renders source select in .logbar', async () => {
     server.use(
       http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
       http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
@@ -410,9 +410,6 @@ describe('Logs', () => {
 
     await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
 
-    const appSelect = screen.getByRole('combobox', { name: /App/i })
-    expect(appSelect).toBeInTheDocument()
-
     const sourceSelect = screen.getByRole('combobox', { name: /Source/i })
     expect(sourceSelect).toBeInTheDocument()
 
@@ -420,6 +417,50 @@ describe('Logs', () => {
     expect(screen.getByRole('option', { name: 'daprd + app' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'daprd only' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'app only' })).toBeInTheDocument()
+  })
+
+  it('renders a single grouped Target select (no separate App/CP selects)', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+      http.get('/api/controlplane', () => HttpResponse.json(CP_LIST_BASE)),
+    )
+
+    renderAt()
+
+    const target = (await screen.findByRole('combobox', { name: /Target/i })) as HTMLSelectElement
+    expect(target).toBeInTheDocument()
+    // Old peer selects are gone
+    expect(screen.queryByRole('combobox', { name: /^App$/i })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: /Control Plane/i })).toBeNull()
+    // Grouped: an Applications optgroup with the app, a Control plane optgroup with a dapr_* service.
+    // Wait for the async /api/apps + /api/controlplane fetches to populate the options —
+    // the select itself renders synchronously with zero options.
+    await screen.findByRole('option', { name: 'order' })
+    expect(target.querySelector('optgroup[label="Applications"]')).not.toBeNull()
+    expect(target.querySelector('optgroup[label="Control plane"]')).not.toBeNull()
+    expect(screen.getByRole('option', { name: 'dapr_scheduler' })).toBeInTheDocument()
+  })
+
+  it('reflects a ?app deep link as the selected Target', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+    renderAt('/logs?app=order&source=daprd')
+    const target = (await screen.findByRole('combobox', { name: /Target/i })) as HTMLSelectElement
+    await waitFor(() => expect(target.value).toBe('app:order'))
+  })
+
+  it('reflects a ?cp deep link as the selected Target and clears app on switch', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+      http.get('/api/controlplane', () => HttpResponse.json(CP_LIST_BASE)),
+    )
+    renderAt('/logs?cp=dapr_scheduler')
+    const target = (await screen.findByRole('combobox', { name: /Target/i })) as HTMLSelectElement
+    await waitFor(() => expect(target.value).toBe('cp:dapr_scheduler'))
   })
 
   it('falls back to "both" for an invalid ?source= URL param', async () => {
@@ -901,8 +942,8 @@ describe('Logs', () => {
     expect(screen.getByRole('option', { name: 'dapr_placement' })).toBeInTheDocument()
 
     // Statics must not be duplicated by the fetched list.
-    const cpSelect = screen.getByRole('combobox', { name: /Control Plane/i })
-    const names = Array.from(cpSelect.querySelectorAll('option')).map(o => o.textContent)
+    const target = screen.getByRole('combobox', { name: /Target/i })
+    const names = Array.from(target.querySelectorAll('option')).map(o => o.textContent)
     expect(names.filter(n => n === 'dapr_placement')).toHaveLength(1)
   })
 
@@ -959,7 +1000,7 @@ describe('Logs', () => {
     expect(await screen.findByText(/placement raft leader/)).toBeInTheDocument()
   })
 
-  it('CP — while the CP list is still loading, a ?cp= deep link shows loading, not "Select an app"', async () => {
+  it('CP — while the CP list is still loading, a ?cp= deep link shows loading, not "Select a target"', async () => {
     server.use(
       http.get('/api/apps', () => HttpResponse.json([])),
       http.get('/api/controlplane', async () => {
@@ -974,8 +1015,8 @@ describe('Logs', () => {
       expect(screen.getByRole('heading', { name: 'Logs' })).toBeInTheDocument(),
     )
     // The compose name can't be validated until the fetch lands — but the page
-    // must not claim "Select an app" while a cp target is pending.
-    expect(screen.queryByText(/Select an app/)).toBeNull()
+    // must not claim "Select a target" while a cp target is pending.
+    expect(screen.queryByText(/Select a target/)).toBeNull()
 
     // Once the list arrives the CP stream mounts.
     await waitFor(() => expect(FakeES.instances.length).toBeGreaterThanOrEqual(1))
@@ -995,9 +1036,9 @@ describe('Logs', () => {
       expect(screen.getByRole('option', { name: 'saga-placement-1' })).toBeInTheDocument(),
     )
     expect(FakeES.instances).toHaveLength(0)
-    const cpSelect = screen.getByRole('combobox', { name: /Control Plane/i }) as HTMLSelectElement
-    expect(cpSelect.value).toBe('')
-    expect(screen.getByText(/Select an app/)).toBeInTheDocument()
+    const target = screen.getByRole('combobox', { name: /Target/i }) as HTMLSelectElement
+    expect(target.value).toBe('')
+    expect(screen.getByText(/Select a target/)).toBeInTheDocument()
   })
 
   // F5: logfoot tail size
@@ -1032,11 +1073,11 @@ describe('Logs', () => {
       ),
     )
     renderAt('/logs?app=daprmq-host-1&source=daprd')
-    const select = await screen.findByLabelText('App')
+    const select = await screen.findByLabelText('Target')
     await waitFor(() => {
       const values = Array.from(select.querySelectorAll('option')).map(o => o.value)
-      expect(values).toContain('daprmq-host-1')
-      expect(values).toContain('daprmq-host-2')
+      expect(values).toContain('app:daprmq-host-1')
+      expect(values).toContain('app:daprmq-host-2')
     })
     // Labels disambiguate: app id + container name.
     expect(screen.getByRole('option', { name: 'daprmq-service (daprmq-host-1)' })).toBeInTheDocument()
