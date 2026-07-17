@@ -89,7 +89,7 @@ describe('AppDetail', () => {
     expect(posted).toBe(false)
   })
 
-  it('offers Start for a stopped target and hides Start for Aspire', async () => {
+  it('hides Start for a fully stopped Aspire app', async () => {
     server.use(
       http.get('/api/apps/order', () =>
         HttpResponse.json({ ...runningApp, appStatus: 'stopped', daprdStatus: 'stopped', isAspire: true }),
