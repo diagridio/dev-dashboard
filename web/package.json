@@ -16,7 +16,7 @@
     "js-yaml": "^5.2.1",
     "react": "^19",
     "react-dom": "^19",
-    "react-router-dom": "^6.26.0"
+    "react-router-dom": "^7.18.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
