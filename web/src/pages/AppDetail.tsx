@@ -13,14 +13,14 @@ import { appKey } from '../lib/appKey'
 import { formatUptime, useNow } from '../lib/uptime'
 import { getCapabilities } from '../lib/capabilities'
 import { modeLabel } from '../lib/modeLabel'
-import { useAppModeTelemetry } from '../hooks/useAppModeTelemetry'
+import { useAppTelemetry } from '../hooks/useAppTelemetry'
 
 // ---------- content ----------
 
 function AppDetailContent({ app }: { app: AppDetailType }) {
   const navigate = useNavigate()
   const { toast, toastNode } = useToast()
-  useAppModeTelemetry(app)
+  useAppTelemetry(app)
 
   useDocumentTitle(appKey(app))
 
