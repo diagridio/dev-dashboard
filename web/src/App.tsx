@@ -7,6 +7,7 @@ import { CliDrawer } from './components/CliDrawer'
 import { getTheme, type Theme } from './lib/prefs'
 import { safeGet } from './lib/safeStorage'
 import { trackAction, trackView } from './lib/telemetry'
+import { useDiscoveryTelemetry } from './hooks/useDiscoveryTelemetry'
 
 const SIDEBAR_COLLAPSED_KEY = 'devdash.sidebarCollapsed'
 
@@ -36,6 +37,11 @@ export function App() {
     appId: leafParams.appId ?? searchParams.get('app') ?? undefined,
     instanceId: leafParams.instanceId ?? undefined,
   }
+
+  // Mounted here (not per-route) so the ['apps'] react-query stays active on
+  // every route, keeping the `modes` telemetry context live app-wide — do
+  // not "optimize" this by moving it closer to where apps are displayed.
+  useDiscoveryTelemetry()
 
   useEffect(() => {
     trackAction('app_startup')

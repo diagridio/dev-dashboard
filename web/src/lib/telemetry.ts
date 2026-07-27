@@ -66,3 +66,15 @@ export function trackError(error: unknown, context?: Record<string, unknown>): v
 export function trackView(name: string): void {
   runOrBuffer((r) => r.startView(name))
 }
+
+/** Sets a RUM global-context property, once enabled. Buffered until
+ * initTelemetry() has resolved; dropped if telemetry is disabled. */
+export function setTelemetryContext(key: string, value: unknown): void {
+  runOrBuffer((r) => r.setGlobalContextProperty(key, value))
+}
+
+/** Removes a RUM global-context property, once enabled. Buffered until
+ * initTelemetry() has resolved; dropped if telemetry is disabled. */
+export function removeTelemetryContext(key: string): void {
+  runOrBuffer((r) => r.removeGlobalContextProperty(key))
+}

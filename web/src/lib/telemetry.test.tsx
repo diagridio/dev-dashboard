@@ -4,6 +4,8 @@ const initMock = vi.fn()
 const addActionMock = vi.fn()
 const addErrorMock = vi.fn()
 const startViewMock = vi.fn()
+const setGlobalContextPropertyMock = vi.fn()
+const removeGlobalContextPropertyMock = vi.fn()
 
 vi.mock('@datadog/browser-rum', () => ({
   datadogRum: {
@@ -11,6 +13,8 @@ vi.mock('@datadog/browser-rum', () => ({
     addAction: addActionMock,
     addError: addErrorMock,
     startView: startViewMock,
+    setGlobalContextProperty: setGlobalContextPropertyMock,
+    removeGlobalContextProperty: removeGlobalContextPropertyMock,
   },
 }))
 
@@ -20,6 +24,8 @@ beforeEach(() => {
   addActionMock.mockClear()
   addErrorMock.mockClear()
   startViewMock.mockClear()
+  setGlobalContextPropertyMock.mockClear()
+  removeGlobalContextPropertyMock.mockClear()
   delete (window as { __DASH_TELEMETRY_ENABLED__?: boolean }).__DASH_TELEMETRY_ENABLED__
   delete (window as { __DASH_VERSION__?: string }).__DASH_VERSION__
 })
@@ -124,5 +130,41 @@ describe('initTelemetry', () => {
     trackAction('nav_click', { label: 'Applications' })
 
     expect(addActionMock).toHaveBeenCalledWith('nav_click', { label: 'Applications' })
+  })
+})
+
+describe('setTelemetryContext / removeTelemetryContext', () => {
+  it('delegates to the RUM SDK once enabled', async () => {
+    window.__DASH_TELEMETRY_ENABLED__ = true
+    const { initTelemetry, setTelemetryContext, removeTelemetryContext } = await import('./telemetry')
+    await initTelemetry()
+
+    setTelemetryContext('mode_filter', 'compose')
+    expect(setGlobalContextPropertyMock).toHaveBeenCalledWith('mode_filter', 'compose')
+
+    removeTelemetryContext('app_mode')
+    expect(removeGlobalContextPropertyMock).toHaveBeenCalledWith('app_mode')
+  })
+
+  it('buffers a call made before initTelemetry resolves and flushes it', async () => {
+    window.__DASH_TELEMETRY_ENABLED__ = true
+    const { initTelemetry, setTelemetryContext } = await import('./telemetry')
+
+    const initPromise = initTelemetry()
+    setTelemetryContext('modes', ['compose'])
+    expect(setGlobalContextPropertyMock).not.toHaveBeenCalled()
+
+    await initPromise
+    expect(setGlobalContextPropertyMock).toHaveBeenCalledWith('modes', ['compose'])
+  })
+
+  it('does nothing when telemetry is disabled', async () => {
+    const { initTelemetry, setTelemetryContext, removeTelemetryContext } = await import('./telemetry')
+    await initTelemetry()
+
+    setTelemetryContext('mode_filter', 'all')
+    removeTelemetryContext('app_mode')
+    expect(setGlobalContextPropertyMock).not.toHaveBeenCalled()
+    expect(removeGlobalContextPropertyMock).not.toHaveBeenCalled()
   })
 })

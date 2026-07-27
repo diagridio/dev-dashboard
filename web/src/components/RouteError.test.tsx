@@ -9,7 +9,7 @@ import { RefreshProvider } from '../lib/refresh'
 import { ConnectionContext } from '../lib/connection'
 import { trackError } from '../lib/telemetry'
 
-vi.mock('../lib/telemetry', () => ({ trackError: vi.fn(), trackAction: vi.fn(), trackView: vi.fn() }))
+vi.mock('../lib/telemetry', () => ({ trackError: vi.fn(), trackAction: vi.fn(), trackView: vi.fn(), setTelemetryContext: vi.fn() }))
 
 // jsdom does not implement matchMedia; stub it so SmallScreenGuard works
 beforeAll(() => {
