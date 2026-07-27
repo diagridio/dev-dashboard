@@ -31,7 +31,7 @@ Aspire, or Testcontainers.
   `window.__DASH_CAPABILITIES__` (see `pkg/server/spa.go`), whose `mode` field echoes the
   CLI `--mode` value (`''` = complete scan). The client reads it via
   `getCapabilities().mode` (`web/src/lib/capabilities.ts`).
-- **Per-app runtime** is available on each `AppSummary` as `source`
+- **Per-app mode** is available on each `AppSummary` as `source`
   (`standalone`/`compose`/`testcontainers`/`aspire`/`auto`) plus an `isAspire` flag.
   `web/src/lib/modeLabel.ts` maps these to *pretty UI labels* ("Dapr run",
   "TestContainers", …). The apps list is fetched by `useApps()`
@@ -46,19 +46,19 @@ There are three distinct, complementary signals. We capture **all three**:
 
 1. **`mode_filter`** — the CLI `--mode` filter the user chose. Static, known at page
    load, always present. Empty (`''`) means a complete scan; we normalize that to `"all"`.
-2. **`runtimes`** — the set of runtimes *actually discovered* among running apps. Dynamic;
+2. **`modes`** — the set of modes *actually discovered* among running apps. Dynamic;
    in a complete scan the user may be running a mix. Populates after the first apps poll.
 3. **`app_mode`** — the discovery mode of the *single app the user is currently focused on*
    (viewing its detail page). Present only while a specific app is in focus.
 
 Why all three, and why `app_mode` matters most for errors: `mode_filter` is what the
-user *asked* to scan, and `runtimes` is the *set* actually running — but when the user is
+user *asked* to scan, and `modes` is the *set* actually running — but when the user is
 running a mix (e.g. `--mode all` with both Compose and Aspire apps) and one app breaks,
 neither pins down *how the failing app itself runs*. `app_mode` does: RUM auto-captures
 most errors (uncaught exceptions, promise rejections, console errors) rather than routing
 them through an explicit call site, so the only reliable way to attach the failing app's
-runtime is to keep it in global context while that app is in focus. Any error that fires
-while the user is on that app's page then carries its runtime, regardless of `mode_filter`.
+mode is to keep it in global context while that app is in focus. Any error that fires
+while the user is on that app's page then carries its mode, regardless of `mode_filter`.
 
 ## Design
 
@@ -70,10 +70,10 @@ session (views, actions, resources, long tasks, and errors). Three flat properti
 | Property      | Type       | Example                | Meaning                                                  |
 | ------------- | ---------- | ---------------------- | -------------------------------------------------------- |
 | `mode_filter` | `string`   | `"compose"` / `"all"`  | CLI `--mode` value (`''` → `"all"`)                       |
-| `runtimes`    | `string[]` | `["compose","aspire"]` | Distinct runtimes among discovered apps                  |
+| `modes`    | `string[]` | `["compose","aspire"]` | Distinct modes among discovered apps                  |
 | `app_mode`    | `string`   | `"compose"`            | Discovery mode of the app currently in focus (detail page only) |
 
-In Datadog these surface as `@context.mode_filter`, `@context.runtimes`, and
+In Datadog these surface as `@context.mode_filter`, `@context.modes`, and
 `@context.app_mode`, filterable on any RUM event including Error events. Flat keys (no
 dots) are used deliberately to avoid nested-facet ambiguity. `app_mode` is *absent*
 when no specific app is in focus (e.g. on the apps list) — it is set when an app detail
@@ -127,7 +127,7 @@ intentionally so — it denotes "no filter / scan everything").
    `app_mode` on unmount — cleaner than storing `undefined`. No change to
    `initTelemetry()` itself.
 
-2. **`runtimeToken(app)` — new pure helper** in `web/src/lib/runtimeToken.ts`. Maps
+2. **`modeToken(app)` — new pure helper** in `web/src/lib/modeToken.ts`. Maps
    `Pick<AppSummary, 'source' | 'isAspire'>` to a canonical token or `undefined`. Sibling
    to `modeLabel.ts`, which stays for pretty UI labels. Kept separate because the two
    vocabularies differ (canonical telemetry tokens vs. human labels).
@@ -136,15 +136,15 @@ intentionally so — it denotes "no filter / scan everything").
    keep RUM global context in sync with the current mode. Mounted **once** in `App.tsx`.
    - On mount: `setTelemetryContext('mode_filter', normalizeModeFilter(getCapabilities().mode))`.
    - Subscribes to `useApps()` (shared react-query cache — no extra network request):
-     whenever the data changes, compute the sorted, de-duplicated set of `runtimeToken`s
-     over the apps and call `setTelemetryContext('runtimes', tokens)`. Sorting keeps the
+     whenever the data changes, compute the sorted, de-duplicated set of `modeToken`s
+     over the apps and call `setTelemetryContext('modes', tokens)`. Sorting keeps the
      array stable so identical sets don't churn RUM context.
 
 4. **`useAppModeTelemetry(app)` — new hook** in
    `web/src/hooks/useAppModeTelemetry.ts`. One job: keep `app_mode` in sync with the
    app currently in focus. Called by `AppDetail` once the app has loaded.
    - When the app's mode token changes:
-     `setTelemetryContext('app_mode', runtimeToken(app))` (skipped when the token is
+     `setTelemetryContext('app_mode', modeToken(app))` (skipped when the token is
      `undefined`, e.g. an `auto`/unknown source).
    - On unmount (or when the token becomes `undefined`):
      `removeTelemetryContext('app_mode')`, so an error on a later, non-app page is not
@@ -154,7 +154,7 @@ intentionally so — it denotes "no filter / scan everything").
    tracking effects.
 
 6. **`AppDetail.tsx`** — call `useAppModeTelemetry(app)` from `AppDetailContent`, which
-   already has the loaded `app` (with `source`/`isAspire`) via `useApp()`. `runtimeToken`
+   already has the loaded `app` (with `source`/`isAspire`) via `useApp()`. `modeToken`
    is reused here — no new mapping. (The same pattern generalizes to other app-specific
    pages such as `WorkflowDetail`, but only `AppDetail` is in scope now.)
 
@@ -162,8 +162,8 @@ intentionally so — it denotes "no filter / scan everything").
 
 ```
 window.__DASH_CAPABILITIES__.mode ─► getCapabilities().mode ─► normalizeModeFilter ─► setTelemetryContext('mode_filter', …) ─┐
-GET /api/apps ─► useApps() ─► apps[] ─► runtimeToken(each) ─► distinct sorted set ─► setTelemetryContext('runtimes', […]) ────┼─► RUM global context ─► every RUM event
-AppDetail app ─► runtimeToken(app) ─► setTelemetryContext('app_mode', …) / removeTelemetryContext on unmount ─────────────┘
+GET /api/apps ─► useApps() ─► apps[] ─► modeToken(each) ─► distinct sorted set ─► setTelemetryContext('modes', […]) ────┼─► RUM global context ─► every RUM event
+AppDetail app ─► modeToken(app) ─► setTelemetryContext('app_mode', …) / removeTelemetryContext on unmount ─────────────┘
 ```
 
 ## Behavior & edge cases
@@ -173,12 +173,12 @@ AppDetail app ─► runtimeToken(app) ─► setTelemetryContext('app_mode', �
 - **Ordering:** `mode_filter` is set at mount, which may fire before `initTelemetry()`
   resolves. Buffering guarantees it flushes in order once RUM is ready, so it is present
   on the earliest reported error.
-- **`runtimes` timing:** absent until the first successful apps poll. Early errors still
+- **`modes` timing:** absent until the first successful apps poll. Early errors still
   carry `mode_filter`, so at least one mode dimension is always present.
-- **Empty apps / all-unknown sources:** `runtimes` is set to `[]`. This is a meaningful
+- **Empty apps / all-unknown sources:** `modes` is set to `[]`. This is a meaningful
   signal (dashboard running, nothing discovered) and distinct from "not yet loaded".
 - **Mode changes:** `mode_filter` is fixed for a server process lifetime; the hook sets it
-  once. `runtimes` updates live as apps start/stop across polls.
+  once. `modes` updates live as apps start/stop across polls.
 - **`app_mode` lifetime:** set when an app detail page mounts, removed on unmount.
   Navigating from app A's page to app B's updates it to B; navigating to a non-app page
   removes it. An unknown/`auto` source yields no token, so `app_mode` stays absent
@@ -191,11 +191,11 @@ AppDetail app ─► runtimeToken(app) ─► setTelemetryContext('app_mode', �
   to the RUM mock. Assert `setTelemetryContext`/`removeTelemetryContext` (a) delegate to
   the matching SDK method once enabled, (b) buffer a call made before `initTelemetry()`
   resolves and flush it, (c) do nothing when telemetry is disabled.
-- **`runtimeToken.test.ts`:** every source, the `isAspire` override beating `standalone`,
+- **`modeToken.test.ts`:** every source, the `isAspire` override beating `standalone`,
   and unknown/`auto` → `undefined`.
 - **`useModeTelemetry.test.tsx`:** render with a mocked `useApps` result and stubbed
   telemetry; assert the correct `mode_filter` call (including `''` → `"all"`) and the
-  distinct, sorted `runtimes` call. Verify duplicate sources collapse to one token.
+  distinct, sorted `modes` call. Verify duplicate sources collapse to one token.
 - **`useAppModeTelemetry.test.tsx`:** render with an app; assert
   `setTelemetryContext('app_mode', …)` fires with the right token, that unmount calls
   `removeTelemetryContext('app_mode')`, and that an unknown/`auto`-source app sets
