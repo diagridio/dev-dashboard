@@ -113,3 +113,22 @@ func TestDrop(t *testing.T) {
 	// Verify List is empty
 	require.Len(t, r.List(), 0)
 }
+
+func TestRegistrySuppression(t *testing.T) {
+	r := NewRegistry()
+	require.False(t, r.IsSuppressed("orders"))
+
+	r.Suppress("orders")
+	require.True(t, r.IsSuppressed("orders"))
+
+	// Idempotent.
+	r.Suppress("orders")
+	require.True(t, r.IsSuppressed("orders"))
+
+	r.Unsuppress("orders")
+	require.False(t, r.IsSuppressed("orders"))
+
+	// Unsuppressing an unknown key is a no-op.
+	r.Unsuppress("never")
+	require.False(t, r.IsSuppressed("never"))
+}
