@@ -7,6 +7,7 @@ import { CliDrawer } from './components/CliDrawer'
 import { getTheme, type Theme } from './lib/prefs'
 import { safeGet } from './lib/safeStorage'
 import { trackAction, trackView } from './lib/telemetry'
+import { useModeTelemetry } from './hooks/useModeTelemetry'
 
 const SIDEBAR_COLLAPSED_KEY = 'devdash.sidebarCollapsed'
 
@@ -36,6 +37,8 @@ export function App() {
     appId: leafParams.appId ?? searchParams.get('app') ?? undefined,
     instanceId: leafParams.instanceId ?? undefined,
   }
+
+  useModeTelemetry()
 
   useEffect(() => {
     trackAction('app_startup')
