@@ -32,7 +32,7 @@ Aspire, or Testcontainers.
   CLI `--mode` value (`''` = complete scan). The client reads it via
   `getCapabilities().mode` (`web/src/lib/capabilities.ts`).
 - **Per-app mode** is available on each `AppSummary` as `source`
-  (`standalone`/`compose`/`testcontainers`/`aspire`/`auto`) plus an `isAspire` flag.
+  (`standalone`/`compose`/`testcontainers`/`aspire`, or absent) plus an `isAspire` flag.
   `web/src/lib/modeLabel.ts` maps these to *pretty UI labels* ("Dapr run",
   "TestContainers", …). The apps list is fetched by `useApps()`
   (`web/src/hooks/useApps.ts`) and polled on the global refresh interval.
@@ -98,7 +98,7 @@ This matches the CLI `--mode` vocabulary. App `source`/`isAspire` values map ont
 | `source === 'compose'`                 | `compose`         |
 | `source === 'testcontainers'`          | `test-containers` |
 | `source === 'standalone'`              | `dapr-run`        |
-| anything else (e.g. `auto`, unknown)   | *(omitted)*       |
+| absent or unrecognized source          | *(omitted)*       |
 
 `mode_filter` normalization: a non-empty `getCapabilities().mode` is already in this
 vocabulary and passes through; `''` → `"all"` (the only value outside the token set, and
@@ -145,7 +145,7 @@ intentionally so — it denotes "no filter / scan everything").
    app currently in focus. Called by `AppDetail` once the app has loaded.
    - When the app's mode token changes:
      `setTelemetryContext('app_mode', modeToken(app))` (skipped when the token is
-     `undefined`, e.g. an `auto`/unknown source).
+     `undefined`, e.g. an absent/unknown source).
    - On unmount (or when the token becomes `undefined`):
      `removeTelemetryContext('app_mode')`, so an error on a later, non-app page is not
      attributed to this app.
@@ -181,7 +181,7 @@ AppDetail app ─► modeToken(app) ─► setTelemetryContext('app_mode', …) 
   once. `modes` updates live as apps start/stop across polls.
 - **`app_mode` lifetime:** set when an app detail page mounts, removed on unmount.
   Navigating from app A's page to app B's updates it to B; navigating to a non-app page
-  removes it. An unknown/`auto` source yields no token, so `app_mode` stays absent
+  removes it. An unknown/absent source yields no token, so `app_mode` stays absent
   rather than being set to a placeholder.
 - **No config/server change:** `env` stays `'prod'`; no new injected globals.
 
@@ -192,13 +192,13 @@ AppDetail app ─► modeToken(app) ─► setTelemetryContext('app_mode', …) 
   the matching SDK method once enabled, (b) buffer a call made before `initTelemetry()`
   resolves and flush it, (c) do nothing when telemetry is disabled.
 - **`modeToken.test.ts`:** every source, the `isAspire` override beating `standalone`,
-  and unknown/`auto` → `undefined`.
+  and unknown/absent → `undefined`.
 - **`useModeTelemetry.test.tsx`:** render with a mocked `useApps` result and stubbed
   telemetry; assert the correct `mode_filter` call (including `''` → `"all"`) and the
   distinct, sorted `modes` call. Verify duplicate sources collapse to one token.
 - **`useAppModeTelemetry.test.tsx`:** render with an app; assert
   `setTelemetryContext('app_mode', …)` fires with the right token, that unmount calls
-  `removeTelemetryContext('app_mode')`, and that an unknown/`auto`-source app sets
+  `removeTelemetryContext('app_mode')`, and that an unknown/absent-source app sets
   nothing.
 
 ## Out of scope
