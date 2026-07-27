@@ -75,4 +75,25 @@ describe('useModeTelemetry', () => {
 
     expect(setTelemetryContextMock).toHaveBeenCalledWith('modes', [])
   })
+
+  it('avoids re-sending an equivalent modes set on a new apps array reference, but resends when the set changes', async () => {
+    getCapabilitiesMock.mockReturnValue({ mode: '' })
+    useAppsMock.mockReturnValue({ data: [app('compose')] })
+    const { useModeTelemetry } = await import('./useModeTelemetry')
+
+    const { rerender } = renderHook(() => useModeTelemetry())
+    const modesCalls = () => setTelemetryContextMock.mock.calls.filter((c) => c[0] === 'modes')
+
+    expect(modesCalls()).toHaveLength(1)
+
+    // New array reference, same set of modes: should not churn.
+    useAppsMock.mockReturnValue({ data: [app('compose')] })
+    rerender()
+    expect(modesCalls()).toHaveLength(1)
+
+    // Set actually changes: should resend.
+    useAppsMock.mockReturnValue({ data: [app('compose'), app('aspire')] })
+    rerender()
+    expect(modesCalls()).toHaveLength(2)
+  })
 })

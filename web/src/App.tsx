@@ -38,6 +38,9 @@ export function App() {
     instanceId: leafParams.instanceId ?? undefined,
   }
 
+  // Mounted here (not per-route) so the ['apps'] react-query stays active on
+  // every route, keeping the `modes` telemetry context live app-wide — do
+  // not "optimize" this by moving it closer to where apps are displayed.
   useModeTelemetry()
 
   useEffect(() => {
