@@ -15,7 +15,10 @@ differ substantially per mode.
 ## Goal
 
 Attach the discovery mode to every RUM event — especially errors — so RUM sessions and
-errors can be segmented and filtered by mode in Datadog.
+errors can be segmented and filtered by mode in Datadog. Crucially, this must hold
+*regardless of the CLI `--mode`*: even under `--mode all`, when an app the user is running
+causes an error, we want to know whether that app runs via `dapr run`, Docker Compose,
+Aspire, or Testcontainers.
 
 ## What already exists
 
@@ -37,33 +40,45 @@ errors can be segmented and filtered by mode in Datadog.
 No server-side or configuration change is required — all needed data is already
 client-side.
 
-## The two notions of "mode"
+## The three notions of "mode"
 
-There are two distinct, complementary signals. We capture **both**:
+There are three distinct, complementary signals. We capture **all three**:
 
 1. **`mode_filter`** — the CLI `--mode` filter the user chose. Static, known at page
    load, always present. Empty (`''`) means a complete scan; we normalize that to `"all"`.
 2. **`runtimes`** — the set of runtimes *actually discovered* among running apps. Dynamic;
    in a complete scan the user may be running a mix. Populates after the first apps poll.
+3. **`app_runtime`** — the runtime of the *single app the user is currently focused on*
+   (viewing its detail page). Present only while a specific app is in focus.
 
-Capturing both means an error carries both what the user asked to scan and what was
-really running.
+Why all three, and why `app_runtime` matters most for errors: `mode_filter` is what the
+user *asked* to scan, and `runtimes` is the *set* actually running — but when the user is
+running a mix (e.g. `--mode all` with both Compose and Aspire apps) and one app breaks,
+neither pins down *how the failing app itself runs*. `app_runtime` does: RUM auto-captures
+most errors (uncaught exceptions, promise rejections, console errors) rather than routing
+them through an explicit call site, so the only reliable way to attach the failing app's
+runtime is to keep it in global context while that app is in focus. Any error that fires
+while the user is on that app's page then carries its runtime, regardless of `mode_filter`.
 
 ## Design
 
 ### RUM global context
 
 Use Datadog RUM **global context**, which attaches attributes to *every* event in the
-session (views, actions, resources, long tasks, and errors). Two flat properties:
+session (views, actions, resources, long tasks, and errors). Three flat properties:
 
-| Property      | Type       | Example                | Meaning                                    |
-| ------------- | ---------- | ---------------------- | ------------------------------------------ |
-| `mode_filter` | `string`   | `"compose"` / `"all"`  | CLI `--mode` value (`''` → `"all"`)         |
-| `runtimes`    | `string[]` | `["compose","aspire"]` | Distinct runtimes among discovered apps    |
+| Property      | Type       | Example                | Meaning                                                  |
+| ------------- | ---------- | ---------------------- | -------------------------------------------------------- |
+| `mode_filter` | `string`   | `"compose"` / `"all"`  | CLI `--mode` value (`''` → `"all"`)                       |
+| `runtimes`    | `string[]` | `["compose","aspire"]` | Distinct runtimes among discovered apps                  |
+| `app_runtime` | `string`   | `"compose"`            | Runtime of the app currently in focus (detail page only) |
 
-In Datadog these surface as `@context.mode_filter` and `@context.runtimes`, filterable on
-any RUM event including Error events. Flat keys (no dots) are used deliberately to avoid
-nested-facet ambiguity.
+In Datadog these surface as `@context.mode_filter`, `@context.runtimes`, and
+`@context.app_runtime`, filterable on any RUM event including Error events. Flat keys (no
+dots) are used deliberately to avoid nested-facet ambiguity. `app_runtime` is *absent*
+when no specific app is in focus (e.g. on the apps list) — it is set when an app detail
+page mounts and removed when it unmounts, so a later error is never mis-attributed to a
+previously-viewed app.
 
 ### Shared vocabulary
 
@@ -91,7 +106,8 @@ intentionally so — it denotes "no filter / scan everything").
 
 ### Components
 
-1. **`telemetry.ts` — new wrapper.** One thin function matching the existing pattern:
+1. **`telemetry.ts` — two new wrappers.** Thin functions matching the existing pattern
+   (buffered until init, dropped if telemetry disabled):
 
    ```ts
    /** Sets a RUM global-context property, once enabled. Buffered until
@@ -99,9 +115,17 @@ intentionally so — it denotes "no filter / scan everything").
    export function setTelemetryContext(key: string, value: unknown): void {
      runOrBuffer((r) => r.setGlobalContextProperty(key, value))
    }
+
+   /** Removes a RUM global-context property, once enabled. Buffered until
+    * initTelemetry() has resolved; dropped if telemetry is disabled. */
+   export function removeTelemetryContext(key: string): void {
+     runOrBuffer((r) => r.removeGlobalContextProperty(key))
+   }
    ```
 
-   No change to `initTelemetry()` itself.
+   `removeTelemetryContext` (via `removeGlobalContextProperty`) is used to clear
+   `app_runtime` on unmount — cleaner than storing `undefined`. No change to
+   `initTelemetry()` itself.
 
 2. **`runtimeToken(app)` — new pure helper** in `web/src/lib/runtimeToken.ts`. Maps
    `Pick<AppSummary, 'source' | 'isAspire'>` to a canonical token or `undefined`. Sibling
@@ -116,15 +140,30 @@ intentionally so — it denotes "no filter / scan everything").
      over the apps and call `setTelemetryContext('runtimes', tokens)`. Sorting keeps the
      array stable so identical sets don't churn RUM context.
 
-4. **`App.tsx`** — call `useModeTelemetry()` once, alongside the existing startup/view
+4. **`useAppRuntimeTelemetry(app)` — new hook** in
+   `web/src/hooks/useAppRuntimeTelemetry.ts`. One job: keep `app_runtime` in sync with the
+   app currently in focus. Called by `AppDetail` once the app has loaded.
+   - When the app's runtime token changes:
+     `setTelemetryContext('app_runtime', runtimeToken(app))` (skipped when the token is
+     `undefined`, e.g. an `auto`/unknown source).
+   - On unmount (or when the token becomes `undefined`):
+     `removeTelemetryContext('app_runtime')`, so an error on a later, non-app page is not
+     attributed to this app.
+
+5. **`App.tsx`** — call `useModeTelemetry()` once, alongside the existing startup/view
    tracking effects.
+
+6. **`AppDetail.tsx`** — call `useAppRuntimeTelemetry(app)` from `AppDetailContent`, which
+   already has the loaded `app` (with `source`/`isAspire`) via `useApp()`. `runtimeToken`
+   is reused here — no new mapping. (The same pattern generalizes to other app-specific
+   pages such as `WorkflowDetail`, but only `AppDetail` is in scope now.)
 
 ### Data flow
 
 ```
-window.__DASH_CAPABILITIES__.mode ─► getCapabilities().mode ─► normalizeModeFilter ─┐
-                                                                                     ├─► setTelemetryContext ─► RUM global context ─► every RUM event
-GET /api/apps ─► useApps() ─► apps[] ─► runtimeToken(each) ─► distinct sorted set ──┘
+window.__DASH_CAPABILITIES__.mode ─► getCapabilities().mode ─► normalizeModeFilter ─► setTelemetryContext('mode_filter', …) ─┐
+GET /api/apps ─► useApps() ─► apps[] ─► runtimeToken(each) ─► distinct sorted set ─► setTelemetryContext('runtimes', […]) ────┼─► RUM global context ─► every RUM event
+AppDetail app ─► runtimeToken(app) ─► setTelemetryContext('app_runtime', …) / removeTelemetryContext on unmount ─────────────┘
 ```
 
 ## Behavior & edge cases
@@ -140,19 +179,27 @@ GET /api/apps ─► useApps() ─► apps[] ─► runtimeToken(each) ─► di
   signal (dashboard running, nothing discovered) and distinct from "not yet loaded".
 - **Mode changes:** `mode_filter` is fixed for a server process lifetime; the hook sets it
   once. `runtimes` updates live as apps start/stop across polls.
+- **`app_runtime` lifetime:** set when an app detail page mounts, removed on unmount.
+  Navigating from app A's page to app B's updates it to B; navigating to a non-app page
+  removes it. An unknown/`auto` source yields no token, so `app_runtime` stays absent
+  rather than being set to a placeholder.
 - **No config/server change:** `env` stays `'prod'`; no new injected globals.
 
 ## Testing
 
-- **`telemetry.test.tsx`:** add `setGlobalContextProperty` to the RUM mock. Assert
-  `setTelemetryContext` (a) delegates to `setGlobalContextProperty` once enabled, (b)
-  buffers a call made before `initTelemetry()` resolves and flushes it, (c) does nothing
-  when telemetry is disabled.
+- **`telemetry.test.tsx`:** add `setGlobalContextProperty` and `removeGlobalContextProperty`
+  to the RUM mock. Assert `setTelemetryContext`/`removeTelemetryContext` (a) delegate to
+  the matching SDK method once enabled, (b) buffer a call made before `initTelemetry()`
+  resolves and flush it, (c) do nothing when telemetry is disabled.
 - **`runtimeToken.test.ts`:** every source, the `isAspire` override beating `standalone`,
   and unknown/`auto` → `undefined`.
 - **`useModeTelemetry.test.tsx`:** render with a mocked `useApps` result and stubbed
   telemetry; assert the correct `mode_filter` call (including `''` → `"all"`) and the
   distinct, sorted `runtimes` call. Verify duplicate sources collapse to one token.
+- **`useAppRuntimeTelemetry.test.tsx`:** render with an app; assert
+  `setTelemetryContext('app_runtime', …)` fires with the right token, that unmount calls
+  `removeTelemetryContext('app_runtime')`, and that an unknown/`auto`-source app sets
+  nothing.
 
 ## Out of scope
 
