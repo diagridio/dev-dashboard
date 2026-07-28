@@ -38,6 +38,19 @@ func (o *overlay) List(ctx context.Context) ([]discovery.Instance, error) {
 			items = append(items, o.synthesize(e))
 		}
 	}
+	// Suppression: instances the user cleared stay hidden while still stopped;
+	// once one is seen running again it reappears and its suppression is pruned.
+	out := items[:0]
+	for _, in := range items {
+		if o.reg.IsSuppressed(in.InstanceKey) {
+			if fullyStopped(in) {
+				continue
+			}
+			o.reg.Unsuppress(in.InstanceKey)
+		}
+		out = append(out, in)
+	}
+	items = out
 	sort.SliceStable(items, func(a, b int) bool {
 		if items[a].AppID != items[b].AppID {
 			return items[a].AppID < items[b].AppID
@@ -91,6 +104,12 @@ func (o *overlay) applyEntry(in *discovery.Instance) {
 	in.AppStatus = discovery.StatusStopped
 	in.AppPID = 0
 	in.AppStartedAt = ""
+}
+
+// fullyStopped reports whether both halves of an instance are stopped — the
+// predicate the dashboard uses to treat an instance as inactive/removable.
+func fullyStopped(in discovery.Instance) bool {
+	return in.AppStatus == discovery.StatusStopped && in.DaprdStatus == discovery.StatusStopped
 }
 
 // synthesize renders a fully stopped instance from its stop-time snapshot.

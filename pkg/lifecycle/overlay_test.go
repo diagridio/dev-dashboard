@@ -126,3 +126,30 @@ func TestOverlayKeepsCascadeInsuranceSnapshotsWhilePIDsMatch(t *testing.T) {
 	require.True(t, ok, "insurance snapshots survive while PIDs match")
 	require.Len(t, e.Procs, 3)
 }
+
+func TestOverlayHidesSuppressedStoppedInstance(t *testing.T) {
+	reg := NewRegistry()
+	stopped := standaloneInst()
+	stopped.AppStatus, stopped.DaprdStatus = discovery.StatusStopped, discovery.StatusStopped
+	reg.Suppress(stopped.InstanceKey)
+
+	svc := Overlay(fakeApps{items: map[string]discovery.Instance{"orders": stopped}}, reg, newFakeProc())
+
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Empty(t, items) // suppressed + fully stopped -> hidden
+}
+
+func TestOverlayUnsuppressesReactivatedInstance(t *testing.T) {
+	reg := NewRegistry()
+	live := standaloneInst()
+	live.AppStatus, live.DaprdStatus = discovery.StatusRunning, discovery.StatusRunning
+	reg.Suppress(live.InstanceKey)
+
+	svc := Overlay(fakeApps{items: map[string]discovery.Instance{"orders": live}}, reg, newFakeProc())
+
+	items, err := svc.List(context.Background())
+	require.NoError(t, err)
+	require.Len(t, items, 1)                             // running again -> shown
+	require.False(t, reg.IsSuppressed(live.InstanceKey)) // and pruned
+}
