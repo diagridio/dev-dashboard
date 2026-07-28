@@ -235,6 +235,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
           confirmLabel="Remove"
           onCancel={() => setConfirmRemove(false)}
           onConfirm={() => {
+            trackAction('app_remove', { source: app.source, scope: 'list' })
             forget.mutate()
             setConfirmRemove(false)
           }}

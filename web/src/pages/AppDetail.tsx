@@ -13,6 +13,7 @@ import { appKey } from '../lib/appKey'
 import { formatUptime, useNow } from '../lib/uptime'
 import { getCapabilities } from '../lib/capabilities'
 import { modeLabel } from '../lib/modeLabel'
+import { trackAction } from '../lib/telemetry'
 import { useAppTelemetry } from '../hooks/useAppTelemetry'
 
 // ---------- content ----------
@@ -90,11 +91,13 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
       body: 'It will be hidden until it runs again or the dashboard restarts. Nothing is deleted from Docker.',
       label: 'Remove',
       danger: true,
-      run: () =>
+      run: () => {
+        trackAction('app_remove', { source: app.source, scope: 'detail' })
         forget.mutate(undefined, {
           onError: (e) => toast.show(e instanceof Error ? e.message : 'Remove failed'),
           onSuccess: () => navigate('/'),
-        }),
+        })
+      },
     })
   }
 

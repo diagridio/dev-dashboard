@@ -2,11 +2,21 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
+import { trackAction } from '../lib/telemetry'
 import { Applications } from './Applications'
+
+vi.mock('../lib/telemetry', () => ({
+  trackAction: vi.fn(),
+  trackView: vi.fn(),
+  trackError: vi.fn(),
+  setTelemetryContext: vi.fn(),
+  removeTelemetryContext: vi.fn(),
+  initTelemetry: vi.fn(),
+}))
 
 function renderAt() {
   const client = makeQueryClient()
@@ -369,5 +379,6 @@ describe('Applications', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: /^remove$/i }))
     await waitFor(() => expect(deleted).toBe('orders'))
     expect(rows.length).toBeGreaterThan(0)
+    expect(trackAction).toHaveBeenCalledWith('app_remove', expect.objectContaining({ scope: 'list' }))
   })
 })
