@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { describe, it, expect } from 'vitest'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
-import { useAppAction, useAppForget } from './useAppAction'
+import { useAppAction, useAppForget, useClearInactive } from './useAppAction'
 
 function wrapper({ children }: { children: React.ReactNode }) {
   return <QueryProvider client={makeQueryClient()}>{children}</QueryProvider>
@@ -62,5 +62,22 @@ describe('useAppForget', () => {
     result.current.mutate()
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.error?.message).toBe('no remembered stopped instance for this app')
+  })
+})
+
+describe('useClearInactive', () => {
+  it('POSTs to /apps/clear-inactive and returns the cleared count', async () => {
+    let hit = false
+    server.use(
+      http.post('/api/apps/clear-inactive', () => {
+        hit = true
+        return HttpResponse.json({ cleared: 2 })
+      }),
+    )
+    const { result } = renderHook(() => useClearInactive(), { wrapper })
+    result.current.mutate()
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(hit).toBe(true)
+    expect(result.current.data?.cleared).toBe(2)
   })
 })

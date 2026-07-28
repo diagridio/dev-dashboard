@@ -1,10 +1,16 @@
+import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useApps } from '../hooks/useApps'
+import { useClearInactive, useAppForget } from '../hooks/useAppAction'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { runtimeSwatch } from '../lib/runtimeSwatch'
 import { appKey } from '../lib/appKey'
 import { appDisplayState } from '../lib/appDisplayState'
 import { modeLabel } from '../lib/modeLabel'
+import { getCapabilities } from '../lib/capabilities'
+import { trackAction } from '../lib/telemetry'
+import { useToast } from '../lib/toast'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import type { AppSummary } from '../types/api'
 
 // Fully stopped: both the app process/container and its daprd sidecar report 'stopped'.
@@ -22,6 +28,10 @@ const PAGE_HEADER = (
 export function Applications() {
   const navigate = useNavigate()
   const { data: apps, isLoading } = useApps()
+  const caps = getCapabilities()
+  const { toast, toastNode } = useToast()
+  const clearInactive = useClearInactive()
+  const [confirmClear, setConfirmClear] = useState(false)
 
   useDocumentTitle('Applications')
 
@@ -54,10 +64,42 @@ export function Applications() {
   // Total components loaded across every running app; '—' when none report any.
   const componentsTotal = apps.reduce((n, a) => n + (a.components?.length ?? 0), 0)
   const componentsLoaded = componentsTotal > 0 ? componentsTotal : '—'
+  const inactive = apps.filter(isStopped)
 
   return (
     <div className="page">
-      {PAGE_HEADER}
+      <div className="phead">
+        <div>
+          <h1>Applications</h1>
+          <div className="sub">Dapr apps &amp; sidecars discovered on this machine</div>
+        </div>
+        {caps.lifecycle && inactive.length > 0 && (
+          <button
+            className="btn ghost"
+            disabled={clearInactive.isPending}
+            onClick={() => setConfirmClear(true)}
+          >
+            Clear inactive · {inactive.length}
+          </button>
+        )}
+      </div>
+      <ConfirmDialog
+        open={confirmClear}
+        title={`Remove ${inactive.length} stopped application${inactive.length === 1 ? '' : 's'} from the dashboard?`}
+        confirmLabel="Clear inactive"
+        onCancel={() => setConfirmClear(false)}
+        onConfirm={() => {
+          trackAction('clear_inactive', { count: inactive.length })
+          clearInactive.mutate(undefined, {
+            onError: (e) => toast.show(e instanceof Error ? e.message : 'Clear failed'),
+          })
+          setConfirmClear(false)
+        }}
+      >
+        <p className="muted">
+          They&rsquo;ll reappear if they run again or when the dashboard restarts. Nothing is deleted from Docker.
+        </p>
+      </ConfirmDialog>
       <div className="stats">
         <div className="stat">
           <div className="n">{running}</div>
@@ -107,11 +149,16 @@ export function Applications() {
         </div>
       </div>
       <p className="hint">Tip — click a row to open the application + daprd detail.</p>
+      {toastNode}
     </div>
   )
 }
 
 function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
+  const caps = getCapabilities()
+  const forget = useAppForget(appKey(app))
+  const [confirmRemove, setConfirmRemove] = useState(false)
+  const removable = caps.lifecycle && isStopped(app)
   const num = (v: number) =>
     v ? <td className="mono tabnum">{v}</td> : <td className="mono tabnum faint">—</td>
   const state = appDisplayState(app)
@@ -169,7 +216,33 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       >
         {modeLabel(app)}
       </td>
-      <td className="kebab">⋯</td>
+      <td className="kebab" onClick={(e) => e.stopPropagation()}>
+        {removable ? (
+          <button
+            className="tbtn"
+            disabled={forget.isPending}
+            aria-label={`Remove ${app.appId} from the dashboard`}
+            onClick={() => setConfirmRemove(true)}
+          >
+            Remove
+          </button>
+        ) : (
+          '⋯'
+        )}
+        <ConfirmDialog
+          open={confirmRemove}
+          title={`Remove "${app.appId}" from the dashboard?`}
+          confirmLabel="Remove"
+          onCancel={() => setConfirmRemove(false)}
+          onConfirm={() => {
+            trackAction('app_remove', { source: app.source, scope: 'list' })
+            forget.mutate()
+            setConfirmRemove(false)
+          }}
+        >
+          <p className="muted">It&rsquo;ll reappear if it runs again or when the dashboard restarts.</p>
+        </ConfirmDialog>
+      </td>
     </tr>
   )
 }
