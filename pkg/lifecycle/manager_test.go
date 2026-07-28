@@ -363,26 +363,48 @@ func TestStandaloneAppStopSnapshotsEverything(t *testing.T) {
 	require.Contains(t, e.Procs, TargetAll, "cascade insurance: CLI command captured")
 }
 
-func TestForgetDropsRememberedInstance(t *testing.T) {
+func TestDismissSuppressesAndDropsGhost(t *testing.T) {
 	reg := NewRegistry()
-	reg.RecordStop(standaloneInst(), map[Target]ProcSnapshot{TargetAll: {PID: 300}})
+	ghost := standaloneInst() // InstanceKey "orders"
+	reg.RecordStop(ghost, map[Target]ProcSnapshot{TargetAll: {PID: 300}})
 	m := New(fakeApps{items: map[string]discovery.Instance{}}, reg, nil, newFakeProc(), nil)
 
-	require.NoError(t, m.Forget(context.Background(), "orders"))
-	_, ok := reg.Get("orders")
-	require.False(t, ok, "entry dropped")
+	require.NoError(t, m.Dismiss(context.Background(), "orders"))
 
-	require.ErrorIs(t, m.Forget(context.Background(), "orders"), discovery.ErrNotFound)
+	_, ok := reg.Get("orders")
+	require.False(t, ok) // ghost dropped
+	require.True(t, reg.IsSuppressed("orders"))
 }
 
-func TestForgetResolvesAppIDFallback(t *testing.T) {
+func TestDismissSuppressesComposeKeyWithoutGhost(t *testing.T) {
 	reg := NewRegistry()
-	in := standaloneInst()
-	in.InstanceKey = "orders-1"
-	reg.RecordStop(in, map[Target]ProcSnapshot{TargetAll: {PID: 300}})
 	m := New(fakeApps{items: map[string]discovery.Instance{}}, reg, nil, newFakeProc(), nil)
 
-	require.NoError(t, m.Forget(context.Background(), "orders"), "AppID fallback resolves")
-	_, ok := reg.Get("orders-1")
-	require.False(t, ok, "the entry's own key is dropped, not the fallback alias")
+	require.NoError(t, m.Dismiss(context.Background(), "shop-checkout-app-1"))
+
+	require.True(t, reg.IsSuppressed("shop-checkout-app-1"))
+}
+
+func TestClearInactiveDismissesEveryStoppedInstance(t *testing.T) {
+	reg := NewRegistry()
+	stopped1 := standaloneInst() // "orders"
+	stopped1.AppStatus, stopped1.DaprdStatus = discovery.StatusStopped, discovery.StatusStopped
+	stopped2 := composeInst() // "shop-checkout-app-1"
+	stopped2.AppStatus, stopped2.DaprdStatus = discovery.StatusStopped, discovery.StatusStopped
+	running := standaloneInst()
+	running.InstanceKey, running.AppID = "live", "live"
+	running.AppStatus, running.DaprdStatus = discovery.StatusRunning, discovery.StatusRunning
+
+	m := New(fakeApps{items: map[string]discovery.Instance{
+		"orders":              stopped1,
+		"shop-checkout-app-1": stopped2,
+		"live":                running,
+	}}, reg, nil, newFakeProc(), nil)
+
+	n, err := m.ClearInactive(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, 2, n)
+	require.True(t, reg.IsSuppressed("orders"))
+	require.True(t, reg.IsSuppressed("shop-checkout-app-1"))
+	require.False(t, reg.IsSuppressed("live"))
 }
