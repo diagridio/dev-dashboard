@@ -360,7 +360,7 @@ describe('Applications', () => {
     renderAt()
     const rows = await screen.findAllByRole('row')
     // Exactly one row (the stopped one) exposes a Remove button.
-    const removeButtons = screen.getAllByRole('button', { name: /^remove$/i })
+    const removeButtons = screen.getAllByRole('button', { name: /^remove\b/i })
     expect(removeButtons).toHaveLength(1)
     await userEvent.click(removeButtons[0])
     // Scope to the confirm dialog: it has its own "Remove" button, distinct

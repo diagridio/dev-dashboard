@@ -221,7 +221,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
           <button
             className="tbtn"
             disabled={forget.isPending}
-            title={`Remove ${app.appId} from the dashboard`}
+            aria-label={`Remove ${app.appId} from the dashboard`}
             onClick={() => setConfirmRemove(true)}
           >
             Remove
