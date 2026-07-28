@@ -83,11 +83,13 @@ func TestAppsLogsReturns404WhenNoLogPath(t *testing.T) {
 
 // fakeLifecycle is a test double for lifecycle.Manager.
 type fakeLifecycle struct {
-	err       error
-	forgetErr error
-	gotKey    string
-	gotTgt    lifecycle.Target
-	gotAct    lifecycle.Action
+	err        error
+	dismissErr error
+	clearErr   error
+	cleared    int
+	gotKey     string
+	gotTgt     lifecycle.Target
+	gotAct     lifecycle.Action
 }
 
 func (f *fakeLifecycle) Do(ctx context.Context, key string, target lifecycle.Target, action lifecycle.Action) error {
@@ -95,9 +97,13 @@ func (f *fakeLifecycle) Do(ctx context.Context, key string, target lifecycle.Tar
 	return f.err
 }
 
-func (f *fakeLifecycle) Forget(ctx context.Context, key string) error {
+func (f *fakeLifecycle) Dismiss(ctx context.Context, key string) error {
 	f.gotKey = key
-	return f.forgetErr
+	return f.dismissErr
+}
+
+func (f *fakeLifecycle) ClearInactive(ctx context.Context) (int, error) {
+	return f.cleared, f.clearErr
 }
 
 func TestAppsLifecycleRoute(t *testing.T) {
@@ -139,18 +145,18 @@ func TestAppsLifecycleRouteNilManager(t *testing.T) {
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
 }
 
-func TestAppsForgetRoute(t *testing.T) {
+func TestAppsDismissRoute(t *testing.T) {
 	cases := []struct {
 		name   string
 		err    error
 		status int
 	}{
 		{"ok", nil, http.StatusNoContent},
-		{"not found", discovery.ErrNotFound, http.StatusNotFound},
+		{"exec failure", errors.New("boom"), http.StatusBadGateway},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			life := &fakeLifecycle{forgetErr: tc.err}
+			life := &fakeLifecycle{dismissErr: tc.err}
 			h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
 			req := httptest.NewRequest(http.MethodDelete, "/orders", nil)
 			rec := httptest.NewRecorder()
@@ -163,7 +169,39 @@ func TestAppsForgetRoute(t *testing.T) {
 	}
 }
 
-func TestAppsForgetRouteNilManager(t *testing.T) {
+func TestAppsClearInactiveRoute(t *testing.T) {
+	life := &fakeLifecycle{cleared: 3}
+	h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/clear-inactive", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var body struct {
+		Cleared int `json:"cleared"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, 3, body.Cleared)
+}
+
+func TestAppsClearInactiveRouteError(t *testing.T) {
+	life := &fakeLifecycle{clearErr: errors.New("boom")}
+	h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/clear-inactive", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusBadGateway, rec.Code)
+}
+
+func TestAppsClearInactiveRouteNilManager(t *testing.T) {
+	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
+	req := httptest.NewRequest(http.MethodPost, "/clear-inactive", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+}
+
+func TestAppsDismissRouteNilManager(t *testing.T) {
 	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodDelete, "/orders", nil)
 	rec := httptest.NewRecorder()
