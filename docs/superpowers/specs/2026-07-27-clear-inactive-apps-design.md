@@ -137,8 +137,10 @@ the feature coherent and global with no per-page code.
   dashboard" / "hidden until it runs again or the dashboard restarts" — never
   "delete" or "remove container".
 
-- **Telemetry.** Reuse `trackAction` for `clear_inactive` (with count) and the
-  per-row/detail remove, consistent with existing action tracking.
+- **Telemetry.** Reuse `trackAction` for `clear_inactive` (with count). As
+  shipped, only the global clear is tracked; adding parity `trackAction` on the
+  per-row and AppDetail Remove confirmations is an optional follow-up (the
+  AppDetail Remove was already untracked before this feature).
 
 ### 4. Edge cases
 
@@ -151,10 +153,15 @@ the feature coherent and global with no per-page code.
   button is hidden client-side anyway.
 - **Concurrency**: suppression set shares the manager mutex; `Dismiss` and the
   overlay read are serialized.
-- **Not-fully-stopped single delete**: `DELETE /api/apps/{appId}` for an app
-  that is neither fully stopped nor a registry ghost returns an error
-  (`404`, preserving current `ErrNotFound` behavior) — you cannot dismiss a
-  live app.
+- **Not-fully-stopped single delete**: `DELETE /api/apps/{appId}` always
+  succeeds (`204`) and suppresses the key unconditionally — `Dismiss` never
+  fails and never touches Docker. Suppressing a still-running or unknown key is
+  a safe no-op: the overlay only hides *fully-stopped* instances, so a running
+  app stays visible and the stray suppression is pruned on the very next
+  `List`. (The UI only ever exposes Remove on fully-stopped rows, so this path
+  is unreachable through the dashboard anyway.) This supersedes an earlier draft
+  that returned `404` for non-ghost live apps; the unconditional-204 contract is
+  simpler and observably equivalent.
 
 ### 5. Testing (TDD)
 
