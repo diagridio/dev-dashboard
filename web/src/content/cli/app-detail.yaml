@@ -1,3 +1,5 @@
+# CLI commands shown in the drawer on the Application detail page.
+# Constraint: self-hosted only, never a `-k` / `--kubernetes` command.
 context: AppDetail
 tools:
   dapr:
@@ -6,6 +8,12 @@ tools:
       - title: Stop this app
         command: dapr stop --app-id {{appId}}
         docs: https://docs.dapr.io/reference/cli/dapr-stop/
-      - title: Invoke a method on this app
+      - title: Run this app with a Dapr sidecar
+        command: dapr run --app-id {{appId}} --app-port <port> -- <run-command>
+        docs: https://docs.dapr.io/reference/cli/dapr-run/
+      - title: Invoke a method (POST) on this app
         command: dapr invoke --app-id {{appId}} --method <method> --data '{"key":"value"}'
+        docs: https://docs.dapr.io/reference/cli/dapr-invoke/
+      - title: Invoke a method (GET) on this app
+        command: dapr invoke --app-id {{appId}} --method <method> --verb GET
         docs: https://docs.dapr.io/reference/cli/dapr-invoke/

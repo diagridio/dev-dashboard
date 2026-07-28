@@ -1,3 +1,7 @@
+# CLI commands shown in the drawer on the Workflow instance detail page.
+# Constraint: self-hosted only, never a `-k` / `--kubernetes` command.
+# The workflow-scoped reminder lookup stays here; generic scheduler
+# management lives on the Control Plane page.
 context: WorkflowDetail
 tools:
   dapr:
@@ -5,6 +9,9 @@ tools:
     commands:
       - title: View execution history
         command: dapr workflow history {{instanceId}} --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: Raise an external event to this instance
+        command: dapr workflow raise-event {{instanceId}}/<event-name> --app-id {{appId}} --input '{"key":"value"}'
         docs: https://docs.dapr.io/reference/cli/dapr-workflow/
       - title: Terminate this instance
         command: dapr workflow terminate {{instanceId}} --app-id {{appId}}
@@ -14,6 +21,9 @@ tools:
         docs: https://docs.dapr.io/reference/cli/dapr-workflow/
       - title: Resume this instance
         command: dapr workflow resume {{instanceId}} --app-id {{appId}}
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: Re-run this instance
+        command: dapr workflow rerun {{instanceId}} --app-id {{appId}}
         docs: https://docs.dapr.io/reference/cli/dapr-workflow/
       - title: Purge this instance
         command: dapr workflow purge {{instanceId}} --app-id {{appId}}

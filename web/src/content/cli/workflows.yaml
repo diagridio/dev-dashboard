@@ -1,3 +1,6 @@
+# CLI commands shown in the drawer on the Workflows overview page.
+# Constraint: self-hosted only, never a `-k` / `--kubernetes` command.
+# Scheduler management lives on the Control Plane page.
 context: Workflows
 tools:
   dapr:
@@ -9,6 +12,9 @@ tools:
       - title: List running workflows
         command: dapr workflow list --app-id {{appId}} --filter-status RUNNING
         docs: https://docs.dapr.io/reference/cli/dapr-workflow/
-      - title: List scheduled jobs
-        command: dapr scheduler list
-        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: List instances of a named workflow
+        command: dapr workflow list --app-id {{appId}} --filter-name <workflow-name>
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/
+      - title: Start a new workflow instance
+        command: dapr workflow run <workflow-name> --app-id {{appId}} --input '{"key":"value"}'
+        docs: https://docs.dapr.io/reference/cli/dapr-workflow/

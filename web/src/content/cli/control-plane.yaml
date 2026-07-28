@@ -1,0 +1,29 @@
+# CLI commands shown in the drawer on the Control Plane page.
+# Home for Dapr Scheduler management (jobs & actor reminders).
+# Constraint: self-hosted only, never a `-k` / `--kubernetes` command.
+context: ControlPlane
+tools:
+  dapr:
+    label: Dapr
+    commands:
+      - title: List scheduled jobs and reminders
+        command: dapr scheduler list
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: List scheduled jobs as YAML
+        command: dapr scheduler list -o yaml
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: Get a job or reminder by key
+        command: dapr scheduler get <type>/<key> -o yaml
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: Delete a job or reminder by key
+        command: dapr scheduler delete <type>/<key>
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: Delete all jobs matching a filter
+        command: dapr scheduler delete-all <filter-key>
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: Export all jobs and reminders to a file
+        command: dapr scheduler export -o backup.bin
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: Import jobs and reminders from a file
+        command: dapr scheduler import -f backup.bin
+        docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
