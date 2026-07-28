@@ -79,14 +79,15 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const busy = action.isPending
   // An orphaned sidecar has nothing re-runnable: Stop is the only action.
   const orphaned = !!app.sidecarOrphaned
-  // Fully stopped standalone instances (incl. Aspire ghosts) exist only as
-  // registry memories; offer dropping them from the list.
-  const removable = !isCompose && appStopped && daprdStopped
+  // Fully stopped instances (standalone, Aspire ghosts, and compose) exist
+  // only as suppressible dashboard state; offer removing them from the list
+  // — nothing is deleted from Docker.
+  const removable = appStopped && daprdStopped
   const forget = useAppForget(key)
   const removeFromList = () => {
     setConfirm({
       title: `Remove "${app.appId}" from the list?`,
-      body: 'The stopped instance will no longer be shown.',
+      body: 'It will be hidden until it runs again or the dashboard restarts. Nothing is deleted from Docker.',
       label: 'Remove',
       danger: true,
       run: () =>
