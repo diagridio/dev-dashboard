@@ -17,11 +17,14 @@ type Entry struct {
 // intentionally not persisted: after a dashboard restart the processes are
 // genuinely gone and unknowable.
 type Registry struct {
-	mu      sync.Mutex
-	entries map[string]*Entry // keyed by InstanceKey
+	mu         sync.Mutex
+	entries    map[string]*Entry   // keyed by InstanceKey
+	suppressed map[string]struct{} // InstanceKeys the user cleared; hidden while stopped
 }
 
-func NewRegistry() *Registry { return &Registry{entries: map[string]*Entry{}} }
+func NewRegistry() *Registry {
+	return &Registry{entries: map[string]*Entry{}, suppressed: map[string]struct{}{}}
+}
 
 // RecordStop merges snaps into the entry for in's InstanceKey, storing in as
 // the display snapshot.
@@ -74,6 +77,30 @@ func (r *Registry) Drop(key string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	delete(r.entries, key)
+}
+
+// Suppress hides an InstanceKey from the overlay while it remains fully
+// stopped. It is cleared automatically when the instance is seen running
+// again (see overlay.List) or on dashboard restart (the set is not persisted).
+func (r *Registry) Suppress(key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.suppressed[key] = struct{}{}
+}
+
+// Unsuppress removes a key from the suppression set.
+func (r *Registry) Unsuppress(key string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.suppressed, key)
+}
+
+// IsSuppressed reports whether key is currently suppressed.
+func (r *Registry) IsSuppressed(key string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, ok := r.suppressed[key]
+	return ok
 }
 
 // List returns all entries sorted by InstanceKey.

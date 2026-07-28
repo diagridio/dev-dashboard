@@ -606,7 +606,7 @@ describe('AppDetail', () => {
     expect(deleted).toBe(true)
   })
 
-  it('offers Remove from list for a fully stopped Aspire ghost, not for running or compose apps', async () => {
+  it('offers Remove from list for a fully stopped Aspire ghost', async () => {
     server.use(
       http.get('/api/apps/order', () =>
         HttpResponse.json({
@@ -623,6 +623,24 @@ describe('AppDetail', () => {
     renderDetail()
     await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
     expect(screen.getByRole('button', { name: 'Remove from list' })).toBeInTheDocument()
+  })
+
+  it('offers Remove from list for a fully-stopped compose app', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'checkout',
+          instanceKey: 'shop-checkout-app-1',
+          source: 'compose',
+          appStatus: 'stopped',
+          daprdStatus: 'stopped',
+          health: 'unknown',
+          runtime: 'go',
+        }),
+      ),
+    )
+    renderDetail()
+    expect(await screen.findByRole('button', { name: /remove from list/i })).toBeInTheDocument()
   })
 
   it('hides Remove from list for running instances', async () => {

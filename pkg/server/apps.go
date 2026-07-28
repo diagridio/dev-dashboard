@@ -80,15 +80,24 @@ func appsRouter(svc discovery.Service, containerLogs func(context.Context, strin
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "lifecycle actions unavailable"})
 			return
 		}
-		err := life.Forget(req.Context(), chi.URLParam(req, "appId"))
-		switch {
-		case err == nil:
-			w.WriteHeader(http.StatusNoContent)
-		case errors.Is(err, discovery.ErrNotFound):
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no remembered stopped instance for this app"})
-		default:
+		if err := life.Dismiss(req.Context(), chi.URLParam(req, "appId")); err != nil {
 			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
 		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	r.Post("/clear-inactive", func(w http.ResponseWriter, req *http.Request) {
+		if life == nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "lifecycle actions unavailable"})
+			return
+		}
+		n, err := life.ClearInactive(req.Context())
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]int{"cleared": n})
 	})
 
 	return r

@@ -15,10 +15,15 @@ func logger() *slog.Logger { return slog.Default().With("component", "lifecycle"
 // Manager starts, stops and restarts discovered app instances.
 type Manager interface {
 	Do(ctx context.Context, key string, target Target, action Action) error
-	// Forget drops a remembered stopped instance so it no longer appears on
-	// the dashboard. Only registry-backed (fully stopped standalone)
-	// instances have an entry; anything else is discovery.ErrNotFound.
-	Forget(ctx context.Context, key string) error
+	// Dismiss hides an inactive instance from the dashboard: it drops any
+	// registry ghost and suppresses the InstanceKey so a natively-scanned
+	// stopped instance (e.g. a stopped compose container) stops appearing.
+	// The suppression auto-clears when the instance is seen running again.
+	// It always succeeds and never touches Docker.
+	Dismiss(ctx context.Context, key string) error
+	// ClearInactive dismisses every currently fully-stopped instance and
+	// returns how many distinct instances were dismissed.
+	ClearInactive(ctx context.Context) (int, error)
 }
 
 type manager struct {
@@ -119,16 +124,39 @@ func composeTargets(in discovery.Instance, target Target, action Action) ([]stri
 	return stopOrder, nil
 }
 
-// Forget implements Manager: it resolves key like the registry (InstanceKey
-// first, AppID fallback) and drops the entry under its own key.
-func (m *manager) Forget(ctx context.Context, key string) error {
-	e, ok := m.reg.Get(key)
-	if !ok {
-		return fmt.Errorf("%w: %s", discovery.ErrNotFound, key)
+// Dismiss resolves key to its canonical InstanceKey when a registry ghost
+// exists (so suppression matches the key the scanner reports), drops that
+// ghost, then suppresses the key. Suppressing a still-running instance is
+// harmless: the overlay un-suppresses it on the next scan.
+func (m *manager) Dismiss(ctx context.Context, key string) error {
+	ik := key
+	if e, ok := m.reg.Get(key); ok {
+		ik = e.Instance.InstanceKey
 	}
-	logger().Info("forgetting stopped instance", "key", e.Instance.InstanceKey)
-	m.reg.Drop(e.Instance.InstanceKey)
+	logger().Info("dismissing inactive instance", "key", ik)
+	m.reg.Drop(ik)
+	m.reg.Suppress(ik)
 	return nil
+}
+
+// ClearInactive lists the instances the dashboard currently serves (the
+// manager's apps service is the overlay, so this includes synthesized ghosts
+// and stopped compose containers) and dismisses each fully-stopped one.
+func (m *manager) ClearInactive(ctx context.Context) (int, error) {
+	items, err := m.apps.List(ctx)
+	if err != nil {
+		return 0, err
+	}
+	seen := map[string]bool{}
+	for _, in := range items {
+		if !fullyStopped(in) || seen[in.InstanceKey] {
+			continue
+		}
+		seen[in.InstanceKey] = true
+		m.reg.Drop(in.InstanceKey)
+		m.reg.Suppress(in.InstanceKey)
+	}
+	return len(seen), nil
 }
 
 // doStandalone dispatches start/stop/restart for a process-table instance.

@@ -54,3 +54,25 @@ export function useAppForget(key: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['apps'] }),
   })
 }
+
+export interface ClearInactiveResult {
+  cleared: number
+}
+
+async function sendClearInactive(): Promise<ClearInactiveResult> {
+  const res = await fetch(apiUrl('/apps/clear-inactive'), { method: 'POST' })
+  await throwIfNotOK(res)
+  return (await res.json()) as ClearInactiveResult
+}
+
+/**
+ * Removes every fully-stopped instance from the dashboard via
+ * POST /api/apps/clear-inactive. Invalidates all app queries on success.
+ */
+export function useClearInactive() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => sendClearInactive(),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['apps'] }),
+  })
+}
