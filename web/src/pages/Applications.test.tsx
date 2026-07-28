@@ -1,4 +1,5 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
 import { describe, it, expect } from 'vitest'
@@ -63,6 +64,15 @@ const sampleApps = [
     runTemplate: 'dapr.yaml',
   },
 ]
+
+const stoppedApp = {
+  ...baseApp,
+  appId: 'orders',
+  appStatus: 'stopped',
+  daprdStatus: 'stopped',
+  daprdPid: 0,
+  appPid: 0,
+}
 
 describe('Applications', () => {
   it('renders an app row with a link to detail', async () => {
@@ -307,5 +317,57 @@ describe('Applications', () => {
     renderAt()
     await waitFor(() => expect(screen.getByText('primes-go')).toBeInTheDocument())
     expect(screen.getByTitle(/publish the daprd HTTP port/i)).toBeInTheDocument()
+  })
+
+  it('shows the global Clear inactive button with the stopped count', async () => {
+    mockApps([{ ...baseApp }, stoppedApp])
+    renderAt()
+    expect(await screen.findByRole('button', { name: /clear inactive · 1/i })).toBeInTheDocument()
+  })
+
+  it('hides the Clear inactive button when nothing is stopped', async () => {
+    mockApps([{ ...baseApp }])
+    renderAt()
+    await screen.findByText('order') // list rendered
+    expect(screen.queryByRole('button', { name: /clear inactive/i })).not.toBeInTheDocument()
+  })
+
+  it('confirms then POSTs clear-inactive', async () => {
+    mockApps([{ ...baseApp }, stoppedApp])
+    let hit = false
+    server.use(
+      http.post('/api/apps/clear-inactive', () => {
+        hit = true
+        return HttpResponse.json({ cleared: 1 })
+      }),
+    )
+    renderAt()
+    await userEvent.click(await screen.findByRole('button', { name: /clear inactive · 1/i }))
+    // ConfirmDialog confirm button
+    await userEvent.click(await screen.findByRole('button', { name: /^clear inactive$/i }))
+    await waitFor(() => expect(hit).toBe(true))
+  })
+
+  it('shows a per-row Remove only for stopped rows and DELETEs it', async () => {
+    mockApps([{ ...baseApp }, stoppedApp])
+    let deleted = ''
+    server.use(
+      http.delete('/api/apps/:key', ({ params }) => {
+        deleted = String(params.key)
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    renderAt()
+    const rows = await screen.findAllByRole('row')
+    // Exactly one row (the stopped one) exposes a Remove button.
+    const removeButtons = screen.getAllByRole('button', { name: /^remove$/i })
+    expect(removeButtons).toHaveLength(1)
+    await userEvent.click(removeButtons[0])
+    // Scope to the confirm dialog: it has its own "Remove" button, distinct
+    // from the row's trigger button that is still rendered behind it.
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: /^remove$/i }))
+    await waitFor(() => expect(deleted).toBe('orders'))
+    expect(rows.length).toBeGreaterThan(0)
   })
 })
