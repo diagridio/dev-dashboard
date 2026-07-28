@@ -137,10 +137,8 @@ the feature coherent and global with no per-page code.
   dashboard" / "hidden until it runs again or the dashboard restarts" — never
   "delete" or "remove container".
 
-- **Telemetry.** Reuse `trackAction` for `clear_inactive` (with count). As
-  shipped, only the global clear is tracked; adding parity `trackAction` on the
-  per-row and AppDetail Remove confirmations is an optional follow-up (the
-  AppDetail Remove was already untracked before this feature).
+- **Telemetry.** Reuse `trackAction` for `clear_inactive` (with count) and the
+  per-row/detail remove, consistent with existing action tracking.
 
 ### 4. Edge cases
 

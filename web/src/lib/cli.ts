@@ -5,6 +5,7 @@ import workflowsRaw from '../content/cli/workflows.yaml?raw'
 import workflowDetailRaw from '../content/cli/workflow-detail.yaml?raw'
 import actorsRaw from '../content/cli/actors.yaml?raw'
 import subscriptionsRaw from '../content/cli/subscriptions.yaml?raw'
+import controlPlaneRaw from '../content/cli/control-plane.yaml?raw'
 
 export interface CliCommandDef {
   title: string
@@ -29,6 +30,7 @@ const rawByContext: Record<string, string> = {
   WorkflowDetail: workflowDetailRaw,
   Actors: actorsRaw,
   Subscriptions: subscriptionsRaw,
+  ControlPlane: controlPlaneRaw,
 }
 
 const contentByContext: Record<string, CliContent> = Object.fromEntries(

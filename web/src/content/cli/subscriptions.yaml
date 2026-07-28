@@ -1,3 +1,5 @@
+# CLI commands shown in the drawer on the Subscriptions page.
+# Constraint: self-hosted only, never a `-k` / `--kubernetes` command.
 context: Subscriptions
 tools:
   dapr:
@@ -5,4 +7,7 @@ tools:
     commands:
       - title: Publish a test event
         command: dapr publish --publish-app-id <app-id> --pubsub <pubsub> --topic <topic> --data '{"key":"value"}'
+        docs: https://docs.dapr.io/reference/cli/dapr-publish/
+      - title: Publish a test event from a file
+        command: dapr publish --publish-app-id <app-id> --pubsub <pubsub> --topic <topic> --data-file <path>
         docs: https://docs.dapr.io/reference/cli/dapr-publish/
