@@ -838,12 +838,19 @@ Replace the body of `sidecarEndpoints` (`cmd/reconciler.go:446-472`):
 			if addr == "" || seen[in.AppID] {
 				continue
 			}
+			// Aspire apps are never sidecar-sourced. This is checked first and
+			// unconditionally: the contract scanner sets DaprGRPCAddr for aspire
+			// posture too, so folding it into the includeAll clause below would
+			// silently admit them.
+			if in.Source == discovery.SourceAspire {
+				continue
+			}
 			// A contract-declared app carries its own gRPC address and is
 			// always sidecar-sourced: there may be no readable store at all,
 			// exactly as for Testcontainers apps.
 			include := in.Source == discovery.SourceTestcontainers ||
 				in.DaprGRPCAddr != "" ||
-				(includeAll && in.SidecarReachable && in.Source != discovery.SourceAspire)
+				(includeAll && in.SidecarReachable)
 			if !include {
 				continue
 			}
@@ -853,6 +860,9 @@ Replace the body of `sidecarEndpoints` (`cmd/reconciler.go:446-472`):
 		return eps
 	}
 ```
+
+This is the complete final state of the loop body — the aspire check is outermost and the
+`includeAll` clause no longer repeats it.
 
 `strconv` may now be unused in `cmd/reconciler.go` — remove it from the imports if `go vet` says so.
 
@@ -869,15 +879,11 @@ Update the doc comment above the function to record the new clause:
 // immediately.
 ```
 
-Note the aspire exclusion still holds for the `includeAll` clause, but an aspire app would now be included if it carried a `DaprGRPCAddr`. The contract scanner only sets that field, and Task 4 passes `SourceAspire` for aspire posture — so verify the intended behavior: aspire container posture has no `Workflows` sidecar source today. Keep the exclusion authoritative by making the aspire check outermost:
-
-```go
-			if in.Source == discovery.SourceAspire {
-				continue
-			}
-```
-
-placed immediately after the `addr == ""` check, and drop `&& in.Source != discovery.SourceAspire` from the `includeAll` clause.
+The reason the aspire check moved outermost: `DaprGRPCAddr != ""` is now an inclusion trigger,
+and the contract scanner sets that field in **aspire** posture too (Task 4 passes
+`SourceAspire` there). Leaving the exclusion inside the `includeAll` clause would therefore
+give aspire container posture a sidecar workflow source it does not have today — a silent
+behavior change. The `aspire apps stay excluded` subtest in Step 1 is the guard.
 
 - [ ] **Step 4: Run the test to verify it passes**
 
