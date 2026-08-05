@@ -280,10 +280,19 @@ of `controlplane.Service` (`pkg/controlplane/types.go:24`), only `Name`, `Ports`
 `Healthy` are reachable in-network, while `Status`, `MemoryBytes`, `MemoryHuman`, `LogPath`,
 and `Actionable` are all container-runtime facts.
 
-`Mode: "compose"` is echoed to the SPA, which needs two copy changes:
+`Mode: "compose"` is echoed to the SPA, which needs two copy changes.
 
-- The unreachable-sidecar hint currently advises publishing the port to the host. In-network
-  that advice is wrong; it must say the dashboard and the named service have to share a
+`Capabilities` also gains an explicit `ContainerPosture bool` (`containerPosture` in JSON,
+mirrored in `web/src/lib/capabilities.ts`). It is required, not cosmetic: `caps.Mode` is
+`"compose"` in **both** compose host posture and compose container posture, so mode alone
+cannot distinguish them, and `Instance.Source` is `SourceCompose` in both. Inferring posture
+from `!caps.lifecycle` would work today but couples unrelated flags. Aspire container
+posture sets it too, which is correct.
+
+- The unreachable-sidecar hint currently advises publishing the port to the host
+  (`web/src/pages/AppDetail.tsx:233` and `web/src/pages/Applications.tsx:175`, both keyed on
+  `app.source === 'compose'`). In-network that advice is wrong; gated on
+  `containerPosture` it must instead say the dashboard and the named service have to share a
   network.
 - `web/src/pages/ControlPlane.tsx:18` and `web/src/pages/Logs.tsx` already branch on mode
   and need compose-**container** empty-state copy distinct from compose-**host** copy. Both
@@ -361,7 +370,8 @@ work).
 - Translation no-op regression test: a compose-posture component with an in-network address
   survives `rc.translate` unmodified.
 - Capabilities golden for compose container posture, plus a route-level assertion that
-  `/api/controlplane` and the log routes are **absent** (not merely flagged off).
+  `/api/controlplane` and the log routes are **absent** (not merely flagged off), and that
+  `containerPosture` is `true` there and `false` in compose host posture.
 - Integration test in the spirit of `cmd/compose_discovery_integration_test.go`: a fake
   sidecar serving `/v1.0/metadata`, `/v1.0/healthz`, and publish, driven through the
   contract scanner.
