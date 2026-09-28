@@ -309,9 +309,45 @@ func (s *service) Get(ctx context.Context, appID, instanceID string) (Execution,
 	return ex, nil
 }
 
-// load reads an instance's history-* and customStatus keys and decodes them
-// under the given namespace.
+// load reads one instance: its metadata record first, then (via
+// loadWithMeta) the history keys that record declares.
 func (s *service) load(ctx context.Context, ns, appID, instanceID string) (Execution, error) {
+	meta, err := s.store.Get(ctx, statestore.InstancePrefix(ns, appID, instanceID)+statestore.SuffixMetadata)
+	if err != nil {
+		return Execution{}, err
+	}
+	ex, _, err := s.loadWithMeta(ctx, ns, appID, instanceID, meta)
+	return ex, err
+}
+
+// loadWithMeta loads an instance given its already-read metadata record.
+// When the record declares a usable HistoryLength, the history keys are
+// built directly (as Dapr itself loads state) and fetched in one BulkGet:
+// no key scan. Otherwise it falls back to scanning the instance's keys.
+// fromMeta reports which path ran; only metadata-path results are safe to
+// cache against the metadata bytes.
+func (s *service) loadWithMeta(ctx context.Context, ns, appID, instanceID string, meta []byte) (Execution, bool, error) {
+	n, ok := historyLength(meta)
+	if !ok {
+		ex, err := s.loadByScan(ctx, ns, appID, instanceID)
+		return ex, false, err
+	}
+	prefix := statestore.InstancePrefix(ns, appID, instanceID)
+	keys := make([]string, 0, n+1)
+	for i := uint64(0); i < n; i++ {
+		keys = append(keys, prefix+statestore.HistoryKey(i))
+	}
+	keys = append(keys, prefix+statestore.SuffixCustomStatus)
+	values, err := s.store.BulkGet(ctx, keys)
+	if err != nil {
+		return Execution{}, false, err
+	}
+	return decodeInstance(appID, instanceID, prefix, values), true, nil
+}
+
+// loadByScan is the original loader: discover the instance's keys with a
+// KeysLike scan, then read them. Used when metadata can't be trusted.
+func (s *service) loadByScan(ctx context.Context, ns, appID, instanceID string) (Execution, error) {
 	keys, _, err := s.store.Keys(ctx, statestore.InstanceKeyPattern(ns, appID, instanceID), "", 0)
 	if err != nil {
 		return Execution{}, err
@@ -323,20 +359,28 @@ func (s *service) load(ctx context.Context, ns, appID, instanceID string) (Execu
 	if err != nil {
 		return Execution{}, err
 	}
-	prefix := statestore.InstancePrefix(ns, appID, instanceID)
-	var history []*protos.HistoryEvent
+	return decodeInstance(appID, instanceID, statestore.InstancePrefix(ns, appID, instanceID), values), nil
+}
+
+// decodeInstance decodes history-* (in key order, which is chronological)
+// and customStatus values into an Execution. Missing or empty values and
+// undecodable events are skipped.
+func decodeInstance(appID, instanceID, prefix string, values map[string][]byte) Execution {
 	var historyKeys []string
 	customStatus := ""
-	for k := range values {
+	for k, v := range values {
 		suffix := strings.TrimPrefix(k, prefix)
 		switch {
 		case strings.HasPrefix(suffix, statestore.HistoryPrefix):
-			historyKeys = append(historyKeys, k)
+			if len(v) > 0 {
+				historyKeys = append(historyKeys, k)
+			}
 		case suffix == statestore.SuffixCustomStatus:
-			customStatus = string(values[k])
+			customStatus = string(v)
 		}
 	}
 	sort.Strings(historyKeys) // history-000000, history-000001, ... lexical == chronological
+	history := make([]*protos.HistoryEvent, 0, len(historyKeys))
 	for _, hk := range historyKeys {
 		var e protos.HistoryEvent
 		if err := proto.Unmarshal(values[hk], &e); err != nil {
@@ -344,7 +388,7 @@ func (s *service) load(ctx context.Context, ns, appID, instanceID string) (Execu
 		}
 		history = append(history, &e)
 	}
-	return DecodeExecution(appID, instanceID, history, customStatus), nil
+	return DecodeExecution(appID, instanceID, history, customStatus)
 }
 
 func matches(s ExecutionSummary, q ListQuery) bool {
