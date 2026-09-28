@@ -219,3 +219,65 @@ func TestNilSecretsServiceIsSafe(t *testing.T) {
 	require.Len(t, list, 1)
 	require.Empty(t, list[0].SecretRefs)
 }
+
+const envOnlyStoreYAML = `apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: envstore
+spec:
+  type: secretstores.local.env
+  version: v1
+`
+
+const envRefCompYAML = `apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pg
+spec:
+  type: bindings.postgresql
+  version: v1
+  metadata:
+  - name: connectionString
+    secretKeyRef:
+      name: DASH_TEST_PG
+      key: DASH_TEST_PG
+  - name: unsetField
+    secretKeyRef:
+      name: DASH_TEST_UNSET
+  - name: deniedField
+    secretKeyRef:
+      name: DAPR_SECRET
+auth:
+  secretStore: envstore
+`
+
+// An env-backed reference is resolved by daprd from ITS environment, which
+// the dashboard cannot see, so the component view must not report a status
+// derived from the dashboard's own environment — neither a false failure for
+// an unset variable nor a false "resolved" (and revealable) value. Outcomes
+// that do not depend on the environment's contents, like the denylist, stay.
+func TestEnvBackedRefsAreNotChecked(t *testing.T) {
+	t.Setenv("DASH_TEST_PG", "postgres://dashboard-only")
+	t.Setenv("DAPR_SECRET", "nope")
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "envstore.yaml"), []byte(envOnlyStoreYAML), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "pg.yaml"), []byte(envRefCompYAML), 0o600))
+	paths := func() []string { return []string{dir} }
+	svc := New(paths, nil, WithSecrets(secrets.New(paths)))
+	ctx := context.Background()
+
+	got, err := svc.Get(ctx, KindComponent, "pg")
+	require.NoError(t, err)
+	byField := map[string]SecretRefStatus{}
+	for _, s := range got.SecretRefs {
+		byField[s.Field] = s
+	}
+	for _, f := range []string{"connectionString", "unsetField"} {
+		require.Equal(t, StatusNotChecked, byField[f].Status, f)
+		require.Contains(t, byField[f].Detail, "daprd", f)
+	}
+	require.Equal(t, string(secrets.StatusForbidden), byField["deniedField"].Status)
+
+	_, err = svc.RevealSecret(ctx, "pg", "connectionString")
+	require.ErrorIs(t, err, ErrNoSecretValue, "the dashboard's value is not daprd's; do not reveal it")
+}

@@ -46,6 +46,21 @@ describe('SecretRefsPanel', () => {
     expect(screen.queryByText('s3cr3t')).not.toBeInTheDocument()
   })
 
+  it('shows an env-backed ref without a status pill or reveal', () => {
+    const { container } = renderPanel([{
+      field: 'connectionString', kind: 'secretKeyRef', store: 'secretstore',
+      name: 'POSTGRESQLCONNECTION', status: 'not-checked',
+      detail: "read by daprd from its own environment, which the dashboard can't see",
+    }])
+    expect(screen.getByText('connectionString')).toBeInTheDocument()
+    expect(screen.getByText('secretstore → POSTGRESQLCONNECTION')).toBeInTheDocument()
+    expect(screen.getByText(/read by daprd from its own environment/)).toBeInTheDocument()
+    expect(container.querySelector('[data-cy="secret-status-pill"]')).toBeNull()
+    expect(screen.queryByText(/not checked/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /reveal/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('••••••••')).not.toBeInTheDocument()
+  })
+
   it('shows the failure detail for an unresolved ref', () => {
     renderPanel([missing])
     expect(screen.getByText('KEY NOT FOUND')).toBeInTheDocument()

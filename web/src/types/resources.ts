@@ -35,6 +35,9 @@ export type SecretStatus =
   | 'key-not-found'
   | 'empty-value'
   | 'forbidden'
+  // daprd reads the value from its own environment (local.env store or
+  // envRef), which the dashboard can't see: shown without a status.
+  | 'not-checked'
 
 export interface SecretRefStatus {
   field: string

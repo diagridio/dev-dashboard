@@ -63,6 +63,10 @@ type Result struct {
 	Status Status
 	Value  string
 	Detail string // human-facing: the env var name or absolute file path tried
+	// FromEnv reports that the outcome depends on what the dashboard's own
+	// process environment contains. daprd reads its own environment, which
+	// need not match, so such an outcome says nothing about daprd.
+	FromEnv bool
 }
 
 // IsSecretStoreType reports whether a component type declares a secret store.

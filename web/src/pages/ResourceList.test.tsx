@@ -267,14 +267,19 @@ describe('ResourceList kind=component', () => {
     expect(screen.queryByLabelText(/pubsub has an unresolved secret/i)).not.toBeInTheDocument()
   })
 
-  it('does not mark a component whose secret references all resolved', async () => {
+  it('does not mark a component whose secret references are resolved or not checked', async () => {
+    // not-checked: daprd reads the value from its own environment, which the
+    // dashboard can't see — that is not a problem to flag.
     const ORDER = {
       id: 'ord000ord000',
       name: 'order',
       kind: 'component',
       type: 'state.redis',
       path: '/tmp/order.yaml',
-      secretRefs: [{ field: 'redisPassword', kind: 'secretKeyRef', status: 'resolved' }],
+      secretRefs: [
+        { field: 'redisPassword', kind: 'secretKeyRef', status: 'resolved' },
+        { field: 'redisUsername', kind: 'envRef', status: 'not-checked' },
+      ],
     }
     server.use(
       http.get('/api/resources', ({ request }) => {

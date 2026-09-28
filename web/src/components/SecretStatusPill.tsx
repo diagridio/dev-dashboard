@@ -2,7 +2,8 @@ import type { SecretStatus } from '../types/resources'
 
 // Class tokens are prefixed with the component's own name so they cannot
 // collide with unrelated global rules — see web/STYLEGUIDE.md.
-const STATUS_CLASS: Record<SecretStatus, string> = {
+// 'not-checked' has no pill: callers render no status for it at all.
+const STATUS_CLASS: Record<Exclude<SecretStatus, 'not-checked'>, string> = {
   resolved: 'secref-ok',
   'store-not-specified': 'secref-err',
   'store-not-found': 'secref-err',
@@ -14,6 +15,7 @@ const STATUS_CLASS: Record<SecretStatus, string> = {
 }
 
 export function SecretStatusPill({ status }: { status: SecretStatus }) {
+  if (status === 'not-checked') return null
   const cls = STATUS_CLASS[status] ?? 'secref-warn'
   return (
     <span data-cy="secret-status-pill" className={'pill ' + cls}>

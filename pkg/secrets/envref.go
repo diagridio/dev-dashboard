@@ -47,12 +47,12 @@ func lookupEnv(name string) Result {
 	val, ok := os.LookupEnv(name)
 	switch {
 	case !ok:
-		return Result{Status: StatusKeyNotFound,
+		return Result{Status: StatusKeyNotFound, FromEnv: true,
 			Detail: "env var " + name + " is not set in the dashboard's environment"}
 	case val == "":
-		return Result{Status: StatusEmptyValue, Detail: envDetail(name)}
+		return Result{Status: StatusEmptyValue, FromEnv: true, Detail: envDetail(name)}
 	}
-	return Result{Status: StatusResolved, Value: val, Detail: envDetail(name)}
+	return Result{Status: StatusResolved, FromEnv: true, Value: val, Detail: envDetail(name)}
 }
 
 // resolveEnvRef resolves a spec.metadata[].envRef straight from the

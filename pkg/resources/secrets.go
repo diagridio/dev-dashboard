@@ -36,6 +36,14 @@ type SecretStoreInfo struct {
 	UsedBy          []string `json:"usedBy,omitempty"`
 }
 
+// StatusNotChecked marks a reference whose value daprd reads from its own
+// process environment (a local.env store or an envRef). The dashboard only
+// sees its own environment, so any resolved/unset/empty verdict would describe
+// the wrong process; the UI shows the reference without a status instead.
+const StatusNotChecked = "not-checked"
+
+const notCheckedDetail = "read by daprd from its own environment, which the dashboard can't see"
+
 // secretRefsFor resolves every reference declared in doc. Returns nil when the
 // document declares none or no resolver is configured.
 func (s *service) secretRefsFor(ctx context.Context, doc []byte) []SecretRefStatus {
@@ -50,6 +58,9 @@ func (s *service) secretRefsFor(ctx context.Context, doc []byte) []SecretRefStat
 	for field, ref := range refs {
 		res := s.secrets.Resolve(ctx, storeName, ref)
 		status, detail := res.Status, res.Detail
+		if res.FromEnv {
+			status, detail = StatusNotChecked, notCheckedDetail
+		}
 		if status == secrets.StatusStoreNotFound {
 			if p, ok := s.containerStorePath(storeName); ok {
 				status = secrets.StatusStoreUnreadable
@@ -116,7 +127,8 @@ func (s *service) RevealSecret(ctx context.Context, idOrName, field string) (str
 		return "", ErrNoSecretValue
 	}
 	res := s.secrets.Resolve(ctx, storeName, ref)
-	if res.Status != secrets.StatusResolved {
+	// A FromEnv value is the dashboard's own, not necessarily daprd's.
+	if res.Status != secrets.StatusResolved || res.FromEnv {
 		return "", ErrNoSecretValue
 	}
 	return res.Value, nil

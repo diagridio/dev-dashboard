@@ -165,3 +165,31 @@ func TestEnvKeysAllowlist(t *testing.T) {
 	require.False(t, EnvVarAllowed("OTHER"))
 	require.True(t, EnvVarAllowed("allowed_one"), "allowlist matching is case-insensitive, as in Dapr")
 }
+
+// TestResolveMarksEnvDependentOutcomes: FromEnv flags exactly the outcomes
+// that depend on what the dashboard's own process environment contains, so
+// the component view can decline to show them (daprd's environment may
+// differ). Config-level outcomes such as the denylist or a key that can never
+// match stay unflagged.
+func TestResolveMarksEnvDependentOutcomes(t *testing.T) {
+	t.Setenv("MYAPP_SET", "v")
+	t.Setenv("MYAPP_BLANK", "")
+	t.Setenv("PLAIN_SET", "v")
+	svc, _ := writeStore(t, envStoreWithPrefixYAML, "")
+	ctx := context.Background()
+
+	for _, ref := range []Ref{
+		{Kind: "secretKeyRef", Name: "SET"},
+		{Kind: "secretKeyRef", Name: "BLANK"},
+		{Kind: "secretKeyRef", Name: "NOT_SET"},
+	} {
+		require.True(t, svc.Resolve(ctx, "envsecrets", ref).FromEnv, ref.Name)
+	}
+	require.True(t, svc.Resolve(ctx, "", Ref{Kind: "envRef", Name: "PLAIN_SET"}).FromEnv)
+	require.True(t, svc.Resolve(ctx, "", Ref{Kind: "envRef", Name: "UNSET_VAR"}).FromEnv)
+
+	require.False(t, svc.Resolve(ctx, "envsecrets", Ref{Kind: "secretKeyRef", Name: "SET", Key: "OTHER"}).FromEnv,
+		"a key that differs from the name never matches, whatever the environment holds")
+	require.False(t, svc.Resolve(ctx, "", Ref{Kind: "envRef", Name: "DAPR_API_TOKEN"}).FromEnv)
+	require.False(t, svc.Resolve(ctx, "missing", Ref{Kind: "secretKeyRef", Name: "SET"}).FromEnv)
+}

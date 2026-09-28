@@ -256,7 +256,7 @@ func (s *service) Resolve(ctx context.Context, storeName string, ref Ref) Result
 		// Dapr applies a secret only when the value is non-empty.
 		return Result{Status: StatusEmptyValue, Detail: detail}
 	}
-	return Result{Status: StatusResolved, Value: val, Detail: detail}
+	return Result{Status: StatusResolved, Value: val, Detail: detail, FromEnv: st.Type == TypeEnv}
 }
 
 // KeyNames returns the store's available secret names (never their values).
