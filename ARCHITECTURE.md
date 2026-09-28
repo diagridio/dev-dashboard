@@ -27,6 +27,13 @@ The dashboard is a **single Go binary** that:
    store is openable. That is what makes `state.in-memory` workflows inspectable.
 5. **Degrades gracefully** — a down sidecar, an unreachable store, or a missing runtime
    turns into a partial result or a clear error, never a crash.
+6. **Resolves component secret references** (`secretKeyRef` / `envRef` metadata) both for
+   display on the Components page and to open state-store connections that need them —
+   using the **dashboard's own environment and working directory, not daprd's**. The
+   dashboard is a separate process: a `secretstores.local.env` reference reads the
+   dashboard's environment, not the app's or daprd's, and a relative `secretsFile` for
+   `secretstores.local.file` is resolved against a documented candidate list rather than
+   daprd's cwd.
 
 The only mutating operations in the entire product are: workflow **terminate/purge**,
 managing your own saved **state-store connections** (persisted to
@@ -87,6 +94,9 @@ pkg/                    domain packages — each isolated, none import cmd/
   controlplane/         docker/podman detection, inspect, lifecycle actions, log stream
   containerruntime/     docker/podman resolution + exec runner (shared by controlplane & discovery)
   resources/            component + configuration YAML loader
+  secrets/              local secret-store detection + secretKeyRef/envRef resolution,
+                        delegating to components-contrib's own local.file / local.env
+                        stores; feeds pkg/resources and cmd/reconciler
   logs/                 file tail → line channel
   news/                 Diagrid product-feed proxy (cache + singleflight)
   metadata/             embedded component-metadata catalog (drives connection forms)

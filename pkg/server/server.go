@@ -75,11 +75,15 @@ type Capabilities struct {
 	// adapt static fallbacks (e.g. the Logs page's dapr_* targets) to the
 	// server's discovery filter.
 	Mode string `json:"mode"`
+	// SecretReveal gates the per-field secret reveal endpoint. It is off
+	// whenever the dashboard is served off-host (AllowNonLoopback), because
+	// that posture can be reached through a proxy from another machine.
+	SecretReveal bool `json:"secretReveal"`
 }
 
 // FullCapabilities is the host-mode default: everything on.
 func FullCapabilities() Capabilities {
-	return Capabilities{Lifecycle: true, ControlPlane: true, Logs: true, Workflows: true, State: true}
+	return Capabilities{Lifecycle: true, ControlPlane: true, Logs: true, Workflows: true, State: true, SecretReveal: true}
 }
 
 // NewRouter wires the API and the embedded SPA under the optional base path.
@@ -94,6 +98,9 @@ func NewRouter(opts Options) http.Handler {
 	caps := FullCapabilities()
 	if opts.Capabilities != nil {
 		caps = *opts.Capabilities
+	}
+	if opts.AllowNonLoopback {
+		caps.SecretReveal = false
 	}
 
 	mount := func(router chi.Router) {

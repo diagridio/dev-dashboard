@@ -5,6 +5,8 @@ export interface Capabilities {
   workflows: boolean
   /** State page (state-store record browser). */
   state?: boolean
+  /** Secret reference reveal endpoint (disabled when served off-host). */
+  secretReveal?: boolean
   /** CLI --mode value ('' = complete scan); lets the UI adapt static fallbacks. */
   mode?: string
 }
@@ -21,6 +23,7 @@ const FULL: Capabilities = {
   logs: true,
   workflows: true,
   state: true,
+  secretReveal: true,
   mode: '',
 }
 

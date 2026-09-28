@@ -365,6 +365,7 @@ export function State() {
       {loadError && (
         <div className="banner danger" data-testid="load-error-banner">
           {loadError} — Select another state store or check the connection.
+          {selectedStoreObj?.secretIssue && ` ${selectedStoreObj.secretIssue}`}
         </div>
       )}
 

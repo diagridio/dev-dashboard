@@ -149,7 +149,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		Backend:          rc,
 		StateBackend:     rc,
 		Stores:           rc,
-		Resources:        resources.New(rc.Paths, deps.ExtraResources),
+		Resources:        resources.New(rc.Paths, deps.ExtraResources, resources.WithSecrets(rc.secretsSvc)),
 		News:             newsSvc,
 		ControlPlane:     deps.ControlPlane,
 		TelemetryEnabled: deps.TelemetryEnabled,

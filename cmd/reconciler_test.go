@@ -384,7 +384,10 @@ func TestReconciler_BaseCtxCancelAbortsPreWarm(t *testing.T) {
 
 // TestComponentFor_WarnsOnUnresolvedSecrets verifies issue 3: componentFor must
 // log a warning when secretKeyRef metadata cannot be resolved, instead of
-// silently discarding the unresolved keys.
+// silently discarding the unresolved keys. The diagnostic text now comes
+// from pkg/secrets (via resolveComponentSecrets) rather than the old,
+// now-removed statestore helper, so it names the field and the pkg/secrets
+// status instead of the old "unresolved secretKeyRef metadata" wording.
 func TestComponentFor_WarnsOnUnresolvedSecrets(t *testing.T) {
 	dir := t.TempDir()
 	home := t.TempDir()
@@ -418,8 +421,10 @@ func TestComponentFor_WarnsOnUnresolvedSecrets(t *testing.T) {
 
 	_, ok := rc.componentFor(id)
 	require.True(t, ok)
-	require.Contains(t, buf.String(), "unresolved secretKeyRef",
+	require.Contains(t, buf.String(), "unresolved secret reference",
 		"componentFor must warn when secretKeyRef metadata cannot be resolved")
+	require.Contains(t, buf.String(), "connectionString unresolved",
+		"the warning must name the unresolved field")
 }
 
 func TestAddStoreDuplicateNameFriendlyError(t *testing.T) {

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/stretchr/testify/require"
 )
@@ -46,6 +47,30 @@ func TestRootCmd_HasVerboseFlag(t *testing.T) {
 	}
 	if f.DefValue != "false" {
 		t.Fatalf("expected --verbose default false, got %q", f.DefValue)
+	}
+}
+
+// TestFinalizeSecretReveal_NonLoopbackBindForcesOff verifies finding 1 of the
+// whole-branch review: --bind wires AllowNonLoopback to containerPosture, not
+// to the bind address, so a host-mode server bound to a non-loopback address
+// must still lose SecretReveal — the loopback Host guard only inspects the
+// Host header, which a non-browser client on another machine can forge.
+func TestFinalizeSecretReveal_NonLoopbackBindForcesOff(t *testing.T) {
+	got := finalizeSecretReveal(server.FullCapabilities(), "0.0.0.0")
+	require.False(t, got.SecretReveal, "non-loopback bind must force SecretReveal off")
+
+	// No other capability is disturbed.
+	require.True(t, got.Lifecycle)
+	require.True(t, got.ControlPlane)
+	require.True(t, got.Logs)
+	require.True(t, got.Workflows)
+	require.True(t, got.State)
+}
+
+func TestFinalizeSecretReveal_LoopbackBindLeavesRevealOn(t *testing.T) {
+	for _, bind := range []string{"127.0.0.1", "localhost", "::1"} {
+		got := finalizeSecretReveal(server.FullCapabilities(), bind)
+		require.True(t, got.SecretReveal, "loopback bind %q must leave SecretReveal on", bind)
 	}
 }
 

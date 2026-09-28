@@ -31,10 +31,14 @@ func SetVerbose(v bool) { verbose.Store(v) }
 // state.postgresql/postgres, state.mongodb).
 var ErrUnsupported = errors.New("unsupported state store type")
 
-// SecretRef is a Dapr secretKeyRef: the secret name and the key within it.
+// SecretRef is a Dapr secretKeyRef or envRef metadata reference.
 type SecretRef struct {
-	Name string // secretKeyRef.name (the secret's name)
-	Key  string // secretKeyRef.key (the key within that secret)
+	// Kind is "secretKeyRef" or "envRef", mirroring secrets.Ref.Kind. The zero
+	// value ("") is treated as "secretKeyRef" by every consumer, so existing
+	// literals built before envRef support was added keep working unchanged.
+	Kind string
+	Name string // secretKeyRef.name, or the env var name for envRef
+	Key  string // secretKeyRef.key (the key within that secret); unused for envRef
 }
 
 // Component is the parsed subset of a Dapr state-store component YAML we need.
@@ -43,7 +47,7 @@ type Component struct {
 	Type        string               // spec.type, e.g. "state.redis"
 	Version     string               // spec.version
 	Metadata    map[string]string    // spec.metadata name->value (inline only)
-	SecretRefs  map[string]SecretRef // spec.metadata name->secretKeyRef (no inline value)
+	SecretRefs  map[string]SecretRef // spec.metadata name->secretKeyRef/envRef (no inline value)
 	SecretStore string               // auth.secretStore
 	Path        string               // source file path (for display / disambiguation)
 }

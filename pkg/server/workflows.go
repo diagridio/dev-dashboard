@@ -38,6 +38,9 @@ type StoreInfo struct {
 	Active     bool      `json:"active"`
 	Connection string    `json:"connection"` // secrets-free host/db summary for display
 	UpdatedAt  time.Time `json:"updatedAt"`  // last added/updated; drives panel recency order
+	// SecretIssue names an unresolved secret reference that will make this
+	// store fail to connect. Empty when there is none.
+	SecretIssue string `json:"secretIssue,omitempty"`
 }
 
 // TargetResolver resolves an (appID, instanceID) pair into a RemoveTarget.

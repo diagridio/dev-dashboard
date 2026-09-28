@@ -74,6 +74,11 @@ export function StateStoreConnectionsPanel() {
               {s.path}
             </div>
           )}
+          {s.secretIssue && (
+            <div className="field-err" style={{ fontSize: 11 }}>
+              {s.secretIssue}
+            </div>
+          )}
         </div>
       ))}
 

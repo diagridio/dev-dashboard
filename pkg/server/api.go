@@ -100,7 +100,7 @@ func apiRouter(v version.Info, apps discovery.Service, containerLogs func(contex
 	if caps.State && stateBackend != nil {
 		r.Mount("/state", stateRouter(stateBackend))
 	}
-	r.Mount("/resources", resourcesRouter(res, apps))
+	r.Mount("/resources", resourcesRouter(res, apps, caps.SecretReveal))
 	r.Mount("/news", newsRouter(newsSvc))
 	if caps.ControlPlane {
 		r.Mount("/controlplane", controlPlaneRouter(cp))

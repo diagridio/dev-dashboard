@@ -193,6 +193,8 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		c.Mode = string(mode)
 		caps = &c
 	}
+	finalized := finalizeSecretReveal(*caps, settings.Bind)
+	caps = &finalized
 
 	telemetry := telemetryEnabled(os.Getenv)
 	opts, closers := assembleOptions(ctx, serveDeps{
@@ -282,6 +284,22 @@ func isLoopbackBind(bind string) bool {
 		return true
 	}
 	return false
+}
+
+// finalizeSecretReveal forces SecretReveal off whenever the server binds a
+// non-loopback address, regardless of container posture. AllowNonLoopback
+// (wired to containerPosture, not to --bind) already forces it off inside
+// pkg/server for the aspire/container CSRF-guard mode, but host mode can
+// still be told to bind 0.0.0.0 while keeping the loopback Host guard; that
+// guard only inspects the Host header, so a non-browser client on another
+// machine can forge a loopback Host and reach the reveal endpoint. Binding
+// non-loopback is the actual exposure, independent of posture, so this check
+// is applied unconditionally after posture-specific capabilities are built.
+func finalizeSecretReveal(caps server.Capabilities, bind string) server.Capabilities {
+	if !isLoopbackBind(bind) {
+		caps.SecretReveal = false
+	}
+	return caps
 }
 
 func trimSlash(s string) string {

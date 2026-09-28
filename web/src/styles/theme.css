@@ -211,6 +211,10 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .s-term { background: var(--term-bg); color: var(--term-fg); }
 .s-susp { background: var(--susp-bg); color: var(--susp-fg); }
 .s-pend { background: var(--pend-bg); color: var(--pend-fg); }
+.secref-ok { background: var(--done-bg); color: var(--done-fg); }
+.secref-warn { background: var(--pend-bg); color: var(--pend-fg); }
+.secref-err { background: var(--fail-bg); color: var(--fail-fg); }
+.cn-secretwarn { color: var(--fail-fg); font-size: 11px; }
 .health { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; }
 .health .led { width: 8px; height: 8px; border-radius: 50%; }
 .led.ok { background: var(--ok-bright); }

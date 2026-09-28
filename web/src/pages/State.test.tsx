@@ -302,6 +302,36 @@ describe('State page', () => {
     expect(screen.getByTestId('store-select')).toBeInTheDocument()
   })
 
+  // Covers finding 5 of the whole-branch review: the design spec requires the
+  // State page to append the secret issue to its error banner (the
+  // StateStoreConnectionsPanel half already existed; the page never wired it
+  // in), so a user whose selected store is secret-broken sees why, not just
+  // a bare "state store unavailable".
+  it('appends the selected store secretIssue to the load-error banner', async () => {
+    server.use(
+      http.get('/api/statestores', () =>
+        HttpResponse.json([
+          {
+            ...STORES[0],
+            secretIssue:
+              'redisPassword unresolved (key-not-found): no such key: redis-secret',
+          },
+          STORES[1],
+        ]),
+      ),
+      http.get('/api/state/appids', () => HttpResponse.json([])),
+      http.get('/api/state', () =>
+        HttpResponse.json({ error: 'this state store cannot be browsed' }, { status: 503 }),
+      ),
+    )
+    renderAt()
+    const banner = await screen.findByTestId('load-error-banner')
+    expect(banner).toHaveTextContent('cannot be browsed')
+    expect(banner).toHaveTextContent(
+      'redisPassword unresolved (key-not-found): no such key: redis-secret',
+    )
+  })
+
   it('guides the user when no state store is configured at all', async () => {
     server.use(http.get('/api/statestores', () => HttpResponse.json([])))
     renderAt()

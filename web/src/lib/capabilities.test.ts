@@ -19,6 +19,7 @@ describe('getCapabilities', () => {
       logs: true,
       workflows: true,
       state: true,
+      secretReveal: true,
       mode: '',
     })
   })
