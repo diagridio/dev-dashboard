@@ -29,10 +29,34 @@ func TestResolveEnvStoreAppliesPrefix(t *testing.T) {
 	require.Equal(t, StatusResolved, got.Status)
 	require.Equal(t, "from-env", got.Value)
 	require.Contains(t, got.Detail, "MYAPP_REDIS_PASSWORD")
+}
 
-	// An unset variable is empty, not resolved.
-	got = svc.Resolve(ctx, "envsecrets", Ref{Kind: "secretKeyRef", Name: "NOT_SET"})
+// TestResolveEnvStoreUnsetVsEmpty: contrib's local.env GetSecret uses
+// os.Getenv, which cannot tell an unset variable from one set to "". The
+// resolver must, because the fixes differ: export the variable vs give it a
+// value. Both details must say whose environment was read, since the
+// dashboard sees its own process environment, not daprd's.
+func TestResolveEnvStoreUnsetVsEmpty(t *testing.T) {
+	t.Setenv("MYAPP_BLANK", "")
+	svc, _ := writeStore(t, envStoreWithPrefixYAML, "")
+	ctx := context.Background()
+
+	got := svc.Resolve(ctx, "envsecrets", Ref{Kind: "secretKeyRef", Name: "NOT_SET"})
+	require.Equal(t, StatusKeyNotFound, got.Status)
+	require.Contains(t, got.Detail, "MYAPP_NOT_SET")
+	require.Contains(t, got.Detail, "not set")
+	require.Contains(t, got.Detail, "dashboard's environment")
+
+	got = svc.Resolve(ctx, "envsecrets", Ref{Kind: "secretKeyRef", Name: "BLANK"})
 	require.Equal(t, StatusEmptyValue, got.Status)
+	require.Contains(t, got.Detail, "MYAPP_BLANK")
+	require.Contains(t, got.Detail, "dashboard's environment")
+
+	// local.env returns a single key equal to the secret name, so a
+	// mismatched key is still not found even when the variable is set.
+	t.Setenv("MYAPP_SET", "v")
+	got = svc.Resolve(ctx, "envsecrets", Ref{Kind: "secretKeyRef", Name: "SET", Key: "OTHER"})
+	require.Equal(t, StatusKeyNotFound, got.Status)
 }
 
 // TestResolveEnvStoreDenylist covers finding 4 of the whole-branch review:
@@ -104,7 +128,15 @@ func TestResolveEnvRef(t *testing.T) {
 	require.Equal(t, "tok", got.Value)
 	require.Contains(t, got.Detail, "MY_TOKEN")
 
-	require.Equal(t, StatusEmptyValue, svc.Resolve(ctx, "", Ref{Kind: "envRef", Name: "UNSET_VAR"}).Status)
+	got = svc.Resolve(ctx, "", Ref{Kind: "envRef", Name: "UNSET_VAR"})
+	require.Equal(t, StatusKeyNotFound, got.Status)
+	require.Contains(t, got.Detail, "not set")
+	require.Contains(t, got.Detail, "dashboard's environment")
+
+	t.Setenv("BLANK_VAR", "")
+	got = svc.Resolve(ctx, "", Ref{Kind: "envRef", Name: "BLANK_VAR"})
+	require.Equal(t, StatusEmptyValue, got.Status)
+	require.Contains(t, got.Detail, "dashboard's environment")
 }
 
 func TestEnvVarAllowed(t *testing.T) {

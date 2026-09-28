@@ -34,17 +34,33 @@ func EnvVarAllowed(key string) bool {
 	return false
 }
 
+// envDetail names an env var and whose environment it was read from: the
+// dashboard's own process, which need not match daprd's.
+func envDetail(name string) string {
+	return "env var " + name + " in the dashboard's environment"
+}
+
+// lookupEnv reads name from the dashboard's environment, telling an unset
+// variable (StatusKeyNotFound) apart from one set to "" (StatusEmptyValue).
+// Dapr's os.Getenv-based lookups cannot, but the fix differs for the user.
+func lookupEnv(name string) Result {
+	val, ok := os.LookupEnv(name)
+	switch {
+	case !ok:
+		return Result{Status: StatusKeyNotFound,
+			Detail: "env var " + name + " is not set in the dashboard's environment"}
+	case val == "":
+		return Result{Status: StatusEmptyValue, Detail: envDetail(name)}
+	}
+	return Result{Status: StatusResolved, Value: val, Detail: envDetail(name)}
+}
+
 // resolveEnvRef resolves a spec.metadata[].envRef straight from the
 // environment, exactly as the runtime does: no secret store, no prefix.
 func resolveEnvRef(ref Ref) Result {
-	detail := "env var " + ref.Name
 	if !EnvVarAllowed(ref.Name) {
 		return Result{Status: StatusForbidden,
-			Detail: detail + " is on Dapr's denylist (DAPR_*, APP_API_TOKEN, names with spaces)"}
+			Detail: "env var " + ref.Name + " is on Dapr's denylist (DAPR_*, APP_API_TOKEN, names with spaces)"}
 	}
-	val := os.Getenv(ref.Name)
-	if val == "" {
-		return Result{Status: StatusEmptyValue, Detail: detail}
-	}
-	return Result{Status: StatusResolved, Value: val, Detail: detail}
+	return lookupEnv(ref.Name)
 }

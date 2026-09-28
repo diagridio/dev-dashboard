@@ -205,7 +205,7 @@ func detailFor(st Store, e *entry, ref Ref) string {
 	case TypeFile:
 		return "secrets file " + e.file
 	case TypeEnv:
-		return "env var " + st.Properties["prefix"] + ref.Name
+		return envDetail(st.Properties["prefix"] + ref.Name)
 	}
 	return ""
 }
@@ -248,6 +248,11 @@ func (s *service) Resolve(ctx context.Context, storeName string, ref Ref) Result
 		return Result{Status: StatusKeyNotFound, Detail: detail}
 	}
 	if val == "" {
+		if st.Type == TypeEnv {
+			// contrib's GetSecret is a bare os.Getenv, which reports an unset
+			// variable as "". lookupEnv tells the two apart.
+			return lookupEnv(st.Properties["prefix"] + ref.Name)
+		}
 		// Dapr applies a secret only when the value is non-empty.
 		return Result{Status: StatusEmptyValue, Detail: detail}
 	}
