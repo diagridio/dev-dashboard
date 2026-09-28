@@ -89,13 +89,36 @@ func forEachBounded(ctx context.Context, n int, fn func(i int)) {
 }
 
 // loadSummaries loads refs concurrently and returns one result per ref, in
-// input order, so callers stay deterministic before their own sort.
+// input order, so callers stay deterministic before their own sort. It
+// reads all metadata values in one BulkGet, reuses cached summaries whose
+// metadata bytes are unchanged, and loads the rest via loadWithMeta.
 func (s *service) loadSummaries(ctx context.Context, ns string, refs []instanceRef) ([]loaded, error) {
 	out := make([]loaded, len(refs))
+	if len(refs) == 0 {
+		return out, nil
+	}
+	metaKeys := make([]string, len(refs))
+	for i, r := range refs {
+		metaKeys[i] = statestore.InstancePrefix(ns, r.appID, r.id) + statestore.SuffixMetadata
+	}
+	metas, err := s.store.BulkGet(ctx, metaKeys)
+	if err != nil {
+		return nil, err
+	}
 	forEachBounded(ctx, len(refs), func(i int) {
-		ex, err := s.load(ctx, ns, refs[i].appID, refs[i].id)
+		r := refs[i]
+		meta := metas[metaKeys[i]]
+		key := cacheKey(ns, r.appID, r.id)
+		if sum, ok := s.cache.get(key, meta); ok {
+			out[i] = loaded{summary: sum, ok: true}
+			return
+		}
+		ex, fromMeta, err := s.loadWithMeta(ctx, ns, r.appID, r.id, meta)
 		if err != nil {
 			return
+		}
+		if fromMeta {
+			s.cache.put(key, ns, r.appID, meta, ex.ExecutionSummary)
 		}
 		out[i] = loaded{summary: ex.ExecutionSummary, ok: true}
 	})
@@ -133,6 +156,9 @@ type service struct {
 	// List/Stats); the store-wide scans (all-apps List/Stats, AppIDs) always
 	// use the store namespace.
 	nsResolver func(ctx context.Context, appID string) string
+	// cache holds list/stats summaries validated by metadata bytes (see
+	// summaryCache). Get never uses it: the detail page needs full history.
+	cache *summaryCache
 }
 
 // Option customizes a workflow Service.
@@ -148,7 +174,7 @@ func New(store statestore.Store, namespace string, opts ...Option) Service {
 	if namespace == "" {
 		namespace = "default"
 	}
-	s := &service{store: store, namespace: namespace}
+	s := &service{store: store, namespace: namespace, cache: newSummaryCache(maxCachedSummaries)}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -301,10 +327,18 @@ func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 	if err != nil {
 		return StatsResult{}, err
 	}
-	results, err := s.loadSummaries(ctx, ns, refsFromKeys(metaKeys, seen))
+	refs := refsFromKeys(metaKeys, seen)
+	results, err := s.loadSummaries(ctx, ns, refs)
 	if err != nil {
 		return StatsResult{}, err
 	}
+	// Stats saw every metadata key in scope, so any cached instance it
+	// didn't see was purged or deleted.
+	keep := make(map[string]struct{}, len(refs))
+	for _, r := range refs {
+		keep[cacheKey(ns, r.appID, r.id)] = struct{}{}
+	}
+	s.cache.prune(ns, q.AppID, keep)
 	for _, r := range results {
 		if !r.ok || !matches(r.summary, searchQ) {
 			continue
