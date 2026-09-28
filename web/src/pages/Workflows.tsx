@@ -81,7 +81,7 @@ export function Workflows() {
   const [dialogInitialForce, setDialogInitialForce] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [removeStatus, setRemoveStatus] = useState<{ ok: number; failed: number } | null>(null)
-  const { mutate: removeWorkflows } = useRemoveWorkflows()
+  const { mutate: removeWorkflows, isPending: removing } = useRemoveWorkflows()
 
   // Running apps — used to flag workflow rows whose app-id is not currently running.
   const { data: appsData } = useApps()
@@ -665,6 +665,7 @@ export function Workflows() {
         onConfirm={onConfirmRemove}
         onCancel={() => setConfirmDialogOpen(false)}
         initialForce={dialogInitialForce}
+        busy={removing}
       />
     </div>
   )

@@ -77,4 +77,25 @@ describe('ConfirmRemoveDialog', () => {
     fireEvent.click(cancel)
     expect(trigger).toHaveFocus()
   })
+
+  it('while busy: shows a status line, disables force and both buttons', () => {
+    render(
+      <ConfirmRemoveDialog
+        open
+        busy
+        targets={[{ appId: 'o', instanceId: 'a', status: 'Completed' }, { appId: 'o', instanceId: 'b', status: 'Running' }]}
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Removing 2 workflows…')
+    expect(document.querySelector('[data-cy="confirm-force"]')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Removing…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+  })
+
+  it('shows no status line when idle', () => {
+    render(<ConfirmRemoveDialog open targets={[{ appId: 'o', instanceId: 'a', status: 'Running' }]} onConfirm={() => {}} onCancel={() => {}} />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
 })
