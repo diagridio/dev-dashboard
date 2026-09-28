@@ -1,6 +1,9 @@
 package statestore
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 const (
 	KeyDelimiter       = "||"
@@ -57,4 +60,15 @@ func ParseAppID(key string) (string, bool) {
 		return "", false
 	}
 	return parts[0], true
+}
+
+// HistoryKey returns the key suffix of an instance's i-th history entry,
+// matching Dapr's naming: "history-" + i zero-padded to at least 6 digits.
+// Prepend InstancePrefix to get the full key.
+func HistoryKey(i uint64) string {
+	s := strconv.FormatUint(i, 10)
+	if len(s) < 6 {
+		s = strings.Repeat("0", 6-len(s)) + s
+	}
+	return HistoryPrefix + s
 }
