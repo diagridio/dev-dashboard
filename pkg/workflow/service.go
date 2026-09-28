@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dapr/durabletask-go/api/protos"
@@ -29,6 +30,80 @@ const (
 	filteredScanPageMultiple = 10
 	maxFilteredScanKeys      = 2000
 )
+
+// instanceLoadConcurrency bounds how many instances List/Stats load at once.
+const instanceLoadConcurrency = 8
+
+// instanceRef identifies one instance found by a metadata-key scan.
+type instanceRef struct{ appID, id string }
+
+// loaded is one instance's summary; ok is false when it failed to load
+// (skipped, as a failed load always was).
+type loaded struct {
+	summary ExecutionSummary
+	ok      bool
+}
+
+// refsFromKeys parses metadata keys into instance refs, skipping malformed
+// keys and any app/instance pair already recorded in seen (which it updates).
+func refsFromKeys(keys []string, seen map[string]struct{}) []instanceRef {
+	refs := make([]instanceRef, 0, len(keys))
+	for _, k := range keys {
+		appID, ok := statestore.ParseAppID(k)
+		if !ok {
+			continue
+		}
+		id, ok := statestore.ParseInstanceID(k)
+		if !ok {
+			continue
+		}
+		dk := appID + "/" + id
+		if _, dup := seen[dk]; dup {
+			continue
+		}
+		seen[dk] = struct{}{}
+		refs = append(refs, instanceRef{appID: appID, id: id})
+	}
+	return refs
+}
+
+// forEachBounded runs fn(i) for every i in [0, n) on at most
+// instanceLoadConcurrency goroutines. It stops scheduling once ctx is done
+// and always waits for in-flight calls before returning.
+func forEachBounded(ctx context.Context, n int, fn func(i int)) {
+	sem := make(chan struct{}, instanceLoadConcurrency)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		if ctx.Err() != nil {
+			break
+		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			fn(i)
+		}()
+	}
+	wg.Wait()
+}
+
+// loadSummaries loads refs concurrently and returns one result per ref, in
+// input order, so callers stay deterministic before their own sort.
+func (s *service) loadSummaries(ctx context.Context, ns string, refs []instanceRef) ([]loaded, error) {
+	out := make([]loaded, len(refs))
+	forEachBounded(ctx, len(refs), func(i int) {
+		ex, err := s.load(ctx, ns, refs[i].appID, refs[i].id)
+		if err != nil {
+			return
+		}
+		out[i] = loaded{summary: ex.ExecutionSummary, ok: true}
+	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 type ListQuery struct {
 	AppID           string
@@ -181,26 +256,13 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 		}
 		next = n
 		scanned += len(metaKeys)
-		for _, k := range metaKeys {
-			appID, ok := statestore.ParseAppID(k)
-			if !ok {
-				continue
-			}
-			id, ok := statestore.ParseInstanceID(k)
-			if !ok {
-				continue
-			}
-			dedupKey := appID + "/" + id
-			if _, dup := seen[dedupKey]; dup {
-				continue
-			}
-			seen[dedupKey] = struct{}{}
-			ex, err := s.load(ctx, ns, appID, id)
-			if err != nil {
-				continue
-			}
-			if matches(ex.ExecutionSummary, q) {
-				items = append(items, ex.ExecutionSummary)
+		results, err := s.loadSummaries(ctx, ns, refsFromKeys(metaKeys, seen))
+		if err != nil {
+			return ListResult{}, err
+		}
+		for _, r := range results {
+			if r.ok && matches(r.summary, q) {
+				items = append(items, r.summary)
 			}
 		}
 		// Unfiltered: preserve one-key-page-per-call semantics.
@@ -239,28 +301,15 @@ func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 	if err != nil {
 		return StatsResult{}, err
 	}
-	for _, k := range metaKeys {
-		appID, ok := statestore.ParseAppID(k)
-		if !ok {
+	results, err := s.loadSummaries(ctx, ns, refsFromKeys(metaKeys, seen))
+	if err != nil {
+		return StatsResult{}, err
+	}
+	for _, r := range results {
+		if !r.ok || !matches(r.summary, searchQ) {
 			continue
 		}
-		id, ok := statestore.ParseInstanceID(k)
-		if !ok {
-			continue
-		}
-		dedupKey := appID + "/" + id
-		if _, dup := seen[dedupKey]; dup {
-			continue
-		}
-		seen[dedupKey] = struct{}{}
-		ex, err := s.load(ctx, ns, appID, id)
-		if err != nil {
-			continue
-		}
-		if !matches(ex.ExecutionSummary, searchQ) {
-			continue
-		}
-		res.Counts[ex.Status]++
+		res.Counts[r.summary.Status]++
 		res.Total++
 	}
 	return res, nil
