@@ -345,7 +345,7 @@ export function WorkflowDetail() {
   const store = searchParams.get('store') ?? undefined
   const { data: execution, isLoading, isError } = useWorkflow(appId ?? '', instanceId ?? '', store)
   const navigate = useNavigate()
-  const { mutate: removeWorkflows } = useRemoveWorkflows()
+  const { mutate: removeWorkflows, isPending: removing } = useRemoveWorkflows()
 
   // Running apps — the App ID links to its app page only when that app is
   // currently running; otherwise the link would point at a non-existent app.
@@ -815,6 +815,7 @@ export function WorkflowDetail() {
         onConfirm={onConfirmRemove}
         onCancel={() => setRemoveDialogOpen(false)}
         initialForce={removeForce}
+        busy={removing}
       />
 
       {toastNode}

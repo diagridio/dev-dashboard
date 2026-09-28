@@ -869,6 +869,36 @@ describe('Workflows page — store selector', () => {
     await waitFor(() => expect(capturedStore).toBe('statestore-b'))
   })
 
+  it('keeps the remove dialog open and busy until the purge response arrives', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({ items: [{ appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }] }),
+      ),
+      http.post('/api/workflows/purge', async () => {
+        await gate
+        return HttpResponse.json([{ instanceId: 'abc', mechanism: 'purge', ok: true }])
+      }),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'abc' })
+    await userEvent.click(document.querySelectorAll('tbody .cbx:not(.on)')[0])
+    await userEvent.click(document.querySelector('[data-cy="bulk-remove"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    await userEvent.click(document.querySelector('[data-cy="confirm-remove"]') as HTMLElement)
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Removing 1 workflow…'))
+    expect(document.querySelector('[data-cy="confirm-remove"]')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+
+    release()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
   it('collapses duplicate-path stores (same name+type+connection) into one option, showing the active one', async () => {
     const dupPaths = [
       { id: 'redis-p1', name: 'redis', type: 'state.redis', source: 'auto', path: '/c/redis-a.yaml', active: false, connection: 'localhost:6379' },
