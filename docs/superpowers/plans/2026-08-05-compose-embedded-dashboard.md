@@ -20,6 +20,8 @@
 - Contract validation is **fail-fast at startup** and every error names the exact environment variable.
 - Do not change the `DEVDASHBOARD_MODE=aspire` default baked into `Dockerfile` / `Dockerfile.goreleaser` — it would break the existing Aspire hosting integration.
 - Do not run `git push` or open a PR; commit locally only.
+- **Known Windows-only failures** (path separator / file mode, fail on every branch, not caused by this plan): `cmd`: `TestDerivePaths_AutoDetect`, `TestRegistry_SaveLoadRoundTrip_WindowsPath`, `TestResolveServeSettings/env_overrides_aspire_defaults`; `pkg/discovery`: `TestTranslateMountPath`, `TestComposeSourceScan`. Ignore these when judging regressions on Windows.
+- **Capabilities added on main after this plan was first written** (merged 2026-09-29): `Capabilities.State` (State page, needs a connected store — there is no sidecar fallback, see `reconciler.StateFor`) and `Capabilities.SecretReveal` (forced off whenever `AllowNonLoopback` is set or the bind is non-loopback — see `finalizeSecretReveal` in `cmd/root.go`). Every edit to the capabilities struct, the container-posture branch, or `capabilities.ts` must preserve both.
 
 ## File Structure
 
@@ -41,7 +43,7 @@
 
 ### Task 1: `Instance.GRPCAddr()` — resolve the sidecar gRPC endpoint
 
-Today `cmd/reconciler.go:468` builds the sidecar gRPC address as `"127.0.0.1:" + strconv.Itoa(in.GRPCPort)`, which is a host-posture assumption. This task adds a resolver alongside the existing `BaseURL()` so a contract-supplied address can win, exactly as `DaprHTTPBaseURL` wins in `sidecarBaseURL`.
+Today `cmd/reconciler.go:527` builds the sidecar gRPC address as `"127.0.0.1:" + strconv.Itoa(in.GRPCPort)`, which is a host-posture assumption. This task adds a resolver alongside the existing `BaseURL()` so a contract-supplied address can win, exactly as `DaprHTTPBaseURL` wins in `sidecarBaseURL`.
 
 **Files:**
 - Modify: `pkg/discovery/types.go` (add one field to `Instance`, after `DaprHTTPBaseURL` at line 39)
@@ -155,7 +157,8 @@ Derivation rule: take the **host** of `_DAPR_HTTP` (host without port, or host:p
 - Rename: `pkg/discovery/scan_aspire.go` → `pkg/discovery/scan_contract.go`
 - Rename: `pkg/discovery/scan_aspire_test.go` → `pkg/discovery/scan_contract_test.go`
 - Modify: `pkg/discovery/service.go` (add `DaprGRPCAddr` to `ScanResult` and its enrichment passthrough)
-- Modify: `cmd/root.go:141,169` and `cmd/sources_test.go` if they reference the old names
+- Modify: `cmd/root.go:141,153,173`, `cmd/mode.go:58`
+- Modify: `cmd/serve_aspire_integration_test.go:43` and `cmd/workflow_test.go:118` (both call `NewAspireScanner`)
 
 **Interfaces:**
 - Consumes: `Instance.DaprGRPCAddr` (Task 1).
@@ -369,7 +372,7 @@ Note on the `url not host:port` case: `net.SplitHostPort("http://order-dapr:5000
 
 - [ ] **Step 6: Update the call sites**
 
-In `cmd/root.go`, the two `discovery.NewAspireScanner(os.Getenv)` calls (lines 141 and 169) become `discovery.NewContractScanner(os.Getenv, discovery.SourceAspire)` for now — Task 4 makes line 141's source mode-derived. Every `discovery.AspireContractPresent` reference (`cmd/mode.go:58`, `cmd/root.go:149`) becomes `discovery.ContractPresent`.
+In `cmd/root.go`, the two `discovery.NewAspireScanner(os.Getenv)` calls (lines 141 and 173) become `discovery.NewContractScanner(os.Getenv, discovery.SourceAspire)` for now — Task 4 makes line 141's source mode-derived. Every `discovery.AspireContractPresent` reference (`cmd/mode.go:58`, `cmd/root.go:153`) becomes `discovery.ContractPresent`. The two test callers (`cmd/serve_aspire_integration_test.go:43`, `cmd/workflow_test.go:118`) become `discovery.NewContractScanner(..., discovery.SourceAspire)`.
 
 Find any remaining references:
 
@@ -389,12 +392,12 @@ Expected: PASS — all subtests including the six derivation shapes and five mal
 Run: `gofmt -l . && go test -tags unit -race ./...`
 Expected: no gofmt output; all packages PASS. The pre-existing renamed aspire tests must still pass unchanged apart from the function name.
 
-> **Windows note:** `TestDerivePaths_AutoDetect` and `TestRegistry_SaveLoadRoundTrip_WindowsPath` fail on Windows on every branch (path separator and file mode). Ignore those two when judging regressions.
+> **Windows note:** see the known Windows-only failures in Global Constraints. Ignore those when judging regressions.
 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add pkg/discovery/scan_contract.go pkg/discovery/scan_contract_test.go pkg/discovery/service.go cmd/root.go cmd/mode.go
+git add pkg/discovery/scan_contract.go pkg/discovery/scan_contract_test.go pkg/discovery/service.go cmd/root.go cmd/mode.go cmd/serve_aspire_integration_test.go cmd/workflow_test.go
 git commit -m "feat(discovery): parameterize contract scanner source and add gRPC address"
 ```
 
@@ -406,7 +409,7 @@ git commit -m "feat(discovery): parameterize contract scanner source and add gRP
 
 **Files:**
 - Modify: `cmd/mode.go:53-59`
-- Test: `cmd/mode_test.go` (append)
+- Test: `cmd/mode_test.go` (append; and remove the now-wrong compose assertion in the existing `TestContainerPosture` at line 67 — see Step 3a)
 
 **Interfaces:**
 - Consumes: `discovery.ContractPresent` (Task 2).
@@ -468,6 +471,8 @@ func TestComposeContainerPostureServeDefaults(t *testing.T) {
 Run: `go test -tags unit ./cmd/ -run "TestContainerPostureMatrix|TestComposeContainerPostureServeDefaults" -v`
 Expected: FAIL on `compose with contract is container posture` — got false, want true. `TestComposeContainerPostureServeDefaults` should already PASS (it pins existing behavior).
 
+> **Windows:** `TestResolveServeSettings/env_overrides_aspire_defaults` fails there on every branch because of the path separator. `TestComposeContainerPostureServeDefaults` sets no resources path, so it is not affected.
+
 - [ ] **Step 3: Widen the posture check**
 
 Replace `containerPosture` in `cmd/mode.go`:
@@ -496,10 +501,18 @@ Also update the `Mode` doc comment block above (lines 13-28) so `ModeCompose` re
 //     via the container runtime.
 ```
 
+- [ ] **Step 3a: Retire the contradicting assertion**
+
+The existing `TestContainerPosture` (`cmd/mode_test.go:53`) asserts at line 67 that
+`containerPosture(ModeCompose, withContract)` is **false** — the exact behavior this task
+reverses. Delete that `if` block (the other three assertions stay). `TestContainerPostureMatrix`
+covers the compose cases in both directions. This is an intentional test change, not a
+host-posture regression.
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `go test -tags unit ./cmd/ -run "TestContainerPostureMatrix|TestComposeContainerPostureServeDefaults" -v`
-Expected: PASS, all seven matrix subtests plus the defaults test.
+Run: `go test -tags unit ./cmd/ -run "TestContainerPosture|TestComposeContainerPostureServeDefaults" -v`
+Expected: PASS — the trimmed `TestContainerPosture`, all seven matrix subtests, and the defaults test.
 
 - [ ] **Step 5: Update the `--bind` and `--mode` flag help**
 
@@ -532,11 +545,11 @@ git commit -m "feat(cmd): admit compose mode into container posture"
 
 ### Task 4: Wire the compose container posture in `runServe`
 
-The `case containerPosture:` branch (`cmd/root.go:140`) hardcodes the Aspire source and gates `Workflows` on a state-store file. This task derives the source from the mode and enables `Workflows` when any app has a gRPC address, since sidecar-gRPC inspection needs no store.
+The `case containerPosture:` branch (`cmd/root.go:140`) hardcodes the Aspire source and gates `Workflows` and `State` on a state-store file. This task derives the source from the mode and enables `Workflows` when any app has a gRPC address, since sidecar-gRPC inspection needs no store. `State` keeps its store gate: the State page has no sidecar fallback (Dapr's HTTP State API cannot enumerate keys).
 
 **Files:**
-- Modify: `cmd/root.go:139-147`
-- Modify: `pkg/server/server.go:62-76` (`Capabilities`)
+- Modify: `cmd/root.go:140-151`
+- Modify: `pkg/server/server.go` (`Capabilities`, which now also carries `State` and `SecretReveal`)
 - Test: `cmd/root_capabilities_test.go` (create)
 
 **Interfaces:**
@@ -632,7 +645,7 @@ In `pkg/server/server.go`, add to the `Capabilities` struct after `Mode`:
 	ContainerPosture bool `json:"containerPosture"`
 ```
 
-`FullCapabilities()` leaves it false, which is correct for every host mode.
+`FullCapabilities()` leaves it false, which is correct for every host mode. Do not touch the `State` or `SecretReveal` fields or the `AllowNonLoopback` override in `NewRouter`.
 
 - [ ] **Step 4: Add the two helpers**
 
@@ -672,7 +685,7 @@ func anyGRPCAddr(scan discovery.Scanner) bool {
 
 - [ ] **Step 5: Rewrite the container-posture branch**
 
-Replace `cmd/root.go:140-147` with:
+Replace `cmd/root.go:140-151` with:
 
 ```go
 	case containerPosture:
@@ -683,15 +696,20 @@ Replace `cmd/root.go:140-147` with:
 		appNS = contractNamespaces(scan)
 		appsSvc = discovery.New(scan, client)
 		caps = &server.Capabilities{
-			// Sidecar-gRPC inspection needs no store, so a declared app is
-			// enough to enable the workflow routes.
-			Workflows:        settings.StateStore != "" || anyGRPCAddr(scan),
+			// Sidecar-gRPC inspection needs no store, so in compose a declared
+			// app is enough to enable the workflow routes. Aspire apps are
+			// never sidecar-sourced (Task 5), so aspire keeps the store gate.
+			Workflows: settings.StateStore != "" || (mode == ModeCompose && anyGRPCAddr(scan)),
+			// The State page has no sidecar fallback, so it still needs a store.
+			State:            settings.StateStore != "",
 			Mode:             string(mode),
 			ContainerPosture: true,
 		}
 ```
 
-Note `Mode` changes from the hardcoded `string(ModeAspire)` to `string(mode)`. For Aspire that is the same value, so nothing changes there.
+Note `Mode` changes from the hardcoded `string(ModeAspire)` to `string(mode)`. For Aspire that is the same value, so nothing changes there. `SecretReveal` stays unset (false) here and is also forced off afterwards by `finalizeSecretReveal` and by `AllowNonLoopback` in `NewRouter`. Leave both of those alone.
+
+> **Why the `mode == ModeCompose` guard:** `anyGRPCAddr` is true for aspire too (the contract scanner derives an address in both postures). Without the guard, aspire container posture with declared apps and no store would report `Workflows: true`, while Task 5 keeps aspire apps out of the sidecar source, leaving a Workflows page with no data source. The guard keeps aspire bit-for-bit unchanged (decided 2026-09-29).
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
@@ -714,10 +732,10 @@ git commit -m "feat(cmd): wire compose container posture with store-free workflo
 
 ### Task 5: Sidecar endpoints and eligibility in the reconciler
 
-`sidecarEndpoints` (`cmd/reconciler.go:445`) filters on `in.GRPCPort == 0` and builds a loopback address, so contract-declared apps are invisible to the sidecar workflow source. This task switches to `GRPCAddr()` and makes contract-declared compose apps unconditionally eligible.
+`sidecarEndpoints` (`cmd/reconciler.go:504`) filters on `in.GRPCPort == 0` and builds a loopback address, so contract-declared apps are invisible to the sidecar workflow source. This task switches to `GRPCAddr()` and makes contract-declared compose apps unconditionally eligible.
 
 **Files:**
-- Modify: `cmd/reconciler.go:445-473`
+- Modify: `cmd/reconciler.go:504-532`
 - Test: `cmd/reconciler_sidecar_test.go` (create)
 
 **Interfaces:**
@@ -820,7 +838,7 @@ Expected: FAIL on `contract compose app uses its in-network address` — got 0 e
 
 - [ ] **Step 3: Rewrite the endpoint resolver**
 
-Replace the body of `sidecarEndpoints` (`cmd/reconciler.go:446-472`):
+Replace the body of `sidecarEndpoints` (`cmd/reconciler.go:505-531`):
 
 ```go
 	return func(ctx context.Context) []workflow.SidecarEndpoint {
@@ -864,7 +882,7 @@ Replace the body of `sidecarEndpoints` (`cmd/reconciler.go:446-472`):
 This is the complete final state of the loop body — the aspire check is outermost and the
 `includeAll` clause no longer repeats it.
 
-`strconv` may now be unused in `cmd/reconciler.go` — remove it from the imports if `go vet` says so.
+Keep the `strconv` import in `cmd/reconciler.go`: `translate` (line 117) still uses it.
 
 Update the doc comment above the function to record the new clause:
 
@@ -906,7 +924,7 @@ git commit -m "feat(cmd): resolve sidecar gRPC endpoints via GRPCAddr and admit 
 
 ### Task 6: Pin the translation no-op
 
-`rc.translate` (`cmd/reconciler.go:94`) rewrites compose state-store addresses to `localhost:<published>`, which would be actively wrong in container posture — inside the network `postgres:5432` resolves directly. Correctness rests on `composeEnv` being nil, which container posture achieves by never constructing a `ComposeSource`. That is a nil check in a different file from the code that depends on it, so it gets a regression test.
+`rc.translate` (`cmd/reconciler.go:102`) rewrites compose state-store addresses to `localhost:<published>`, which would be actively wrong in container posture — inside the network `postgres:5432` resolves directly. Correctness rests on `composeEnv` being nil, which container posture achieves by never constructing a `ComposeSource`. That is a nil check in a different file from the code that depends on it, so it gets a regression test.
 
 **Files:**
 - Test: `cmd/reconciler_translate_test.go` (create)
@@ -959,7 +977,7 @@ func TestTranslateIsNoOpWithoutComposeEnv(t *testing.T) {
 - [ ] **Step 2: Run the test**
 
 Run: `go test -tags unit ./cmd/ -run TestTranslateIsNoOpWithoutComposeEnv -v`
-Expected: PASS immediately — this pins existing behavior rather than driving a change. If it FAILS, `translate` has a path that ignores the nil check, which is a real bug to fix before continuing.
+Expected: PASS immediately — this pins existing behavior rather than driving a change. Since the main merge this guard protects more than workflows: `resolveComponent` (shared by `baseServiceFor` and the new `StateFor`) calls `translate`, so the State page's in-network store connection depends on it too. If it FAILS, `translate` has a path that ignores the nil check, which is a real bug to fix before continuing.
 
 - [ ] **Step 3: Commit**
 
@@ -976,8 +994,8 @@ Both hints tell the user to publish the daprd HTTP port to the host, keyed on `a
 
 **Files:**
 - Modify: `web/src/lib/capabilities.ts`
-- Modify: `web/src/pages/AppDetail.tsx:42,233`
-- Modify: `web/src/pages/Applications.tsx:165,175`
+- Modify: `web/src/pages/AppDetail.tsx:42,231`
+- Modify: `web/src/pages/Applications.tsx:171,181`
 - Test: `web/src/pages/AppDetail.test.tsx` (append; an existing test at line 218 covers the host case)
 
 **Interfaces:**
@@ -998,6 +1016,8 @@ stub cannot leak into the host-posture test — do not add another cleanup hook.
       controlPlane: false,
       logs: false,
       workflows: true,
+      state: false,
+      secretReveal: false,
       mode: 'compose',
       containerPosture: true,
     }
@@ -1031,7 +1051,7 @@ Expected: FAIL — the publish-port hint renders, `same Docker network` is not f
 
 - [ ] **Step 3: Add the flag to the SPA capabilities**
 
-In `web/src/lib/capabilities.ts`:
+In `web/src/lib/capabilities.ts`, add only the new field. Keep `state` and `secretReveal`, which main added:
 
 ```ts
 export interface Capabilities {
@@ -1039,6 +1059,10 @@ export interface Capabilities {
   controlPlane: boolean
   logs: boolean
   workflows: boolean
+  /** State page (state-store record browser). */
+  state?: boolean
+  /** Secret reference reveal endpoint (disabled when served off-host). */
+  secretReveal?: boolean
   /** CLI --mode value ('' = complete scan); lets the UI adapt static fallbacks. */
   mode?: string
   /**
@@ -1054,13 +1078,13 @@ export interface Capabilities {
 
 - [ ] **Step 4: Update the AppDetail hint**
 
-In `web/src/pages/AppDetail.tsx`, near line 42 where `unreachable` is computed, add the posture read (the file already imports `getCapabilities` for other gating — verify and add the import if not):
+In `web/src/pages/AppDetail.tsx`, near line 42 where `unreachable` is computed, add the posture read. The component already has `const caps = getCapabilities()` at line 28, so reuse it:
 
 ```ts
-  const containerPosture = getCapabilities().containerPosture === true
+  const containerPosture = caps.containerPosture === true
 ```
 
-Replace the hint block at line 233:
+Replace the hint block at line 231:
 
 ```tsx
       {unreachable ? (
@@ -1084,10 +1108,10 @@ Replace the hint block at line 233:
 
 - [ ] **Step 5: Update the Applications list tooltip**
 
-In `web/src/pages/Applications.tsx`, add the posture read alongside the existing `unreachable` computation at line 165 and branch the `title` at line 175:
+In `web/src/pages/Applications.tsx`, add the posture read alongside the existing `unreachable` computation at line 171 and branch the `title` at line 181. The row component already has `const caps = getCapabilities()` at line 164, so reuse it:
 
 ```ts
-  const containerPosture = getCapabilities().containerPosture === true
+  const containerPosture = caps.containerPosture === true
   const unreachableHint = containerPosture
     ? 'sidecar unreachable — the dashboard and this app must share a Docker network'
     : 'publish the daprd HTTP port (e.g. 3500:3500) to enable health & metadata'
@@ -1272,8 +1296,8 @@ git commit -m "test(cmd): integration coverage for compose container posture ove
 ### Task 9: Documentation
 
 **Files:**
-- Modify: `README.md:117-190` (the "Run as a container (.NET Aspire)" section)
-- Modify: `ARCHITECTURE.md:125,139,149,288,359`
+- Modify: `README.md:117-186` (the "Run as a container (.NET Aspire)" section)
+- Modify: `ARCHITECTURE.md:136-138,152,160-163,311-315,383` (line numbers as of the 2026-09-29 main merge; re-grep if they have moved)
 
 **Interfaces:**
 - Consumes: everything above.
@@ -1291,23 +1315,23 @@ Include, in this order:
 2. The namespace-owner addressing table (three shapes) from spec section 3.
 3. The custom-networks requirement, stated as the first troubleshooting item.
 4. The `_DAPR_GRPC` row added to the app-discovery env table, documenting the derivation default.
-5. An explicit "what is off and why" list: lifecycle, control plane, logs, update-check, browser-open — with the note that placement connectivity is still visible on App Detail and Actors, and that logs are architecturally unavailable rather than unimplemented.
+5. An explicit "what is off and why" list: lifecycle, control plane, logs, update-check, browser-open, and secret-value reveal (always off when served off-host; secret reference *status* is still shown on the component view). Add that the State page appears only when `DEVDASHBOARD_STATESTORE_FILE` points at a mounted state-store component (mounting components via `DEVDASHBOARD_RESOURCES_PATH` alone does not enable it), while Workflows works without one through the sidecar. Note that placement connectivity is still visible on App Detail and Actors, and that logs are architecturally unavailable rather than unimplemented. Mirror the wording of the existing aspire "the following are disabled" paragraph (README ~line 130).
 6. A note that `DEVDASHBOARD_MODE=compose` must be set explicitly because the image bakes in `aspire`.
 
 - [ ] **Step 3: Update the mode/flag tables**
 
-- `README.md:107` — the `--mode compose` bullet gains ", or a service inside your compose project when the `DEVDASHBOARD_APP_*` contract is set".
-- `README.md:113` — the "requires a container runtime" sentence must except container posture, which requires no runtime.
-- `README.md:123-124` — the `--port`/`--bind` rows say "aspire container posture"; widen to "container posture".
+- `README.md:106` — the `--mode compose` bullet gains ", or a service inside your compose project when the `DEVDASHBOARD_APP_*` contract is set".
+- `README.md:113-114` — the "require a container runtime" sentence must except container posture, which needs no runtime; "`0.0.0.0` in aspire container posture" becomes "in container posture".
+- `README.md:177-178` — the env table's `--port`/`--bind` rows sit inside the aspire section; once it is split, check that they read correctly for both subsections.
 
 - [ ] **Step 4: Update ARCHITECTURE.md**
 
-- Line 125 (`--mode` row): note that `compose` selects posture by contract presence.
-- Line 139: the container-posture definition currently reads "aspire mode *with* the contract"; widen to aspire **or compose**.
-- Line 149: `compose` is listed as failing hard without a container runtime — add the container-posture exception.
-- Line 288 (capabilities tier 1): record that compose container posture gets `Workflows` from the sidecar-gRPC source without a store, and add `ContainerPosture` to the struct description.
-- Line 359 (`sourcesFor`): note that container posture branches before `sourcesFor` is consulted.
-- The scanner section describing `scan_aspire.go` must use the new filename and the source parameter.
+- Lines 136-137 (`--port`/`--bind` rows): "aspire container posture" becomes "container posture".
+- Line 138 (`--mode` row): note that `compose` selects container posture when the contract is present.
+- Line 152: the container-posture definition currently reads "aspire mode *with* the contract"; widen to aspire **or compose**.
+- Lines 160-163 (`sourcesFor` / fail-hard without a container runtime): note that container posture branches before `sourcesFor` is consulted, so it needs no runtime.
+- Lines 311-315 (capabilities tier 1): today this says aspire container posture gets "only `Workflows`". Now that main has added `State` and `SecretReveal`, rewrite it to say container posture gets `Workflows` and `State` when a store is configured, compose container posture also gets `Workflows` from the sidecar-gRPC source without a store, and `SecretReveal` is always off. Add `ContainerPosture` to the struct field list at line 308.
+- Line 383 (discovery scanners): the scanner description must use the new `scan_contract.go` name and the source parameter.
 
 - [ ] **Step 5: Verify the docs match the code**
 
@@ -1338,7 +1362,7 @@ Expected: no gofmt output, `go vet` clean.
 - [ ] **Step 2: Full Go suite**
 
 Run: `go test -tags unit -race ./...`
-Expected: PASS, except the two known Windows-only failures (`TestDerivePaths_AutoDetect`, `TestRegistry_SaveLoadRoundTrip_WindowsPath`).
+Expected: PASS, except the known Windows-only failures listed in Global Constraints.
 
 - [ ] **Step 3: Web suite and lint**
 
@@ -1348,7 +1372,7 @@ Expected: PASS.
 - [ ] **Step 4: Confirm the host-posture regression bar**
 
 Run: `go test -tags unit ./cmd/ -run "TestResolveMode|TestSourcesFor|TestResolveServeSettings" -v`
-Expected: PASS with no test modified in this plan — proof that host modes are untouched.
+Expected: PASS, with none of these three tests modified by this plan, which shows host modes are untouched. (On Windows, `TestResolveServeSettings/env_overrides_aspire_defaults` fails on every branch because of the path separator. Compare against `main` instead of expecting green.) The only intentional host-side test edit is the compose assertion removed from `TestContainerPosture` in Task 3 Step 3a.
 
 - [ ] **Step 5: Manual smoke test against the real fixture**
 
@@ -1373,7 +1397,7 @@ The repo ships a working compose Dapr app at `test/e2e/fixtures/compose/docker-c
 ```
 
 3. `docker compose up -d`, open `http://localhost:9090`.
-4. Confirm: the app is listed as source `compose` and healthy; App Detail shows placement connected; Resources lists the mounted components; the Workflows page loads and lists instances via the sidecar with **no** state store configured; the Logs and Control Plane nav entries are absent.
+4. Confirm: the app is listed as source `compose` and healthy; App Detail shows placement connected; Resources lists the mounted components; the Workflows page loads and lists instances via the sidecar with **no** state store configured; the Logs and Control Plane nav entries are absent; the State nav entry is absent (this service sets no `DEVDASHBOARD_STATESTORE_FILE`; optionally re-run with it pointing at the fixture's state-store YAML and confirm State lists records over the in-network address); secret references on the component view show their status but offer no reveal.
 5. Confirm `curl -s localhost:9090/api/controlplane` returns 404 (route absent, not merely flagged off).
 6. `docker compose down`.
 
