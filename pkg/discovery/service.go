@@ -62,6 +62,8 @@ type ScanResult struct {
 	// http://127.0.0.1:<HTTPPort> as the daprd HTTP endpoint for health,
 	// metadata, and workflow calls.
 	DaprHTTPBaseURL string
+	// DaprGRPCAddr is the contract-supplied daprd gRPC endpoint (host:port).
+	DaprGRPCAddr string
 	// Namespace and Label come from the Aspire env contract ("" for other
 	// sources). Label is the orchestrator's display name for the app.
 	Namespace string
@@ -203,7 +205,7 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		AppContainerID: r.AppContainerID, AppContainerName: r.AppContainerName,
 		SidecarReachable: r.SidecarReachable,
 		AppStatus:        r.AppStatus, DaprdStatus: r.DaprdStatus,
-		DaprHTTPBaseURL: r.DaprHTTPBaseURL, Namespace: r.Namespace, Label: r.Label,
+		DaprHTTPBaseURL: r.DaprHTTPBaseURL, DaprGRPCAddr: r.DaprGRPCAddr, Namespace: r.Namespace, Label: r.Label,
 		TestcontainersSession: r.TestcontainersSession,
 	}
 	// A zero Created (e.g. a compose container created but never started)

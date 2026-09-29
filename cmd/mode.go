@@ -55,7 +55,7 @@ func resolveMode(flagValue string, getenv func(string) string) (Mode, error) {
 // contract present. Aspire mode without the contract is a host-run dashboard
 // filtered to Aspire resources and keeps host serving defaults.
 func containerPosture(mode Mode, getenv func(string) string) bool {
-	return mode == ModeAspire && discovery.AspireContractPresent(getenv)
+	return mode == ModeAspire && discovery.ContractPresent(getenv)
 }
 
 // serveSettings is the fully resolved serve configuration: flag > env >

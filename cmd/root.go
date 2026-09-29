@@ -138,7 +138,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	)
 	switch {
 	case containerPosture:
-		scan, err := discovery.NewAspireScanner(os.Getenv)
+		scan, err := discovery.NewContractScanner(os.Getenv, discovery.SourceAspire)
 		if err != nil {
 			return err
 		}
@@ -150,7 +150,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 			Mode:      string(ModeAspire),
 		}
 	default:
-		src := sourcesFor(mode, discovery.AspireContractPresent(os.Getenv))
+		src := sourcesFor(mode, discovery.ContractPresent(os.Getenv))
 		_, crtRunner := containerruntime.Detect()
 		if src.NeedsRuntime && crtRunner == nil {
 			return fmt.Errorf("--mode %s requires a container runtime: install docker or podman (or set DASH_CONTAINER_RUNTIME)", mode)
@@ -170,7 +170,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 			extraRes = tcExtraResources(tcSrc)
 		}
 		if src.AspireContract {
-			as, err := discovery.NewAspireScanner(os.Getenv)
+			as, err := discovery.NewContractScanner(os.Getenv, discovery.SourceAspire)
 			if err != nil {
 				return err
 			}
