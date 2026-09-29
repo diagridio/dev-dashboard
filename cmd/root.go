@@ -112,7 +112,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	}
 	url := fmt.Sprintf("http://%s:%d%s/", displayHost, settings.Port, urlPath)
 
-	// Aspire/container mode disables registry persistence entirely (no home
+	// Container posture (aspire or compose) disables registry persistence entirely (no home
 	// directory), so the "no home" warning is suppressed via QuietRegistry.
 	home := ""
 	if !containerPosture {
@@ -138,16 +138,21 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	)
 	switch {
 	case containerPosture:
-		scan, err := discovery.NewContractScanner(os.Getenv, discovery.SourceAspire)
+		scan, err := discovery.NewContractScanner(os.Getenv, contractSource(mode))
 		if err != nil {
 			return err
 		}
 		appNS = contractNamespaces(scan)
 		appsSvc = discovery.New(scan, client)
 		caps = &server.Capabilities{
-			Workflows: settings.StateStore != "",
-			State:     settings.StateStore != "",
-			Mode:      string(ModeAspire),
+			// Sidecar-gRPC inspection needs no store, so in compose a declared
+			// app is enough to enable the workflow routes. Aspire apps are
+			// never sidecar-sourced (Task 5), so aspire keeps the store gate.
+			Workflows: settings.StateStore != "" || (mode == ModeCompose && anyGRPCAddr(scan)),
+			// The State page has no sidecar fallback, so it still needs a store.
+			State:            settings.StateStore != "",
+			Mode:             string(mode),
+			ContainerPosture: true,
 		}
 	default:
 		src := sourcesFor(mode, discovery.ContractPresent(os.Getenv))
@@ -328,4 +333,21 @@ func openBrowser(url string) error {
 	}
 	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+// anyGRPCAddr reports whether the contract declared at least one app with a
+// resolvable sidecar gRPC endpoint. Because the address is derived from the
+// required _DAPR_HTTP value, this is true whenever any app is declared — the
+// zero-app case (a store-only dashboard) is the one that returns false.
+func anyGRPCAddr(scan discovery.Scanner) bool {
+	results, err := scan()
+	if err != nil {
+		return false
+	}
+	for _, r := range results {
+		if r.DaprGRPCAddr != "" {
+			return true
+		}
+	}
+	return false
 }

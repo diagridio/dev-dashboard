@@ -130,3 +130,12 @@ func resolveServeSettings(containerPosture bool, flagChanged func(string) bool, 
 	}
 	return s, nil
 }
+
+// contractSource maps a container-posture mode to the discovery Source the
+// contract scanner stamps on its results.
+func contractSource(mode Mode) string {
+	if mode == ModeCompose {
+		return discovery.SourceCompose
+	}
+	return discovery.SourceAspire
+}
