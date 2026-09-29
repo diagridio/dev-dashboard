@@ -307,6 +307,65 @@ describe('Game', () => {
     expect(store.saved).not.toBeNull()
   })
 
+  describe('view().prev', () => {
+    it('is the state one tick back after a live tick', () => {
+      const game = new Game(deps())
+      play(game)
+      expect(game.view().prev).toBeNull()
+      game.frame(1)
+      const v = game.view()
+      expect(v.prev?.tick).toBe(v.state.tick - 1)
+      game.frame(3)
+      expect(game.view().prev?.tick).toBe(game.view().state.tick - 1)
+    })
+
+    it('is null while paused', () => {
+      const game = new Game(deps())
+      play(game)
+      game.frame(2)
+      game.command('pause')
+      expect(game.view().prev).toBeNull()
+    })
+
+    it('is null while crashing and replaying, and after the replay resumes play', () => {
+      const game = new Game(deps({ levels: makeLevels({ firstCrashTicks: [300, 300] }) }))
+      play(game)
+      runUntil(game, is('crashing'), ['coin'])
+      expect(game.view().prev).toBeNull()
+      runUntil(game, is('replaying'))
+      expect(game.view().prev).toBeNull()
+      runUntil(game, is('playing'))
+      expect(game.view().prev).toBeNull()
+      game.frame(1)
+      expect(game.view().prev?.tick).toBe(game.state.tick - 1)
+    })
+
+    it('is null right after a level transition and a boss start', () => {
+      const lv = new Game(deps({ levels: makeLevels({ length: 1200 }) }))
+      play(lv)
+      runUntil(lv, (g) => g.phase.kind === 'tip' && g.phase.level === 1, ['coin'])
+      lv.command('confirm')
+      expect(lv.view().prev).toBeNull()
+      const boss = new Game(deps({ levels: makeLevels({ weights: { orb: 1 }, crashAfterPickup: ['orb'] }) }))
+      play(boss)
+      runUntil(boss, is('crashing'), ['orb'])
+      runUntil(boss, (g) => g.phase.kind === 'playing' && g.state.bossUntil > 0)
+      expect(boss.view().prev).toBeNull()
+    })
+
+    it('is null right after resuming a saved run', () => {
+      const store = memoryStore()
+      const first = new Game(deps({ store }))
+      play(first)
+      first.frame(20)
+      first.save()
+      const second = new Game(deps({ store }))
+      second.command('confirm')
+      runUntil(second, is('playing'))
+      expect(second.view().prev).toBeNull()
+    })
+  })
+
   it('offers to resume a saved run and replays it to the same state', () => {
     const store = memoryStore()
     const first = new Game(deps({ store }))

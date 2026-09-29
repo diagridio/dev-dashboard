@@ -8,9 +8,9 @@ export interface Loop {
   stop(): void
 }
 
-/** requestAnimationFrame loop with a fixed-timestep accumulator. */
+/** requestAnimationFrame loop with a fixed-timestep accumulator; also reports the leftover fraction of a tick. */
 export function startLoop(
-  onFrame: (ticks: number) => void,
+  onFrame: (ticks: number, alpha: number) => void,
   raf: (cb: FrameRequestCallback) => number = (cb) => requestAnimationFrame(cb),
   caf: (id: number) => void = (id) => cancelAnimationFrame(id),
 ): Loop {
@@ -28,7 +28,8 @@ export function startLoop(
       ticks = MAX_TICKS_PER_FRAME
       acc = 0
     }
-    onFrame(ticks)
+    // alpha is how far the next tick has progressed: drives display interpolation.
+    onFrame(ticks, acc / TICK_MS)
     if (!stopped) id = raf(frame)
   }
   id = raf(frame)

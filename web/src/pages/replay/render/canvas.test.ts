@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BOSS_TICKS, initialState } from '../engine/step'
-import { PLAYER_H, PLAYER_W, SLIDE_H } from '../engine/step'
+import { BOSS_TICKS, initialState, PLAYER_H, PLAYER_W, SLIDE_H } from '../engine/step'
 import { GROUND_Y, PLAYER_X, type GameState } from '../engine/types'
 import type { Phase } from '../runtime/types'
 import { render, type RenderView } from './canvas'
@@ -53,6 +52,20 @@ describe('render', () => {
     render(ctx, view({ kind: 'crashing', framesLeft: 10 }), pal)
     expect(texts(calls)).toContain('daprd: signal: killed')
     expect(calls.some((c) => c.name === 'translate')).toBe(true)
+  })
+
+  it('sets the device-pixel base transform first, and still shakes on top of it', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'crashing', framesLeft: 10 }, undefined, { pixelScale: 2 }), pal)
+    expect(calls[0]).toEqual({ name: 'setTransform', args: [2, 0, 0, 2, 0, 0] })
+    expect(calls.some((c) => c.name === 'translate')).toBe(true)
+    expect(calls.findIndex((c) => c.name === 'save')).toBeGreaterThan(0)
+  })
+
+  it('defaults the base transform to scale 1', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }), pal)
+    expect(calls[0]).toEqual({ name: 'setTransform', args: [1, 0, 0, 1, 0, 0] })
   })
 
   it('keeps the crash banner but drops the shake with reduced motion', () => {

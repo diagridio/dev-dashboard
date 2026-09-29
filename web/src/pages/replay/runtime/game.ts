@@ -30,6 +30,8 @@ export interface GameView {
   phase: Phase
   notice: string | null
   divergedAt: number | null
+  /** The state one tick before `state` while playing live, for display interpolation; otherwise null. */
+  prev: GameState | null
 }
 
 const emptyStats = (): RunStats => ({ replays: 0, fromHistory: 0, executed: 0, incidents: 0 })
@@ -45,6 +47,8 @@ export class Game {
   /** History index of the non-deterministic event behind the current boss phase. */
   divergedAt: number | null = null
 
+  /** The state before the latest live tick; null whenever `state` was replaced wholesale. */
+  private prevState: GameState | null = null
   private notice: { text: string; untilTick: number } | null = null
   private pending: InputKind[] = []
   /** Whether the slide key is down, tracked in every phase so a release is never lost. */
@@ -82,6 +86,7 @@ export class Game {
       state: this.state,
       phase: this.phase,
       divergedAt: this.divergedAt,
+      prev: this.phase.kind === 'playing' && this.prevState && this.prevState.tick === this.state.tick - 1 ? this.prevState : null,
       notice: n && this.state.tick < n.untilTick ? n.text : null,
     }
   }
@@ -166,6 +171,7 @@ export class Game {
     const t = this.state.tick
     for (const kind of inputs) this.history.push({ type: 'Input', tick: t, kind })
     const ports = { impure: this.deps.impure, crateValue: () => this.deps.impure() }
+    this.prevState = this.state
     const { state, events } = step(this.state, inputs, ports, this.levels)
     this.state = state
     for (const e of events) {
@@ -215,6 +221,7 @@ export class Game {
     this.start = start
     this.history = []
     this.state = initialState(start)
+    this.prevState = null
     this.pending = []
     this.notice = null
     this.chaos.start(start.level, showTip, start.elapsed)
@@ -238,6 +245,7 @@ export class Game {
     this.replayer = createReplayer(this.start, this.history, this.crashTick, this.deps.impure, this.levels)
     this.replayTicksPerFrame = Math.max(REPLAY_MIN_TICKS_PER_FRAME, Math.ceil(this.crashTick / REPLAY_MAX_FRAMES))
     this.state = this.replayer.state
+    this.prevState = null
     this.setPhase({ kind: 'replaying' })
   }
 
@@ -246,6 +254,7 @@ export class Game {
     if (!r) return
     r.advance(this.replayTicksPerFrame)
     this.state = r.state
+    this.prevState = null
     if (!r.done) return
     this.replayer = null
     const result = r.result()
@@ -253,6 +262,7 @@ export class Game {
     this.stats.fromHistory += served.filter((e) => e.type === 'ActivityCompleted').length
     if (result.ok) {
       this.state = result.state
+      this.prevState = null
       this.chaos.scheduleNext(this.state.level, this.state.tick, this.state.elapsed)
       this.setNotice(`Replayed ${this.history.length} events · resumed at tick ${this.state.tick}`)
       this.setPhase({ kind: 'playing' })

@@ -56,6 +56,20 @@ describe('drawHat', () => {
     }
   })
 
+  it('keeps the 1 px outline stroke inside the box', () => {
+    const { ctx, calls } = mockCtx()
+    drawHat(ctx, box, pal)
+    const strokes = calls.flatMap((c, i) => (c.name === 'stroke' ? [calls[i - 1]] : []))
+    expect(strokes).toHaveLength(2)
+    for (const c of strokes) {
+      const [x, y, w, h] = c.args as number[]
+      expect(x - 0.5).toBeGreaterThanOrEqual(box.x - 1e-6)
+      expect(y - 0.5).toBeGreaterThanOrEqual(box.y - 1e-6)
+      expect(x + w + 0.5).toBeLessThanOrEqual(box.x + box.w + 1e-6)
+      expect(y + h + 0.5).toBeLessThanOrEqual(box.y + box.h + 1e-6)
+    }
+  })
+
   it('falls back to rect when roundRect is missing', () => {
     const calls: string[] = []
     const noop = () => {}

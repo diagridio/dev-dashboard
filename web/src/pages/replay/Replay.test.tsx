@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -73,6 +73,45 @@ describe('Replay page', () => {
     fireEvent.keyDown(window, { key: 'Enter' })
     fireEvent.blur(window)
     expect(await screen.findByRole('heading', { name: 'Paused' })).toBeInTheDocument()
+  })
+
+  it('sizes the canvas backing store to its displayed size times the device pixel ratio', async () => {
+    let onResize: () => void = () => {}
+    const observe = vi.fn()
+    const disconnect = vi.fn()
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(cb: () => void) { onResize = cb }
+      observe = observe
+      disconnect = disconnect
+      unobserve = vi.fn()
+    })
+    vi.stubGlobal('devicePixelRatio', 2)
+    let width = 0
+    vi.spyOn(HTMLCanvasElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
+    const { unmount } = renderAt('/replay')
+    const canvas = (await screen.findByLabelText('REPLAY game screen')) as HTMLCanvasElement
+    expect(observe).toHaveBeenCalledWith(canvas)
+    expect(canvas.width).toBe(480) // clientWidth 0: keeps the previous size
+    width = 700
+    act(() => onResize())
+    expect(canvas.width).toBe(1400)
+    expect(canvas.height).toBe(Math.round((1400 * 270) / 480))
+    width = 960
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    expect(canvas.width).toBe(1920)
+    expect(canvas.height).toBe(1080)
+    unmount()
+    expect(disconnect).toHaveBeenCalled()
+  })
+
+  it('keeps the 480x270 backing store without ResizeObserver', async () => {
+    vi.stubGlobal('ResizeObserver', undefined)
+    vi.stubGlobal('devicePixelRatio', 2)
+    vi.spyOn(HTMLCanvasElement.prototype, 'clientWidth', 'get').mockReturnValue(960)
+    renderAt('/replay')
+    const canvas = (await screen.findByLabelText('REPLAY game screen')) as HTMLCanvasElement
+    act(() => { window.dispatchEvent(new Event('resize')) })
+    expect([canvas.width, canvas.height]).toEqual([480, 270])
   })
 
   it('focuses the game stage on mount and starts on Enter there', async () => {

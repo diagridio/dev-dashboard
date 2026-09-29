@@ -5,8 +5,9 @@ import { VIEW_H, VIEW_W } from './engine/types'
 import { HistoryPanel } from './HistoryPanel'
 import { Overlay } from './Overlay'
 import { render } from './render/canvas'
-import { HatPose } from './render/pose'
+import { blend } from './render/interpolate'
 import { readPalette, watchTheme, type Palette } from './render/palette'
+import { HatPose } from './render/pose'
 import { Game } from './runtime/game'
 import { keyToCommand } from './runtime/keys'
 import { startLoop } from './runtime/loop'
@@ -65,12 +66,32 @@ export function Component() {
     })
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
     const hatPose = new HatPose()
+    // Back the canvas with device pixels; drawing stays in the 480x270 logical space via pixelScale.
+    let pixelScale = 1
+    const fit = () => {
+      if (!canvas || typeof ResizeObserver === 'undefined' || canvas.clientWidth === 0) return
+      const width = Math.round(canvas.clientWidth * (window.devicePixelRatio || 1))
+      const height = Math.round((width * VIEW_H) / VIEW_W)
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width
+        canvas.height = height
+      }
+      pixelScale = canvas.width / VIEW_W
+    }
+    const resizeObserver = canvas && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null
+    if (canvas) resizeObserver?.observe(canvas)
+    // Moving the window between monitors changes the pixel ratio without resizing the canvas.
+    window.addEventListener('resize', fit)
+    fit()
     let frame = 0
-    const loop = startLoop((ticks) => {
+    const loop = startLoop((ticks, alpha) => {
       game.frame(ticks)
       frame += 1
       const pose = hatPose.update(game.state.player, reducedMotion)
-      if (ctx && palette) render(ctx, { ...game.view(), reducedMotion, frame, pose }, palette)
+      const view = game.view()
+      if (ctx && palette) {
+        render(ctx, { ...view, state: blend(view.prev, view.state, alpha), reducedMotion, frame, pose, pixelScale }, palette)
+      }
     })
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') game.suspend()
@@ -82,6 +103,8 @@ export function Component() {
     window.addEventListener('blur', onBlur)
     return () => {
       loop.stop()
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', fit)
       unwatch()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)

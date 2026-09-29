@@ -63,7 +63,9 @@ export function drawHat(ctx: CanvasRenderingContext2D, box: Box, pal: Palette, p
     ctx.strokeStyle = pal.hatOutline
     ctx.lineWidth = 1
     for (const p of parts) {
-      shape(ctx, p.rect, p.radius)
+      // Inset by half the line width so the stroke stays inside the hitbox.
+      const r = p.rect
+      shape(ctx, { x: r.x + 0.5, y: r.y + 0.5, w: r.w - 1, h: r.h - 1 }, Math.max(0, p.radius - 0.5))
       ctx.stroke()
     }
   }

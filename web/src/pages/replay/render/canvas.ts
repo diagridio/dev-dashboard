@@ -15,6 +15,8 @@ export interface RenderView {
   frame: number
   /** Squash and stretch for the player; neutral when omitted. */
   pose?: Pose
+  /** Backing-store pixels per logical pixel (device resolution); 1 when omitted. */
+  pixelScale?: number
 }
 
 const FONT = '10px ui-monospace, Menlo, Consolas, monospace'
@@ -118,6 +120,9 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
   const { state, phase } = view
   const crashing = phase.kind === 'crashing'
   const replaying = phase.kind === 'replaying'
+  // Base transform first: everything below draws in the 480x270 logical space at any backing-store size.
+  const scale = view.pixelScale ?? 1
+  ctx.setTransform(scale, 0, 0, scale, 0, 0)
   ctx.save()
   ctx.fillStyle = pal.bg
   ctx.fillRect(0, 0, VIEW_W, VIEW_H)
