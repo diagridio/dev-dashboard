@@ -638,3 +638,22 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .cli-command-row { display: flex; align-items: stretch; gap: 8px; }
 .cli-command-code { flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: var(--mono); white-space: pre-wrap; word-break: break-all; }
 .cli-copy { white-space: nowrap; align-self: flex-start; }
+
+/* ============================================================
+   REPLAY easter egg (pages/replay)
+   ============================================================ */
+.replay-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+.replay-stage { position: relative; max-width: 960px; }
+.replay-stage canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: var(--shadow); }
+.replay-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; border-radius: 13px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
+.replay-card { max-width: 440px; padding: 18px 20px; display: grid; gap: 10px; }
+.replay-card h2 { margin: 0; font-size: 17px; font-weight: 680; display: flex; align-items: center; gap: 8px; }
+.replay-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.replay-card .replay-keys { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.replay-link { color: var(--link); font-size: 12.5px; text-decoration: none; }
+.replay-link:hover { text-decoration: underline; }
+.replay-stats { margin: 4px 0 0; grid-template-columns: repeat(3, 1fr); }
+.replay-count { margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); }
+.replay-empty { margin: 0; padding: 14px; color: var(--faint); font-size: 12.5px; }
+.replay-hist { max-height: 540px; overflow: auto; padding: 8px 12px; }
+@media (max-width: 1100px) { .replay-grid { grid-template-columns: 1fr; } }
