@@ -100,6 +100,25 @@ describe('App shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /toggle theme/i }))
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
   })
+
+  it('opens the REPLAY easter egg on the Konami code', async () => {
+    // Restore only what this test replaces, so other tests keep the matchMedia stub.
+    const origRaf = window.requestAnimationFrame
+    const origCaf = window.cancelAnimationFrame
+    window.requestAnimationFrame = vi.fn(() => 1)
+    window.cancelAnimationFrame = vi.fn()
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    try {
+      renderApp('/')
+      const code = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a']
+      for (const key of code) fireEvent.keyDown(window, { key })
+      expect(await screen.findByRole('heading', { name: 'REPLAY' })).toBeInTheDocument()
+    } finally {
+      getContext.mockRestore()
+      window.requestAnimationFrame = origRaf
+      window.cancelAnimationFrame = origCaf
+    }
+  })
 })
 
 describe('Placeholder', () => {
