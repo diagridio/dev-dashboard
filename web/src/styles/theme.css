@@ -257,8 +257,10 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 @keyframes beat-offline { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--fail-fg) 50%, transparent); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 .offline-label { color: var(--fail-fg); font-size: 12px; white-space: nowrap; }
 .select.compact { padding: 4px 26px 4px 8px; font-size: 12px; border-radius: 8px; background-position: right 8px center; }
-.search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; color: var(--faint); font-size: 13px; min-width: 170px; flex: 1; }
-.search input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; }
+.search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; color: var(--faint); font-size: 13px; min-width: 240px; flex: 1; }
+/* min-width: 0 lets the input shrink inside the flex row; the ellipsis keeps a
+   long placeholder (or value) inside the box on narrow widths. */
+.search input { flex: 1; min-width: 0; text-overflow: ellipsis; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; }
 .childtoggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
 .btn { font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 7px 13px; cursor: pointer; border: 1px solid transparent; text-decoration: none; }
 .btn.primary { background: var(--accent-bright); color: #06231a; border-color: transparent; }
@@ -364,6 +366,12 @@ pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; 
 .clock .lbl2 { font-size: 8.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .85; }
 .ctrlset { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+/* A native <select> is as wide as its longest option; cap it so one long app
+   name can't squeeze the search box. The open list still shows full names. */
+.filters .select { max-width: 220px; text-overflow: ellipsis; }
+/* Secondary filter row (e.g. toggles) directly under .filters. */
+.filters:has(+ .filters-sub) { margin-bottom: 8px; }
+.filters-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .segs { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
 .segs button { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: none; padding: 5px 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 .segs button .n { font-family: var(--mono); font-size: 10.5px; opacity: .8; }

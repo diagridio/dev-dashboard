@@ -348,7 +348,11 @@ component fails the suite until the doc is updated.
   `.ghost` = neutral outline.
 - `.tbtn` — topbar/secondary button (used for Back / View logs).
 - `.copybtn` (+ `.ok` state) — small copy button; pairs with `copyText` + toast.
-- `.search` (wraps an `<input>`), `.select` — filter inputs.
+- `.search` (wraps an `<input>`), `.select` — filter inputs. Inside `.filters`
+  a `.select` is capped at 220px with an ellipsis (give it a `title` with the
+  full selected value) so a long option can't squeeze the search box.
+- `.filters` — the filter bar; `.filters-sub` — an optional second row
+  directly under it for secondary controls such as `.childtoggle`.
 - `.segs` — segmented toggle group (`button[aria-pressed]`).
 - `.lvchip` — log-level toggle chips; `.followbtn` — log follow toggle.
 
