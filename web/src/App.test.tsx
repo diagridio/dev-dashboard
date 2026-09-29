@@ -48,7 +48,7 @@ beforeEach(() => {
 function renderApp(path = '/') {
   const client = makeQueryClient()
   const router = createMemoryRouter(routes, { initialEntries: [path], future: { v7_relativeSplatPath: true } })
-  return render(
+  const result = render(
     <QueryProvider client={client}>
       <RefreshProvider>
         <ConnectionContext value={{ online: true }}>
@@ -57,6 +57,7 @@ function renderApp(path = '/') {
       </RefreshProvider>
     </QueryProvider>,
   )
+  return { ...result, router }
 }
 
 describe('App shell', () => {
@@ -99,6 +100,28 @@ describe('App shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /toggle theme/i }))
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  })
+
+  it('does not push a duplicate history entry for the Konami code on /replay', async () => {
+    const origRaf = window.requestAnimationFrame
+    const origCaf = window.cancelAnimationFrame
+    window.requestAnimationFrame = vi.fn(() => 1)
+    window.cancelAnimationFrame = vi.fn()
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    try {
+      const { router } = renderApp('/replay')
+      await screen.findByRole('heading', { name: 'REPLAY' })
+      const before = router.state.location.key
+      const code = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a']
+      for (const key of code) fireEvent.keyDown(window, { key })
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(router.state.location.key).toBe(before)
+      expect(router.state.historyAction).toBe('POP')
+    } finally {
+      getContext.mockRestore()
+      window.requestAnimationFrame = origRaf
+      window.cancelAnimationFrame = origCaf
+    }
   })
 
   it('opens the REPLAY easter egg on the Konami code', async () => {

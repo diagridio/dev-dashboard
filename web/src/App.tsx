@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useMatches, useNavigate, useSearchParams } from 'react-router-dom'
+import { Outlet, useLocation, useMatches, useNavigate, useSearchParams } from 'react-router-dom'
 import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
 import { ResourcesSidebar } from './components/ResourcesSidebar'
@@ -44,8 +44,12 @@ export function App() {
   // not "optimize" this by moving it closer to where apps are displayed.
   useDiscoveryTelemetry()
   // Easter egg: ↑↑↓↓←→←→BA opens the REPLAY game (pages/replay).
+  // useLocation's pathname is router-relative (no basename), like the '/replay' route.
   const navigate = useNavigate()
-  useKonami(() => navigate('/replay'))
+  const { pathname } = useLocation()
+  useKonami(() => {
+    if (pathname !== '/replay') navigate('/replay')
+  })
 
   useEffect(() => {
     trackAction('app_startup')

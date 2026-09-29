@@ -32,6 +32,25 @@ describe('useKonami', () => {
     expect(cb).toHaveBeenCalledTimes(1)
   })
 
+  it('ignores bare modifier keydowns, so Shift+B Shift+A still counts', () => {
+    const cb = vi.fn()
+    renderHook(() => useKonami(cb))
+    press([...CODE.slice(0, 8), 'Shift', 'B', 'Shift', 'A'])
+    expect(cb).toHaveBeenCalledTimes(1)
+    press(['Control', 'Alt', 'Meta', ...CODE])
+    expect(cb).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores auto-repeat keydowns', () => {
+    const cb = vi.fn()
+    renderHook(() => useKonami(cb))
+    for (const key of CODE) {
+      fireEvent.keyDown(window, { key })
+      fireEvent.keyDown(window, { key: 'x', repeat: true })
+    }
+    expect(cb).toHaveBeenCalledTimes(1)
+  })
+
   it('tolerates extra leading presses', () => {
     const cb = vi.fn()
     renderHook(() => useKonami(cb))

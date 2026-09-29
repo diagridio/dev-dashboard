@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { isEditableTarget } from '../lib/isEditableTarget'
 
+/** Keys that never break the sequence on their own (Shift+B still counts as B). */
+const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta'])
+
 export const KONAMI: readonly string[] = [
   'arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a',
 ]
@@ -15,7 +18,7 @@ export function useKonami(onMatch: () => void): void {
   useEffect(() => {
     let recent: string[] = []
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isEditableTarget(e.target)) return
+      if (e.repeat || MODIFIERS.has(e.key) || isEditableTarget(e.target)) return
       recent = [...recent, e.key.toLowerCase()].slice(-KONAMI.length)
       if (recent.length === KONAMI.length && recent.every((k, i) => k === KONAMI[i])) {
         recent = []
