@@ -10,6 +10,7 @@ import { dedupeWorkflows } from '../lib/dedupeWorkflows'
 import { dedupeStores } from '../lib/dedupeStores'
 import { parseEnum } from '../lib/parseEnum'
 import { DateTimeCell } from '../components/DateTimeCell'
+import { Spinner } from '../components/Spinner'
 import type { StateStore, WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
 const ALL_STATUSES: WorkflowStatus[] = ['Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
@@ -180,7 +181,7 @@ export function Workflows() {
     setSearchParams(params, { replace: true })
   }, [activeStatus, debouncedSearch, page, selectedApp, setSearchParams])
 
-  const { data, isLoading, isError, error } = useWorkflows({
+  const { data, isLoading, isError, error, isPlaceholderData } = useWorkflows({
     status: activeStatus ? [activeStatus] : undefined,
     search: debouncedSearch || undefined,
     page,
@@ -189,6 +190,11 @@ export function Workflows() {
     includeChildren: showChildren,
     enabled: selectedStore !== null,
   })
+
+  // Previous rows stay on screen while a new filter/search/page loads (same
+  // store only; see useWorkflows). They are display-only until the new page
+  // lands: paging and selection would act on the wrong result set.
+  const updating = isPlaceholderData
 
   const { data: stats } = useWorkflowStats({
     appId: selectedApp || undefined,
@@ -240,6 +246,7 @@ export function Workflows() {
 
   function toggleRow(key: string, e: React.MouseEvent) {
     e.stopPropagation()
+    if (updating) return
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
@@ -250,6 +257,7 @@ export function Workflows() {
 
   function toggleAll(e: React.MouseEvent) {
     e.stopPropagation()
+    if (updating) return
     if (selected.size === items.length && items.length > 0) {
       setSelected(new Set())
     } else {
@@ -406,7 +414,7 @@ export function Workflows() {
             aria-pressed={activeStatus === ''}
             onClick={() => setStatus('')}
           >
-            All <span className="n">{stats?.total ?? 0}</span>
+            All <span className="n">{stats ? stats.total : '…'}</span>
           </button>
           {ALL_STATUSES.map((s) => (
             <button
@@ -414,7 +422,7 @@ export function Workflows() {
               aria-pressed={activeStatus === s}
               onClick={() => setStatus(s)}
             >
-              {s} <span className="n">{stats?.counts[s] ?? 0}</span>
+              {s} <span className="n">{stats ? (stats.counts[s] ?? 0) : '…'}</span>
             </button>
           ))}
         </div>
@@ -625,9 +633,14 @@ export function Workflows() {
               ? `${pageOffset + 1}–${pageOffset + items.length} loaded`
               : 'No results'}
           </span>
+          {updating && (
+            <span className="mono muted" role="status" data-testid="list-updating">
+              <Spinner /> Updating…
+            </span>
+          )}
           <div className="pgbtns">
             <button
-              disabled={history.length === 0}
+              disabled={history.length === 0 || updating}
               onClick={() => {
                 if (history.length === 0) return
                 const prev = history[history.length - 1]
@@ -641,7 +654,7 @@ export function Workflows() {
               ← Prev
             </button>
             <button
-              disabled={isError || !data?.nextToken}
+              disabled={isError || updating || !data?.nextToken}
               onClick={() => {
                 if (!data?.nextToken) return
                 setHistory((h) => [...h, { token: page, offset: pageOffset }])
