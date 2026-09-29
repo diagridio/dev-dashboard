@@ -47,8 +47,8 @@ missed; stopped apps drop out) are listed in
 
 ## 2. The contract — the single source of truth
 
-Parsed once at startup by `NewAspireScanner`
-([`pkg/discovery/scan_aspire.go`](../pkg/discovery/scan_aspire.go)):
+Parsed once at startup by `NewContractScanner`
+([`pkg/discovery/scan_contract.go`](../pkg/discovery/scan_contract.go)):
 
 | Env var | Required | Meaning |
 |---|---|---|
@@ -79,7 +79,7 @@ Key properties:
 In [`cmd/root.go`](../cmd/root.go) `runServe`, the `ModeAspire` case:
 
 ```go
-scan, err := discovery.NewAspireScanner(os.Getenv)   // only source
+scan, err := discovery.NewContractScanner(os.Getenv, contractSource(mode))   // only source
 appNS = contractNamespaces(scan)                      // appID → namespace map
 appsSvc = discovery.New(scan, client)                 // no standalone/compose/testcontainers
 caps = &server.Capabilities{Workflows: settings.StateStore != ""}
@@ -260,7 +260,7 @@ Aspire inputs it does much less:
         │  injects DEVDASHBOARD_APP_* (static, once)
         ▼
  diagrid-dev-dashboard (container, mode=aspire)
-        │  NewAspireScanner → []ScanResult (Source=aspire, DaprHTTPBaseURL set)
+        │  NewContractScanner → []ScanResult (Source=aspire, DaprHTTPBaseURL set)
         ▼
  discovery.List  ──(per poll, parallel)──▶  each sidecar:
         │                                     GET {DaprHTTPBaseURL}/v1.0/healthz   → health
@@ -302,7 +302,7 @@ resource service) are analyzed in
 
 | Concern | File |
 |---|---|
-| Contract parsing | [`pkg/discovery/scan_aspire.go`](../pkg/discovery/scan_aspire.go) |
+| Contract parsing | [`pkg/discovery/scan_contract.go`](../pkg/discovery/scan_contract.go) |
 | Mode & serve settings | [`cmd/mode.go`](../cmd/mode.go) |
 | Startup wiring (aspire branch) | [`cmd/root.go`](../cmd/root.go) |
 | Enrichment / base-URL selection | [`pkg/discovery/service.go`](../pkg/discovery/service.go), [`health.go`](../pkg/discovery/health.go) |

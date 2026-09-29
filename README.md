@@ -104,23 +104,27 @@ dashboard surface — applications, workflows, state stores, the Control Plane v
 targets — to a single source; filters are exclusive and never combined:
 
 - `--mode dapr-run` — host `dapr run` processes only (Control Plane shows the `dapr init` containers).
-- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler).
+- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler), or a service inside your compose project when the `DEVDASHBOARD_APP_*` contract is set.
 - `--mode test-containers` — Testcontainers discovery only (no control-plane detection yet).
 - `--mode aspire` — Aspire resources only. Inside an AppHost-managed container (the
   `DEVDASHBOARD_APP_*` contract is present) this is the container serving posture described
   below; on a plain host it filters the process scan to Aspire-managed apps.
 
 `compose` and `test-containers` require a container runtime (docker or podman) and fail at
-startup without one. `--bind` (default `127.0.0.1`, `0.0.0.0` in aspire container posture)
-controls the listen address alongside `--port`.
+startup without one, except in container posture (the `DEVDASHBOARD_APP_*` contract is set
+under `aspire` or `compose`), which needs no runtime. `--bind` (default `127.0.0.1`, `0.0.0.0`
+in container posture) controls the listen address alongside `--port`.
 
-## Run as a container (.NET Aspire)
+## Run as a container
 
-The dashboard also ships as a container image, purpose-built for embedding inside a
-[.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) AppHost via the
+The dashboard also ships as a container image that runs inside an orchestrated project: either
+a [.NET Aspire](https://learn.microsoft.com/dotnet/aspire/) AppHost, via the
 [`diagrid-labs/dashboard-aspire`](https://github.com/diagrid-labs/dashboard-aspire) hosting
-integration (which will be rewritten against the contract below). It also runs standalone
-with a hand-written `docker run`.
+integration (which will be rewritten against the contract below), or a Docker Compose project.
+It also runs standalone with a hand-written `docker run`. Both use the same env contract and
+the same container posture; the differences are called out per subsection.
+
+### Inside a .NET Aspire AppHost
 
 **Image:** `ghcr.io/diagridio/dev-dashboard`, tagged `:X.Y.Z` (in lockstep with binary
 releases) and `:latest`. Prerelease tags (e.g. `v1.5.0-rc.1`) publish their own version tag
@@ -157,10 +161,11 @@ docker run --rm -p 8080:8080 \
 | `DEVDASHBOARD_APP_<i>_DAPR_HTTP` | yes | daprd HTTP base URL, reachable **from the dashboard container** (e.g. `http://myapp-dapr:3500`) |
 | `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Used for **app-scoped** workflow operations — fetching one instance's history, an app-filtered workflow list/stats, and force delete — so those honor the app's own namespace. The store-wide workflow list, stats, and app-id dropdown (all-apps scans) still use the global `DEVDASHBOARD_NAMESPACE` |
 | `DEVDASHBOARD_APP_<i>_LABEL` | no | display name; defaults to the app-id. Shown in the applications list and app detail header whenever it differs from the app-id |
+| `DEVDASHBOARD_APP_<i>_DAPR_GRPC` | no | daprd gRPC endpoint as `host:port`, reachable from the dashboard container. Only used by compose mode, to read workflows from the sidecar (Dapr 1.17+). Defaults to the host of `DAPR_HTTP` on port `50001` (e.g. `http://myapp-dapr:3500` becomes `myapp-dapr:50001`); set it when the sidecar runs with a non-default `-dapr-grpc-port` |
 
 Validation is fail-fast at startup: a missing or non-numeric `DEVDASHBOARD_APP_COUNT`, any
-missing required per-app var, or an unparsable `DAPR_HTTP` URL exits with an error naming the
-exact variable.
+missing required per-app var, an unparsable `DAPR_HTTP` URL, or a malformed `DAPR_GRPC`
+`host:port` exits with an error naming the exact variable.
 
 **Security note:** in aspire mode the dashboard drops the loopback `Host` check (the container
 is addressed by its Docker-network name or a published port). Without `DEVDASHBOARD_ALLOWED_HOSTS`
@@ -172,17 +177,115 @@ development tool — never expose it publicly.
 
 **Serving and features:**
 
-| Env var / flag | Default (aspire) | Meaning |
+| Env var / flag | Default (container posture) | Meaning |
 |---|---|---|
 | `DEVDASHBOARD_PORT` / `--port` | `8080` | listen port |
 | `DEVDASHBOARD_BIND` / `--bind` | `0.0.0.0` | bind address |
 | `DEVDASHBOARD_STATESTORE_FILE` / `--statestore` | unset | path to a mounted Dapr state-store component YAML; enables the Workflows page |
 | `DEVDASHBOARD_NAMESPACE` / `--namespace` | `default` | default Dapr namespace for workflow actor keys |
 | `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra component directories for the Resources page, `os.PathListSeparator`-separated |
-| `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, aspire mode only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
+| `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, container posture only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
 | `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
 
 Precedence everywhere is **flag > env > posture default**.
+
+### As a Docker Compose service
+
+Add the dashboard as one more service in the same compose file as your Dapr apps. Set
+`DEVDASHBOARD_MODE: compose` explicitly: the image bakes in `DEVDASHBOARD_MODE=aspire`, so
+without the override the contract runs in aspire mode and the dashboard cannot read workflows
+from the sidecars. With the contract present, `compose` selects the container posture above
+(port `8080`, bound to `0.0.0.0`, no container runtime or docker socket needed). Without the
+contract, `--mode compose` keeps its host behavior of scanning compose containers through
+docker.
+
+```yaml
+services:
+  order-processor:
+    build: ./order-processor
+
+  order-processor-dapr:
+    image: daprio/daprd:1.18.1
+    command:
+      - "./daprd"
+      - "-app-id"
+      - &order_id order-processor
+      - "-app-port"
+      - "5001"
+      - "-dapr-http-port"
+      - "3500"
+      - "-resources-path"
+      - "/components"
+    volumes:
+      - "./components:/components:ro"
+    network_mode: "service:order-processor"
+
+  dev-dashboard:
+    image: ghcr.io/diagridio/dev-dashboard:latest
+    ports:
+      - "9090:8080"
+    environment:
+      DEVDASHBOARD_MODE: compose
+      DEVDASHBOARD_APP_COUNT: "1"
+      DEVDASHBOARD_APP_0_ID: *order_id
+      # order-processor owns the network namespace, so the sidecar is
+      # addressed by the app's service name.
+      DEVDASHBOARD_APP_0_DAPR_HTTP: http://order-processor:3500
+      DEVDASHBOARD_RESOURCES_PATH: /components
+    volumes:
+      - "./components:/components:ro"
+```
+
+The YAML anchor (`&order_id` / `*order_id`) keeps the app-id from being declared twice. The
+dashboard has no `depends_on`: discovery is static env parsing and sidecar health is probed on
+every refresh, so apps simply show as unreachable until they come up.
+
+**Addressing the sidecar.** `DEVDASHBOARD_APP_<i>_DAPR_HTTP` must point at whichever service
+owns the sidecar's network namespace, not at a naming convention:
+
+| Compose shape | `_DAPR_HTTP` value |
+|---|---|
+| App and sidecar as separate services | `http://<sidecar-service>:3500` |
+| App joins the sidecar (`network_mode: "service:daprd"`) | `http://daprd:3500` (the sidecar owns the namespace) |
+| Sidecar joins the app (`network_mode: "service:app"`) | `http://app:3500` (the **app** service name; the sidecar is not resolvable by name) |
+
+The same rule applies to `_DAPR_GRPC` when you set it explicitly; when you omit it, the
+derived default reuses the host of `_DAPR_HTTP`, so it follows the same shape.
+
+**What is off, and why.** As in aspire mode, discovery is restricted to the env contract, and
+these are disabled: app lifecycle controls (start/stop/restart), the control-plane page, log
+tailing, self-update/update-check, automatic browser opening, and secret-value reveal.
+
+- Lifecycle and the control-plane page need a container runtime to start, stop, and inspect
+  containers; the dashboard runs without the docker socket.
+- Logs are architecturally unavailable, not unimplemented: `docker logs` needs the socket,
+  daprd exposes no log API, and daprd logs to stdout rather than a file a shared volume could
+  carry.
+- Update-check and self-update are off because container images are updated by tag, not in place.
+- Secret-value reveal is always off when the dashboard is served off-host. The component view
+  still shows the *status* of secret references.
+- Placement connectivity is still visible on App Detail and Actors, since it comes from the
+  sidecar's metadata.
+- Workflows works without a state store: the dashboard reads them through each declared
+  sidecar's gRPC endpoint (Dapr 1.17+; older runtimes report that the sidecar does not
+  support workflow inspection). If `DEVDASHBOARD_STATESTORE_FILE` also points at a mounted
+  store, both sources are merged and the sidecar wins on collisions.
+- The State page appears only when `DEVDASHBOARD_STATESTORE_FILE` points at a mounted
+  state-store component. Mounting components via `DEVDASHBOARD_RESOURCES_PATH` alone feeds the
+  Resources page but does not enable State.
+
+**Troubleshooting.**
+
+1. **Sidecar shows as unreachable, or metadata probes fail with DNS errors.** If your compose
+   file declares custom `networks`, the dashboard service must be attached to every network
+   its target sidecars are on; the implicit default network works automatically. In compose
+   container posture the unreachable-sidecar hint tells you to share a network with the
+   named service, not to publish a port.
+2. **Connection refused on a name that resolves.** Check the addressing table above: with
+   `network_mode: "service:..."` the sidecar is only reachable by the namespace owner's
+   service name.
+3. **Workflows page reports the sidecar does not support workflow inspection.** Sidecar
+   workflow reads need Dapr 1.17+.
 
 ## Updating the dashboard
 
