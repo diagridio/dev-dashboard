@@ -181,7 +181,7 @@ development tool — never expose it publicly.
 |---|---|---|
 | `DEVDASHBOARD_PORT` / `--port` | `8080` | listen port |
 | `DEVDASHBOARD_BIND` / `--bind` | `0.0.0.0` | bind address |
-| `DEVDASHBOARD_STATESTORE_FILE` / `--statestore` | unset | path to a mounted Dapr state-store component YAML; enables the Workflows page |
+| `DEVDASHBOARD_STATESTORE_FILE` / `--statestore` | unset | path to a mounted Dapr state-store component YAML; enables the State page and store-backed workflows; in compose container posture Workflows also works without it via the sidecars |
 | `DEVDASHBOARD_NAMESPACE` / `--namespace` | `default` | default Dapr namespace for workflow actor keys |
 | `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra component directories for the Resources page, `os.PathListSeparator`-separated |
 | `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, container posture only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
@@ -279,8 +279,12 @@ tailing, self-update/update-check, automatic browser opening, and secret-value r
 1. **Sidecar shows as unreachable, or metadata probes fail with DNS errors.** If your compose
    file declares custom `networks`, the dashboard service must be attached to every network
    its target sidecars are on; the implicit default network works automatically. In compose
-   container posture the unreachable-sidecar hint tells you to share a network with the
-   named service, not to publish a port.
+   container posture the app is still listed, marked unreachable, and recovers on the next
+   refresh once the sidecar answers. The hint tells you to share a Docker network, not to
+   publish a port: the list tooltip says "the dashboard and this app must share a Docker
+   network", and App Detail says to make sure the dashboard and the app's sidecar are on the
+   same Docker network and that `DEVDASHBOARD_APP_*_DAPR_HTTP` uses the service name that owns
+   the network namespace.
 2. **Connection refused on a name that resolves.** Check the addressing table above: with
    `network_mode: "service:..."` the sidecar is only reachable by the namespace owner's
    service name.

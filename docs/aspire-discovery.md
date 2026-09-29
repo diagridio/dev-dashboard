@@ -79,10 +79,15 @@ Key properties:
 In [`cmd/root.go`](../cmd/root.go) `runServe`, the `ModeAspire` case:
 
 ```go
-scan, err := discovery.NewContractScanner(os.Getenv, contractSource(mode))   // only source
+scan, err := discovery.NewContractScanner(os.Getenv, contractSource(mode))   // contractSource(ModeAspire) = discovery.SourceAspire
 appNS = contractNamespaces(scan)                      // appID → namespace map
 appsSvc = discovery.New(scan, client)                 // no standalone/compose/testcontainers
-caps = &server.Capabilities{Workflows: settings.StateStore != ""}
+caps = &server.Capabilities{
+    Workflows:        settings.StateStore != "",      // aspire never uses the sidecar fallback
+    State:            settings.StateStore != "",
+    Mode:             "aspire",
+    ContainerPosture: true,
+}
 ```
 
 - No `containerruntime.Detect()`, no compose/testcontainers sources, no lifecycle
