@@ -56,7 +56,9 @@ running through a datacenter.
   completed. Best score persists in `localStorage`.
 - **Chaos crash.** At random wall-clock times: glitch effect, banner
   `daprd: signal: killed`, the live state is discarded, and the engine replays
-  the history at 8× speed (8 `step`s per rendered frame). Coins that were
+  the history at 8× speed or faster: at least 8 `step`s per rendered frame,
+  raised so that any replay finishes within about 120 frames (~2 s), so long
+  level-4 runs don't make the player wait. Coins that were
   already collected show a "✓ from history" badge instead of being collected
   again. Control returns at the exact tick of the crash. A crash never costs
   the player anything — that is the point.
@@ -78,10 +80,12 @@ Triggered when a replay detects divergence. A 15 s phase: screen corruption,
 and obstacles spawn from the *diverged* RNG, so the level ahead no longer
 matches what the player saw before the crash.
 
-- **Survive:** "hotfix & redeploy". The multiplier is lost and the run
-  continues via *continue-as-new*: a fresh history starts from a snapshot of
-  the current state (score, level, position, a derived seed). This mirrors
-  Dapr's `ContinueAsNew` and drops the tainted history.
+- The boss phase itself starts as a *continue-as-new* segment from the
+  diverged state (score, level, elapsed time, a derived seed; on-screen
+  entities and the multiplier are not carried over — the screen "scrambles").
+- **Survive:** "hotfix & redeploy". The run continues via another
+  *continue-as-new*: a fresh history starts from a snapshot of the current
+  state. This mirrors Dapr's `ContinueAsNew` and drops the tainted history.
 - **Die:** run ends **FAILED** with reason
   `non-determinism detected at event #n`.
 
@@ -128,7 +132,7 @@ web/src/pages/replay/
   engine/                pure TS: no DOM, no Math.random, no Date, no I/O
     types.ts             GameState, Input, HistoryEvent, StartInput, ReplayResult
     rng.ts               seeded PRNG (mulberry32); its state is a field of GameState
-    step.ts              step(state, inputs, impure) → { state, events }
+    step.ts              step(state, inputs, ports) → { state, events }  (ports = { impure, crateValue })
     levels.ts            level configs and scripted moments
     replay.ts            replay(start, history, toTick, impure) → ReplayResult
     hash.ts              FNV-1a over a canonical serialisation of GameState
@@ -187,8 +191,8 @@ web/src/hooks/useKonami.ts   mounted once in App; navigates to /replay
 
 ### Rendering
 
-- Canvas at a fixed logical 480×270, scaled by an integer factor with
-  `image-rendering: pixelated`. Sprites are drawn from small in-code pixel maps
+- Canvas at a fixed logical 480×270, CSS-scaled to the column width (capped
+  at 960 px, i.e. 2×) with `image-rendering: pixelated`. Sprites are drawn from small in-code pixel maps
   that reference palette slots, not colours.
 - The palette maps slots to `theme.css` tokens (e.g. `--bg`, `--text`,
   `--accent`, status colours) via `getComputedStyle`, refreshed when the
