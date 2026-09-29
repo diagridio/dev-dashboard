@@ -34,7 +34,7 @@ type Instance struct {
 	AppContainerID     string `json:"appContainerId,omitempty"`
 	AppContainerName   string `json:"appContainerName,omitempty"`
 	SidecarReachable   bool   `json:"sidecarReachable"`
-	// DaprHTTPBaseURL is the daprd HTTP endpoint for aspire-source apps
+	// DaprHTTPBaseURL is the daprd HTTP endpoint for contract-declared apps
 	// ("" otherwise; consumers fall back to 127.0.0.1:httpPort).
 	DaprHTTPBaseURL string `json:"daprHttpBaseUrl,omitempty"`
 	// DaprGRPCAddr is the daprd gRPC endpoint as host:port for

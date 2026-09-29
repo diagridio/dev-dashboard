@@ -58,11 +58,11 @@ type ScanResult struct {
 	// not published to the host (metadata/health enrichment impossible).
 	SidecarReachable bool
 
-	// DaprHTTPBaseURL, when set (aspire source), replaces
+	// DaprHTTPBaseURL, when set (contract source: aspire or compose), replaces
 	// http://127.0.0.1:<HTTPPort> as the daprd HTTP endpoint for health,
 	// metadata, and workflow calls.
 	DaprHTTPBaseURL string
-	// DaprGRPCAddr is the contract-supplied daprd gRPC endpoint (host:port).
+	// DaprGRPCAddr is the contract-supplied or derived from DaprHTTPBaseURL daprd gRPC endpoint (host:port).
 	DaprGRPCAddr string
 	// Namespace and Label come from the Aspire env contract ("" for other
 	// sources). Label is the orchestrator's display name for the app.
@@ -275,6 +275,13 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	if err != nil {
 		in.MetadataOK = false
 		logger().Warn("app metadata unavailable", "appID", r.AppID, "httpPort", r.HTTPPort, "err", err)
+		// A contract-declared compose sidecar (only the contract scanner sets
+		// DaprHTTPBaseURL) that answers neither health nor metadata is
+		// unreachable from this container. The scanner sets true again on the
+		// next poll, so it recovers without a restart.
+		if in.Source == SourceCompose && r.DaprHTTPBaseURL != "" && in.Health != HealthHealthy {
+			in.SidecarReachable = false
+		}
 		return in
 	}
 	in.MetadataOK = true

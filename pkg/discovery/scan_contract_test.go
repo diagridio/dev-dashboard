@@ -3,8 +3,12 @@
 package discovery
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func envFunc(vals map[string]string) func(string) string {
@@ -270,6 +274,67 @@ func TestContractScannerRejectsMalformedGRPCAddr(t *testing.T) {
 			// Fail-fast errors must name the exact variable.
 			if !strings.Contains(err.Error(), "DEVDASHBOARD_APP_0_DAPR_GRPC") {
 				t.Fatalf("error must name the variable, got: %v", err)
+			}
+		})
+	}
+}
+
+func contractInstanceFor(t *testing.T, source, daprURL string) Instance {
+	t.Helper()
+	scan, err := NewContractScanner(envMap(map[string]string{
+		"DEVDASHBOARD_APP_COUNT":       "1",
+		"DEVDASHBOARD_APP_0_ID":        "order",
+		"DEVDASHBOARD_APP_0_DAPR_HTTP": daprURL,
+	}), source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := New(scan, &http.Client{Timeout: 500 * time.Millisecond})
+	list, err := svc.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("got %d instances, want 1", len(list))
+	}
+	return list[0]
+}
+
+func TestContractSidecarReachability(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/healthz") {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		_, _ = w.Write([]byte(`{"id":"order","runtimeVersion":"1.17.0"}`))
+	}))
+	defer up.Close()
+	down := httptest.NewServer(http.NotFoundHandler())
+	downURL := down.URL
+	down.Close()
+
+	tests := []struct {
+		name   string
+		source string
+		url    string
+		want   bool
+	}{
+		{"compose reachable", SourceCompose, up.URL, true},
+		{"compose unreachable", SourceCompose, downURL, false},
+		{"aspire reachable", SourceAspire, up.URL, true},
+		{"aspire unreachable stays true", SourceAspire, downURL, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			in := contractInstanceFor(t, tc.source, tc.url)
+			if in.Source != tc.source {
+				t.Fatalf("source = %q want %q", in.Source, tc.source)
+			}
+			if in.SidecarReachable != tc.want {
+				t.Fatalf("SidecarReachable = %v want %v", in.SidecarReachable, tc.want)
+			}
+			if in.DaprdStatus == StatusStopped {
+				t.Fatalf("DaprdStatus must not be stopped")
 			}
 		})
 	}
