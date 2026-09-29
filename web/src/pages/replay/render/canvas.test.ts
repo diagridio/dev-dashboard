@@ -6,7 +6,7 @@ import { render, type RenderView } from './canvas'
 import type { Palette } from './palette'
 
 const pal: Palette = {
-  bg: 'white', ground: 'gray', player: 'green', hat: 'navy', hatOutline: 'transparent', obstacle: 'red', coin: 'gold', orb: 'purple',
+  bg: 'white', ground: 'gray', backdrop: 'silver', player: 'green', hat: 'navy', hatOutline: 'transparent', obstacle: 'red', coin: 'gold', orb: 'purple',
   crate: 'blue', text: 'black', muted: 'gray', glitch: 'cyan', fail: 'red',
 }
 

@@ -27,7 +27,7 @@ describe('readPalette', () => {
   })
 
   it('maps every slot to a CSS custom property', () => {
-    for (const token of Object.values(SLOT_TOKENS)) expect(token).toMatch(/^--[a-z-]+$/)
+    for (const token of Object.values(SLOT_TOKENS)) expect(token).toMatch(/^--[a-z0-9-]+$/)
   })
 })
 

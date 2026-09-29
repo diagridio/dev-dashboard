@@ -2,6 +2,7 @@ import { LEVELS } from '../engine/levels'
 import { PLAYER_H, PLAYER_W, SLIDE_H } from '../engine/step'
 import { GROUND_Y, PLAYER_X, TICK_HZ, VIEW_H, VIEW_W, type Entity, type GameState } from '../engine/types'
 import type { Phase } from '../runtime/types'
+import { drawBackground } from './background'
 import type { Palette } from './palette'
 import { NEUTRAL, type Pose } from './pose'
 import { drawHat } from './sprites'
@@ -127,6 +128,7 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
   ctx.fillStyle = pal.bg
   ctx.fillRect(0, 0, VIEW_W, VIEW_H)
   if (crashing && !view.reducedMotion) ctx.translate(((view.frame * 7) % 9) - 4, ((view.frame * 5) % 7) - 3)
+  drawBackground(ctx, state.distance + state.scroll, pal, view.frame, view.reducedMotion)
   drawGround(ctx, state, pal)
   for (const e of state.entities) drawEntity(ctx, e, pal, replaying)
   drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL)

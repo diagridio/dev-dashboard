@@ -1,12 +1,13 @@
 // Canvas colours come from the dashboard's theme tokens, so the game follows
 // light/dark mode. Never put colour literals here (styleguide rule).
 
-export type Slot = 'bg' | 'ground' | 'player' | 'hat' | 'hatOutline' | 'obstacle' | 'coin' | 'orb' | 'crate' | 'text' | 'muted' | 'glitch' | 'fail'
+export type Slot = 'bg' | 'ground' | 'backdrop' | 'player' | 'hat' | 'hatOutline' | 'obstacle' | 'coin' | 'orb' | 'crate' | 'text' | 'muted' | 'glitch' | 'fail'
 export type Palette = Record<Slot, string>
 
 export const SLOT_TOKENS: Record<Slot, string> = {
   bg: '--surface',
   ground: '--line',
+  backdrop: '--surface-2',
   player: '--accent-bright',
   hat: '--dapr-hat',
   hatOutline: '--dapr-hat-outline',
