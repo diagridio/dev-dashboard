@@ -46,7 +46,7 @@ func fakeSidecar(t *testing.T, published chan<- string) *httptest.Server {
 
 func TestComposeContainerPostureDiscoversAppOverSidecarHTTP(t *testing.T) {
 	published := make(chan string, 1)
-	sidecar := fakeSidecar(t, &published)
+	sidecar := fakeSidecar(t, published)
 
 	env := map[string]string{
 		"DEVDASHBOARD_APP_COUNT":       "1",
