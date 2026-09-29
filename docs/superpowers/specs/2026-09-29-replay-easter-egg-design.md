@@ -160,8 +160,12 @@ web/src/hooks/useKonami.ts   mounted once in App; navigates to /replay
   - `OrbTaken { tick, id, hash }` — records *that* it happened, not the value.
   - `hash` is the state hash after the event's tick is applied.
 - **Start input.** Every history begins from a `StartInput`
-  `{ level, seed, score, x, … }` so levels and the boss hotfix can
-  continue-as-new.
+  `{ level, seed, score, elapsed, distance, boss }` so levels and the boss
+  hotfix can continue-as-new. `distance` is how far earlier segments of the
+  same level already travelled: each segment's scroll restarts at 0, and the
+  level ends when `distance + scroll` reaches its length, so a boss phase or
+  hotfix never sends the player back to the start of the level. A level
+  transition resets `distance` to 0.
 - **The impure port.** `step` receives one function, `impure(): number`, and is
   the only way non-determinism can enter the engine.
   - Orb pickup: `rng = mix(rng, impure())` — value unrecorded.
@@ -182,8 +186,9 @@ web/src/hooks/useKonami.ts   mounted once in App; navigates to /replay
   per accumulated tick and appends emitted events to `history`.
 - A crash sets `state = undefined`, then runs `replay` incrementally (8 ticks
   per frame) so the fast-forward is visible, then resumes live play.
-- Level 0 is special-cased: its crash restarts from the level's `StartInput`
-  with an empty history.
+- Level 0 is special-cased: it has no durable history, so its crash shows
+  "Progress lost" and then starts level 1 (Dapr Workflow enabled) with an
+  empty history. Level 0 never writes a save.
 - **Persistence:** save `{ version, start, history, tick, best }` on each new
   event, on `visibilitychange` → hidden and on `pagehide`. A missing, corrupt
   or wrong-version save is treated as "no save". Storage exceptions are
@@ -219,8 +224,9 @@ Vitest, co-located `*.test.ts(x)` files:
 - **Replay equivalence:** a live run's final state equals `replay()` over its
   history.
 - **Divergence:** a history containing `OrbTaken` replays to
-  `{ ok: false, divergedAt }` at the first event after the orb, with a stubbed
-  `impure` that returns a different sequence.
+  `{ ok: false, divergedAt }` at the `OrbTaken` event itself (its hash is taken
+  after the impure value is mixed into the RNG), with a stubbed `impure` that
+  returns a different sequence.
 - **Crate safety:** a history containing a crate pickup replays `ok` with the
   same stub.
 - **Continue-as-new:** a level transition and a boss hotfix produce a fresh
