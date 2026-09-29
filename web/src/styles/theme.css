@@ -643,7 +643,9 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
    REPLAY easter egg (pages/replay)
    ============================================================ */
 .replay-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
-.replay-stage { position: relative; max-width: 960px; }
+.replay-stage { position: relative; max-width: 960px; border-radius: 13px; }
+.replay-stage:focus { outline: none; }
+.replay-stage:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .replay-stage canvas { display: block; width: 100%; height: auto; image-rendering: pixelated; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: var(--shadow); }
 .replay-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; border-radius: 13px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
 .replay-card { max-width: 440px; padding: 18px 20px; display: grid; gap: 10px; }

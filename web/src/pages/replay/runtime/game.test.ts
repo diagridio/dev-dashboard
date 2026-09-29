@@ -247,6 +247,44 @@ describe('Game', () => {
     expect(game.state.tick).toBe(11)
   })
 
+  it('ends a slide released while paused once play continues, and records it', () => {
+    const game = new Game(deps())
+    play(game)
+    game.frame(5)
+    game.command('slideStart')
+    game.frame(1)
+    expect(game.state.player.sliding).toBe(true)
+    game.command('pause')
+    game.command('slideEnd')
+    game.command('pause')
+    game.frame(1)
+    expect(game.state.player.sliding).toBe(false)
+    expect(game.history[game.history.length - 1]).toEqual({ type: 'Input', tick: 6, kind: 'slideEnd' })
+  })
+
+  it('ends a slide released during a crash once the replay resumes play', () => {
+    const game = new Game(deps({ levels: makeLevels({ firstCrashTicks: [100, 100] }) }))
+    play(game)
+    game.frame(50)
+    game.command('slideStart')
+    runUntil(game, is('crashing'))
+    game.command('slideEnd')
+    runUntil(game, is('playing'))
+    expect(game.state.player.sliding).toBe(true)
+    game.frame(1)
+    expect(game.state.player.sliding).toBe(false)
+    expect(game.history[game.history.length - 1]).toEqual({ type: 'Input', tick: 100, kind: 'slideEnd' })
+  })
+
+  it('starts a slide held through a segment change', () => {
+    const { game } = bossGame()
+    game.command('slideStart')
+    runUntil(game, (g) => g.phase.kind === 'playing' && g.state.bossUntil === 0)
+    game.frame(1)
+    expect(game.state.player.sliding).toBe(true)
+    expect(game.history[0]).toEqual({ type: 'Input', tick: 0, kind: 'slideStart' })
+  })
+
   it('suspend() pauses a running game and saves it', () => {
     const store = memoryStore()
     const game = new Game(deps({ store }))

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { isEditableTarget } from '../../lib/isEditableTarget'
+import { isInteractiveTarget } from '../../lib/isEditableTarget'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { VIEW_H, VIEW_W } from './engine/types'
 import { HistoryPanel } from './HistoryPanel'
@@ -24,20 +24,29 @@ function createGame(): Game {
 export function Component() {
   useDocumentTitle('Replay')
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const [game] = useState(createGame)
   useSyncExternalStore(game.subscribe, game.getVersion)
 
   useEffect(() => {
-    const handler = (down: boolean) => (e: KeyboardEvent) => {
-      if (isEditableTarget(e.target)) return
-      if (e.ctrlKey || e.metaKey || e.altKey) return
-      const command = keyToCommand(e, down)
+    // Arriving from a sidebar link leaves focus there; move it to the game so Enter starts it.
+    stageRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Keys aimed at the app shell (links, buttons, fields, dialogs) are not game keys.
+      if (e.ctrlKey || e.metaKey || e.altKey || isInteractiveTarget(e.target)) return
+      const command = keyToCommand(e, true)
       if (!command) return
       e.preventDefault()
       game.command(command)
     }
-    const onKeyDown = handler(true)
-    const onKeyUp = handler(false)
+    // Releases always get through (they only ever end a slide), so a slide never sticks.
+    const onKeyUp = (e: KeyboardEvent) => {
+      const command = keyToCommand(e, false)
+      if (command) game.command(command)
+    }
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     return () => {
@@ -64,13 +73,16 @@ export function Component() {
       if (document.visibilityState === 'hidden') game.suspend()
     }
     const onPageHide = () => game.save()
+    const onBlur = () => game.suspend()
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('blur', onBlur)
     return () => {
       loop.stop()
       unwatch()
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('blur', onBlur)
       game.suspend()
     }
   }, [game])
@@ -84,7 +96,7 @@ export function Component() {
         </div>
       </div>
       <div className="replay-grid">
-        <div className="replay-stage">
+        <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game">
           <canvas ref={canvasRef} width={VIEW_W} height={VIEW_H} aria-label="REPLAY game screen" />
           <Overlay phase={game.phase} stats={game.stats} best={game.best} score={game.state.score} />
         </div>

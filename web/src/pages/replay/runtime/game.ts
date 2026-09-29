@@ -47,6 +47,8 @@ export class Game {
 
   private notice: { text: string; untilTick: number } | null = null
   private pending: InputKind[] = []
+  /** Whether the slide key is down, tracked in every phase so a release is never lost. */
+  private slideHeld = false
   private replayer: Replayer | null = null
   private replayTicksPerFrame = REPLAY_MIN_TICKS_PER_FRAME
   private crashTick = 0
@@ -85,6 +87,8 @@ export class Game {
   }
 
   command(c: Command): void {
+    if (c === 'slideStart') this.slideHeld = true
+    else if (c === 'slideEnd') this.slideHeld = false
     switch (this.phase.kind) {
       case 'title':
       case 'over':
@@ -293,7 +297,20 @@ export class Game {
 
   private setPhase(phase: Phase): void {
     this.phase = phase
+    if (phase.kind === 'playing') this.syncSlide()
     this.touch()
+  }
+
+  /**
+   * On (re)entering play, queue the slide input that matches the key as it is
+   * now: a release (or press) that happened while input was ignored is then
+   * recorded at the next tick like any other input, so replay stays exact.
+   */
+  private syncSlide(): void {
+    this.pending = this.pending.filter((k) => k === 'jump')
+    const sliding = this.state.player.sliding
+    if (sliding && !this.slideHeld) this.pending.push('slideEnd')
+    else if (!sliding && this.slideHeld) this.pending.push('slideStart')
   }
 
   private touch(): void {

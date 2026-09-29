@@ -65,6 +65,47 @@ describe('Replay page', () => {
     expect(screen.getByRole('link', { name: 'Learn more ↗' })).toHaveAttribute('target', '_blank')
   })
 
+  it('pauses a running game when the window loses focus', async () => {
+    renderAt('/replay')
+    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    fireEvent.keyDown(window, { key: 'Enter' })
+    fireEvent.keyDown(window, { key: 'Enter' })
+    fireEvent.blur(window)
+    expect(await screen.findByRole('heading', { name: 'Paused' })).toBeInTheDocument()
+  })
+
+  it('focuses the game stage on mount and starts on Enter there', async () => {
+    renderAt('/replay')
+    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    const stage = screen.getByLabelText('REPLAY game')
+    expect(stage).toHaveFocus()
+    fireEvent.keyDown(stage, { key: 'Enter' })
+    expect(await screen.findByRole('heading', { name: 'Level 0 · No Safety Net' })).toBeInTheDocument()
+  })
+
+  it('leaves Enter to a focused button', async () => {
+    renderAt('/replay')
+    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    const button = screen.getAllByRole('button')[0]
+    button.focus()
+    const e = fireEvent.keyDown(button, { key: 'Enter' })
+    expect(e).toBe(true) // not preventDefault-ed
+    expect(screen.getByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+  })
+
+  it('leaves keys pressed inside a dialog alone', async () => {
+    renderAt('/replay')
+    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    const inner = document.createElement('div')
+    dialog.appendChild(inner)
+    document.body.appendChild(dialog)
+    fireEvent.keyDown(inner, { key: 'Enter' })
+    expect(screen.getByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+    dialog.remove()
+  })
+
   it('ignores keys pressed with a modifier', async () => {
     renderAt('/replay')
     await screen.findByRole('heading', { name: 'Press Enter to start' })
