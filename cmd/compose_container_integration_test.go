@@ -16,7 +16,7 @@ import (
 
 // fakeSidecar serves the daprd endpoints the dashboard probes in compose
 // container posture: health, metadata, and publish.
-func fakeSidecar(t *testing.T, published *string) *httptest.Server {
+func fakeSidecar(t *testing.T, published chan<- string) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1.0/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -33,7 +33,10 @@ func fakeSidecar(t *testing.T, published *string) *httptest.Server {
 		}`))
 	})
 	mux.HandleFunc("/v1.0/publish/", func(w http.ResponseWriter, r *http.Request) {
-		*published = r.URL.Path
+		select {
+		case published <- r.URL.Path:
+		default:
+		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 	srv := httptest.NewServer(mux)
@@ -42,7 +45,7 @@ func fakeSidecar(t *testing.T, published *string) *httptest.Server {
 }
 
 func TestComposeContainerPostureDiscoversAppOverSidecarHTTP(t *testing.T) {
-	var published string
+	published := make(chan string, 1)
 	sidecar := fakeSidecar(t, &published)
 
 	env := map[string]string{
@@ -107,13 +110,24 @@ func TestComposeContainerPostureDiscoversAppOverSidecarHTTP(t *testing.T) {
 	}
 
 	// Publish reaches the sidecar.
-	req, _ := http.NewRequest(http.MethodPost, app.BaseURL()+"/v1.0/publish/pubsub/orders", strings.NewReader(`{"k":"v"}`))
+	req, err := http.NewRequest(http.MethodPost, app.BaseURL()+"/v1.0/publish/pubsub/orders", strings.NewReader(`{"k":"v"}`))
+	if err != nil {
+		t.Fatalf("publish request: %v", err)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("publish: %v", err)
 	}
 	_ = resp.Body.Close()
-	if published != "/v1.0/publish/pubsub/orders" {
-		t.Errorf("publish path: got %q", published)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("publish status: got %d want %d", resp.StatusCode, http.StatusNoContent)
+	}
+	select {
+	case got := <-published:
+		if got != "/v1.0/publish/pubsub/orders" {
+			t.Errorf("publish path: got %q", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Error("publish never reached the sidecar")
 	}
 }
