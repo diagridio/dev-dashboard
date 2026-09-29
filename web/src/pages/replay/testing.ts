@@ -8,7 +8,7 @@ const BASE: LevelConfig = {
   length: Number.POSITIVE_INFINITY, speed: 4, ramp: 0, maxSpeed: 4,
   weights: { coin: 1 }, bossWeights: { coin: 1 },
   durable: true, chaosMeanTicks: null,
-  tip: { body: 'Test level', href: 'https://docs.dapr.io/' },
+  tip: { body: 'Test level' },
 }
 
 /** A level table where every level is BASE + overrides + its own perLevel patch. */

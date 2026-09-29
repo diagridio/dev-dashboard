@@ -57,12 +57,13 @@ describe('Replay page', () => {
     expect(screen.getByLabelText('REPLAY game screen')).toBeInTheDocument()
   })
 
-  it('Enter opens the level-0 tip with a docs link', async () => {
+  it('Enter opens the level-0 tip without a docs link', async () => {
     renderAt('/replay')
     await screen.findByRole('heading', { name: 'Press Enter to start' })
     fireEvent.keyDown(window, { key: 'Enter' })
     expect(await screen.findByRole('heading', { name: 'Level 0 · No Safety Net' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Learn more ↗' })).toHaveAttribute('target', '_blank')
+    expect(screen.getByText(/keeps its progress in memory/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /learn more/i })).toBeNull()
   })
 
   it('pauses a running game when the window loses focus', async () => {

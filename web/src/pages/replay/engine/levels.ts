@@ -24,7 +24,7 @@ export interface LevelConfig {
   scriptedCrashAt?: number
   /** Pickups that guarantee a crash CRASH_AFTER_PICKUP ticks later. */
   crashAfterPickup?: readonly EntityKind[]
-  tip: { body: string; href: string }
+  tip: { body: string }
 }
 
 export type LevelTable = Record<Level, LevelConfig>
@@ -32,7 +32,6 @@ export type LevelTable = Record<Level, LevelConfig>
 /** A listed pickup forces a crash this many ticks later (1–5 s). */
 export const CRASH_AFTER_PICKUP: readonly [number, number] = [60, 300]
 
-const DOCS = 'https://docs.dapr.io/developing-applications/building-blocks/workflow'
 const BOSS: LevelConfig['bossWeights'] = { low: 3, high: 3 }
 
 export const LEVELS: LevelTable = {
@@ -43,7 +42,6 @@ export const LEVELS: LevelTable = {
     durable: false, chaosMeanTicks: null, scriptedCrashAt: 900,
     tip: {
       body: 'Your workflow keeps its progress in memory. Collect activities and see what happens when the process dies.',
-      href: `${DOCS}/workflow-overview/`,
     },
   },
   1: {
@@ -53,7 +51,6 @@ export const LEVELS: LevelTable = {
     durable: true, chaosMeanTicks: 1200, firstCrashTicks: [480, 720],
     tip: {
       body: 'Dapr Workflow is enabled. Every step is written to history. After a crash the workflow replays that history to rebuild its state, and completed activities are not run again.',
-      href: `${DOCS}/workflow-architecture/`,
     },
   },
   2: {
@@ -63,7 +60,6 @@ export const LEVELS: LevelTable = {
     durable: true, chaosMeanTicks: 1200, crashAfterPickup: ['orb'],
     tip: {
       body: 'Glowing orbs give a ×3 boost, but they are Math.random(), Date.now() and fetch() called straight from workflow code. Replay gets a different answer.',
-      href: `${DOCS}/workflow-features-concepts/#workflow-determinism-and-code-restraints`,
     },
   },
   3: {
@@ -73,7 +69,6 @@ export const LEVELS: LevelTable = {
     durable: true, chaosMeanTicks: 1200, crashAfterPickup: ['orb', 'crate'],
     tip: {
       body: 'Crates give the same boost through callActivity(). The activity result is saved to history, so replay reads it back instead of calling it again.',
-      href: `${DOCS}/workflow-features-concepts/#workflow-determinism-and-code-restraints`,
     },
   },
   4: {
@@ -83,7 +78,6 @@ export const LEVELS: LevelTable = {
     durable: true, chaosMeanTicks: 1200, chaosFloorTicks: 480,
     tip: {
       body: 'Everything at once, faster, with more chaos. How far can your workflow get?',
-      href: `${DOCS}/workflow-patterns/`,
     },
   },
 }

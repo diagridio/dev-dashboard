@@ -54,7 +54,6 @@ export function Overlay({ phase, stats, best, score, level }: Props) {
         <Card>
           <h2>Level {phase.level} · {cfg.name}</h2>
           <p>{cfg.tip.body}</p>
-          <a className="replay-link" href={cfg.tip.href} target="_blank" rel="noreferrer">Learn more ↗</a>
           <p className="replay-keys">Enter to start</p>
         </Card>
       )
