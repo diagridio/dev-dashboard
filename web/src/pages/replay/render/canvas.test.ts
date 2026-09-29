@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { BOSS_TICKS, initialState } from '../engine/step'
-import { GROUND_Y, type GameState } from '../engine/types'
+import { PLAYER_H, PLAYER_W, SLIDE_H } from '../engine/step'
+import { GROUND_Y, PLAYER_X, type GameState } from '../engine/types'
 import type { Phase } from '../runtime/types'
 import { render, type RenderView } from './canvas'
 import type { Palette } from './palette'
 
 const pal: Palette = {
-  bg: 'white', ground: 'gray', player: 'green', obstacle: 'red', coin: 'gold', orb: 'purple',
+  bg: 'white', ground: 'gray', player: 'green', hat: 'navy', hatOutline: 'transparent', obstacle: 'red', coin: 'gold', orb: 'purple',
   crate: 'blue', text: 'black', muted: 'gray', glitch: 'cyan', fail: 'red',
 }
 
@@ -30,6 +31,13 @@ function view(phase: Phase, state: GameState = initialState({ level: 1, seed: 1,
 }
 
 const texts = (calls: { name: string; args: unknown[] }[]) => calls.filter((c) => c.name === 'fillText').map((c) => c.args[0])
+
+/** Bounds of every rounded rect / rect the hat draws (the recording ctx has roundRect). */
+function hatShapes(calls: { name: string; args: unknown[] }[]) {
+  return calls
+    .filter((c) => c.name === 'roundRect')
+    .map((c) => { const [x, y, w, h] = c.args as number[]; return { x, y, w, h } })
+}
 
 describe('render', () => {
   it('draws the HUD with level, score and multiplier', () => {
@@ -86,6 +94,42 @@ describe('render', () => {
     expect(state.bossUntil).toBe(BOSS_TICKS)
     render(ctx, view({ kind: 'playing' }, state), pal)
     expect(texts(calls)).toContain('NonDeterministicError · survive 15s')
+  })
+
+  it('draws the player as the hat inside its hitbox', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }), pal)
+    const shapes = hatShapes(calls)
+    expect(shapes.length).toBeGreaterThan(0)
+    const left = Math.min(...shapes.map((s) => s.x))
+    const right = Math.max(...shapes.map((s) => s.x + s.w))
+    const top = Math.min(...shapes.map((s) => s.y))
+    const bottom = Math.max(...shapes.map((s) => s.y + s.h))
+    expect(left).toBeGreaterThanOrEqual(PLAYER_X - 1e-6)
+    expect(right).toBeLessThanOrEqual(PLAYER_X + PLAYER_W + 1e-6)
+    expect(top).toBeGreaterThanOrEqual(GROUND_Y - PLAYER_H - 1e-6)
+    expect(bottom).toBeCloseTo(GROUND_Y)
+  })
+
+  it('flattens the hat to the slide height while sliding on the ground', () => {
+    const { ctx, calls } = mockCtx()
+    const state = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false })
+    render(ctx, view({ kind: 'playing' }, { ...state, player: { ...state.player, sliding: true } }), pal)
+    expect(Math.min(...hatShapes(calls).map((s) => s.y))).toBeGreaterThanOrEqual(GROUND_Y - SLIDE_H - 1e-6)
+  })
+
+  it('scales a stretched hat around its bottom centre', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }, undefined, { pose: { sx: 0.8, sy: 1.25 } }), pal)
+    const shapes = hatShapes(calls)
+    const left = Math.min(...shapes.map((s) => s.x))
+    const right = Math.max(...shapes.map((s) => s.x + s.w))
+    const top = Math.min(...shapes.map((s) => s.y))
+    const bottom = Math.max(...shapes.map((s) => s.y + s.h))
+    expect(bottom).toBeCloseTo(GROUND_Y)
+    expect((left + right) / 2).toBeCloseTo(PLAYER_X + PLAYER_W / 2)
+    expect(right - left).toBeCloseTo(PLAYER_W * 0.8)
+    expect(bottom - top).toBeCloseTo(PLAYER_H * 1.25)
   })
 
   it('draws the notice when there is one', () => {

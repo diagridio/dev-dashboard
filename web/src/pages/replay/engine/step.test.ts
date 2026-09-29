@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeLevels } from '../testing'
 import { hashState } from './hash'
 import { LEVELS, chaosMeanTicks, speedAt } from './levels'
-import { BOOST_TICKS, BOSS_TICKS, continueAsNew, initialState, step } from './step'
+import { BOOST_TICKS, BOSS_TICKS, PLAYER_H, PLAYER_W, SLIDE_H, continueAsNew, initialState, step } from './step'
 import { GROUND_Y, PLAYER_X, type Entity, type GameState, type InputKind, type Ports, type StartInput } from './types'
 
 const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false }
@@ -42,7 +42,7 @@ describe('initialState', () => {
 
 describe('step', () => {
   it('does not mutate the previous state', () => {
-    const prev = withEntity('coin', GROUND_Y - 30, 10, 10)
+    const prev = withEntity('coin', GROUND_Y - 24, 10, 10)
     const snapshot = JSON.stringify(prev)
     step(prev, ['jump'], ports(), levels)
     expect(JSON.stringify(prev)).toBe(snapshot)
@@ -74,9 +74,32 @@ describe('step', () => {
   })
 
   it('fails on a high obstacle when standing, passes under it when sliding', () => {
-    const high = withEntity('high', GROUND_Y - 44, 22, 30)
+    const high = withEntity('high', GROUND_Y - 42, 22, 30)
     expect(step(high, [], ports(), levels).state.status).toBe('failed')
     expect(step(high, ['slideStart'], ports(), levels).state.status).toBe('running')
+  })
+
+  it('has a hat-shaped hitbox', () => {
+    expect([PLAYER_W, PLAYER_H, SLIDE_H]).toEqual([30, 16, 9])
+  })
+
+  it('collects a low coin while standing but not while sliding', () => {
+    const coin = withEntity('coin', GROUND_Y - 24, 10, 10)
+    expect(step(coin, [], ports(), levels).state.score).toBe(1)
+    const sliding = step(coin, ['slideStart'], ports(), levels).state
+    expect(sliding.score).toBe(0)
+    expect(sliding.entities[0].taken).toBe(false)
+  })
+
+  it('clears a high obstacle by jumping over it', () => {
+    let s: GameState = { ...initialState(start), entities: [{ id: 99, kind: 'high', x: 400, y: GROUND_Y - 42, w: 22, h: 30, taken: false }] }
+    const obstacle = (st: GameState) => st.entities.find((e) => e.id === 99)
+    for (let i = 0; i < 200 && s.status === 'running' && obstacle(s); i++) {
+      const gap = obstacle(s)!.x - (PLAYER_X + PLAYER_W)
+      s = step(s, s.player.y >= GROUND_Y && gap > 0 && gap <= 24 ? ['jump'] : [], ports(), levels).state
+    }
+    expect(s.status).toBe('running')
+    expect(obstacle(s)).toBeUndefined()
   })
 
   it('fails on a low obstacle', () => {
@@ -84,7 +107,7 @@ describe('step', () => {
   })
 
   it('collects a coin as an ActivityCompleted event hashed with the new state', () => {
-    const { state, events } = step(withEntity('coin', GROUND_Y - 30, 10, 10), [], ports(), levels)
+    const { state, events } = step(withEntity('coin', GROUND_Y - 24, 10, 10), [], ports(), levels)
     expect(state.score).toBe(1)
     expect(state.entities[0].taken).toBe(true)
     expect(events).toEqual([{ type: 'ActivityCompleted', tick: 0, id: 99, hash: hashState(state) }])
@@ -92,7 +115,7 @@ describe('step', () => {
 
   it('mixes an unrecorded impure value into the RNG on an orb pickup', () => {
     const impure = vi.fn(() => 0.25)
-    const orb = withEntity('orb', GROUND_Y - 30, 12, 12)
+    const orb = withEntity('orb', GROUND_Y - 24, 12, 12)
     const a = step(orb, [], ports({ impure }), levels)
     const b = step(orb, [], ports({ impure: () => 0.75 }), levels)
     expect(impure).toHaveBeenCalledTimes(1)
@@ -104,7 +127,7 @@ describe('step', () => {
   it('takes a crate result from crateValue and records it', () => {
     const impure = vi.fn(() => 0.25)
     const crateValue = vi.fn(() => 0.5)
-    const { state, events } = step(withEntity('crate', GROUND_Y - 30, 14, 14), [], ports({ impure, crateValue }), levels)
+    const { state, events } = step(withEntity('crate', GROUND_Y - 24, 14, 14), [], ports({ impure, crateValue }), levels)
     expect(crateValue).toHaveBeenCalledWith(99)
     expect(impure).not.toHaveBeenCalled()
     expect(events).toEqual([{ type: 'ActivityCompleted', tick: 0, id: 99, hash: hashState(state), result: 0.5 }])
@@ -113,7 +136,7 @@ describe('step', () => {
   })
 
   it('drops the multiplier after BOOST_TICKS', () => {
-    let s = step(withEntity('orb', GROUND_Y - 30, 12, 12), [], ports(), levels).state
+    let s = step(withEntity('orb', GROUND_Y - 24, 12, 12), [], ports(), levels).state
     for (let i = 0; i < BOOST_TICKS; i++) s = step(s, [], ports(), levels).state
     expect(s.multiplier).toBe(1)
   })
@@ -190,9 +213,8 @@ describe('levels', () => {
     expect(chaosMeanTicks(LEVELS[0], 0)).toBeNull()
   })
 
-  it('only level 0 is non-durable and every tip links to the Dapr docs', () => {
+  it('only level 0 is non-durable', () => {
     expect(LEVELS[0].durable).toBe(false)
     for (const l of [1, 2, 3, 4] as const) expect(LEVELS[l].durable).toBe(true)
-    for (const l of [0, 1, 2, 3, 4] as const) expect(LEVELS[l].tip.href).toMatch(/^https:\/\/docs\.dapr\.io\//)
   })
 })

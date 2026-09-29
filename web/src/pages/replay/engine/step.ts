@@ -8,9 +8,9 @@ import {
 
 export const GRAVITY = 0.5
 export const JUMP_VY = -9
-export const PLAYER_W = 16
-export const PLAYER_H = 24
-export const SLIDE_H = 12
+export const PLAYER_W = 30
+export const PLAYER_H = 16
+export const SLIDE_H = 9
 export const BOOST_TICKS = 10 * TICK_HZ
 export const BOSS_TICKS = 15 * TICK_HZ
 
@@ -79,8 +79,8 @@ function chooseKind(weights: LevelConfig['weights'], r: number): EntityKind {
 function spawnY(kind: EntityKind, r: number): number {
   switch (kind) {
     case 'low': return GROUND_Y - 20
-    case 'high': return GROUND_Y - 44
-    case 'coin': return r < 0.5 ? GROUND_Y - 30 : GROUND_Y - 70
+    case 'high': return GROUND_Y - 42
+    case 'coin': return r < 0.5 ? GROUND_Y - 24 : GROUND_Y - 70
     default: return GROUND_Y - 60
   }
 }

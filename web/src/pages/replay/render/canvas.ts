@@ -3,6 +3,8 @@ import { PLAYER_H, PLAYER_W, SLIDE_H } from '../engine/step'
 import { GROUND_Y, PLAYER_X, TICK_HZ, VIEW_H, VIEW_W, type Entity, type GameState } from '../engine/types'
 import type { Phase } from '../runtime/types'
 import type { Palette } from './palette'
+import { NEUTRAL, type Pose } from './pose'
+import { drawHat } from './sprites'
 
 export interface RenderView {
   state: GameState
@@ -11,6 +13,8 @@ export interface RenderView {
   reducedMotion: boolean
   /** Monotonic frame counter; drives the (deterministic) glitch patterns. */
   frame: number
+  /** Squash and stretch for the player; neutral when omitted. */
+  pose?: Pose
 }
 
 const FONT = '10px ui-monospace, Menlo, Consolas, monospace'
@@ -65,13 +69,10 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, repl
   }
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette): void {
+function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette, pose: Pose): void {
   const p = state.player
   const h = p.sliding && p.y >= GROUND_Y ? SLIDE_H : PLAYER_H
-  ctx.fillStyle = pal.player
-  ctx.fillRect(PLAYER_X, p.y - h, PLAYER_W, h)
-  ctx.fillStyle = pal.bg
-  ctx.fillRect(PLAYER_X + 9, p.y - h + 4, 5, 3)
+  drawHat(ctx, { x: PLAYER_X, y: p.y - h, w: PLAYER_W, h }, pal, pose)
 }
 
 function drawHud(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette): void {
@@ -123,7 +124,7 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
   if (crashing && !view.reducedMotion) ctx.translate(((view.frame * 7) % 9) - 4, ((view.frame * 5) % 7) - 3)
   drawGround(ctx, state, pal)
   for (const e of state.entities) drawEntity(ctx, e, pal, replaying)
-  drawPlayer(ctx, state, pal)
+  drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL)
   ctx.restore()
   drawHud(ctx, state, pal)
   if (view.notice) banner(ctx, view.notice, 44, pal.text, FONT)

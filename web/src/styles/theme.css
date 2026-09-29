@@ -9,6 +9,8 @@
   --sans: "Public Sans Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --sbw: 240px; /* sidebar width; .collapsed → 44px */
   --primary: #0BDDA3;
+  /* Dapr logo hat (CNCF artwork), used as the REPLAY player; exact brand blue on both themes. */
+  --dapr-hat: #0D2192;
   /* Dropdown chevron, shared by .select and select.inp. A neutral gray that
      reads on both themes, so it needs no per-theme override. */
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -55,6 +57,7 @@ body {
      checkbox glyphs, scrollbars — is unreachable by CSS; color-scheme is the
      only switch. Without it those popups stay light in the dark theme. */
   color-scheme: dark;
+  --dapr-hat-outline: rgba(255, 255, 255, 0.35);
   /* Catalyst-aligned green-tinted dark surfaces */
   --bg: #161918; --surface: #1C1F1E; --surface-2: #232625; --raise: #2B2E2D;
   --line: #373A39; --line-soft: #262928;
@@ -71,6 +74,7 @@ body {
 
 .app[data-theme="light"] {
   color-scheme: light;
+  --dapr-hat-outline: transparent;
   --bg: color-mix(in srgb, var(--accent-bright) 3%, #FFFFFF); --surface: #FFFFFF; --surface-2: #F9FAFB; --raise: #FFFFFF;
   --line: #DFE3E8; --line-soft: #ECEFF2;
   --text: #212B36; --muted: #637381; --faint: #919EAB;
@@ -652,8 +656,6 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .replay-card h2 { margin: 0; font-size: 17px; font-weight: 680; display: flex; align-items: center; gap: 8px; }
 .replay-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .replay-card .replay-keys { font-family: var(--mono); font-size: 11px; color: var(--faint); }
-.replay-link { color: var(--link); font-size: 12.5px; text-decoration: none; }
-.replay-link:hover { text-decoration: underline; }
 .replay-stats { margin: 4px 0 0; grid-template-columns: repeat(3, 1fr); }
 .replay-count { margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); }
 .replay-empty { margin: 0; padding: 14px; color: var(--faint); font-size: 12.5px; }

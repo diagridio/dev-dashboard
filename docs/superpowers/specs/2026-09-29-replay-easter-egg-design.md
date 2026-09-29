@@ -43,8 +43,11 @@ Constraints:
 
 ## Gameplay
 
-A side-scrolling runner. The player is a small workflow-instance sprite
-running through a datacenter.
+A side-scrolling runner. The player is the Dapr hat (the logo, in exact Dapr
+blue) running through a datacenter. Its hitbox is hat-shaped: 30 px wide and
+16 px tall, flattening to 9 px while sliding. The hat squashes and stretches
+on jump and landing; that is render-only and never affects collision (and is
+off with reduced motion).
 
 - **Controls:** `Space` / `↑` jump, `↓` slide, `Esc` pause, `Enter` dismiss
   tip cards / confirm.
@@ -93,8 +96,7 @@ matches what the player saw before the crash.
 
 Each level is a *continue-as-new* boundary (new history seeded from the
 previous level's end state), which also keeps histories short. Between levels
-a tip card shows one or two sentences plus a "Learn more" link to the relevant
-Dapr docs page; `Enter` skips it.
+a tip card shows one or two sentences; `Enter` skips it.
 
 | # | Name | Content | Lesson |
 |---|---|---|---|

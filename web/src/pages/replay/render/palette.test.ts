@@ -21,6 +21,11 @@ describe('readPalette', () => {
     expect(readPalette(document.createElement('canvas')).coin).toBe('gray')
   })
 
+  it('maps the hat slots to the Dapr hat tokens', () => {
+    expect(SLOT_TOKENS.hat).toBe('--dapr-hat')
+    expect(SLOT_TOKENS.hatOutline).toBe('--dapr-hat-outline')
+  })
+
   it('maps every slot to a CSS custom property', () => {
     for (const token of Object.values(SLOT_TOKENS)) expect(token).toMatch(/^--[a-z-]+$/)
   })
