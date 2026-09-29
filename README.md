@@ -379,10 +379,12 @@ Testcontainers-managed sidecar itself.
 ## Testing
 
 There are four suites: Go **unit** tests, Go **integration** tests, the **web**
-(frontend) tests, and an opt-in Go **e2e** suite. The unit, integration, and web suites are
-self-contained — no Docker or external services required (the integration tests run an
-in-process Redis via `miniredis` and a temporary SQLite database). The **e2e** suite drives a
-real `daprd` and is local-only — it skips automatically when Dapr is not installed (see below).
+(frontend) tests, and an opt-in Go **e2e** suite. The unit and web suites are self-contained.
+The integration suite runs its state-store and workflow tests against a temporary SQLite
+database plus real Redis, PostgreSQL, and MongoDB containers (via testcontainers-go), so it
+needs Docker or Podman for full coverage; without one, the container-backed tests skip. The
+**e2e** suite drives a real `daprd` and is local-only — it skips automatically when Dapr is not
+installed (see below).
 
 **Prerequisites:** Go ≥ 1.26 (Go tests) and Node.js 20 with `npm` (web tests).
 
@@ -407,9 +409,10 @@ go test -tags unit -race ./cmd/...  # one package, with the race detector
 (`make test-go` uses `gotestsum` for nicer output if it's installed, otherwise plain `go test`.)
 
 **Go integration tests** — gated by `//go:build integration`; they exercise the state-store and
-workflow read paths, the parsed sidecar `/v1.0/metadata`, and the full assembled HTTP server,
-against an in-process Redis (`miniredis`) and a temp SQLite DB, so no external services are
-needed. They run in CI but are not part of `make test`:
+workflow read paths (including a parity test of the workflow list/stats/detail against all four
+supported backends), the parsed sidecar `/v1.0/metadata`, and the full assembled HTTP server.
+Backends run as containers through testcontainers-go (skipped when no container runtime is
+available) alongside a temp SQLite DB. They run in CI but are not part of `make test`:
 
 ```sh
 make test-integration               # = go test -tags integration -race ./...
@@ -535,8 +538,8 @@ sidecars and state store.
 │  pkg/server      chi router + go:embed SPA                    │
 │  pkg/discovery   standalone.List() + /v1.0/metadata           │
 │  pkg/workflow    list / history / purge                       │
-│  pkg/state       state record listing / delete                │
-│  pkg/statestore  client (redis / postgres / sqlite)           │
+│  pkg/state       state record listing / add / delete          │
+│  pkg/statestore  client (redis / postgres / sqlite / mongodb) │
 │  pkg/controlplane docker/podman inspect + lifecycle           │
 │  pkg/metadata    component metadata catalog                   │
 │  pkg/resources   component + configuration YAML loader        │

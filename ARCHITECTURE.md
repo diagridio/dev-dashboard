@@ -54,7 +54,7 @@ apps, whose containers belong to ryuk and whose app belongs to the test process)
         │                 │  reconciler   apps → stores → active store           │
         │  static assets  │  pkg/discovery standalone.List + metadata            │
         └─────────────────┤  pkg/workflow list / history / purge                 │
-                          │  pkg/statestore redis / postgres / sqlite            │
+                          │  pkg/statestore redis / postgres / sqlite / mongodb  │
                           │  pkg/controlplane docker/podman inspect+logs         │
                           │  pkg/resources / logs / news / metadata              │
                           └───────┬───────────────────────┬──────────────────────┘
@@ -87,11 +87,13 @@ pkg/                    domain packages — each isolated, none import cmd/
   discovery/            standalone.List() + /v1.0/metadata + /v1.0/healthz enrichment;
                         also scans compose containers (scan_compose.go) and Testcontainers
                         daprd containers (scan_testcontainers.go, tar_extract.go)
-  statestore/           Store client (redis/postgres/sqlite), Detect, secret resolution
+  statestore/           Store client (redis/postgres/sqlite/mongodb), Detect, secret resolution
+  state/                State page: browse / add / delete state-store records
   workflow/             list / stats / history / terminate / purge; store-backed reads
                         (service.go) + sidecar-gRPC reads (sidecar.go) routed per app
                         (composite.go)
   controlplane/         docker/podman detection, inspect, lifecycle actions, log stream
+  lifecycle/            start / stop / restart of discovered apps and sidecars
   containerruntime/     docker/podman resolution + exec runner (shared by controlplane & discovery)
   resources/            component + configuration YAML loader
   secrets/              local secret-store detection + secretKeyRef/envRef resolution,
@@ -101,6 +103,7 @@ pkg/                    domain packages — each isolated, none import cmd/
   news/                 Diagrid product-feed proxy (cache + singleflight)
   metadata/             embedded component-metadata catalog (drives connection forms)
   server/               chi router + go:embed SPA mount (one file per domain)
+  updatecheck/          latest-release check behind the CLI notice and /api/update-check
   selfupdate/ version/ logging/
 internal/golden/        golden-file test helpers
 web/                    React + TypeScript + Vite SPA → web/dist (embedded via embed.go)
@@ -267,6 +270,10 @@ All domain services are passed in via `server.Options` (`BasePath`, `DistFS`, `V
 | GET | `/api/apps` | discovery | apps.go |
 | GET | `/api/apps/{appId}` | discovery | apps.go |
 | GET | `/api/apps/{appId}/logs` | discovery + logs (SSE) | logs.go |
+| POST | `/api/apps/{appId}/{target}/{action}` | lifecycle | apps.go |
+| DELETE | `/api/apps/{appId}` | lifecycle (clear one inactive app) | apps.go |
+| POST | `/api/apps/clear-inactive` | lifecycle | apps.go |
+| POST | `/api/apps/{appId}/publish` | discovery (pub/sub test message) | apps.go |
 | GET | `/api/actors` | discovery | actors.go |
 | GET | `/api/subscriptions` | discovery | subscriptions.go |
 | GET | `/api/workflows` | reconciler (WorkflowBackend) | workflows.go |
@@ -281,10 +288,12 @@ All domain services are passed in via `server.Options` (`BasePath`, `DistFS`, `V
 | POST | `/api/state/delete` | state | state.go |
 | GET | `/api/resources` | resources | resources.go |
 | GET | `/api/resources/{kind}/{name}` | resources | resources.go |
+| POST | `/api/resources/component/{id}/secret-value` | resources (secret reveal) | resources.go |
 | GET | `/api/news` | news | news.go |
 | GET | `/api/controlplane` | controlplane | controlplane.go |
 | POST | `/api/controlplane/{name}/{action}` | controlplane | controlplane.go |
 | GET | `/api/controlplane/{name}/logs` | controlplane (SSE) | controlplane.go |
+| GET | `/api/update-check` | updatecheck | updatecheck.go |
 | * | `/*` | SPA fallback | spa.go |
 
 Errors use a shared `writeJSON(w, status, {"error": ...})` helper. Status mapping is
@@ -295,8 +304,8 @@ invalid action → 400, runtime unavailable → 503, exec failure → 502.
 ### Capabilities — per-posture feature gating (`pkg/server/server.go` `Capabilities`)
 
 Not every route in the table above always exists. One binary serves two very different
-postures, and a `Capabilities` struct (`Lifecycle`, `ControlPlane`, `Logs`, `Workflows`,
-plus a `Mode` echo of the `--mode` value) decides which feature surfaces are on. The
+postures, and a `Capabilities` struct (`Lifecycle`, `ControlPlane`, `Logs`, `Workflows`, `State`,
+`SecretReveal`, plus a `Mode` echo of the `--mode` value) decides which feature surfaces are on. The
 layer has three tiers:
 
 1. **Decided at boot** (`cmd/root.go` `runServe`): host modes get `FullCapabilities()`
@@ -386,13 +395,33 @@ components-contrib for **Redis, PostgreSQL, SQLite, or MongoDB** (anything else 
 Workflow keys are actor-state keys shaped
 `<appId>||dapr.internal.<ns>.<appId>.workflow||<instanceID>||<suffix>` (`keys.go`).
 
-`workflow.Service` reads instances by enumerating metadata keys (`Keys` with a pattern),
-loading each (`BulkGet`), and decoding the durabletask protobuf history (`decode.go`) into
-an `Execution` (status, name, input/output, timestamps, parent instance, replay count,
-history events). `List` supports status/search/child filters with **loop-fill pagination**
-(keep fetching key-pages until a full page of matches, keys are exhausted, or a bounded
-scan cap is hit — so a filter that matches nothing can't scan unbounded). `Stats` and
-`AppIDs` aggregate across all instances. `Remove` (`remove.go`) picks a mechanism by state:
+`workflow.Service` finds instances by listing metadata keys (`Keys` with a pattern), then
+loads each one the way Dapr itself does: it reads the instance's **metadata record**, takes
+`HistoryLength` from it (a `BackendWorkflowStateMetadata` proto, or legacy JSON from older
+Dapr), builds the `history-000000…` keys directly, and fetches them plus `customStatus` in
+one `BulkGet`. There is no per-instance key scan, which matters because `KeysLike` is a full
+keyspace `SCAN` on Redis and a `LIKE` table scan on the SQL backends. A metadata record that
+can't be trusted (missing, `{}`, zero length, undecodable, over Dapr's bound) falls back to
+scanning that instance's keys. `BulkGet` (`pkg/statestore`) uses the backend's native bulk
+read in chunks of 100 (one query per chunk on PostgreSQL, SQLite and MongoDB; bounded parallel
+`Get`s on Redis). The history is decoded from durabletask protobuf (`decode.go`) into an
+`Execution` (status, name, input/output, timestamps, parent instance, replay count, history
+events).
+
+`List` and `Stats` load instances on a bounded worker pool (8) and return the context error
+when the request is cancelled. `List` supports status/search/child filters with
+**loop-fill pagination** (keep fetching key-pages until a full page of matches, keys are
+exhausted, or a bounded scan cap is hit — so a filter that matches nothing can't scan
+unbounded). `Stats` and `AppIDs` aggregate across all instances.
+
+**Summary cache** (`summary_cache.go`): the per-store service caches list/stats summaries,
+validated against the instance's raw metadata bytes **and** its first history entry
+(`history-000000`, read in the same bulk call). Dapr rewrites metadata on every save, and the
+first entry carries the creation timestamp, so a purged-and-re-created instance with
+identical metadata still misses. `Stats` prunes entries whose keys are gone; `Get` (the
+detail page) never uses the cache; scan-fallback results are never cached. The cache holds at
+most 20 000 summaries and is cleared on overflow. It lives on the service `buildStoreEntry`
+builds once per opened store, so it goes away with that pool connection. `Remove` (`remove.go`) picks a mechanism by state:
 terminate-then-purge or purge via the sidecar's Dapr workflow API when healthy, or a direct
 state-store key-deletion **force** fallback when the sidecar is unreachable or `force` is
 requested.
@@ -545,8 +574,13 @@ surfaces) mount only when their server-injected capability flag is on — see
 Every polling query is a TanStack Query hook (`src/hooks/`) that calls `fetchJSON`
 (`lib/api.ts`) and takes its `refetchInterval` from the global `RefreshControl`
 (`lib/refresh.tsx`: 1s/3s/5s/10s/Off, persisted). Query keys are conventional
-(`['apps']`, `['apps', id]`, `['workflows']`, `['workflow-stats']`, …); mutations
-invalidate the relevant keys. `ConnectionProvider` (`lib/connection.tsx`) polls
+(`['apps']`, `['apps', id]`, `['workflows', store, qs]`, `['workflow-stats', store, qs]`, …);
+mutations invalidate by key prefix. `fetchJSON` accepts an optional `RequestInit`, and the
+workflow hooks pass TanStack's `signal`, so a superseded request is aborted and its store work
+stops server-side. Workflow Stats polls at `max(interval, 10s)` (`refetchMsAtLeast`). The
+workflow list and stats keep the previous result as placeholder data while a new
+filter/search/page loads **within the same store only** — a store switch shows the first-load
+state, so another store's rows are never clickable or removable. `ConnectionProvider` (`lib/connection.tsx`) polls
 `GET /api/health` at that same interval (fixed 30s fallback while refresh is paused/Off)
 and mirrors the result into TanStack's `onlineManager`: two consecutive failures flip the
 app offline — pausing every polling query until the next successful probe — and
@@ -621,10 +655,16 @@ commands):
 
 - **unit** (`//go:build unit`) + **web** (Vitest) — self-contained, the everyday gate.
 - **integration** (`//go:build integration`) — state-store/workflow read paths and the
-  assembled HTTP server against in-process Redis (`miniredis`) + temp SQLite. CI-only.
+  assembled HTTP server. The store contract and the workflow parity test (new read path vs.
+  a reimplemented scan loader) run against temp SQLite plus **real Redis, PostgreSQL and
+  MongoDB containers** via testcontainers-go, and skip the container backends when no
+  container runtime is available. Runs in CI; not part of `make test`.
 - **e2e** (`//go:build e2e`) — drives a real `daprd`; local-only, skips when Dapr is absent.
 
 Go tests are build-tag-gated: a bare `go test ./...` runs nothing. Always pass `-tags`.
+
+A workflow read benchmark, `BenchmarkWorkflowListStats` (integration tag, 2 000 instances per
+backend), is run manually: `go test -tags integration -run '^$' -bench BenchmarkWorkflowListStats ./pkg/workflow`.
 
 ---
 
