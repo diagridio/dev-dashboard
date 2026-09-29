@@ -15,7 +15,14 @@ export interface RenderView {
 
 const FONT = '10px ui-monospace, Menlo, Consolas, monospace'
 const BIG_FONT = 'bold 14px ui-monospace, Menlo, Consolas, monospace'
-const LABEL: Partial<Record<Entity['kind'], string>> = { orb: 'rand()', crate: 'activity' }
+/** Orbs are non-deterministic calls made straight from workflow code; crates wrap one in an activity. */
+const ORB_LABELS = ['Math.random()', 'Date.now()', 'fetch()'] as const
+
+function label(e: Entity): string | null {
+  if (e.kind === 'orb') return ORB_LABELS[e.id % ORB_LABELS.length]
+  if (e.kind === 'crate') return 'callActivity(random)'
+  return null
+}
 
 function banner(ctx: CanvasRenderingContext2D, text: string, y: number, color: string, font: string): void {
   ctx.font = font
@@ -50,11 +57,11 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, repl
   } else {
     ctx.fillRect(e.x, e.y, e.w, e.h)
   }
-  const label = LABEL[kind]
-  if (label) {
+  const text = label(e)
+  if (text) {
     ctx.font = FONT
     ctx.textAlign = 'center'
-    ctx.fillText(label, e.x + e.w / 2, e.y - 4)
+    ctx.fillText(text, e.x + e.w / 2, e.y - 4)
   }
 }
 

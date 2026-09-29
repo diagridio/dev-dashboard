@@ -98,7 +98,7 @@ export function Component() {
       <div className="replay-grid">
         <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game">
           <canvas ref={canvasRef} width={VIEW_W} height={VIEW_H} aria-label="REPLAY game screen" />
-          <Overlay phase={game.phase} stats={game.stats} best={game.best} score={game.state.score} />
+          <Overlay phase={game.phase} stats={game.stats} best={game.best} score={game.state.score} level={game.state.level} />
         </div>
         <HistoryPanel history={game.history} />
       </div>

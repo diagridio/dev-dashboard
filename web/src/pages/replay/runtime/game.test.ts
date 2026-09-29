@@ -285,6 +285,17 @@ describe('Game', () => {
     expect(game.history[0]).toEqual({ type: 'Input', tick: 0, kind: 'slideStart' })
   })
 
+  it('never saves a run in a non-durable level', () => {
+    const store = memoryStore()
+    const game = new Game(deps({ store, levels: makeLevels({}, { 0: { durable: false } }) }))
+    play(game)
+    game.frame(10)
+    game.command('pause')
+    game.suspend()
+    game.save()
+    expect(store.saved).toBeNull()
+  })
+
   it('suspend() pauses a running game and saves it', () => {
     const store = memoryStore()
     const game = new Game(deps({ store }))

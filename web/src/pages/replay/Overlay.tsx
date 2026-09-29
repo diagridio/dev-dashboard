@@ -7,6 +7,8 @@ interface Props {
   stats: RunStats
   best: number
   score: number
+  /** The level the run reached. */
+  level: number
 }
 
 function Card({ children }: { children: ReactNode }) {
@@ -27,7 +29,7 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 /** DOM cards over the canvas for every phase that waits on the player. */
-export function Overlay({ phase, stats, best, score }: Props) {
+export function Overlay({ phase, stats, best, score, level }: Props) {
   switch (phase.kind) {
     case 'title':
       return (
@@ -78,6 +80,7 @@ export function Overlay({ phase, stats, best, score }: Props) {
           <h2>Workflow <span className="pill s-fail">FAILED</span></h2>
           <p>Reason: {phase.reason}</p>
           <div className="stats replay-stats">
+            <Stat label="Level" value={level} />
             <Stat label="Score" value={score} />
             <Stat label="Best" value={best} />
             <Stat label="Replays" value={stats.replays} />

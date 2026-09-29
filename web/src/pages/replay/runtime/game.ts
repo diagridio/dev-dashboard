@@ -152,6 +152,8 @@ export class Game {
   save(): void {
     const k = this.phase.kind
     if (k === 'title' || k === 'resume' || k === 'over' || k === 'lost') return
+    // A non-durable level keeps nothing: a save would promise a resume it can't deliver.
+    if (!this.levels[this.start.level].durable) return
     const tick = k === 'crashing' || k === 'replaying' ? this.crashTick : this.state.tick
     this.deps.store.save({
       version: 1, start: this.start, history: this.history, tick, stats: this.stats, divergedAt: this.divergedAt,

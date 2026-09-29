@@ -68,6 +68,18 @@ describe('render', () => {
     expect(texts(live.calls)).not.toContain('✓ from history')
   })
 
+  it('labels orbs as unrecorded calls and crates as an activity, drawing orbs as circles', () => {
+    const entity = (id: number, kind: 'orb' | 'crate') => ({ id, kind, x: 200 + id * 20, y: GROUND_Y - 60, w: 12, h: 12, taken: false })
+    const state = {
+      ...initialState({ level: 3, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false }),
+      entities: [entity(3, 'orb'), entity(4, 'orb'), entity(5, 'orb'), entity(6, 'crate')],
+    }
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }, state), pal)
+    expect(texts(calls)).toEqual(expect.arrayContaining(['Math.random()', 'Date.now()', 'fetch()', 'callActivity(random)']))
+    expect(calls.filter((c) => c.name === 'arc')).toHaveLength(3)
+  })
+
   it('shows the boss countdown during a boss segment', () => {
     const { ctx, calls } = mockCtx()
     const state = initialState({ level: 2, seed: 1, score: 0, elapsed: 0, distance: 0, boss: true })

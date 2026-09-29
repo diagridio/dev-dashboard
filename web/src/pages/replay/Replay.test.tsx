@@ -114,10 +114,19 @@ describe('Replay page', () => {
     expect(screen.queryByRole('heading', { name: 'Level 0 · No Safety Net' })).not.toBeInTheDocument()
   })
 
-  it('saves the run and stops the loop when the page unmounts mid-run', async () => {
+  const savedRun = () => JSON.stringify({
+    version: 1,
+    start: { level: 1, seed: 5, score: 2, elapsed: 0, distance: 0, boss: false },
+    history: [{ type: 'Input', tick: 3, kind: 'jump' }],
+    tick: 40,
+    stats: { replays: 0, fromHistory: 0, executed: 0, incidents: 0 },
+    divergedAt: null,
+  })
+
+  it('saves a durable run and stops the loop when the page unmounts mid-run', async () => {
+    localStorage.setItem(SAVE_KEY, savedRun())
     const { unmount } = renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
-    fireEvent.keyDown(window, { key: 'Enter' })
+    await screen.findByRole('heading', { name: 'Resume your run?' })
     fireEvent.keyDown(window, { key: 'Enter' })
     localStorage.removeItem(SAVE_KEY)
     unmount()
@@ -125,15 +134,17 @@ describe('Replay page', () => {
     expect(localStorage.getItem(SAVE_KEY)).not.toBeNull()
   })
 
+  it('never saves level 0, which has no durable history', async () => {
+    const { unmount } = renderAt('/replay')
+    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    fireEvent.keyDown(window, { key: 'Enter' })
+    fireEvent.keyDown(window, { key: 'Enter' })
+    unmount()
+    expect(localStorage.getItem(SAVE_KEY)).toBeNull()
+  })
+
   it('offers to resume when a saved run exists', async () => {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
-      version: 1,
-      start: { level: 1, seed: 5, score: 2, elapsed: 0, distance: 0, boss: false },
-      history: [{ type: 'Input', tick: 3, kind: 'jump' }],
-      tick: 40,
-      stats: { replays: 0, fromHistory: 0, executed: 0, incidents: 0 },
-      divergedAt: null,
-    }))
+    localStorage.setItem(SAVE_KEY, savedRun())
     renderAt('/replay')
     expect(await screen.findByRole('heading', { name: 'Resume your run?' })).toBeInTheDocument()
     expect(screen.getByText(/tick 40/)).toBeInTheDocument()
