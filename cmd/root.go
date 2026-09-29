@@ -66,8 +66,8 @@ func NewRootCmd() *cobra.Command {
 	}
 	c.SetVersionTemplate(fmt.Sprintf("diagrid-dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
-	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (aspire container posture defaults to 0.0.0.0); binding a non-loopback address outside container posture leaves the loopback Host guard in place, which rejects remote clients")
-	c.Flags().StringVar(&modeFlag, "mode", "", `discovery filter: "dapr-run", "compose", "test-containers", or "aspire" show only that source's resources ("aspire" also switches to container posture when the DEVDASHBOARD_APP_* contract is present); unset scans every source`)
+	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (container posture defaults to 0.0.0.0); binding a non-loopback address outside container posture leaves the loopback Host guard in place, which rejects remote clients")
+	c.Flags().StringVar(&modeFlag, "mode", "", `discovery filter: "dapr-run", "compose", "test-containers", or "aspire" show only that source's resources ("aspire" and "compose" also switch to container posture when the DEVDASHBOARD_APP_* contract is present); unset scans every source`)
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")
 	c.Flags().StringVar(&stateStore, "statestore", "", "path to a state-store component YAML (overrides auto-detect)")
@@ -100,7 +100,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	}
 	addr := listenAddr(settings.Bind, settings.Port)
 	if !containerPosture && !isLoopbackBind(settings.Bind) {
-		logger.Warn("binding a non-loopback address without container posture; the loopback Host guard will reject remote clients (set --mode aspire for container serving posture)", "bind", settings.Bind)
+		logger.Warn("binding a non-loopback address without container posture; the loopback Host guard will reject remote clients (set --mode aspire or --mode compose with the DEVDASHBOARD_APP_* contract for container serving posture)", "bind", settings.Bind)
 	}
 	urlPath := ""
 	if trimmed := trimSlash(basePath); trimmed != "" {
