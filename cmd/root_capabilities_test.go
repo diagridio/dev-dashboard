@@ -59,3 +59,26 @@ func TestAnyGRPCAddr(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkflowsEnabled(t *testing.T) {
+	tests := []struct {
+		name     string
+		mode     Mode
+		storeSet bool
+		anyGRPC  bool
+		want     bool
+	}{
+		{"aspire apps no store", ModeAspire, false, true, false},
+		{"compose apps no store", ModeCompose, false, true, true},
+		{"compose no apps no store", ModeCompose, false, false, false},
+		{"aspire with store", ModeAspire, true, true, true},
+		{"compose with store", ModeCompose, true, false, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := workflowsEnabled(tc.mode, tc.storeSet, tc.anyGRPC); got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}

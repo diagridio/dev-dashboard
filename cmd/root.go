@@ -148,7 +148,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 			// Sidecar-gRPC inspection needs no store, so in compose a declared
 			// app is enough to enable the workflow routes. Aspire apps are
 			// never sidecar-sourced (Task 5), so aspire keeps the store gate.
-			Workflows: settings.StateStore != "" || (mode == ModeCompose && anyGRPCAddr(scan)),
+			Workflows: workflowsEnabled(mode, settings.StateStore != "", mode == ModeCompose && anyGRPCAddr(scan)),
 			// The State page has no sidecar fallback, so it still needs a store.
 			State:            settings.StateStore != "",
 			Mode:             string(mode),
@@ -333,6 +333,15 @@ func openBrowser(url string) error {
 	}
 	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+// workflowsEnabled decides whether the workflow routes are on in container
+// posture: a configured store always enables them; otherwise only compose
+// with at least one declared sidecar (sidecar-gRPC inspection needs no
+// store). Aspire apps are never sidecar-sourced, so aspire keeps the store
+// gate. anyGRPC is only meaningful for compose.
+func workflowsEnabled(mode Mode, storeSet, anyGRPC bool) bool {
+	return storeSet || (mode == ModeCompose && anyGRPC)
 }
 
 // anyGRPCAddr reports whether the contract declared at least one app with a
