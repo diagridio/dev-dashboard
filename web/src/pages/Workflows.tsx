@@ -433,6 +433,7 @@ export function Workflows() {
           data-cy="app-select"
           data-testid="app-select"
           aria-label="Filter by app"
+          title={selectedApp || undefined}
           value={selectedApp}
           onChange={(e) => {
             setSelectedApp(e.target.value)
@@ -467,8 +468,11 @@ export function Workflows() {
             }}
           />
         </label>
+      </div>
 
-        {/* Show/hide child workflows */}
+      {/* Show/hide child workflows — its own row so the filters above keep
+          their width for the app dropdown and search box. */}
+      <div className="filters-sub">
         <label className="childtoggle">
           <input
             type="checkbox"

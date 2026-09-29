@@ -758,6 +758,27 @@ describe('Workflows page — child workflows toggle', () => {
     await waitFor(() => expect(urls.some((u) => u.includes('includeChildren=false'))).toBe(true))
     await waitFor(() => expect(statsUrls.some((u) => u.includes('includeChildren=false'))).toBe(true))
   })
+
+  it('places the child-workflow toggle on its own row below the filters', async () => {
+    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
+    const { container } = renderAt()
+    const toggle = await screen.findByLabelText('Show child workflows')
+    const filters = container.querySelector('.filters')
+    expect(filters).not.toBeNull()
+    expect(filters).toContainElement(screen.getByRole('textbox', { name: 'Search' }))
+    expect(filters).not.toContainElement(toggle)
+  })
+
+  it('shows the full selected app name as the app dropdown tooltip', async () => {
+    const longApp = 'a-very-long-application-name-that-would-squeeze-the-search-box'
+    server.use(
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/appids', () => HttpResponse.json([longApp])),
+    )
+    renderAt(`/workflows?app=${longApp}`)
+    const select = await screen.findByTestId('app-select')
+    await waitFor(() => expect(select).toHaveAttribute('title', longApp))
+  })
 })
 
 describe('Workflows page — store selector', () => {
