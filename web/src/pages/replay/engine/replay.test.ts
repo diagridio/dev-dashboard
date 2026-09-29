@@ -6,7 +6,7 @@ import { createReplayer, replay } from './replay'
 import { initialState, step } from './step'
 import type { EntityKind, GameState, HistoryEvent, StartInput } from './types'
 
-const start: StartInput = { level: 1, seed: 42, score: 0, elapsed: 0, boss: false }
+const start: StartInput = { level: 1, seed: 42, score: 0, elapsed: 0, distance: 0, boss: false }
 
 /** Plays live like the runtime does: inputs recorded before the step, then its events. */
 function record(ticks: number, levels: LevelTable, want: readonly EntityKind[], impure: () => number) {

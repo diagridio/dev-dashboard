@@ -5,7 +5,7 @@ import { LEVELS, chaosMeanTicks, speedAt } from './levels'
 import { BOOST_TICKS, BOSS_TICKS, continueAsNew, initialState, step } from './step'
 import { GROUND_Y, PLAYER_X, type Entity, type GameState, type InputKind, type Ports, type StartInput } from './types'
 
-const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, boss: false }
+const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false }
 const levels = makeLevels()
 const ports = (over: Partial<Ports> = {}): Ports => ({ impure: () => 0.25, crateValue: () => 0.5, ...over })
 
@@ -26,6 +26,13 @@ describe('initialState', () => {
     const s = initialState(start)
     expect(s).toMatchObject({ tick: 0, level: 1, score: 0, status: 'running', bossUntil: 0 })
     expect(s.player).toEqual({ y: GROUND_Y, vy: 0, sliding: false })
+  })
+
+  it('starts the segment scroll at 0 but carries the distance already travelled', () => {
+    const s = initialState({ ...start, distance: 300 })
+    expect(s.scroll).toBe(0)
+    expect(s.distance).toBe(300)
+    expect(hashState(s)).not.toBe(hashState(initialState(start)))
   })
 
   it('arms the boss timer for a boss segment', () => {
@@ -143,6 +150,24 @@ describe('continueAsNew', () => {
     expect(next).toMatchObject({ level: 1, score: 12, elapsed: 500, boss: false })
     expect(next.seed).not.toBe(s.rng)
     expect(continueAsNew(s, { boss: true, level: 2 })).toMatchObject({ boss: true, level: 2 })
+  })
+
+  it('carries the distance travelled in the level (earlier segments + this scroll)', () => {
+    const s = { ...initialState({ ...start, distance: 100 }), scroll: 250 }
+    expect(continueAsNew(s).distance).toBe(350)
+    expect(continueAsNew(s, { distance: 0 }).distance).toBe(0)
+  })
+
+  it('finishes a level at the same total distance across a continue-as-new boundary', () => {
+    const short = makeLevels({ length: 40 })
+    let s = initialState(start)
+    for (let i = 0; i < 5; i++) s = step(s, [], ports(), short).state
+    expect(s.status).toBe('running')
+    s = initialState(continueAsNew(s, { boss: true }))
+    for (let i = 0; i < 4; i++) s = step(s, [], ports(), short).state
+    expect(s.status).toBe('running')
+    s = step(s, [], ports(), short).state
+    expect(s.status).toBe('levelDone')
   })
 
   it('a continued segment starts from a reproducible state', () => {

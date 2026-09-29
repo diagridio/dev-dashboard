@@ -25,7 +25,7 @@ function mockCtx() {
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls }
 }
 
-function view(phase: Phase, state: GameState = initialState({ level: 1, seed: 1, score: 5, elapsed: 0, boss: false }), extra: Partial<RenderView> = {}): RenderView {
+function view(phase: Phase, state: GameState = initialState({ level: 1, seed: 1, score: 5, elapsed: 0, distance: 0, boss: false }), extra: Partial<RenderView> = {}): RenderView {
   return { state, phase, notice: null, reducedMotion: false, frame: 3, ...extra }
 }
 
@@ -34,7 +34,7 @@ const texts = (calls: { name: string; args: unknown[] }[]) => calls.filter((c) =
 describe('render', () => {
   it('draws the HUD with level, score and multiplier', () => {
     const { ctx, calls } = mockCtx()
-    const state = { ...initialState({ level: 1, seed: 1, score: 5, elapsed: 0, boss: false }), multiplier: 3 }
+    const state = { ...initialState({ level: 1, seed: 1, score: 5, elapsed: 0, distance: 0, boss: false }), multiplier: 3 }
     render(ctx, view({ kind: 'playing' }, state), pal)
     expect(texts(calls)).toContain('LEVEL 1 · REPLAY')
     expect(texts(calls).some((t) => String(t).startsWith('SCORE 5 ×3'))).toBe(true)
@@ -56,7 +56,7 @@ describe('render', () => {
 
   it('badges activities served from history only while replaying', () => {
     const state = {
-      ...initialState({ level: 1, seed: 1, score: 1, elapsed: 0, boss: false }),
+      ...initialState({ level: 1, seed: 1, score: 1, elapsed: 0, distance: 0, boss: false }),
       entities: [{ id: 1, kind: 'coin' as const, x: 200, y: GROUND_Y - 30, w: 10, h: 10, taken: true }],
     }
     const replaying = mockCtx()
@@ -70,7 +70,7 @@ describe('render', () => {
 
   it('shows the boss countdown during a boss segment', () => {
     const { ctx, calls } = mockCtx()
-    const state = initialState({ level: 2, seed: 1, score: 0, elapsed: 0, boss: true })
+    const state = initialState({ level: 2, seed: 1, score: 0, elapsed: 0, distance: 0, boss: true })
     expect(state.bossUntil).toBe(BOSS_TICKS)
     render(ctx, view({ kind: 'playing' }, state), pal)
     expect(texts(calls)).toContain('NonDeterministicError · survive 15s')

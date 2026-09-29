@@ -4,7 +4,7 @@ import type { Save } from './types'
 
 const sample: Save = {
   version: 1,
-  start: { level: 2, seed: 99, score: 5, elapsed: 0, boss: false },
+  start: { level: 2, seed: 99, score: 5, elapsed: 0, distance: 0, boss: false },
   history: [
     { type: 'Input', tick: 3, kind: 'jump' },
     { type: 'ActivityCompleted', tick: 10, id: 4, hash: 123 },
@@ -83,6 +83,7 @@ describe('parseSave', () => {
     ['null', null],
     ['corrupt JSON', 'not json{'],
     ['another version', mutate((s) => { s.version = 2 })],
+    ['a missing distance', mutate((s) => { delete (s.start as Record<string, unknown>).distance })],
     ['a bad level', mutate((s) => { (s.start as Record<string, unknown>).level = 7 })],
     ['an unknown event type', mutate((s) => { (s.history as unknown[]).push({ type: 'Nope', tick: 30 }) })],
     ['out-of-order events', mutate((s) => { (s.history as unknown[]).push({ type: 'Input', tick: 1, kind: 'jump' }) })],

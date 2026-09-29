@@ -43,6 +43,12 @@ describe('ChaosScheduler', () => {
     expect(c.nextCrashAt).toBe(480)
   })
 
+  it('schedules a continued segment from the elapsed time it carries', () => {
+    const c = new ChaosScheduler(() => 0.5, levels)
+    c.start(4, false, 100_000)
+    expect(c.nextCrashAt).toBe(480)
+  })
+
   it('pulls the crash forward after a listed pickup, never back', () => {
     const c = new ChaosScheduler(() => 0.5, levels)
     c.start(2, false)

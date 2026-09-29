@@ -6,7 +6,7 @@ function state(): GameState {
   return {
     level: 1, tick: 10, elapsed: 10, rng: 12345, score: 3, multiplier: 1, multUntil: 0,
     player: { y: GROUND_Y, vy: 0, sliding: false },
-    scroll: 40, nextSpawnAt: 240, nextId: 2,
+    scroll: 40, distance: 0, nextSpawnAt: 240, nextId: 2,
     entities: [{ id: 1, kind: 'coin', x: 300, y: GROUND_Y - 30, w: 10, h: 10, taken: false }],
     bossUntil: 0, status: 'running',
   }
@@ -28,6 +28,7 @@ describe('hashState', () => {
     ['score', (s: GameState) => { s.score += 1 }],
     ['player y', (s: GameState) => { s.player.y -= 0.5 }],
     ['sliding', (s: GameState) => { s.player.sliding = true }],
+    ['distance', (s: GameState) => { s.distance += 1 }],
     ['entity x', (s: GameState) => { s.entities[0].x -= 0.25 }],
     ['entity taken', (s: GameState) => { s.entities[0].taken = true }],
     ['boss', (s: GameState) => { s.bossUntil = 900 }],

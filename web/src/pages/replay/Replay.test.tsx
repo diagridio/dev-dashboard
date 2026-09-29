@@ -87,7 +87,7 @@ describe('Replay page', () => {
   it('offers to resume when a saved run exists', async () => {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       version: 1,
-      start: { level: 1, seed: 5, score: 2, elapsed: 0, boss: false },
+      start: { level: 1, seed: 5, score: 2, elapsed: 0, distance: 0, boss: false },
       history: [{ type: 'Input', tick: 3, kind: 'jump' }],
       tick: 40,
       stats: { replays: 0, fromHistory: 0, executed: 0, incidents: 0 },

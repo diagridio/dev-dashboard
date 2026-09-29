@@ -41,6 +41,8 @@ export interface StartInput {
   score: number
   /** Ticks already spent in this level, drives the level-4 speed ramp. */
   elapsed: number
+  /** Distance (px) already travelled in this level by earlier segments. */
+  distance: number
   /** True when this segment is the NonDeterministicError boss phase. */
   boss: boolean
 }
@@ -58,6 +60,8 @@ export interface GameState {
   player: Player
   /** World distance travelled this segment, px. */
   scroll: number
+  /** Distance travelled in this level before this segment, px. The level ends at distance + scroll. */
+  distance: number
   nextSpawnAt: number
   nextId: number
   entities: Entity[]

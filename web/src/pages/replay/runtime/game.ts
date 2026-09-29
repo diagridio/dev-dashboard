@@ -37,7 +37,7 @@ const nextLevel = (l: Level): Level => (l >= 4 ? 4 : ((l + 1) as Level))
 
 export class Game {
   phase: Phase = { kind: 'title' }
-  start: StartInput = { level: 0, seed: 1, score: 0, elapsed: 0, boss: false }
+  start: StartInput = { level: 0, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false }
   history: HistoryEvent[] = []
   state: GameState
   stats: RunStats = emptyStats()
@@ -104,7 +104,7 @@ export class Game {
       case 'lost':
         if (c === 'confirm') {
           this.stats = emptyStats()
-          this.beginSegment({ level: 1, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, boss: false }, true)
+          this.beginSegment({ level: 1, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false }, true)
           this.setNotice('Dapr Workflow enabled')
         }
         return
@@ -180,7 +180,9 @@ export class Game {
       return
     }
     if (state.status === 'levelDone') {
-      this.beginSegment(continueAsNew(state, { level: nextLevel(state.level), elapsed: 0 }), true)
+      // A level can end mid-boss now that distance carries across segments.
+      this.divergedAt = null
+      this.beginSegment(continueAsNew(state, { level: nextLevel(state.level), elapsed: 0, distance: 0 }), true)
       return
     }
     if (state.bossUntil > 0) {
@@ -200,7 +202,7 @@ export class Game {
     this.stats = emptyStats()
     this.divergedAt = null
     this.deps.store.clear()
-    this.beginSegment({ level: 0, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, boss: false }, true)
+    this.beginSegment({ level: 0, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false }, true)
   }
 
   private beginSegment(start: StartInput, showTip: boolean): void {
@@ -209,7 +211,7 @@ export class Game {
     this.state = initialState(start)
     this.pending = []
     this.notice = null
-    this.chaos.start(start.level, showTip)
+    this.chaos.start(start.level, showTip, start.elapsed)
     this.setPhase(showTip ? { kind: 'tip', level: start.level } : { kind: 'playing' })
     this.save()
   }
@@ -271,7 +273,7 @@ export class Game {
     this.crashTick = save.tick
     this.pending = []
     this.notice = null
-    this.chaos.start(save.start.level, false)
+    this.chaos.start(save.start.level, false, save.start.elapsed)
     this.startReplay()
   }
 

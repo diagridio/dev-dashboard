@@ -13,7 +13,7 @@ export function hashState(s: GameState): number {
   const parts: number[] = [
     s.level, s.tick, s.elapsed, s.rng, q(s.score), s.multiplier, s.multUntil,
     q(s.player.y), q(s.player.vy), s.player.sliding ? 1 : 0,
-    q(s.scroll), q(s.nextSpawnAt), s.nextId, s.bossUntil, STATUS[s.status], s.entities.length,
+    q(s.scroll), q(s.distance), q(s.nextSpawnAt), s.nextId, s.bossUntil, STATUS[s.status], s.entities.length,
   ]
   for (const e of s.entities) parts.push(e.id, KIND[e.kind], q(e.x), q(e.y), e.taken ? 1 : 0)
   let h = 0x811c9dc5

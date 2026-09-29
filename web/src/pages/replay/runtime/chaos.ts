@@ -17,12 +17,12 @@ export class ChaosScheduler {
     return this.dueAt
   }
 
-  /** Called at tick 0 of every segment. */
-  start(level: Level, firstOfLevel: boolean): void {
+  /** Called at tick 0 of every segment; `elapsed` is the level time the segment starts from. */
+  start(level: Level, firstOfLevel: boolean, elapsed = 0): void {
     const cfg = this.levels[level]
     if (cfg.scriptedCrashAt !== undefined) this.dueAt = cfg.scriptedCrashAt
     else if (firstOfLevel && cfg.firstCrashTicks) this.dueAt = this.between(cfg.firstCrashTicks)
-    else this.scheduleNext(level, 0, 0)
+    else this.scheduleNext(level, 0, elapsed)
   }
 
   scheduleNext(level: Level, tick: number, elapsed: number): void {

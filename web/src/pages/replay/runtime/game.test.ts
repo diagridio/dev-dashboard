@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hashState } from '../engine/hash'
+import { chaosMeanTicks } from '../engine/levels'
 import { BOSS_TICKS } from '../engine/step'
 import { GROUND_Y, PLAYER_X, type EntityKind } from '../engine/types'
 import { autopilot, counter, makeLevels } from '../testing'
@@ -170,6 +171,42 @@ describe('Game', () => {
     expect(game.start.boss).toBe(false)
     expect(game.state.tick).toBeLessThan(5)
     expect(game.view().notice).toBe('Hotfix deployed · continue-as-new')
+  })
+
+  it('keeps the level distance across the boss and hotfix segments', () => {
+    const { game } = bossGame()
+    const before = game.start.distance
+    expect(before).toBeGreaterThan(0)
+    runUntil(game, (g) => g.phase.kind === 'playing' && g.state.bossUntil === 0)
+    expect(game.start.distance).toBeGreaterThan(before)
+  })
+
+  it('clears the divergence when the level ends during the boss phase', () => {
+    const levels = makeLevels({ weights: { orb: 1 }, crashAfterPickup: ['orb'] }, { 0: { length: 1_000_000 } })
+    const game = new Game(deps({ levels }))
+    play(game)
+    runUntil(game, is('crashing'), ['orb'])
+    runUntil(game, (g) => g.phase.kind === 'playing' && g.state.bossUntil > 0)
+    expect(game.divergedAt).not.toBeNull()
+    // Direct poke: put the player at the end of the level mid-boss.
+    game.state = { ...game.state, scroll: 1_000_000 - game.state.distance }
+    game.frame(1)
+    expect(game.phase).toEqual({ kind: 'tip', level: 1 })
+    expect(game.start.distance).toBe(0)
+    expect(game.divergedAt).toBeNull()
+  })
+
+  it('schedules chaos after a hotfix from the elapsed time the segment carries', () => {
+    const levels = makeLevels({ weights: { orb: 1 }, crashAfterPickup: ['orb'], chaosMeanTicks: 1000, chaosFloorTicks: 100 })
+    const game = new Game(deps({ levels }))
+    play(game)
+    runUntil(game, is('crashing'), ['orb'])
+    runUntil(game, (g) => g.phase.kind === 'playing' && g.state.bossUntil > 0)
+    runUntil(game, (g) => g.phase.kind === 'playing' && g.state.bossUntil === 0)
+    const expected = Math.round(chaosMeanTicks(levels[0], game.start.elapsed) ?? 0)
+    expect(expected).toBeLessThan(1000)
+    runUntil(game, is('crashing'))
+    expect(game.state.tick).toBe(expected)
   })
 
   it('fails with the non-determinism reason when the player dies during the boss', () => {

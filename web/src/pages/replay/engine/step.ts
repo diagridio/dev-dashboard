@@ -47,6 +47,7 @@ export function initialState(start: StartInput): GameState {
     multUntil: 0,
     player: { y: GROUND_Y, vy: 0, sliding: false },
     scroll: 0,
+    distance: start.distance,
     nextSpawnAt: FIRST_SPAWN_AT,
     nextId: 1,
     entities: [],
@@ -57,7 +58,10 @@ export function initialState(start: StartInput): GameState {
 
 /** Snapshot input for a fresh history segment (Dapr's ContinueAsNew). */
 export function continueAsNew(s: GameState, patch: Partial<StartInput> = {}): StartInput {
-  return { level: s.level, seed: seedFrom(s.rng), score: s.score, elapsed: s.elapsed, boss: false, ...patch }
+  return {
+    level: s.level, seed: seedFrom(s.rng), score: s.score, elapsed: s.elapsed, distance: s.distance + s.scroll, boss: false,
+    ...patch,
+  }
 }
 
 function chooseKind(weights: LevelConfig['weights'], r: number): EntityKind {
@@ -162,7 +166,7 @@ export function step(prev: GameState, inputs: readonly InputKind[], ports: Ports
     }
   }
 
-  if (s.status === 'running' && s.scroll >= cfg.length) s.status = 'levelDone'
+  if (s.status === 'running' && s.distance + s.scroll >= cfg.length) s.status = 'levelDone'
   s.tick += 1
   s.elapsed += 1
   const hash = hashState(s)
