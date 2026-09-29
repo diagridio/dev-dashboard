@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dapr/durabletask-go/api/protos"
@@ -29,6 +30,112 @@ const (
 	filteredScanPageMultiple = 10
 	maxFilteredScanKeys      = 2000
 )
+
+// instanceLoadConcurrency bounds how many instances List/Stats load at once.
+// Each load does its own BulkGet, which on Redis (contrib DefaultBulkStore,
+// fanned out by bulkGetParallelism = 16 in pkg/statestore) becomes parallel
+// Gets, so the fan-out can reach 8 x 16 = 128 concurrent Gets.
+const instanceLoadConcurrency = 8
+
+// instanceRef identifies one instance found by a metadata-key scan.
+type instanceRef struct{ appID, id string }
+
+// loaded is one instance's summary; ok is false when it failed to load
+// (skipped, as a failed load always was).
+type loaded struct {
+	summary ExecutionSummary
+	ok      bool
+}
+
+// refsFromKeys parses metadata keys into instance refs, skipping malformed
+// keys and any app/instance pair already recorded in seen (which it updates).
+func refsFromKeys(keys []string, seen map[string]struct{}) []instanceRef {
+	refs := make([]instanceRef, 0, len(keys))
+	for _, k := range keys {
+		appID, ok := statestore.ParseAppID(k)
+		if !ok {
+			continue
+		}
+		id, ok := statestore.ParseInstanceID(k)
+		if !ok {
+			continue
+		}
+		dk := appID + "/" + id
+		if _, dup := seen[dk]; dup {
+			continue
+		}
+		seen[dk] = struct{}{}
+		refs = append(refs, instanceRef{appID: appID, id: id})
+	}
+	return refs
+}
+
+// forEachBounded runs fn(i) for every i in [0, n) on at most
+// instanceLoadConcurrency goroutines. It stops scheduling once ctx is done
+// and always waits for in-flight calls before returning.
+func forEachBounded(ctx context.Context, n int, fn func(i int)) {
+	sem := make(chan struct{}, instanceLoadConcurrency)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		if ctx.Err() != nil {
+			break
+		}
+		sem <- struct{}{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			fn(i)
+		}()
+	}
+	wg.Wait()
+}
+
+// loadSummaries loads refs concurrently and returns one result per ref, in
+// input order, so callers stay deterministic before their own sort. It
+// reads all metadata values and first history entries in one BulkGet,
+// reuses cached summaries whose metadata and first-entry bytes are both
+// unchanged, and loads the rest via loadWithMeta.
+func (s *service) loadSummaries(ctx context.Context, ns string, refs []instanceRef) ([]loaded, error) {
+	out := make([]loaded, len(refs))
+	if len(refs) == 0 {
+		return out, nil
+	}
+	metaKeys := make([]string, len(refs))
+	firstKeys := make([]string, len(refs))
+	for i, r := range refs {
+		prefix := statestore.InstancePrefix(ns, r.appID, r.id)
+		metaKeys[i] = prefix + statestore.SuffixMetadata
+		firstKeys[i] = prefix + statestore.HistoryKey(0)
+	}
+	allKeys := make([]string, 0, 2*len(refs))
+	allKeys = append(append(allKeys, metaKeys...), firstKeys...)
+	metas, err := s.store.BulkGet(ctx, allKeys)
+	if err != nil {
+		return nil, err
+	}
+	forEachBounded(ctx, len(refs), func(i int) {
+		r := refs[i]
+		meta, first := metas[metaKeys[i]], metas[firstKeys[i]]
+		key := cacheKey(ns, r.appID, r.id)
+		if sum, ok := s.cache.get(key, meta, first); ok {
+			out[i] = loaded{summary: sum, ok: true}
+			return
+		}
+		ex, fromMeta, err := s.loadWithMeta(ctx, ns, r.appID, r.id, meta)
+		if err != nil {
+			return
+		}
+		if fromMeta {
+			s.cache.put(key, ns, r.appID, meta, first, ex.ExecutionSummary)
+		}
+		out[i] = loaded{summary: ex.ExecutionSummary, ok: true}
+	})
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 type ListQuery struct {
 	AppID           string
@@ -58,6 +165,9 @@ type service struct {
 	// List/Stats); the store-wide scans (all-apps List/Stats, AppIDs) always
 	// use the store namespace.
 	nsResolver func(ctx context.Context, appID string) string
+	// cache holds list/stats summaries validated by metadata bytes (see
+	// summaryCache). Get never uses it: the detail page needs full history.
+	cache *summaryCache
 }
 
 // Option customizes a workflow Service.
@@ -73,7 +183,7 @@ func New(store statestore.Store, namespace string, opts ...Option) Service {
 	if namespace == "" {
 		namespace = "default"
 	}
-	s := &service{store: store, namespace: namespace}
+	s := &service{store: store, namespace: namespace, cache: newSummaryCache(maxCachedSummaries)}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -181,26 +291,13 @@ func (s *service) List(ctx context.Context, q ListQuery) (ListResult, error) {
 		}
 		next = n
 		scanned += len(metaKeys)
-		for _, k := range metaKeys {
-			appID, ok := statestore.ParseAppID(k)
-			if !ok {
-				continue
-			}
-			id, ok := statestore.ParseInstanceID(k)
-			if !ok {
-				continue
-			}
-			dedupKey := appID + "/" + id
-			if _, dup := seen[dedupKey]; dup {
-				continue
-			}
-			seen[dedupKey] = struct{}{}
-			ex, err := s.load(ctx, ns, appID, id)
-			if err != nil {
-				continue
-			}
-			if matches(ex.ExecutionSummary, q) {
-				items = append(items, ex.ExecutionSummary)
+		results, err := s.loadSummaries(ctx, ns, refsFromKeys(metaKeys, seen))
+		if err != nil {
+			return ListResult{}, err
+		}
+		for _, r := range results {
+			if r.ok && matches(r.summary, q) {
+				items = append(items, r.summary)
 			}
 		}
 		// Unfiltered: preserve one-key-page-per-call semantics.
@@ -239,28 +336,23 @@ func (s *service) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 	if err != nil {
 		return StatsResult{}, err
 	}
-	for _, k := range metaKeys {
-		appID, ok := statestore.ParseAppID(k)
-		if !ok {
+	refs := refsFromKeys(metaKeys, seen)
+	results, err := s.loadSummaries(ctx, ns, refs)
+	if err != nil {
+		return StatsResult{}, err
+	}
+	// Stats saw every metadata key in scope, so any cached instance it
+	// didn't see was purged or deleted.
+	keep := make(map[string]struct{}, len(refs))
+	for _, r := range refs {
+		keep[cacheKey(ns, r.appID, r.id)] = struct{}{}
+	}
+	s.cache.prune(ns, q.AppID, keep)
+	for _, r := range results {
+		if !r.ok || !matches(r.summary, searchQ) {
 			continue
 		}
-		id, ok := statestore.ParseInstanceID(k)
-		if !ok {
-			continue
-		}
-		dedupKey := appID + "/" + id
-		if _, dup := seen[dedupKey]; dup {
-			continue
-		}
-		seen[dedupKey] = struct{}{}
-		ex, err := s.load(ctx, ns, appID, id)
-		if err != nil {
-			continue
-		}
-		if !matches(ex.ExecutionSummary, searchQ) {
-			continue
-		}
-		res.Counts[ex.Status]++
+		res.Counts[r.summary.Status]++
 		res.Total++
 	}
 	return res, nil
@@ -309,9 +401,45 @@ func (s *service) Get(ctx context.Context, appID, instanceID string) (Execution,
 	return ex, nil
 }
 
-// load reads an instance's history-* and customStatus keys and decodes them
-// under the given namespace.
+// load reads one instance: its metadata record first, then (via
+// loadWithMeta) the history keys that record declares.
 func (s *service) load(ctx context.Context, ns, appID, instanceID string) (Execution, error) {
+	meta, err := s.store.Get(ctx, statestore.InstancePrefix(ns, appID, instanceID)+statestore.SuffixMetadata)
+	if err != nil {
+		return Execution{}, err
+	}
+	ex, _, err := s.loadWithMeta(ctx, ns, appID, instanceID, meta)
+	return ex, err
+}
+
+// loadWithMeta loads an instance given its already-read metadata record.
+// When the record declares a usable HistoryLength, the history keys are
+// built directly (as Dapr itself loads state) and fetched in one BulkGet:
+// no key scan. Otherwise it falls back to scanning the instance's keys.
+// fromMeta reports which path ran; only metadata-path results are safe to
+// cache against the metadata bytes.
+func (s *service) loadWithMeta(ctx context.Context, ns, appID, instanceID string, meta []byte) (Execution, bool, error) {
+	n, ok := historyLength(meta)
+	if !ok {
+		ex, err := s.loadByScan(ctx, ns, appID, instanceID)
+		return ex, false, err
+	}
+	prefix := statestore.InstancePrefix(ns, appID, instanceID)
+	keys := make([]string, 0, n+1)
+	for i := uint64(0); i < n; i++ {
+		keys = append(keys, prefix+statestore.HistoryKey(i))
+	}
+	keys = append(keys, prefix+statestore.SuffixCustomStatus)
+	values, err := s.store.BulkGet(ctx, keys)
+	if err != nil {
+		return Execution{}, false, err
+	}
+	return decodeInstance(appID, instanceID, prefix, values), true, nil
+}
+
+// loadByScan is the original loader: discover the instance's keys with a
+// KeysLike scan, then read them. Used when metadata can't be trusted.
+func (s *service) loadByScan(ctx context.Context, ns, appID, instanceID string) (Execution, error) {
 	keys, _, err := s.store.Keys(ctx, statestore.InstanceKeyPattern(ns, appID, instanceID), "", 0)
 	if err != nil {
 		return Execution{}, err
@@ -323,20 +451,28 @@ func (s *service) load(ctx context.Context, ns, appID, instanceID string) (Execu
 	if err != nil {
 		return Execution{}, err
 	}
-	prefix := statestore.InstancePrefix(ns, appID, instanceID)
-	var history []*protos.HistoryEvent
+	return decodeInstance(appID, instanceID, statestore.InstancePrefix(ns, appID, instanceID), values), nil
+}
+
+// decodeInstance decodes history-* (in key order, which is chronological)
+// and customStatus values into an Execution. Missing or empty values and
+// undecodable events are skipped.
+func decodeInstance(appID, instanceID, prefix string, values map[string][]byte) Execution {
 	var historyKeys []string
 	customStatus := ""
-	for k := range values {
+	for k, v := range values {
 		suffix := strings.TrimPrefix(k, prefix)
 		switch {
 		case strings.HasPrefix(suffix, statestore.HistoryPrefix):
-			historyKeys = append(historyKeys, k)
+			if len(v) > 0 {
+				historyKeys = append(historyKeys, k)
+			}
 		case suffix == statestore.SuffixCustomStatus:
-			customStatus = string(values[k])
+			customStatus = string(v)
 		}
 	}
 	sort.Strings(historyKeys) // history-000000, history-000001, ... lexical == chronological
+	history := make([]*protos.HistoryEvent, 0, len(historyKeys))
 	for _, hk := range historyKeys {
 		var e protos.HistoryEvent
 		if err := proto.Unmarshal(values[hk], &e); err != nil {
@@ -344,7 +480,7 @@ func (s *service) load(ctx context.Context, ns, appID, instanceID string) (Execu
 		}
 		history = append(history, &e)
 	}
-	return DecodeExecution(appID, instanceID, history, customStatus), nil
+	return DecodeExecution(appID, instanceID, history, customStatus)
 }
 
 func matches(s ExecutionSummary, q ListQuery) bool {

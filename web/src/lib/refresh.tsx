@@ -65,3 +65,10 @@ export function refetchMs(ctx: Pick<RefreshCtx, 'intervalMs' | 'paused'>): numbe
   if (ctx.paused || ctx.intervalMs === 0) return false
   return ctx.intervalMs
 }
+
+// refetchMs with a lower bound, for expensive store-wide reads that don't
+// need the page's full cadence. Paused / off still disable polling.
+export function refetchMsAtLeast(ctx: Pick<RefreshCtx, 'intervalMs' | 'paused'>, floorMs: number): number | false {
+  const ms = refetchMs(ctx)
+  return ms === false ? false : Math.max(ms, floorMs)
+}

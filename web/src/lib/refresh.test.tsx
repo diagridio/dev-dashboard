@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import React from 'react'
-import { RefreshProvider, useRefreshInterval, refetchMs } from './refresh'
+import { RefreshProvider, useRefreshInterval, refetchMs, refetchMsAtLeast } from './refresh'
 
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <RefreshProvider>{children}</RefreshProvider>
@@ -114,5 +114,19 @@ describe('refetchMs', () => {
 
   it('returns false when intervalMs is 0', () => {
     expect(refetchMs({ intervalMs: 0, paused: false })).toBe(false)
+  })
+})
+
+describe('refetchMsAtLeast', () => {
+  it('raises short intervals to the floor', () => {
+    expect(refetchMsAtLeast({ intervalMs: 1000, paused: false }, 10_000)).toBe(10_000)
+    expect(refetchMsAtLeast({ intervalMs: 3000, paused: false }, 10_000)).toBe(10_000)
+  })
+  it('keeps intervals already above the floor', () => {
+    expect(refetchMsAtLeast({ intervalMs: 10_000, paused: false }, 5_000)).toBe(10_000)
+  })
+  it('stays disabled when paused or off', () => {
+    expect(refetchMsAtLeast({ intervalMs: 3000, paused: true }, 10_000)).toBe(false)
+    expect(refetchMsAtLeast({ intervalMs: 0, paused: false }, 10_000)).toBe(false)
   })
 })

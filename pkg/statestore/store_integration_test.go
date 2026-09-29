@@ -4,6 +4,7 @@ package statestore_test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -14,6 +15,8 @@ import (
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // Real Dapr workflow key shape: <appId>||<actorType>||<instanceId>||<suffix>.
@@ -58,6 +61,29 @@ func runStoreContract(t *testing.T, store statestore.Store) {
 	require.Nil(t, recs[0].TTLExpire, "no TTL was set on this key")
 
 	require.Empty(t, mustRecords(t, rr, nil), "an empty key list is a no-op")
+
+	// BulkGet parity: binary (proto) values must come back byte-identical to
+	// Get on every backend (SQLite base64-encodes binary values at rest), a
+	// missing key maps to nil, and >bulkGetChunk keys span several chunks.
+	bin, err := proto.Marshal(wrapperspb.Bytes([]byte("binary\x00payload\xff")))
+	require.NoError(t, err)
+	var bulkKeys []string
+	for i := 0; i < 130; i++ {
+		k := fmt.Sprintf("k||a||bulk||history-%06d", i)
+		require.NoError(t, store.Set(ctx, k, bin))
+		bulkKeys = append(bulkKeys, k)
+	}
+	missing := "k||a||bulk||absent"
+	got2, err := store.BulkGet(ctx, append(bulkKeys, missing))
+	require.NoError(t, err)
+	require.Len(t, got2, len(bulkKeys)+1)
+	for _, k := range bulkKeys {
+		single, err := store.Get(ctx, k)
+		require.NoError(t, err)
+		require.Equal(t, single, got2[k], "BulkGet bytes must equal Get bytes for %s", k)
+		require.Equal(t, bin, got2[k])
+	}
+	require.Nil(t, got2[missing])
 }
 
 func mustRecords(t *testing.T, rr statestore.RecordReader, keys []string) []statestore.Record {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest'
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, delay } from 'msw'
 import { setupServer } from 'msw/node'
 import { fetchJSON } from './api'
 
@@ -23,5 +23,20 @@ describe('fetchJSON error enrichment', () => {
   it('still throws the status prefix when the body has no error field', async () => {
     server.use(http.get('/api/workflows', () => HttpResponse.text('boom', { status: 500 })))
     await expect(fetchJSON('/workflows')).rejects.toThrowError(/API error 500 for \/workflows/)
+  })
+})
+
+describe('fetchJSON abort', () => {
+  it('forwards the AbortSignal so an aborted request rejects', async () => {
+    server.use(
+      http.get('/api/workflows', async () => {
+        await delay(200)
+        return HttpResponse.json({ items: [] })
+      }),
+    )
+    const ctrl = new AbortController()
+    const p = fetchJSON('/workflows', { signal: ctrl.signal })
+    ctrl.abort()
+    await expect(p).rejects.toThrow()
   })
 })

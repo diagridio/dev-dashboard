@@ -145,17 +145,61 @@ func (s *ccStore) Get(ctx context.Context, key string) ([]byte, error) {
 	return resp.Data, nil
 }
 
-// BulkGet retrieves multiple keys in a sequential loop.
-// For the modest local key counts targeted here, a loop is correct;
-// a future optimisation can delegate to the underlying BulkStore interface.
+const (
+	// bulkGetChunk caps keys per backend bulk read: well under SQLite's
+	// bound-parameter limit, and small enough to keep PostgreSQL/MongoDB
+	// queries cheap.
+	bulkGetChunk = 100
+	// bulkGetParallelism bounds concurrent Gets for backends whose BulkGet is
+	// contrib's DefaultBulkStore (Redis); native implementations ignore it.
+	bulkGetParallelism = 16
+)
+
+// BulkGet reads many keys through the backend's bulk path: one query per
+// chunk on PostgreSQL, SQLite and MongoDB; bounded parallel Gets on Redis.
+// The result has an entry for every requested key, nil when the key is
+// missing. A per-key backend error fails the whole call, like Get.
 func (s *ccStore) BulkGet(ctx context.Context, keys []string) (map[string][]byte, error) {
+	bs, ok := s.inner.(state.BulkStore)
+	if !ok {
+		// Defensive: state.Store embeds BulkStore, so every supported
+		// backend takes the branch above.
+		out := make(map[string][]byte, len(keys))
+		for _, k := range keys {
+			b, err := s.Get(ctx, k)
+			if err != nil {
+				return nil, err
+			}
+			out[k] = b
+		}
+		return out, nil
+	}
+	return bulkGetChunked(ctx, bs, keys, bulkGetChunk)
+}
+
+// bulkGetChunked issues one bs.BulkGet per chunk of keys and merges the
+// responses by key (backends may return them in any order).
+func bulkGetChunked(ctx context.Context, bs state.BulkStore, keys []string, chunk int) (map[string][]byte, error) {
 	out := make(map[string][]byte, len(keys))
-	for _, k := range keys {
-		b, err := s.Get(ctx, k)
+	for start := 0; start < len(keys); start += chunk {
+		end := min(start+chunk, len(keys))
+		reqs := make([]state.GetRequest, 0, end-start)
+		for _, k := range keys[start:end] {
+			reqs = append(reqs, state.GetRequest{Key: k})
+			out[k] = nil
+		}
+		resp, err := bs.BulkGet(ctx, reqs, state.BulkGetOpts{Parallelism: bulkGetParallelism})
 		if err != nil {
 			return nil, err
 		}
-		out[k] = b
+		for _, r := range resp {
+			if r.Error != "" {
+				return nil, fmt.Errorf("bulk get %q: %s", r.Key, r.Error)
+			}
+			if _, want := out[r.Key]; want {
+				out[r.Key] = r.Data
+			}
+		}
 	}
 	return out, nil
 }
