@@ -569,6 +569,13 @@ Client-side History-API routing; the router `basename` and all API URLs derive f
 surfaces) mount only when their server-injected capability flag is on — see
 *Capabilities* in §5.
 
+`/replay` is a hidden easter egg: REPLAY, a small runner game that teaches workflow
+replay and determinism (Konami code or direct URL; not linked in the nav). It is the one
+lazy route (`lazy: () => import('./pages/replay/Replay')`), so it ships as its own chunk.
+It is browser-only: a pure, event-sourced engine in `pages/replay/engine/` (guarded by
+`purity.test.ts`), a runtime state machine in `pages/replay/runtime/`, and its only
+persistence is `localStorage` (`devdash.replay.*`). Design: `docs/superpowers/specs/2026-09-29-replay-easter-egg-design.md`.
+
 ### Data fetching & live data
 
 Every polling query is a TanStack Query hook (`src/hooks/`) that calls `fetchJSON`
