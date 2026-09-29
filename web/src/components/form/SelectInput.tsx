@@ -15,7 +15,7 @@ export function SelectInput({ id, value, onChange, options, ...rest }: SelectInp
   return (
     <select
       id={id}
-      className="select"
+      className="inp"
       value={value}
       aria-label={rest['aria-label']}
       onChange={(e) => onChange(e.target.value)}

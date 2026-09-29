@@ -10,7 +10,7 @@ acts as a passive, read-only observer for local Dapr development. There is **no 
 runtime** — the frontend is compiled to `web/dist` and baked into the binary at build time.
 
 - **Module:** `github.com/diagridio/dev-dashboard`
-- **Toolchain:** Go ≥ 1.26 (`go.mod` pins 1.26.4), Node.js 20 + `npm` (build/test only).
+- **Toolchain:** Go ≥ 1.26 (`go.mod` pins 1.26.7), Node.js 20 + `npm` (build/test only).
 - **Entry point:** `main.go` → `cmd/` (cobra root, default subcommand is `serve`).
 
 ## Repository layout
@@ -24,13 +24,17 @@ cmd/               cobra root + subcommands (serve, update, workflow); no domain
 pkg/               domain packages — each is isolated, none import cmd/
   discovery/       standalone.List() + /v1.0/metadata + /v1.0/healthz enrichment
   workflow/        list / stats / history / terminate / purge (reads the state store)
-  statestore/      redis / postgres / sqlite client + Detect + secret resolution
+  statestore/      redis / postgres / sqlite / mongodb client + Detect + secret resolution
+  state/           State page: browse / add / delete state-store records
+  lifecycle/       start / stop / restart of discovered apps and sidecars
   controlplane/    docker/podman detection, inspect, lifecycle actions, log stream
   metadata/        embedded component-metadata catalog (drives the add/edit connection forms)
   resources/       component + configuration YAML loader
+  secrets/         local secret-store detection + secretKeyRef/envRef resolution, using
+                   the dashboard's own environment/cwd, not daprd's
   logs/            file tail → SSE
   server/          chi router + go:embed SPA mount (one file per domain)
-  news/ logging/ selfupdate/ version/
+  news/ updatecheck/ logging/ selfupdate/ version/
 internal/golden/   golden-file test helpers
 web/               React + TypeScript + Vite SPA → web/dist (embedded via web/embed.go)
                    see web/STYLEGUIDE.md for UI styling conventions
@@ -87,8 +91,10 @@ cd web && npx vitest run src/path/to/file.test.tsx
 
 - **unit** (`//go:build unit`) and **web** (Vitest) — self-contained, the everyday gate.
 - **integration** (`//go:build integration`) — exercises state-store/workflow read paths and the
-  assembled HTTP server against in-process Redis (`miniredis`) + temp SQLite; no external
-  services. Runs in CI but not in `make test`.
+  assembled HTTP server. The store contract and workflow parity tests run against temp SQLite
+  plus real Redis / PostgreSQL / MongoDB containers (testcontainers-go); the container backends
+  skip when no container runtime is available, so a skip there is not a pass. Runs in CI but
+  not in `make test`.
 - **e2e** (`//go:build e2e`) — drives a real `daprd`; local-only, skips when Dapr isn't installed.
 - **Golden files** (`testdata/golden/*`): regenerate after an intentional shape change with
   `-update`, e.g. `go test -tags integration ./pkg/workflow -run Golden -update`.
@@ -134,13 +140,19 @@ via ldflags (`diagrid-dev-dashboard --version`).
 - **Follow the UI style guide for frontend work.** New pages/components compose the existing
   class vocabulary and design tokens in `web/src/styles/theme.css` — don't hardcode colors or
   reinvent primitives. See [`web/STYLEGUIDE.md`](web/STYLEGUIDE.md).
-- **Read-only product surface:** the dashboard never starts/stops apps and never edits app or
-  component state. The mutating operations are limited to workflow terminate/purge, managing the
-  user's own saved state-store connections (the `connections.yaml` registry under
-  `~/.dapr/dev-dashboard/`, written `0600`), and control-plane lifecycle actions
-  (start/restart/stop of the known `dapr_*` control-plane containers via the resolved
-  container runtime, allowlisted to those container names). Don't add other side-effecting
-  behavior without an explicit ask.
+- **Mostly read-only product surface:** the dashboard observes; it never edits component YAML or
+  app code. The mutating operations are limited to:
+  - workflow terminate/purge (and the explicit force-delete fallback);
+  - managing the user's own saved state-store connections (the `connections.yaml` registry under
+    `~/.dapr/dev-dashboard/`, written `0600`);
+  - State page record writes and deletes, only when the user asks for them;
+  - app lifecycle actions on discovered apps (stop for all; start/restart for compose apps;
+    refused for Testcontainers apps) and clearing stopped apps from the list (non-destructive);
+  - control-plane lifecycle actions (start/restart/stop of the known `dapr_*` control-plane
+    containers via the resolved container runtime, allowlisted to those container names);
+  - publishing a test message to a subscription's pub/sub topic from the Subscriptions page.
+
+  Don't add other side-effecting behavior without an explicit ask.
 - Commit/push only when asked; the project uses Conventional Commit prefixes (`feat:`, `refactor:`,
   `docs:`) — match the existing `git log` style.
 

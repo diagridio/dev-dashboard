@@ -5,6 +5,7 @@ import { AppDetail } from './pages/AppDetail'
 import { Logs } from './pages/Logs'
 import { Workflows } from './pages/Workflows'
 import { WorkflowDetail } from './pages/WorkflowDetail'
+import { State } from './pages/State'
 import { Actors } from './pages/Actors'
 import { Subscriptions } from './pages/Subscriptions'
 import { ResourceList } from './pages/ResourceList'
@@ -26,6 +27,7 @@ const gatedChildren: RouteObject[] = [
         { path: 'workflows/:appId/:instanceId', element: <WorkflowDetail />, handle: { rumView: 'WorkflowDetail' } },
       ]
     : []),
+  ...(caps.state ? [{ path: 'state', element: <State />, handle: { rumView: 'State' } }] : []),
   { path: 'actors', element: <Actors />, handle: { rumView: 'Actors' } },
   { path: 'subscriptions', element: <Subscriptions />, handle: { rumView: 'Subscriptions' } },
   { path: 'components/new', element: <ComponentBuilder />, handle: { rumView: 'ComponentBuilder' } },

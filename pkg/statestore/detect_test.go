@@ -54,6 +54,21 @@ auth:
   secretStore: local-secrets
 `
 
+const redisEnvRefComponent = `
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: envref-redis
+spec:
+  type: state.redis
+  version: v1
+  metadata:
+    - name: redisHost
+      value: localhost:6379
+    - name: redisPassword
+      envRef: REDIS_PASSWORD
+`
+
 const secondStateComponent = `
 apiVersion: dapr.io/v1alpha1
 kind: Component
@@ -129,6 +144,34 @@ func TestDetectParsesSecretKeyRef(t *testing.T) {
 	require.Equal(t, "local-secrets", c.SecretStore)
 	ref, ok := c.SecretRefs["redisPassword"]
 	require.True(t, ok)
+	require.Equal(t, "secretKeyRef", ref.Kind)
 	require.Equal(t, "redis-secret", ref.Name)
 	require.Equal(t, "redis-password", ref.Key)
+}
+
+// TestDetectParsesEnvRef covers finding 2 of the whole-branch review:
+// pkg/statestore's own component parser used to only recognize secretKeyRef,
+// so a state store declaring envRef fell through to an empty inline value
+// with no SecretRefs entry at all — silently different from what
+// pkg/secrets/pkg/resources reported for the very same YAML on the
+// Components page.
+func TestDetectParsesEnvRef(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "redis.yaml"), []byte(redisEnvRefComponent), 0o600))
+
+	comps, err := Detect([]string{dir})
+	require.NoError(t, err)
+	require.Len(t, comps, 1)
+	c := comps[0]
+
+	require.Equal(t, "localhost:6379", c.Metadata["redisHost"])
+	// envRef entry is NOT added as an inline metadata value (and must not be
+	// an empty string either — that was the silent-failure symptom).
+	_, hasInline := c.Metadata["redisPassword"]
+	require.False(t, hasInline)
+
+	ref, ok := c.SecretRefs["redisPassword"]
+	require.True(t, ok, "envRef must populate SecretRefs, not fall through unnoticed")
+	require.Equal(t, "envRef", ref.Kind)
+	require.Equal(t, "REDIS_PASSWORD", ref.Name)
 }

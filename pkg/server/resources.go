@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"sort"
 
@@ -11,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-func resourcesRouter(res resources.Service, apps discovery.Service) http.Handler {
+func resourcesRouter(res resources.Service, apps discovery.Service, revealEnabled bool) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
 		kind := resources.Kind(req.URL.Query().Get("kind"))
@@ -55,6 +57,33 @@ func resourcesRouter(res resources.Service, apps discovery.Service) http.Handler
 			got.LoadedBy = loadedByFor(req.Context(), apps, got.Name)
 		}
 		writeJSON(w, http.StatusOK, got)
+	})
+	r.Post("/component/{id}/secret-value", func(w http.ResponseWriter, req *http.Request) {
+		if !revealEnabled {
+			writeJSON(w, http.StatusForbidden,
+				map[string]string{"error": "secret reveal is disabled when the dashboard is served off-host"})
+			return
+		}
+		var body struct {
+			Field string `json:"field"`
+		}
+		if err := json.NewDecoder(req.Body).Decode(&body); err != nil || body.Field == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "field is required"})
+			return
+		}
+		id := chi.URLParam(req, "id")
+		val, err := res.RevealSecret(req.Context(), id, body.Field)
+		if errors.Is(err, resources.ErrNotFound) || errors.Is(err, resources.ErrNoSecretValue) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no resolved secret for that field"})
+			return
+		}
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		slog.Default().With("component", "resources").Info("secret revealed", "resource", id, "field", body.Field)
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, http.StatusOK, map[string]string{"value": val})
 	})
 	return r
 }

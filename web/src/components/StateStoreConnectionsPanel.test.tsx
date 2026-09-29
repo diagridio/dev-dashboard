@@ -108,6 +108,20 @@ describe('StateStoreConnectionsPanel', () => {
     expect(screen.getByRole('button', { name: /disconnect orders-pg/i })).toBeInTheDocument()
   })
 
+  it('shows the secret issue for a store that cannot resolve its refs', async () => {
+    const withSecretIssue = [
+      {
+        id: 'a', name: 'statestore', type: 'state.redis', source: 'auto',
+        path: '/tmp/statestore.yaml', active: false, connection: 'localhost:6379',
+        secretIssue: 'redisPassword unresolved (key-not-found): secrets file /tmp/secrets.json',
+      },
+    ]
+    server.use(http.get('/api/statestores', () => HttpResponse.json(withSecretIssue)))
+    render(<QueryProvider client={makeQueryClient()}><StateStoreConnectionsPanel /></QueryProvider>)
+
+    expect(await screen.findByText(/redisPassword unresolved/)).toBeInTheDocument()
+  })
+
   it('explains durable dismissal when removing an auto-discovered connection', async () => {
     const autoInactive = [
       { id: 'a2', name: 'projstore', type: 'state.sqlite', source: 'auto', path: '/y/b.yaml', active: false, connection: 'b.db' },

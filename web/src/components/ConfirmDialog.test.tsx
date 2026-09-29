@@ -79,4 +79,37 @@ describe('ConfirmDialog', () => {
     expect(trigger).toHaveFocus()
     vi.useRealTimers()
   })
+
+  it('while busy: disables both buttons and ignores Escape and backdrop clicks', async () => {
+    const onConfirm = vi.fn()
+    const onCancel = vi.fn()
+    render(
+      <ConfirmDialog open busy title="Stop app?" confirmLabel="Stop" onConfirm={onConfirm} onCancel={onCancel} />,
+    )
+    const cancel = screen.getByRole('button', { name: 'Cancel' })
+    const confirm = screen.getByRole('button', { name: 'Stop' })
+    expect(cancel).toBeDisabled()
+    expect(confirm).toBeDisabled()
+    await userEvent.click(confirm)
+    await userEvent.click(cancel)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(document.querySelector('.modal-backdrop') as HTMLElement)
+    expect(onConfirm).not.toHaveBeenCalled()
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('shows busyLabel on the confirm button while busy', () => {
+    render(
+      <ConfirmDialog
+        open
+        busy
+        busyLabel="Stopping…"
+        title="Stop app?"
+        confirmLabel="Stop"
+        onConfirm={() => {}}
+        onCancel={() => {}}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Stopping…' })).toBeDisabled()
+  })
 })

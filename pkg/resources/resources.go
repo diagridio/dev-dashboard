@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/diagridio/dev-dashboard/pkg/secrets"
 	"sigs.k8s.io/yaml"
 )
 
@@ -41,6 +42,10 @@ const (
 // ErrNotFound is returned by Get when no matching resource exists.
 var ErrNotFound = errors.New("resource not found")
 
+// ErrNoSecretValue is returned by RevealSecret when the field has no secret
+// reference, or the reference does not resolve to a value.
+var ErrNoSecretValue = errors.New("no resolved secret value for field")
+
 // Resource describes a single Dapr component or configuration YAML file.
 type Resource struct {
 	ID       string   `json:"id"`
@@ -51,6 +56,14 @@ type Resource struct {
 	Path     string   `json:"path"`
 	Raw      string   `json:"raw,omitempty"`
 	LoadedBy []string `json:"loadedBy,omitempty"`
+
+	SecretRefs  []SecretRefStatus `json:"secretRefs,omitempty"`
+	SecretStore *SecretStoreInfo  `json:"secretStore,omitempty"`
+
+	// doc is the single YAML document this resource was parsed from. It is
+	// unexported, so it never reaches the API; secret-reference parsing reads
+	// it instead of re-walking the file.
+	doc []byte
 }
 
 // resourceID derives a stable, URL-safe id for a resource — the entryID
@@ -67,6 +80,10 @@ type Service interface {
 	// Get resolves idOrName as a resource ID first, then as a metadata name
 	// (first match) so pre-ID deep links keep working.
 	Get(ctx context.Context, kind Kind, idOrName string) (Resource, error)
+	// RevealSecret returns the resolved value of a single secret reference on
+	// a component. It is the only path by which secret material leaves this
+	// package.
+	RevealSecret(ctx context.Context, idOrName, field string) (string, error)
 }
 
 // rawResource is a minimal struct for parsing YAML resource files.
@@ -82,8 +99,18 @@ type rawResource struct {
 }
 
 type service struct {
-	paths  func() []string
-	extras func() []Resource
+	paths   func() []string
+	extras  func() []Resource
+	secrets secrets.Service
+}
+
+// Option configures the resources Service.
+type Option func(*service)
+
+// WithSecrets attaches a secret resolver so component resources carry secret
+// reference status. Without it, SecretRefs and SecretStore stay empty.
+func WithSecrets(svc secrets.Service) Option {
+	return func(s *service) { s.secrets = svc }
 }
 
 // New returns a Service that scans the paths returned by the provider for
@@ -91,11 +118,15 @@ type service struct {
 // that exist outside the host filesystem, e.g. extracted from containers).
 // Either provider may be nil. Both are called on every List/Get so callers
 // can change sources at runtime.
-func New(paths func() []string, extras func() []Resource) Service {
+func New(paths func() []string, extras func() []Resource, opts ...Option) Service {
 	if paths == nil {
 		paths = func() []string { return nil }
 	}
-	return &service{paths: paths, extras: extras}
+	s := &service{paths: paths, extras: extras}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // kindFromString maps a YAML kind string to a Kind constant.
@@ -134,6 +165,7 @@ func FromRaw(displayPath string, content []byte) []Resource {
 			Version: rr.Spec.Version,
 			Path:    displayPath,
 			Raw:     string(content),
+			doc:     doc,
 		})
 	}
 	return out
@@ -182,6 +214,7 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 					Type:    rr.Spec.Type,
 					Version: rr.Spec.Version,
 					Path:    absPath,
+					doc:     doc,
 				})
 			}
 			return nil
@@ -227,7 +260,23 @@ func (s *service) List(ctx context.Context, kind Kind) ([]Resource, error) {
 		}
 		return out[i].Path < out[j].Path
 	})
+	for i := range out {
+		if out[i].Kind == KindComponent {
+			out[i].SecretRefs = s.secretRefsFor(ctx, out[i].doc)
+		}
+	}
 	return out, nil
+}
+
+// enrich attaches secret-reference status and, for secret-store components,
+// the store detail payload.
+func (s *service) enrich(ctx context.Context, r Resource) Resource {
+	if r.Kind != KindComponent {
+		return r
+	}
+	r.SecretRefs = s.secretRefsFor(ctx, r.doc)
+	r.SecretStore = s.secretStoreInfoFor(ctx, r)
+	return r
 }
 
 // Get returns the resource matching idOrName (ID first, then first name
@@ -245,7 +294,7 @@ func (s *service) Get(ctx context.Context, kind Kind, idOrName string) (Resource
 			return Resource{}, err
 		}
 		r.Raw = string(data)
-		return r, nil
+		return s.enrich(ctx, r), nil
 	}
 	for _, r := range scanned {
 		if r.ID == idOrName {
@@ -254,7 +303,7 @@ func (s *service) Get(ctx context.Context, kind Kind, idOrName string) (Resource
 	}
 	for _, r := range extras {
 		if r.ID == idOrName {
-			return r, nil
+			return s.enrich(ctx, r), nil
 		}
 	}
 	for _, r := range scanned {
@@ -264,7 +313,7 @@ func (s *service) Get(ctx context.Context, kind Kind, idOrName string) (Resource
 	}
 	for _, r := range extras {
 		if r.Name == idOrName {
-			return r, nil
+			return s.enrich(ctx, r), nil
 		}
 	}
 	return Resource{}, ErrNotFound

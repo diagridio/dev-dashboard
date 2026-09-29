@@ -8,6 +8,8 @@ import { appKey } from '../lib/appKey'
 import { appDisplayState } from '../lib/appDisplayState'
 import { modeLabel } from '../lib/modeLabel'
 import { getCapabilities } from '../lib/capabilities'
+import { emptyStateContent } from '../lib/emptyState'
+import { renderCopyLinks } from '../lib/copy-links'
 import { trackAction } from '../lib/telemetry'
 import { useToast } from '../lib/toast'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -49,6 +51,10 @@ export function Applications() {
       <div className="page">
         {PAGE_HEADER}
         <p className="muted">No Dapr apps running</p>
+        {/* Getting-started hint — copy lives in src/content/empty-states.yaml. */}
+        <p className="muted" data-testid="empty-hint">
+          {renderCopyLinks(emptyStateContent.apps)}
+        </p>
       </div>
     )
   }

@@ -51,6 +51,14 @@ export function App() {
     if (rumView) trackView(rumView)
   }, [rumView])
 
+  // The theme has to reach <html>, not just the .app div: a <select> or
+  // <datalist> popup is drawn by the OS outside the page, and the browser takes
+  // its light/dark appearance from the document root's color-scheme (see the
+  // :root[data-theme] rules in theme.css). An ancestor div cannot reach it.
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+  }, [theme])
+
   const appClass = ['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : '', updateAvailable ? 'update-available' : '']
     .filter(Boolean)
     .join(' ')

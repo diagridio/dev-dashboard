@@ -31,11 +31,14 @@ func (f fakeResources) Get(_ context.Context, kind resources.Kind, name string) 
 	}
 	return resources.Resource{}, resources.ErrNotFound
 }
+func (f fakeResources) RevealSecret(_ context.Context, _, _ string) (string, error) {
+	return "", resources.ErrNoSecretValue
+}
 
 func TestResourcesListWithLoadedBy(t *testing.T) {
 	res := fakeResources{items: []resources.Resource{{Name: "statestore", Kind: resources.KindComponent, Type: "state.redis"}}}
 	apps := &fakeApps{instances: []discovery.Instance{{AppID: "order", Components: []discovery.Component{{Name: "statestore"}}}}}
-	h := resourcesRouter(res, apps)
+	h := resourcesRouter(res, apps, false)
 
 	r1, body := get(t, h, "/?kind=component")
 	require.Equal(t, http.StatusOK, r1.StatusCode)
@@ -63,7 +66,7 @@ func TestLoadedByUsesInstanceKeys(t *testing.T) {
 		{AppID: "daprmq-service", InstanceKey: "daprmq-host-1", Components: []discovery.Component{{Name: "statestore"}}},
 		{AppID: "daprmq-service", InstanceKey: "daprmq-host-2", Components: []discovery.Component{{Name: "statestore"}}},
 	}}
-	h := resourcesRouter(res, apps)
+	h := resourcesRouter(res, apps, false)
 
 	r1, body := get(t, h, "/component/statestore")
 	require.Equal(t, http.StatusOK, r1.StatusCode)

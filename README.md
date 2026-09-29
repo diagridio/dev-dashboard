@@ -1,4 +1,4 @@
-# Diagrid Dev Dashboard
+# Diagrid Dapr Dev Dashboard
 
 A local dashboard for Dapr developers that offers a live view of everything Dapr running on
 your machine, plus guided builders for authoring Dapr component and resiliency YAML.
@@ -9,7 +9,7 @@ your machine, plus guided builders for authoring Dapr component and resiliency Y
 
 ## Goal
 
-The Diagrid Dev Dashboard is a companion for local Dapr development. It inspects the
+The Diagrid Dapr Dev Dashboard is a companion for local Dapr development. It inspects the
 apps you start with `dapr run` / `dapr run -f`, Aspire, Docker Compose, or Dapr
 Testcontainers (e.g. Spring Boot apps run with `mvn spring-boot:test-run` and
 `dapr-spring-boot-starter-test`), and surfaces everything about them — sidecars, workflows,
@@ -230,6 +230,20 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   and a continuously-ticking wall-clock while it runs.
 - **Clean up workflows** — terminate and/or purge individual or bulk workflows, with an
   explicit "force delete" fallback for stuck/orphaned state.
+- **Browse, add & clean state records** — the **State** page lists the records in any connected
+  state store: key, app prefix, value preview, size, version (etag), and TTL, paginated over the
+  backend's own key cursor, with row expansion for the full value and a *Decode base64* toggle for
+  encoded values. **+ New record** writes a record under `<app-id>||<key>` — the same key shape
+  Dapr writes — and refuses a key that already exists unless you opt into overwriting; records can
+  be deleted individually or by multi-select. There is no in-place edit: overwrite the key instead.
+  Two limitations worth knowing:
+  **workflow history and actor state are hidden by default** (they live in the same keyspace
+  as your app's records — use *Show internal keys* to reveal them), and **there is no
+  "last modified" column** — Dapr's state components do not expose a modification timestamp,
+  so none can be shown. The Version column is the backend's etag: it changes on every write,
+  but it is not a time. Stores that cannot be opened directly — an in-memory store inside a
+  Testcontainers app, for example — cannot be browsed at all: Dapr's state API has no way to
+  enumerate keys, so there is nothing to page over.
 - **Review actors & subscriptions** — global pages aggregating active actor types and pub/sub
   subscriptions across all apps, each linkable back to the owning application.
 - **Read components & configurations** — read-only YAML viewers, enriched with which apps
@@ -352,7 +366,7 @@ marked `actorStateStore: "true"` (falling back to the first detected). Check:
   store by hand via the connection manager on the Components page.
 - Workflow keys are namespaced; the dashboard defaults to `default`. For another namespace, pass
   `--namespace <ns>`.
-- Only **Redis / PostgreSQL / SQLite** state stores can be opened directly. Apps whose store
+- Only **Redis / PostgreSQL / SQLite / MongoDB** state stores can be opened directly. Apps whose store
   the dashboard can't open (e.g. `state.in-memory`, or a Testcontainers app whose store lives
   inside the container) are served **via their sidecar's gRPC workflow API** instead — this
   requires Dapr ≥ 1.17 and only works while the sidecar is running.
@@ -365,10 +379,12 @@ Testcontainers-managed sidecar itself.
 ## Testing
 
 There are four suites: Go **unit** tests, Go **integration** tests, the **web**
-(frontend) tests, and an opt-in Go **e2e** suite. The unit, integration, and web suites are
-self-contained — no Docker or external services required (the integration tests run an
-in-process Redis via `miniredis` and a temporary SQLite database). The **e2e** suite drives a
-real `daprd` and is local-only — it skips automatically when Dapr is not installed (see below).
+(frontend) tests, and an opt-in Go **e2e** suite. The unit and web suites are self-contained.
+The integration suite runs its state-store and workflow tests against a temporary SQLite
+database plus real Redis, PostgreSQL, and MongoDB containers (via testcontainers-go), so it
+needs Docker or Podman for full coverage; without one, the container-backed tests skip. The
+**e2e** suite drives a real `daprd` and is local-only — it skips automatically when Dapr is not
+installed (see below).
 
 **Prerequisites:** Go ≥ 1.26 (Go tests) and Node.js 20 with `npm` (web tests).
 
@@ -393,9 +409,10 @@ go test -tags unit -race ./cmd/...  # one package, with the race detector
 (`make test-go` uses `gotestsum` for nicer output if it's installed, otherwise plain `go test`.)
 
 **Go integration tests** — gated by `//go:build integration`; they exercise the state-store and
-workflow read paths, the parsed sidecar `/v1.0/metadata`, and the full assembled HTTP server,
-against an in-process Redis (`miniredis`) and a temp SQLite DB, so no external services are
-needed. They run in CI but are not part of `make test`:
+workflow read paths (including a parity test of the workflow list/stats/detail against all four
+supported backends), the parsed sidecar `/v1.0/metadata`, and the full assembled HTTP server.
+Backends run as containers through testcontainers-go (skipped when no container runtime is
+available) alongside a temp SQLite DB. They run in CI but are not part of `make test`:
 
 ```sh
 make test-integration               # = go test -tags integration -race ./...
@@ -521,7 +538,8 @@ sidecars and state store.
 │  pkg/server      chi router + go:embed SPA                    │
 │  pkg/discovery   standalone.List() + /v1.0/metadata           │
 │  pkg/workflow    list / history / purge                       │
-│  pkg/statestore  client (redis / postgres / sqlite)           │
+│  pkg/state       state record listing / add / delete          │
+│  pkg/statestore  client (redis / postgres / sqlite / mongodb) │
 │  pkg/controlplane docker/podman inspect + lifecycle           │
 │  pkg/metadata    component metadata catalog                   │
 │  pkg/resources   component + configuration YAML loader        │
@@ -566,7 +584,7 @@ sidecars and state store.
   component YAML declared in test config is extracted from the container so it appears on the
   Components page. All sources are merged, so one failing never hides the others.
 - **Workflows** are read from the detected **state store backend** (Redis / PostgreSQL /
-  SQLite); a client is built from the auto-detected component YAML. When the dashboard cannot
+  SQLite / MongoDB); a client is built from the auto-detected component YAML. When the dashboard cannot
   open an app's store — Testcontainers apps (whose store lives inside the container,
   `state.in-memory` included), or any app when no store is openable — workflows are read live
   from the **sidecar's gRPC workflow API** (Dapr ≥ 1.17) instead, per app. Purge uses the

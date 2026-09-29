@@ -49,11 +49,16 @@ func TestAssembleResolvesSecretKeyRefAndServesWorkflow(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "secrets.json"),
 		[]byte(`{"sqlite-secret":{"conn":"`+dbPath+`"}}`), 0o600))
 
-	// local.file secret store component.
+	// local.file secret store component. multiValued is required so the
+	// store keeps "sqlite-secret" as a nested {"conn": ...} map instead of
+	// flattening it to a single "sqlite-secret:conn" key (components-contrib's
+	// default nested-separator behavior), matching this test's use of a
+	// secretKeyRef with a separate `key` field.
 	secretComp := "apiVersion: dapr.io/v1alpha1\nkind: Component\n" +
 		"metadata:\n  name: local-secrets\n" +
 		"spec:\n  type: secretstores.local.file\n  version: v1\n  metadata:\n" +
-		"  - name: secretsFile\n    value: secrets.json\n"
+		"  - name: secretsFile\n    value: secrets.json\n" +
+		"  - name: multiValued\n    value: \"true\"\n"
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "secrets-store.yaml"), []byte(secretComp), 0o644))
 
 	// State-store component: connectionString via secretKeyRef.

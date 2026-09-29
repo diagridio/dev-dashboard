@@ -86,6 +86,20 @@ describe('App shell', () => {
     expect(appDiv).not.toBeNull()
     expect(appDiv?.getAttribute('data-theme')).toBe('light')
   })
+
+  /**
+   * The theme also has to reach <html>. A <select> or <datalist> popup is drawn
+   * by the OS, outside the page, and the browser picks its light/dark
+   * appearance from the document root's color-scheme — an ancestor div cannot
+   * reach it. Without this mirror the dropdowns stay light in the dark theme.
+   */
+  it('mirrors the theme onto the document root', () => {
+    renderApp()
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+
+    fireEvent.click(screen.getByRole('button', { name: /toggle theme/i }))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  })
 })
 
 describe('Placeholder', () => {

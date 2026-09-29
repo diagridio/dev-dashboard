@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.26.3' }
+        with: { go-version: '1.26.7' }
       - run: go install gotest.tools/gotestsum@latest
       - run: test -z "$(gofmt -l .)"
       - run: go vet -tags unit ./...

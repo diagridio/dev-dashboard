@@ -92,6 +92,7 @@ All tokens are CSS custom properties. Reference them with `var(--name)`.
 | Token | Use |
 |---|---|
 | `--bg` | App background (behind cards) |
+| `--canvas` / `--canvas-text` | `html`/`body` only — the surface behind `.app`, visible through overscroll and the scrollbar gutter. Defined on `:root[data-theme=…]`, unlike every other token; keep `--canvas` equal to dark `--bg` (a styleguide test enforces it). Never use in a component — reach for `--bg`. |
 | `--surface` | Card / panel / table background |
 | `--surface-2` | Subtle raised fill: table headers, hover rows, chips, inputs |
 | `--raise` | Elevated control (active segment in `.segs`) |
@@ -254,6 +255,12 @@ if (error) return <div className="page">{HEADER}<p className="err">Error loading
 Tip: hoist a static `PAGE_HEADER` const (as `Applications.tsx` does) so every state
 shows the same header.
 
+Empty states may add one muted hint paragraph below the "nothing here" line. Keep
+that copy in `src/content/empty-states.yaml` (loaded by `src/lib/emptyState.ts`) and
+render it with `renderCopyLinks` (`src/lib/copy-links.tsx`), which turns its
+`[label](https://…)` markdown into `.celllink` external links — so wording and links
+can be edited without touching a component.
+
 ---
 
 ## 5. Component catalog
@@ -267,6 +274,8 @@ component fails the suite until the doc is updated.
 | Pattern | Pointer |
 |---|---|
 | Status → pill | `components/StatusPill.tsx` — status string → `.pill .s-*` + uppercased label. **Don't hand-map statuses.** |
+| Secret reference status → pill | `components/SecretStatusPill.tsx` — `SecretStatus` → `.pill .secref-*` + uppercased label, for a component's secret-reference resolution status. |
+| Timestamp table cell | `components/DateTimeCell.tsx` — a timestamp split into `.dt-date` + `.dt-time` spans so it sits on one line when there's room and stacks when the column is narrow. Falls back to a `.faint` em dash on missing/invalid input. Used by the Workflows and State tables. |
 | Modal dialog | `components/Modal.tsx` — focus-trapped shell (`.modal-backdrop` + `.card.modal-card`); accepts `initialFocusRef` (element focused on open) and `narrow` (the 420px confirm width). Traps/restores focus via `hooks/useModalFocus.ts` — reuse it, don't hand-roll traps. |
 | Confirmation dialog | `components/ConfirmDialog.tsx` — a narrow `Modal` with a Cancel + confirm footer. Cancel gets initial focus (Enter can't fire the action by accident); the confirm button is `.btn.danger` by default, or `.btn.primary` via `danger={false}` for non-destructive actions (Start/Restart). **Never use `window.confirm`** — every confirmation goes through this component. `components/ConfirmRemoveDialog.tsx` (workflow delete: mechanism summary + force checkbox) is the reference composition for a confirm with extra body content. |
 | Save/cancel form dialog | `components/form/DialogShell.tsx` — titled `Modal` with Save/Cancel footer + `duplicateNameError` name-collision guard; the builder dialogs are the reference usage. |
@@ -279,6 +288,7 @@ component fails the suite until the doc is updated.
 | Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh, whose dot is also the backend-offline indicator — never mount a per-page one), `components/ThemeToggle.tsx`, and the `↗ Share` button (opens `ShareDialog`). `components/CliDrawer.tsx` is mounted once in the `App.tsx` shell as a fixed right-edge overlay (outside `.body`) — like `RefreshControl` it's global; don't mount a per-page one. |
 | Share dialog | `components/ShareDialog.tsx` — a `narrow` `Modal` with an intro line, a read-only message-preview `<textarea>`, and a `.modal-actions` row of channel buttons: Copy (`.btn.primary` + `copyText`/toast, initial focus) and Email / X / LinkedIn / BlueSky (`.btn.ghost` links built by `lib/share.ts`). |
 | CLI command drawer | `components/CliDrawer.tsx` — right-edge overlay panel with a vertical `CLI` edge tab; open state persists via `lib/safeStorage.ts`. Its rows are `components/CliCommand.tsx` — a titled command with an optional docs `↗` link and a `⧉ Copy` `.copybtn`. Context-sensitive command sets and placeholder substitution come from `lib/cli.ts` (`getCliContent` / `resolvePlaceholders`). |
+| Busy indicator | `components/Spinner.tsx` — inline braille-dots spinner for in-progress text. Decorative only (`aria-hidden`): always pair it with a text label, inside a `role="status"` element (e.g. the remove dialog's busy state, the Workflows pager's "Updating…"). Renders nothing under `prefers-reduced-motion`, so the label alone carries the state. |
 | Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. |
 | Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx` → `<pre className="json">` / `<pre className="code">`. |
 
@@ -313,6 +323,7 @@ component fails the suite until the doc is updated.
 
 **Inline elements / badges**
 - `.pill .s-*` — status pill (use `StatusPill`).
+- `.pill .secref-*` — secret reference status pill (use `SecretStatusPill`).
 - `.health` + `.led.{ok,warn,bad}` — colored LED + label.
 - `.chip`, `.typechip`, `.appref`, `.dprchip`, `.rulebadge`, `.tag-int` — small
   mono badges for types, app refs, Dapr tags. **Link chip vs. info chip is a hard
@@ -328,13 +339,21 @@ component fails the suite until the doc is updated.
 - `.kebab` — the `⋯` row-actions glyph.
 
 **Controls**
-- `.btn` + `.btn.primary` / `.btn.ghost` / `.btn.danger` — buttons.
+- `.btn` + `.btn.primary` / `.btn.ghost` / `.btn.danger` — buttons. A gated action stays
+  `disabled` rather than hidden (see §6). Every variant has a `:disabled` style, enforced by a
+  styleguide test: the primary's accent fill recedes to `--surface-2` / `--faint`, and the
+  ghost and danger variants drop to `--faint` text on a `--line-soft` border. The mint and the
+  red are both "this action can be taken" signals, so neither survives being disabled.
   `.primary` = solid green affirmative action; `.danger` = red outline for
   destructive / disruptive actions (Stop / Remove / Force delete / Disconnect);
   `.ghost` = neutral outline.
 - `.tbtn` — topbar/secondary button (used for Back / View logs).
 - `.copybtn` (+ `.ok` state) — small copy button; pairs with `copyText` + toast.
-- `.search` (wraps an `<input>`), `.select` — filter inputs.
+- `.search` (wraps an `<input>`), `.select` — filter inputs. Inside `.filters`
+  a `.select` is capped at 220px with an ellipsis (give it a `title` with the
+  full selected value) so a long option can't squeeze the search box.
+- `.filters` — the filter bar; `.filters-sub` — an optional second row
+  directly under it for secondary controls such as `.childtoggle`.
 - `.segs` — segmented toggle group (`button[aria-pressed]`).
 - `.lvchip` — log-level toggle chips; `.followbtn` — log follow toggle.
 
@@ -344,6 +363,25 @@ component fails the suite until the doc is updated.
 - `.field` — a label-over-control row (`grid`, `gap`); `.field > label` is the muted caption.
   `.req` marks a required-field asterisk; `.field-err` is the inline error line under a control;
   `.field-row` lays out a control plus adjacent element horizontally.
+- `:disabled` — `.inp` and `.select` share one rule (`--surface-2` fill, `--faint` text,
+  `--line-soft` border, default cursor) so an input and a dropdown beside it recede together
+  and match the disabled buttons. A styleguide test requires it. Prefer omitting a control the
+  user can't use at all over rendering it disabled (§7 capability gating); disable it when it
+  is merely unavailable *right now* — a field waiting on a prior choice.
+
+**Dropdowns** — every `<select>` takes one of exactly two variants, and both share the
+`--chevron` arrow (`appearance: none`, so the OS arrow never shows): `.select` in filter bars
+and toolbars, `select.inp` in form fields. A styleguide test enforces the pair. A free-text
+field with suggestions is an `<input list>` + `<datalist>` on `.inp` — used for the State
+page's New record app id, where a prefix that has no records yet must still be typeable.
+
+The **popup** either one opens is drawn by the OS *outside the page*, so no CSS reaches inside
+it. `color-scheme` is the only control, and the browser reads it from the **document root** —
+which is why `App.tsx` mirrors `data-theme` onto `<html>` and `theme.css` carries
+`:root[data-theme=…] { color-scheme: … }`. The `.app[data-theme=…]` declaration covers in-page
+control internals but cannot reach an OS-drawn popup; putting it only there leaves the
+dropdown light (or system-grey) in the dark theme. The same switch governs checkbox glyphs and
+scrollbars.
 
 **Feedback**
 - `.toast` (`.show`) — driven by `useToast`.
@@ -496,6 +534,19 @@ copy/download buttons per builder.
   empty cell.
 - **Copy-to-clipboard:** `.copybtn` (or click-to-copy on a `.vv.mono`) → `copyText()`
   → `toast.show('… copied')`. The `⧉ Copy` label is the convention.
+- **Inline page banners:** a non-blocking message above the content — a load error
+  the page degrades around, or the result of a bulk action — is a `.banner`, with
+  `.danger` (failure) or `.ok` (success) for the text color; the neutral `.banner`
+  alone is informational. A dismiss control inside one is a `.banner-dismiss`
+  (an underlined, inherit-colored button). Used by the Workflows and State pages.
+  ```tsx
+  <div className={failed > 0 ? 'banner danger' : 'banner ok'}>
+    Removed {ok} workflow{ok !== 1 ? 's' : ''}{failed > 0 ? `, ${failed} failed` : ''}.{' '}
+    <button className="banner-dismiss" onClick={dismiss}>Dismiss</button>
+  </div>
+  ```
+  A banner never replaces the page chrome — the selector and filters stay usable so
+  the user can switch to a working store.
 - **Clickable card rows:** `table.t.click` (or `table.wf`) handles cursor + hover;
   navigate from the row's `onClick`.
 

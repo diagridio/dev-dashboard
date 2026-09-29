@@ -16,7 +16,9 @@ import (
 	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/secrets"
 	"github.com/diagridio/dev-dashboard/pkg/server"
+	"github.com/diagridio/dev-dashboard/pkg/state"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/workflow"
 )
@@ -24,6 +26,7 @@ import (
 // Compile-time interface assertions.
 var _ server.StoreRegistry = (*reconciler)(nil)
 var _ server.WorkflowBackend = (*reconciler)(nil)
+var _ server.StateBackend = (*reconciler)(nil)
 
 // connectTimeout bounds a single state-store connection attempt during reconcile.
 const connectTimeout = 15 * time.Second
@@ -46,6 +49,7 @@ type reconciler struct {
 	pool           *connPool
 	degraded       storeEntry
 	sidecarPool    *workflow.SidecarPool
+	secretsSvc     secrets.Service
 	// composeEnv returns the compose endpoint/mount context (nil = no compose).
 	composeEnv func() discovery.ComposeEnv
 	// extraResPaths are appended to the reconciler's resource scan paths on every
@@ -70,7 +74,7 @@ func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeD
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return &reconciler{
+	rc := &reconciler{
 		baseCtx:        ctx,
 		apps:           apps,
 		namespace:      namespace,
@@ -86,6 +90,10 @@ func newReconciler(ctx context.Context, apps discovery.Service, namespace, homeD
 		degraded:    buildStoreEntry(nil, namespace, client, apps, nil),
 		sidecarPool: workflow.NewSidecarPool(),
 	}
+	// secrets.New closes over rc.Paths (the full resource path set), so it must
+	// be built after rc exists — it cannot live inside the struct literal above.
+	rc.secretsSvc = secrets.New(rc.Paths)
+	return rc
 }
 
 // translate rewrites a compose-project store's connection metadata to
@@ -122,6 +130,46 @@ func identity(c *statestore.Component) string {
 	return c.Name + "|" + c.Type + "|" + statestore.ConnInfo(*c)
 }
 
+// resolveComponentSecrets returns c.Metadata with every secretKeyRef applied,
+// plus a one-sentence diagnostic naming the first unresolved reference (empty
+// when everything resolved). The diagnostic is what the connections panel and
+// the State page show instead of an opaque dial failure.
+func resolveComponentSecrets(svc secrets.Service, c statestore.Component) (map[string]string, string) {
+	out := make(map[string]string, len(c.Metadata)+len(c.SecretRefs))
+	for k, v := range c.Metadata {
+		out[k] = v
+	}
+	if len(c.SecretRefs) == 0 || svc == nil {
+		return out, ""
+	}
+	// Sort field names so the reported issue is deterministic across runs.
+	fields := make([]string, 0, len(c.SecretRefs))
+	for f := range c.SecretRefs {
+		fields = append(fields, f)
+	}
+	sort.Strings(fields)
+
+	var issue string
+	for _, field := range fields {
+		ref := c.SecretRefs[field]
+		kind := ref.Kind
+		if kind == "" {
+			kind = "secretKeyRef" // zero value: refs built before envRef support
+		}
+		res := svc.Resolve(context.Background(), c.SecretStore, secrets.Ref{
+			Kind: kind, Name: ref.Name, Key: ref.Key,
+		})
+		if res.Status == secrets.StatusResolved {
+			out[field] = res.Value
+			continue
+		}
+		if issue == "" {
+			issue = fmt.Sprintf("%s unresolved (%s): %s", field, res.Status, res.Detail)
+		}
+	}
+	return out, issue
+}
+
 // reconcile is NOT safe for concurrent use: callers MUST ensure only one
 // reconcile runs at a time (the reconcilingApps decorator's single-flight guard
 // and the synchronous boot seed are the only callers). It re-derives state from
@@ -131,19 +179,29 @@ func identity(c *statestore.Component) string {
 func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 	log := slog.Default().With("component", "reconciler")
 	resPaths, scanPaths, loaded, appPaths := derivePaths(apps, rc.homeDir, rc.stateStorePath, rc.extraResPaths)
+
+	// Publish resPaths before detecting/resolving secrets below: rc.secretsSvc
+	// closes over rc.Paths, which reads rc.resPaths. Without this, the
+	// detect/resolve loop below would run against last cycle's paths — nil on
+	// the very first, synchronous boot reconcile — so secret resolution would
+	// find zero stores. Bail out under the closed guard before doing any work.
+	rc.mu.Lock()
+	if rc.closed {
+		rc.mu.Unlock()
+		return
+	}
+	rc.resPaths = resPaths
+	rc.mu.Unlock()
+
 	detected, err := statestore.Detect(scanPaths)
 	if err != nil {
 		log.Warn("state-store detection failed", "err", err)
 	}
-	secretStores, err := statestore.DetectSecretStores(scanPaths)
-	if err != nil {
-		log.Warn("secret-store detection failed", "err", err)
-	}
 	for i := range detected {
-		resolved, unresolved := statestore.ResolveSecrets(detected[i], secretStores)
+		resolved, issue := resolveComponentSecrets(rc.secretsSvc, detected[i])
 		detected[i].Metadata = resolved
-		if len(unresolved) > 0 {
-			log.Warn("unresolved secretKeyRef metadata", "store", detected[i].Name, "keys", unresolved)
+		if issue != "" {
+			log.Warn("unresolved secret reference", "store", detected[i].Name, "issue", issue)
 		}
 		// Auto-persist every detected store as a path-ref. Persist the YAML path,
 		// not the resolved metadata, so no secrets land in the registry file.
@@ -170,7 +228,9 @@ func (rc *reconciler) reconcile(apps []discovery.Instance, fp string) {
 		rc.mu.Unlock()
 		return
 	}
-	rc.resPaths, rc.electedReg, rc.fp = resPaths, newReg, fp
+	// resPaths was already published above, before secret resolution ran; only
+	// electedReg/fp are new here.
+	rc.electedReg, rc.fp = newReg, fp
 	rc.mu.Unlock()
 
 	// Pre-warm the elected active store through the pool. The pool retains it;
@@ -230,36 +290,33 @@ func (rc *reconciler) activeComponent() *statestore.Component {
 	return rc.electedReg.active()
 }
 
-// autoDetection is a per-call memo of Detect/DetectSecretStores results over a
-// set of auto-entry paths, so Stores() walks the YAML files once per call
-// instead of once per auto entry. It is built, used, and discarded within a
-// single call — no cross-request caching.
+// autoDetection is a per-call memo of Detect results over a set of auto-entry
+// paths, so Stores() walks the YAML files once per call instead of once per
+// auto entry. It is built, used, and discarded within a single call — no
+// cross-request caching.
 type autoDetection struct {
-	components   []statestore.Component
-	secretStores []statestore.SecretStore
+	components []statestore.Component
 }
 
-// detectAuto runs component + secret-store detection over paths once.
+// detectAuto runs component detection over paths once.
 func detectAuto(paths []string, log *slog.Logger) *autoDetection {
 	detected, err := statestore.Detect(paths)
 	if err != nil {
 		log.Warn("state-store detection failed", "paths", paths, "err", err)
 	}
-	secretStores, err := statestore.DetectSecretStores(paths)
-	if err != nil {
-		log.Warn("secret-store detection failed", "paths", paths, "err", err)
-	}
-	return &autoDetection{components: detected, secretStores: secretStores}
+	return &autoDetection{components: detected}
 }
 
 // componentForEntry builds the statestore.Component for a registry entry.
 // Manual entries use their inline metadata; auto entries are matched against
 // det (a detection covering the entry's path — pass nil to detect just this
 // entry's path) and 2a-resolved. A missing/unreadable YAML yields a bare
-// component (connect will error).
-func (rc *reconciler) componentForEntry(e ConnEntry, det *autoDetection) statestore.Component {
+// component (connect will error). The second return is the secret-resolution
+// issue sentence (empty when everything resolved, or the entry is manual, or
+// the YAML was missing) — see resolveComponentSecrets.
+func (rc *reconciler) componentForEntry(e ConnEntry, det *autoDetection) (statestore.Component, string) {
 	if e.Source == SourceManual {
-		return rc.translate(statestore.Component{Name: e.Name, Type: e.Type, Metadata: e.Metadata})
+		return rc.translate(statestore.Component{Name: e.Name, Type: e.Type, Metadata: e.Metadata}), ""
 	}
 	log := slog.Default().With("component", "reconciler")
 	if det == nil {
@@ -270,15 +327,15 @@ func (rc *reconciler) componentForEntry(e ConnEntry, det *autoDetection) statest
 		if c.Path != e.Path && !(c.Name == e.Name && underScanPath(c.Path, e.Path)) {
 			continue
 		}
-		resolved, unresolved := statestore.ResolveSecrets(c, det.secretStores)
-		if len(unresolved) > 0 {
-			log.Warn("unresolved secretKeyRef metadata", "store", c.Name, "keys", unresolved)
+		resolved, issue := resolveComponentSecrets(rc.secretsSvc, c)
+		if issue != "" {
+			log.Warn("unresolved secret reference", "store", c.Name, "issue", issue)
 		}
 		c.Metadata = resolved
-		return rc.translate(c)
+		return rc.translate(c), issue
 	}
 	// YAML missing/unreadable: return a bare component (connect will error).
-	return statestore.Component{Name: e.Name, Type: e.Type, Path: e.Path}
+	return statestore.Component{Name: e.Name, Type: e.Type, Path: e.Path}, ""
 }
 
 // underScanPath reports whether compPath (always absolute — Detect abs-olutes
@@ -305,7 +362,8 @@ func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 	}
 	for _, e := range rc.registry.List() {
 		if e.ID == id {
-			return rc.componentForEntry(e, nil), true
+			comp, _ := rc.componentForEntry(e, nil)
+			return comp, true
 		}
 	}
 	return statestore.Component{}, false
@@ -349,16 +407,17 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 		if e.Dismissed {
 			continue
 		}
-		comp := rc.componentForEntry(e, det)
+		comp, issue := rc.componentForEntry(e, det)
 		out = append(out, server.StoreInfo{
-			ID:         e.ID,
-			Name:       e.Name,
-			Type:       e.Type,
-			Source:     e.Source,
-			Path:       e.Path,
-			Active:     identity(&comp) == activeID && activeID != "",
-			Connection: statestore.ConnInfo(comp),
-			UpdatedAt:  e.UpdatedAt,
+			ID:          e.ID,
+			Name:        e.Name,
+			Type:        e.Type,
+			Source:      e.Source,
+			Path:        e.Path,
+			Active:      identity(&comp) == activeID && activeID != "",
+			Connection:  statestore.ConnInfo(comp),
+			UpdatedAt:   e.UpdatedAt,
+			SecretIssue: issue,
 		})
 	}
 	sortStores(out)
@@ -472,29 +531,63 @@ func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
 	}
 }
 
-// baseServiceFor resolves the store-backed service exactly as ServiceFor
-// historically did. storeUp reports whether a store actually opened (false
-// for the degraded no-store entry and the unreachable service).
-func (rc *reconciler) baseServiceFor(id string) (svc workflow.Service, rem server.WorkflowRemover, storeUp, known bool) {
-	var comp statestore.Component
+// resolveComponent maps a registry entry id to the component to open. degraded
+// reports the no-store case (no active store elected); known is false for an
+// unrecognised id.
+func (rc *reconciler) resolveComponent(id string) (comp statestore.Component, degraded, known bool) {
 	if id == "" {
 		active := rc.activeComponent()
 		if active == nil {
-			return rc.degraded.svc, rc.degraded.rem, false, true
+			return statestore.Component{}, true, true
 		}
 		comp = *active
 	} else {
 		c, ok := rc.componentFor(id)
 		if !ok {
-			return nil, nil, false, false
+			return statestore.Component{}, false, false
 		}
 		comp = c
 	}
-
 	// Apply compose address translation (no-op for non-compose stores) so the
 	// pool key matches the pre-warmed translated entry and the dial uses the
 	// host-reachable address rather than the in-container service name.
-	comp = rc.translate(comp)
+	return rc.translate(comp), false, true
+}
+
+// StateFor satisfies server.StateBackend.
+//
+// Unlike ServiceFor there is no sidecar composition: Dapr's HTTP State API
+// cannot enumerate keys, so a store that will not open has no fallback and the
+// unreachable service is the final answer.
+func (rc *reconciler) StateFor(id string) (state.Service, bool) {
+	comp, degraded, known := rc.resolveComponent(id)
+	if !known {
+		return nil, false
+	}
+	if degraded {
+		return rc.degraded.state, true
+	}
+	// Derive from baseCtx so shutdown aborts an in-flight dial here too.
+	octx, cancel := context.WithTimeout(rc.baseCtx, connectTimeout)
+	defer cancel()
+	e, err := rc.pool.openOrGet(octx, comp)
+	if err != nil {
+		return state.NewUnreachable(comp.Name, statestore.ConnInfo(comp)), true
+	}
+	return e.state, true
+}
+
+// baseServiceFor resolves the store-backed service exactly as ServiceFor
+// historically did. storeUp reports whether a store actually opened (false
+// for the degraded no-store entry and the unreachable service).
+func (rc *reconciler) baseServiceFor(id string) (svc workflow.Service, rem server.WorkflowRemover, storeUp, known bool) {
+	comp, degraded, known := rc.resolveComponent(id)
+	if !known {
+		return nil, nil, false, false
+	}
+	if degraded {
+		return rc.degraded.svc, rc.degraded.rem, false, true
+	}
 
 	// Derive from baseCtx so shutdown aborts an in-flight dial here too.
 	octx, cancel := context.WithTimeout(rc.baseCtx, connectTimeout)

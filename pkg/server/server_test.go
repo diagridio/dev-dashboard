@@ -136,3 +136,21 @@ func TestRouterInjectsTelemetryFlag(t *testing.T) {
 	_, body := get(t, h, "/")
 	require.Contains(t, body, "window.__DASH_TELEMETRY_ENABLED__=true;")
 }
+
+func TestStateRouteGatedOnCapability(t *testing.T) {
+	// State off: the route must not exist at all — absent routes are the real
+	// boundary; the capability flag is only advisory UX for the SPA.
+	off := NewRouter(Options{
+		DistFS:       fstest.MapFS{"index.html": {Data: []byte("shell")}},
+		Version:      version.Info{Version: "test"},
+		Apps:         newFakeApps(),
+		Backend:      newFakeBackend(fakeWF{}),
+		Capabilities: &Capabilities{},
+	})
+	// get() sets a loopback Host; a bare httptest request defaults to
+	// example.com, which requestGuard rejects with 403 before routing.
+	res, _ := get(t, off, "/api/state")
+	require.Equal(t, http.StatusNotFound, res.StatusCode)
+
+	require.True(t, FullCapabilities().State, "host mode enables the State page")
+}

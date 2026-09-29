@@ -7,6 +7,7 @@ import (
 
 	"github.com/dapr/durabletask-go/api/protos"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -232,4 +233,39 @@ func TestDecodeExecutionCompletedNoFailure(t *testing.T) {
 	require.Nil(t, last.FailureDetails)
 	require.NotNil(t, last.Output)
 	require.Equal(t, `"done"`, *last.Output)
+}
+
+func TestHistoryLength(t *testing.T) {
+	pb := func(n uint64) []byte {
+		b, err := proto.Marshal(&protos.BackendWorkflowStateMetadata{HistoryLength: n, Generation: 1})
+		require.NoError(t, err)
+		return b
+	}
+	cases := []struct {
+		name   string
+		meta   []byte
+		wantN  uint64
+		wantOK bool
+	}{
+		{"proto", pb(12), 12, true},
+		{"proto zero length", pb(0), 0, false},
+		{"proto at bound", pb(maxHistoryEntries), maxHistoryEntries, true},
+		{"proto over bound", pb(maxHistoryEntries + 1), maxHistoryEntries + 1, false},
+		{"legacy json", []byte(`{"InboxLength":0,"HistoryLength":3,"Generation":2}`), 3, true},
+		{"legacy json lower-case keys", []byte(`{"historyLength":4}`), 4, true},
+		{"empty json object", []byte(`{}`), 0, false},
+		{"json-looking garbage", []byte(`{not json`), 0, false},
+		{"nil", nil, 0, false},
+		{"empty", []byte{}, 0, false},
+		{"binary garbage", []byte{0xff, 0xff, 0xff}, 0, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			n, ok := historyLength(c.meta)
+			require.Equal(t, c.wantOK, ok)
+			if c.wantOK {
+				require.Equal(t, c.wantN, n)
+			}
+		})
+	}
 }

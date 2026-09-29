@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/diagridio/dev-dashboard/pkg/secrets"
 	"sigs.k8s.io/yaml"
 )
 
@@ -25,6 +26,11 @@ func splitYAMLDocs(data []byte) [][]byte {
 	return docs
 }
 
+// rawComponent captures only the fields Detect needs to filter and label a
+// component. Secret references themselves (secretKeyRef AND envRef) are
+// parsed separately via secrets.ParseRefs against the same YAML document, so
+// this struct's own Spec.Metadata entries never need a *Ref field: it only
+// has to tell a plain value apart from "this name is a reference, skip it".
 type rawComponent struct {
 	Kind     string `json:"kind"`
 	Metadata struct {
@@ -34,17 +40,10 @@ type rawComponent struct {
 		Type     string `json:"type"`
 		Version  string `json:"version"`
 		Metadata []struct {
-			Name         string `json:"name"`
-			Value        string `json:"value"`
-			SecretKeyRef struct {
-				Name string `json:"name"`
-				Key  string `json:"key"`
-			} `json:"secretKeyRef"`
+			Name  string `json:"name"`
+			Value string `json:"value"`
 		} `json:"metadata"`
 	} `json:"spec"`
-	Auth struct {
-		SecretStore string `json:"secretStore"`
-	} `json:"auth"`
 }
 
 // Detect finds state-store components under the given files or directories.
@@ -80,21 +79,30 @@ func Detect(paths []string) ([]Component, error) {
 				if rc.Kind != "Component" || !strings.HasPrefix(rc.Spec.Type, "state.") {
 					continue
 				}
+				// secrets.ParseRefs recognizes both secretKeyRef AND envRef against
+				// the same document; using it here (rather than a second local
+				// secretKeyRef-only parse) is what makes envRef visible on the
+				// state-store path at all — previously only pkg/secrets/pkg/resources
+				// saw it, so the Components page reported "resolved" while the state
+				// dial silently received an empty credential.
+				storeName, parsedRefs := secrets.ParseRefs(doc)
 				md := make(map[string]string, len(rc.Spec.Metadata))
 				var refs map[string]SecretRef
 				for _, m := range rc.Spec.Metadata {
-					if m.SecretKeyRef.Name != "" {
-						if refs == nil {
-							refs = make(map[string]SecretRef)
-						}
-						refs[m.Name] = SecretRef{Name: m.SecretKeyRef.Name, Key: m.SecretKeyRef.Key}
+					if _, isRef := parsedRefs[m.Name]; isRef {
 						continue
 					}
 					md[m.Name] = m.Value
 				}
+				for name, r := range parsedRefs {
+					if refs == nil {
+						refs = make(map[string]SecretRef)
+					}
+					refs[name] = SecretRef{Kind: r.Kind, Name: r.Name, Key: r.Key}
+				}
 				out = append(out, Component{
 					Name: rc.Metadata.Name, Type: rc.Spec.Type, Version: rc.Spec.Version,
-					Metadata: md, SecretRefs: refs, SecretStore: rc.Auth.SecretStore, Path: absPath,
+					Metadata: md, SecretRefs: refs, SecretStore: storeName, Path: absPath,
 				})
 			}
 			return nil

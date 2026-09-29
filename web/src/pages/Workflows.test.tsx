@@ -1,7 +1,7 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider, MemoryRouter } from 'react-router-dom'
-import { http, HttpResponse } from 'msw'
+import { http, HttpResponse, delay } from 'msw'
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { QueryClient, focusManager } from '@tanstack/react-query'
 import { server } from '../test/setup'
@@ -409,6 +409,66 @@ describe('Workflows', () => {
     const select = (await screen.findByTestId('app-select')) as HTMLSelectElement
     await waitFor(() => expect(select.value).toBe('pr-digest'))
   })
+
+  describe('while a new filter loads', () => {
+    function slowFailedHandler() {
+      return http.get('/api/workflows', async ({ request }) => {
+        const status = new URL(request.url).searchParams.get('status')
+        if (status === 'Failed') {
+          await delay(300)
+          return HttpResponse.json({ items: [{ appId: 'order', instanceId: 'def', name: 'W', status: 'Failed' }] })
+        }
+        return HttpResponse.json({
+          items: [{ appId: 'order', instanceId: 'abc', name: 'W', status: 'Running' }],
+          nextToken: 'tok',
+        })
+      })
+    }
+
+    it('keeps the previous rows and shows Updating…', async () => {
+      server.use(slowFailedHandler())
+      renderAt()
+      await screen.findByRole('link', { name: 'abc' })
+      await userEvent.click(screen.getByRole('button', { name: /^Failed/ }))
+      expect(screen.getByRole('link', { name: 'abc' })).toBeInTheDocument()
+      expect(screen.getByTestId('list-updating')).toHaveTextContent('Updating…')
+      await screen.findByRole('link', { name: 'def' })
+      expect(screen.queryByTestId('list-updating')).not.toBeInTheDocument()
+    })
+
+    it('disables the pager while rows are placeholders', async () => {
+      server.use(slowFailedHandler())
+      renderAt()
+      await screen.findByRole('link', { name: 'abc' })
+      expect(screen.getByRole('button', { name: 'Next →' })).toBeEnabled()
+      await userEvent.click(screen.getByRole('button', { name: /^Failed/ }))
+      expect(screen.getByRole('button', { name: 'Next →' })).toBeDisabled()
+    })
+
+    it('does not let placeholder rows be selected', async () => {
+      server.use(slowFailedHandler())
+      renderAt()
+      await screen.findByRole('link', { name: 'abc' })
+      await userEvent.click(screen.getByRole('button', { name: /^Failed/ }))
+      const cbx = screen.getByRole('checkbox', { name: 'Select abc' })
+      await userEvent.click(cbx)
+      expect(cbx).toHaveAttribute('aria-checked', 'false')
+    })
+  })
+
+  it('shows … in the status tabs until stats load', async () => {
+    server.use(
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/stats', async () => {
+        await delay('infinite')
+        return HttpResponse.json({ counts: {}, total: 0 })
+      }),
+    )
+    renderAt()
+    const all = await screen.findByRole('button', { name: /^All/ })
+    expect(all).toHaveTextContent('All …')
+    expect(screen.getByRole('button', { name: /^Running/ })).toHaveTextContent('Running …')
+  })
 })
 
 describe('Workflows page — selection reset', () => {
@@ -698,6 +758,27 @@ describe('Workflows page — child workflows toggle', () => {
     await waitFor(() => expect(urls.some((u) => u.includes('includeChildren=false'))).toBe(true))
     await waitFor(() => expect(statsUrls.some((u) => u.includes('includeChildren=false'))).toBe(true))
   })
+
+  it('places the child-workflow toggle on its own row below the filters', async () => {
+    server.use(http.get('/api/workflows', () => HttpResponse.json({ items: [] })))
+    const { container } = renderAt()
+    const toggle = await screen.findByLabelText('Show child workflows')
+    const filters = container.querySelector('.filters')
+    expect(filters).not.toBeNull()
+    expect(filters).toContainElement(screen.getByRole('textbox', { name: 'Search' }))
+    expect(filters).not.toContainElement(toggle)
+  })
+
+  it('shows the full selected app name as the app dropdown tooltip', async () => {
+    const longApp = 'a-very-long-application-name-that-would-squeeze-the-search-box'
+    server.use(
+      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows/appids', () => HttpResponse.json([longApp])),
+    )
+    renderAt(`/workflows?app=${longApp}`)
+    const select = await screen.findByTestId('app-select')
+    await waitFor(() => expect(select).toHaveAttribute('title', longApp))
+  })
 })
 
 describe('Workflows page — store selector', () => {
@@ -867,6 +948,36 @@ describe('Workflows page — store selector', () => {
     // The purge request must target the store the page is scoped to,
     // not fall back to the server's active store.
     await waitFor(() => expect(capturedStore).toBe('statestore-b'))
+  })
+
+  it('keeps the remove dialog open and busy until the purge response arrives', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => {
+      release = r
+    })
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(twoStores)),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({ items: [{ appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Running', createdAt: '2026-06-29T10:00:00Z' }] }),
+      ),
+      http.post('/api/workflows/purge', async () => {
+        await gate
+        return HttpResponse.json([{ instanceId: 'abc', mechanism: 'purge', ok: true }])
+      }),
+    )
+    renderAt()
+    await screen.findByRole('link', { name: 'abc' })
+    await userEvent.click(document.querySelectorAll('tbody .cbx:not(.on)')[0])
+    await userEvent.click(document.querySelector('[data-cy="bulk-remove"]') as HTMLElement)
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    await userEvent.click(document.querySelector('[data-cy="confirm-remove"]') as HTMLElement)
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Removing 1 workflow…'))
+    expect(document.querySelector('[data-cy="confirm-remove"]')).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+
+    release()
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('collapses duplicate-path stores (same name+type+connection) into one option, showing the active one', async () => {

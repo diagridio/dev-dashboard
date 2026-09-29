@@ -9,11 +9,28 @@
   --sans: "Public Sans Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --sbw: 240px; /* sidebar width; .collapsed → 44px */
   --primary: #0BDDA3;
+  /* Dropdown chevron, shared by .select and select.inp. A neutral gray that
+     reads on both themes, so it needs no per-theme override. */
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
+
+/* Native control popups — the list a <select> or a <datalist> opens — are drawn
+   by the OS outside the page, and the browser takes their appearance from the
+   DOCUMENT ROOT's color-scheme; a themed ancestor div cannot reach them. App.tsx
+   mirrors data-theme onto <html> for exactly these two rules. */
+/* --canvas is what html/body paint: the .app div covers the viewport, but the
+   canvas still shows through the macOS rubber-band overscroll and the scrollbar
+   gutter. The dark value repeats .app[data-theme="dark"]'s --bg on purpose —
+   .app must stay self-themed even when rendered without the root attribute (a
+   component test, say) — and a styleguide test keeps the two from drifting. */
+:root[data-theme="dark"] { color-scheme: dark; --canvas: #161918; --canvas-text: #F8F8F8; }
+:root[data-theme="light"] { color-scheme: light; --canvas: #F8FBFB; --canvas-text: #212B36; }
 
 html, body, #root { height: 100%; margin: 0; }
 body {
-  background: #F8FBFB; color: #212B36;
+  /* Fallbacks cover the tick before App.tsx mirrors the theme onto <html>;
+     they match the light theme, which is also getTheme()'s default. */
+  background: var(--canvas, #F8FBFB); color: var(--canvas-text, #212B36);
   font-family: var(--sans);
   -webkit-font-smoothing: antialiased;
 }
@@ -34,6 +51,10 @@ body {
 }
 
 .app[data-theme="dark"] {
+  /* Browser-drawn control chrome — the popup a <select> or a datalist opens,
+     checkbox glyphs, scrollbars — is unreachable by CSS; color-scheme is the
+     only switch. Without it those popups stay light in the dark theme. */
+  color-scheme: dark;
   /* Catalyst-aligned green-tinted dark surfaces */
   --bg: #161918; --surface: #1C1F1E; --surface-2: #232625; --raise: #2B2E2D;
   --line: #373A39; --line-soft: #262928;
@@ -49,6 +70,7 @@ body {
 }
 
 .app[data-theme="light"] {
+  color-scheme: light;
   --bg: color-mix(in srgb, var(--accent-bright) 3%, #FFFFFF); --surface: #FFFFFF; --surface-2: #F9FAFB; --raise: #FFFFFF;
   --line: #DFE3E8; --line-soft: #ECEFF2;
   --text: #212B36; --muted: #637381; --faint: #919EAB;
@@ -189,6 +211,10 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .s-term { background: var(--term-bg); color: var(--term-fg); }
 .s-susp { background: var(--susp-bg); color: var(--susp-fg); }
 .s-pend { background: var(--pend-bg); color: var(--pend-fg); }
+.secref-ok { background: var(--done-bg); color: var(--done-fg); }
+.secref-warn { background: var(--pend-bg); color: var(--pend-fg); }
+.secref-err { background: var(--fail-bg); color: var(--fail-fg); }
+.cn-secretwarn { color: var(--fail-fg); font-size: 11px; }
 .health { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; }
 .health .led { width: 8px; height: 8px; border-radius: 50%; }
 .led.ok { background: var(--ok-bright); }
@@ -216,7 +242,11 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .stat .n { font-family: var(--mono); font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
 .stat .l { font-family: var(--mono); font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
 .stat .n.bad { color: var(--fail-fg); }
-.select { font: inherit; font-size: 12.5px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 30px 7px 11px; cursor: pointer; appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; background-size: 10px; }
+/* The one dropdown chevron. Shared by both select variants — .select (compact,
+   filter bars) and select.inp (full-width, form fields) — so every dropdown in
+   the app carries the same arrow instead of the OS one. */
+.select, select.inp { cursor: pointer; appearance: none; -webkit-appearance: none; -moz-appearance: none; background-image: var(--chevron); background-repeat: no-repeat; background-position: right 10px center; background-size: 10px; padding-right: 30px; }
+.select { font: inherit; font-size: 12.5px; color: var(--text); background-color: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 30px 7px 11px; }
 .refresh-compact { display: inline-flex; align-items: center; gap: 7px; }
 .beatbtn { display: inline-flex; align-items: center; justify-content: center; padding: 5px; background: transparent; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
 .beatbtn:hover { border-color: var(--faint); }
@@ -227,14 +257,24 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 @keyframes beat-offline { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--fail-fg) 50%, transparent); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 .offline-label { color: var(--fail-fg); font-size: 12px; white-space: nowrap; }
 .select.compact { padding: 4px 26px 4px 8px; font-size: 12px; border-radius: 8px; background-position: right 8px center; }
-.search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; color: var(--faint); font-size: 13px; min-width: 170px; flex: 1; }
-.search input { flex: 1; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; }
+.search { display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; color: var(--faint); font-size: 13px; min-width: 240px; flex: 1; }
+/* min-width: 0 lets the input shrink inside the flex row; the ellipsis keeps a
+   long placeholder (or value) inside the box on narrow widths. */
+.search input { flex: 1; min-width: 0; text-overflow: ellipsis; background: transparent; border: none; outline: none; color: var(--text); font: inherit; font-size: 13px; }
 .childtoggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); cursor: pointer; }
 .btn { font: inherit; font-size: 12.5px; font-weight: 600; border-radius: 8px; padding: 7px 13px; cursor: pointer; border: 1px solid transparent; text-decoration: none; }
 .btn.primary { background: var(--accent-bright); color: #06231a; border-color: transparent; }
 .btn.ghost { background: transparent; color: var(--text); border-color: var(--line); }
-.btn.ghost:disabled { color: var(--faint); border-color: var(--line-soft); cursor: default; }
+/* The accent fill is the "this action is available" signal, so a gated primary
+   (every dialog Save, every wizard Continue) drops it until it is valid and
+   only then turns green. */
+.btn.primary:disabled { background: var(--surface-2); color: var(--faint); border-color: var(--line-soft); }
+.btn.ghost:disabled { color: var(--faint); border-color: var(--line-soft); }
+.btn:disabled { cursor: default; }
 .btn.danger { background: transparent; color: var(--fail-fg); border-color: color-mix(in srgb, var(--fail-fg) 45%, transparent); }
+/* Same treatment as a disabled ghost: the red, like the mint, is a signal that
+   the action can be taken. */
+.btn.danger:disabled { color: var(--faint); border-color: var(--line-soft); }
 .btn:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .copybtn { font: inherit; font-family: var(--mono); font-size: 10.5px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
 .copybtn:hover { color: var(--text); border-color: var(--faint); }
@@ -243,6 +283,11 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px); background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 9px 15px; font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 50; }
 .toast .d { width: 8px; height: 8px; border-radius: 50%; background: var(--done-fg); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.banner { margin-bottom: 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; color: var(--text); }
+.banner.danger { color: var(--fail-fg); }
+.banner.ok { color: var(--accent-bright); }
+.banner-dismiss { font: inherit; color: inherit; background: none; border: none; padding: 0; text-decoration: underline; cursor: pointer; }
+.banner-dismiss:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .hint { font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: center; margin-top: 14px; }
 .none { color: var(--faint); }
 .hidden { display: none !important; }
@@ -321,6 +366,12 @@ pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; 
 .clock .lbl2 { font-size: 8.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .85; }
 .ctrlset { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+/* A native <select> is as wide as its longest option; cap it so one long app
+   name can't squeeze the search box. The open list still shows full names. */
+.filters .select { max-width: 220px; text-overflow: ellipsis; }
+/* Secondary filter row (e.g. toggles) directly under .filters. */
+.filters:has(+ .filters-sub) { margin-bottom: 8px; }
+.filters-sub { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .segs { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 9px; padding: 3px; }
 .segs button { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: none; padding: 5px 11px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; }
 .segs button .n { font-family: var(--mono); font-size: 10.5px; opacity: .8; }
@@ -338,6 +389,24 @@ table.wf tbody tr:last-child td { border-bottom: none; }
 .appcell { display: inline-flex; align-items: center; gap: 6px; }
 .dprchip { font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--dapr); color: var(--dapr); }
 .cbx { width: 14px; height: 14px; border: 1.5px solid var(--faint); border-radius: 4px; display: inline-block; vertical-align: middle; }
+
+/* ---- State page table ---- */
+/* Fixed layout: state keys and base64 values are long unbroken tokens with no
+   break opportunity, so an auto-layout table stretches its columns to fit them
+   and the whole page scrolls sideways. Widths are declared on the header cells;
+   the two text columns take the remaining slack and wrap inside it. */
+table.wf.statetbl { table-layout: fixed; min-width: 900px; }
+.statetbl .c-sel { width: 34px; }
+.statetbl .c-key { width: 25%; }
+.statetbl .c-app { width: 100px; }
+.statetbl .c-val { width: 30%; }
+/* 7 mono chars + the 28px cell padding — "1023 KB" is the widest size string,
+   and nowrap keeps it on one line rather than breaking at its space. */
+.statetbl .c-size { width: 78px; white-space: nowrap; }
+.statetbl .c-ver { width: 80px; }
+.statetbl .c-ttl { width: 120px; }
+/* anywhere (not break-all) still prefers a space when the text has one. */
+.statetbl td.wrapany { white-space: normal; overflow-wrap: anywhere; }
 .cbx.on { position: relative; }
 .cbx.on::after { content: ""; position: absolute; left: 4px; top: 1px; width: 3px; height: 7px; border: solid var(--text); border-width: 0 2px 2px 0; transform: rotate(45deg); }
 tr.sel { background: color-mix(in srgb, var(--accent-bright) 9%, var(--surface)); }
@@ -501,6 +570,12 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .field .req { color: var(--fail-fg); }
 .inp { font: inherit; font-size: 12.5px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 9px; padding: 7px 11px; width: 100%; }
 .inp:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 1px; }
+/* A disabled control reads as unavailable rather than merely unresponsive: the
+   fill recedes to --surface-2 and the text goes faint, matching the disabled
+   buttons. Both variants share the rule so an input and a dropdown beside it
+   look alike. Browsers also grey a disabled control's own text, so the explicit
+   color keeps it on our token instead of the UA's. */
+.inp:disabled, .select:disabled { color: var(--faint); background-color: var(--surface-2); border-color: var(--line-soft); cursor: default; }
 .field-err { color: var(--fail-fg); font-size: 11px; margin-top: 2px; }
 .field-row { display: flex; align-items: center; gap: 8px; }
 .section-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 10px; margin: 6px 0 8px; }

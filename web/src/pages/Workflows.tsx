@@ -9,28 +9,13 @@ import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { dedupeWorkflows } from '../lib/dedupeWorkflows'
 import { dedupeStores } from '../lib/dedupeStores'
 import { parseEnum } from '../lib/parseEnum'
-import { formatDateTimeParts } from '../lib/wallclock'
+import { DateTimeCell } from '../components/DateTimeCell'
+import { Spinner } from '../components/Spinner'
 import type { StateStore, WorkflowStatus, WorkflowSummary } from '../types/workflow'
 
 const ALL_STATUSES: WorkflowStatus[] = ['Running', 'Completed', 'Failed', 'Terminated', 'Suspended']
 
 const STORE_KEY = 'devdash.workflowStore'
-
-/**
- * Render a timestamp as localized date and time in separate spans so they sit
- * on one line when there's room and stack (date first, time second) when the
- * column is narrow. Falls back to an em dash on missing/invalid input.
- */
-function DateTimeCell({ ts }: { ts?: string }) {
-  const parts = formatDateTimeParts(ts)
-  if (!parts) return <>—</>
-  return (
-    <>
-      <span className="dt-date">{parts.date}</span>{' '}
-      <span className="dt-time">{parts.time}</span>
-    </>
-  )
-}
 
 /** Compute a human-readable duration between two dates (or from createdAt to now if no end). */
 function formatDuration(createdAt?: string, endAt?: string): string {
@@ -97,7 +82,7 @@ export function Workflows() {
   const [dialogInitialForce, setDialogInitialForce] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [removeStatus, setRemoveStatus] = useState<{ ok: number; failed: number } | null>(null)
-  const { mutate: removeWorkflows } = useRemoveWorkflows()
+  const { mutate: removeWorkflows, isPending: removing } = useRemoveWorkflows()
 
   // Running apps — used to flag workflow rows whose app-id is not currently running.
   const { data: appsData } = useApps()
@@ -196,7 +181,7 @@ export function Workflows() {
     setSearchParams(params, { replace: true })
   }, [activeStatus, debouncedSearch, page, selectedApp, setSearchParams])
 
-  const { data, isLoading, isError, error } = useWorkflows({
+  const { data, isLoading, isError, error, isPlaceholderData } = useWorkflows({
     status: activeStatus ? [activeStatus] : undefined,
     search: debouncedSearch || undefined,
     page,
@@ -205,6 +190,11 @@ export function Workflows() {
     includeChildren: showChildren,
     enabled: selectedStore !== null,
   })
+
+  // Previous rows stay on screen while a new filter/search/page loads (same
+  // store only; see useWorkflows). They are display-only until the new page
+  // lands: paging and selection would act on the wrong result set.
+  const updating = isPlaceholderData
 
   const { data: stats } = useWorkflowStats({
     appId: selectedApp || undefined,
@@ -256,6 +246,7 @@ export function Workflows() {
 
   function toggleRow(key: string, e: React.MouseEvent) {
     e.stopPropagation()
+    if (updating) return
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
@@ -266,6 +257,7 @@ export function Workflows() {
 
   function toggleAll(e: React.MouseEvent) {
     e.stopPropagation()
+    if (updating) return
     if (selected.size === items.length && items.length > 0) {
       setSelected(new Set())
     } else {
@@ -399,49 +391,17 @@ export function Workflows() {
 
       {/* Load-error banner — page stays usable so the user can switch stores */}
       {loadError && (
-        <div
-          data-testid="load-error-banner"
-          style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid var(--line)',
-            background: 'var(--surface)',
-            color: 'var(--fail-fg)',
-            fontSize: 13,
-          }}
-        >
+        <div className="banner danger" data-testid="load-error-banner">
           {loadError} — Select another state store or check the connection.
         </div>
       )}
 
       {/* Remove status banner */}
       {removeStatus && (
-        <div
-          style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid var(--line)',
-            background: 'var(--surface)',
-            color: removeStatus.failed > 0 ? 'var(--fail-fg)' : 'var(--accent-bright)',
-            fontSize: 13,
-          }}
-        >
+        <div className={removeStatus.failed > 0 ? 'banner danger' : 'banner ok'}>
           Removed {removeStatus.ok} workflow{removeStatus.ok !== 1 ? 's' : ''}
           {removeStatus.failed > 0 ? `, ${removeStatus.failed} failed` : ''}.{' '}
-          <button
-            onClick={() => setRemoveStatus(null)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              color: 'inherit',
-              fontSize: 'inherit',
-              textDecoration: 'underline',
-              padding: 0,
-            }}
-          >
+          <button className="banner-dismiss" onClick={() => setRemoveStatus(null)}>
             Dismiss
           </button>
         </div>
@@ -454,7 +414,7 @@ export function Workflows() {
             aria-pressed={activeStatus === ''}
             onClick={() => setStatus('')}
           >
-            All <span className="n">{stats?.total ?? 0}</span>
+            All <span className="n">{stats ? stats.total : '…'}</span>
           </button>
           {ALL_STATUSES.map((s) => (
             <button
@@ -462,7 +422,7 @@ export function Workflows() {
               aria-pressed={activeStatus === s}
               onClick={() => setStatus(s)}
             >
-              {s} <span className="n">{stats?.counts[s] ?? 0}</span>
+              {s} <span className="n">{stats ? (stats.counts[s] ?? 0) : '…'}</span>
             </button>
           ))}
         </div>
@@ -473,6 +433,7 @@ export function Workflows() {
           data-cy="app-select"
           data-testid="app-select"
           aria-label="Filter by app"
+          title={selectedApp || undefined}
           value={selectedApp}
           onChange={(e) => {
             setSelectedApp(e.target.value)
@@ -507,8 +468,11 @@ export function Workflows() {
             }}
           />
         </label>
+      </div>
 
-        {/* Show/hide child workflows */}
+      {/* Show/hide child workflows — its own row so the filters above keep
+          their width for the app dropdown and search box. */}
+      <div className="filters-sub">
         <label className="childtoggle">
           <input
             type="checkbox"
@@ -673,9 +637,14 @@ export function Workflows() {
               ? `${pageOffset + 1}–${pageOffset + items.length} loaded`
               : 'No results'}
           </span>
+          {updating && (
+            <span className="mono muted" role="status" data-testid="list-updating">
+              <Spinner /> Updating…
+            </span>
+          )}
           <div className="pgbtns">
             <button
-              disabled={history.length === 0}
+              disabled={history.length === 0 || updating}
               onClick={() => {
                 if (history.length === 0) return
                 const prev = history[history.length - 1]
@@ -689,7 +658,7 @@ export function Workflows() {
               ← Prev
             </button>
             <button
-              disabled={isError || !data?.nextToken}
+              disabled={isError || updating || !data?.nextToken}
               onClick={() => {
                 if (!data?.nextToken) return
                 setHistory((h) => [...h, { token: page, offset: pageOffset }])
@@ -713,6 +682,7 @@ export function Workflows() {
         onConfirm={onConfirmRemove}
         onCancel={() => setConfirmDialogOpen(false)}
         initialForce={dialogInitialForce}
+        busy={removing}
       />
     </div>
   )

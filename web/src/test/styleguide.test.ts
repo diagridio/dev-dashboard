@@ -115,3 +115,140 @@ describe('styleguide lint guards', () => {
     ).toEqual([])
   })
 })
+
+/**
+ * Native form-control chrome — the popup a <select> or a datalist opens, plus
+ * checkbox glyphs and scrollbars — is drawn by the browser and cannot be
+ * reached by our CSS. `color-scheme` is the only switch, so each theme block
+ * has to declare its own; without it every popup renders light, whatever the
+ * tokens say.
+ */
+describe('theme.css native control chrome', () => {
+  const css = readFileSync(path.join(srcDir, 'styles/theme.css'), 'utf8')
+
+  /** The declarations inside `selector { … }`. */
+  function block(selector: string): string {
+    const start = css.indexOf(`${selector} {`)
+    expect(start, `theme.css has no ${selector} block`).toBeGreaterThanOrEqual(0)
+    const end = css.indexOf('}', start)
+    return css.slice(start, end)
+  }
+
+  // The OS draws select/datalist popups outside the page and takes their
+  // appearance from the DOCUMENT ROOT's color-scheme, so the root declaration
+  // is the one that actually fixes a light dropdown in the dark theme; the
+  // .app one covers in-page control internals.
+  it.each([
+    ['dark', 'dark'],
+    ['light', 'light'],
+  ])('declares color-scheme: %s on the root and on .app for the %s theme', (theme, scheme) => {
+    for (const selector of [`:root[data-theme="${theme}"]`, `.app[data-theme="${theme}"]`]) {
+      expect(
+        block(selector),
+        `${selector} must declare color-scheme: ${scheme} so browser-drawn control popups ` +
+          `(select, datalist) match the theme`,
+      ).toMatch(new RegExp(`color-scheme:\\s*${scheme}\\b`))
+    }
+  })
+
+  // Codifies the dropdown audit: both variants must keep sharing one chevron
+  // rule, so a new one cannot quietly fall back to the OS arrow.
+  it('styles both select variants from a single chevron rule', () => {
+    expect(css).toMatch(/\.select,\s*select\.inp\s*\{[^}]*background-image:\s*var\(--chevron\)/)
+  })
+
+  // html/body sit behind the .app div and show through the macOS rubber-band
+  // overscroll and the scrollbar gutter, so they must follow the theme too.
+  it('paints body from the per-theme canvas token', () => {
+    expect(block('body')).toMatch(/background:\s*var\(--canvas/)
+  })
+
+  /**
+   * A disabled .btn.primary must not keep the accent fill: the green is the
+   * signal that the action is available, so a gated Save (every dialog and
+   * wizard uses one) has to read as unavailable until it is valid.
+   */
+  it('gives every button variant a disabled style', () => {
+    for (const variant of ['primary', 'ghost', 'danger']) {
+      expect(
+        css,
+        `theme.css has no .btn.${variant}:disabled rule — a disabled ${variant} button ` +
+          `would look identical to an enabled one`,
+      ).toMatch(new RegExp(`\\.btn\\.${variant}:disabled\\s*\\{`))
+    }
+    // The accent fill is what must go; assert it is actually replaced.
+    const rule = /\.btn\.primary:disabled\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(rule, '.btn.primary:disabled must override the accent background').toMatch(
+      /background:/,
+    )
+    expect(rule).not.toMatch(/var\(--accent-bright\)/)
+  })
+
+  /**
+   * A disabled input or dropdown has to look unavailable too — otherwise the
+   * only cue is a click that does nothing.
+   */
+  it('gives disabled form controls a distinct style', () => {
+    for (const sel of ['.inp', '.select']) {
+      const escaped = sel.replace('.', '\\.')
+      expect(
+        css,
+        `theme.css has no ${sel}:disabled rule — a disabled control would look editable`,
+      ).toMatch(new RegExp(`${escaped}:disabled`))
+    }
+    // The shared rule must actually change the fill and the text, not just the cursor.
+    const rule = /[^{}]*\.inp:disabled[^{}]*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(rule).toMatch(/color:/)
+    expect(rule).toMatch(/background(-color)?:/)
+  })
+
+  it('keeps the dark canvas identical to the dark app background', () => {
+    const canvas = /--canvas:\s*([^;]+);/.exec(block(':root[data-theme="dark"]'))?.[1]?.trim()
+    const appBg = /--bg:\s*([^;]+);/.exec(block('.app[data-theme="dark"]'))?.[1]?.trim()
+    expect(canvas, ':root[data-theme="dark"] must define --canvas').toBeTruthy()
+    expect(
+      canvas,
+      'the body canvas and the app background must be the same color, or the ' +
+        'overscroll area shows a seam against the page',
+    ).toBe(appBg)
+  })
+})
+
+/**
+ * Every <select> in the app takes one of the two sanctioned variants —
+ * `.select` (filter bars) or `.inp` (form fields) — so dropdowns cannot drift
+ * apart visually. See STYLEGUIDE.md §"Dropdowns".
+ */
+describe('dropdown variants', () => {
+  /**
+   * Comments discuss `<select>` in prose, so they are stripped before the scan:
+   * block comments entirely, and any line whose first non-space is `//` (left
+   * alone mid-line, so a `https://…` inside a string survives).
+   */
+  function code(src: string): string {
+    return src
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split('\n')
+      .filter((line) => !/^\s*\/\//.test(line))
+      .join('\n')
+  }
+
+  it('gives every select the .select or .inp class', () => {
+    const offenders: string[] = []
+    for (const rel of sourceFiles()) {
+      const src = code(readFileSync(path.join(srcDir, rel), 'utf8'))
+      // Each <select …> opening tag, up to the closing angle bracket.
+      for (const m of src.matchAll(/<select\b[^>]*>/g)) {
+        const tag = m[0]
+        if (!/className="(?:[^"]*\b)?(?:select|inp)\b[^"]*"/.test(tag)) {
+          offenders.push(`${rel}: ${tag.replace(/\s+/g, ' ').slice(0, 90)}`)
+        }
+      }
+    }
+    expect(
+      offenders,
+      `<select> without the .select (filter) or .inp (form) variant — dropdowns must not ` +
+        `drift apart, see STYLEGUIDE.md §Dropdowns:\n${offenders.join('\n')}`,
+    ).toEqual([])
+  })
+})

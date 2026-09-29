@@ -3,6 +3,8 @@ import { useResource } from '../hooks/useResources'
 import { highlightYaml } from '../lib/yaml-highlight'
 import { copyText } from '../lib/clipboard'
 import { useToast } from '../lib/toast'
+import { SecretRefsPanel } from '../components/SecretRefsPanel'
+import { SecretStorePanel } from '../components/SecretStorePanel'
 import type { ResourceKind } from '../types/resources'
 
 export interface ResourceDetailProps {
@@ -57,35 +59,41 @@ export function ResourceDetail({ kind, idOrName }: ResourceDetailProps) {
   }
 
   return (
-    <div className="card">
-      <div className="ph" style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 14px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: '13.5px' }}>
-        <span className="mono" style={{ fontWeight: 500, color: 'var(--muted)', fontSize: 12 }}>
-          {metaStr}
-        </span>
-        {refList.length > 0 ? (
-          <span>
-            {refList.map((appId) => (
-              <Link
-                key={appId}
-                className="appref link"
-                to={`/apps/${appId}`}
-                style={{ marginRight: 4 }}
-              >
-                {appId}
-              </Link>
-            ))}
+    <div>
+      {kind === 'component' && detail.secretStore && <SecretStorePanel info={detail.secretStore} />}
+      {kind === 'component' && (detail.secretRefs?.length ?? 0) > 0 && (
+        <SecretRefsPanel resourceId={detail.id} refs={detail.secretRefs!} componentType={detail.type} />
+      )}
+      <div className="card">
+        <div className="ph" style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '11px 14px', borderBottom: '1px solid var(--line)', fontWeight: 600, fontSize: '13.5px' }}>
+          <span className="mono" style={{ fontWeight: 500, color: 'var(--muted)', fontSize: 12 }}>
+            {metaStr}
           </span>
-        ) : (
-          <span className="muted" style={{ fontStyle: 'italic', fontWeight: 400, fontSize: 12 }}>
-            not currently {refLabel}
-          </span>
-        )}
-        <button className="copybtn" style={{ marginLeft: 'auto' }} onClick={copyYaml}>
-          ⧉ Copy YAML
-        </button>
+          {refList.length > 0 ? (
+            <span>
+              {refList.map((appId) => (
+                <Link
+                  key={appId}
+                  className="appref link"
+                  to={`/apps/${appId}`}
+                  style={{ marginRight: 4 }}
+                >
+                  {appId}
+                </Link>
+              ))}
+            </span>
+          ) : (
+            <span className="muted" style={{ fontStyle: 'italic', fontWeight: 400, fontSize: 12 }}>
+              not currently {refLabel}
+            </span>
+          )}
+          <button className="copybtn" style={{ marginLeft: 'auto' }} onClick={copyYaml}>
+            ⧉ Copy YAML
+          </button>
+        </div>
+        <pre className="code">{highlightYaml(rawYaml)}</pre>
+        {toastNode}
       </div>
-      <pre className="code">{highlightYaml(rawYaml)}</pre>
-      {toastNode}
     </div>
   )
 }

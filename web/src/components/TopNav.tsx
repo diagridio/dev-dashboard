@@ -18,6 +18,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Applications', to: '/' },
   { label: 'Components', to: '/components' },
   { label: 'Workflows', to: '/workflows', cap: 'workflows' },
+  { label: 'State', to: '/state', cap: 'state' },
   { label: 'Actors', to: '/actors' },
   { label: 'Subscriptions', to: '/subscriptions' },
   { label: 'Resiliency', to: '/resiliency' },
@@ -65,7 +66,7 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
       <span className="brand">
         <Logo height={21} />
         <span className="dot">/</span>
-        <span className="app-name">Dev Dashboard</span>
+        <span className="app-name">Dapr Dev Dashboard</span>
       </span>
 
       <nav className="nav" aria-label="Primary navigation">

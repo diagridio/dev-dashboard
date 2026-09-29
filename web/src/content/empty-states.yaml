@@ -1,0 +1,8 @@
+# Copy shown under a page's empty state, when there is nothing to list yet.
+# Edit wording here — no code changes needed.
+#
+# Markdown-style links are rendered as external links: [label](https://…).
+# Only http/https targets become links; anything else stays literal text.
+
+# Applications page — shown when no Dapr apps were discovered.
+apps: "New to Dapr? Clone the [Dapr Quickstarts repo](https://github.com/dapr/quickstarts) and run some applications! There are more resources available in the left menu."

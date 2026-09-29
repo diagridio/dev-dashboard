@@ -31,10 +31,14 @@ func SetVerbose(v bool) { verbose.Store(v) }
 // state.postgresql/postgres, state.mongodb).
 var ErrUnsupported = errors.New("unsupported state store type")
 
-// SecretRef is a Dapr secretKeyRef: the secret name and the key within it.
+// SecretRef is a Dapr secretKeyRef or envRef metadata reference.
 type SecretRef struct {
-	Name string // secretKeyRef.name (the secret's name)
-	Key  string // secretKeyRef.key (the key within that secret)
+	// Kind is "secretKeyRef" or "envRef", mirroring secrets.Ref.Kind. The zero
+	// value ("") is treated as "secretKeyRef" by every consumer, so existing
+	// literals built before envRef support was added keep working unchanged.
+	Kind string
+	Name string // secretKeyRef.name, or the env var name for envRef
+	Key  string // secretKeyRef.key (the key within that secret); unused for envRef
 }
 
 // Component is the parsed subset of a Dapr state-store component YAML we need.
@@ -43,7 +47,7 @@ type Component struct {
 	Type        string               // spec.type, e.g. "state.redis"
 	Version     string               // spec.version
 	Metadata    map[string]string    // spec.metadata name->value (inline only)
-	SecretRefs  map[string]SecretRef // spec.metadata name->secretKeyRef (no inline value)
+	SecretRefs  map[string]SecretRef // spec.metadata name->secretKeyRef/envRef (no inline value)
 	SecretStore string               // auth.secretStore
 	Path        string               // source file path (for display / disambiguation)
 }
@@ -141,17 +145,61 @@ func (s *ccStore) Get(ctx context.Context, key string) ([]byte, error) {
 	return resp.Data, nil
 }
 
-// BulkGet retrieves multiple keys in a sequential loop.
-// For the modest local key counts targeted here, a loop is correct;
-// a future optimisation can delegate to the underlying BulkStore interface.
+const (
+	// bulkGetChunk caps keys per backend bulk read: well under SQLite's
+	// bound-parameter limit, and small enough to keep PostgreSQL/MongoDB
+	// queries cheap.
+	bulkGetChunk = 100
+	// bulkGetParallelism bounds concurrent Gets for backends whose BulkGet is
+	// contrib's DefaultBulkStore (Redis); native implementations ignore it.
+	bulkGetParallelism = 16
+)
+
+// BulkGet reads many keys through the backend's bulk path: one query per
+// chunk on PostgreSQL, SQLite and MongoDB; bounded parallel Gets on Redis.
+// The result has an entry for every requested key, nil when the key is
+// missing. A per-key backend error fails the whole call, like Get.
 func (s *ccStore) BulkGet(ctx context.Context, keys []string) (map[string][]byte, error) {
+	bs, ok := s.inner.(state.BulkStore)
+	if !ok {
+		// Defensive: state.Store embeds BulkStore, so every supported
+		// backend takes the branch above.
+		out := make(map[string][]byte, len(keys))
+		for _, k := range keys {
+			b, err := s.Get(ctx, k)
+			if err != nil {
+				return nil, err
+			}
+			out[k] = b
+		}
+		return out, nil
+	}
+	return bulkGetChunked(ctx, bs, keys, bulkGetChunk)
+}
+
+// bulkGetChunked issues one bs.BulkGet per chunk of keys and merges the
+// responses by key (backends may return them in any order).
+func bulkGetChunked(ctx context.Context, bs state.BulkStore, keys []string, chunk int) (map[string][]byte, error) {
 	out := make(map[string][]byte, len(keys))
-	for _, k := range keys {
-		b, err := s.Get(ctx, k)
+	for start := 0; start < len(keys); start += chunk {
+		end := min(start+chunk, len(keys))
+		reqs := make([]state.GetRequest, 0, end-start)
+		for _, k := range keys[start:end] {
+			reqs = append(reqs, state.GetRequest{Key: k})
+			out[k] = nil
+		}
+		resp, err := bs.BulkGet(ctx, reqs, state.BulkGetOpts{Parallelism: bulkGetParallelism})
 		if err != nil {
 			return nil, err
 		}
-		out[k] = b
+		for _, r := range resp {
+			if r.Error != "" {
+				return nil, fmt.Errorf("bulk get %q: %s", r.Key, r.Error)
+			}
+			if _, want := out[r.Key]; want {
+				out[r.Key] = r.Data
+			}
+		}
 	}
 	return out, nil
 }

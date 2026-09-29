@@ -56,4 +56,7 @@ export interface StateStore {
   active: boolean
   connection: string
   updatedAt?: string
+  // Names an unresolved secret reference that will make this store fail to
+  // connect. Absent/empty when there is none.
+  secretIssue?: string
 }

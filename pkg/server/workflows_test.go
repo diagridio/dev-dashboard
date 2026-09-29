@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/version"
@@ -240,7 +241,7 @@ func TestStateStoresEndpoint(t *testing.T) {
 	stores := fakeStoreRegistry{stores: []StoreInfo{
 		{ID: "statestore-auto", Name: "statestore", Type: "state.redis", Source: "auto", Active: true, Connection: "localhost:6379"},
 	}}
-	h := apiRouter(version.Info{}, nil, nil, nil, newFakeBackend(fakeWF{}), stores, fakeResources{}, fakeNews{}, nil, fakeUpdateCheck{}, FullCapabilities())
+	h := apiRouter(version.Info{}, nil, nil, nil, newFakeBackend(fakeWF{}), nil, stores, fakeResources{}, fakeNews{}, nil, fakeUpdateCheck{}, FullCapabilities())
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `"name":"statestore"`)
@@ -251,7 +252,7 @@ func TestStateStoresEndpoint(t *testing.T) {
 }
 
 func TestStateStoresNilRegistry(t *testing.T) {
-	h := apiRouter(version.Info{}, nil, nil, nil, newFakeBackend(fakeWF{}), nil, fakeResources{}, fakeNews{}, nil, fakeUpdateCheck{}, FullCapabilities())
+	h := apiRouter(version.Info{}, nil, nil, nil, newFakeBackend(fakeWF{}), nil, nil, fakeResources{}, fakeNews{}, nil, fakeUpdateCheck{}, FullCapabilities())
 	res, body := get(t, h, "/statestores")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Contains(t, body, `[]`)
@@ -363,4 +364,35 @@ func TestWorkflowsNoStoreMessageUnchanged(t *testing.T) {
 	res, body := get(t, h, "/")
 	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
 	require.Contains(t, body, "no state store detected")
+}
+
+// ctxProbeWF records whether the context List/Stats received was already
+// cancelled, proving the handlers pass the request context through so a
+// client abort stops the store work.
+type ctxProbeWF struct {
+	fakeWF
+	sawCancelled *atomic.Bool
+}
+
+func (p ctxProbeWF) List(ctx context.Context, _ workflow.ListQuery) (workflow.ListResult, error) {
+	p.sawCancelled.Store(ctx.Err() != nil)
+	return workflow.ListResult{}, ctx.Err()
+}
+func (p ctxProbeWF) Stats(ctx context.Context, _ workflow.ListQuery) (workflow.StatsResult, error) {
+	p.sawCancelled.Store(ctx.Err() != nil)
+	return workflow.StatsResult{}, ctx.Err()
+}
+
+func TestWorkflowHandlersPassRequestContext(t *testing.T) {
+	for _, path := range []string{"/", "/stats"} {
+		t.Run(path, func(t *testing.T) {
+			saw := &atomic.Bool{}
+			h := workflowsRouter(newFakeBackend(ctxProbeWF{sawCancelled: saw}), nil)
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			ctx, cancel := context.WithCancel(req.Context())
+			cancel()
+			h.ServeHTTP(httptest.NewRecorder(), req.WithContext(ctx))
+			require.True(t, saw.Load(), "handler must hand the request context to the service")
+		})
+	}
 }

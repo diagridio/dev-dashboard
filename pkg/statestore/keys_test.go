@@ -50,3 +50,10 @@ func TestParseAppID(t *testing.T) {
 	_, ok = ParseAppID("||dapr.internal.default..workflow||x||metadata")
 	require.False(t, ok) // empty app-id segment
 }
+
+func TestHistoryKey(t *testing.T) {
+	require.Equal(t, "history-000000", HistoryKey(0))
+	require.Equal(t, "history-000007", HistoryKey(7))
+	require.Equal(t, "history-999999", HistoryKey(999999))
+	require.Equal(t, "history-1234567", HistoryKey(1234567))
+}

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/state"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/workflow"
 	"github.com/stretchr/testify/require"
@@ -138,6 +139,40 @@ func (s *patternKeysStore) BulkGet(context.Context, []string) (map[string][]byte
 func (s *patternKeysStore) Delete(context.Context, string) error      { return nil }
 func (s *patternKeysStore) Set(context.Context, string, []byte) error { return nil }
 func (s *patternKeysStore) Close() error                              { return nil }
+
+// recordingStore is a statestore.Store that also implements RecordReader.
+// patternKeysStore's methods are on a pointer receiver, so the embed must be a
+// pointer for the promoted methods to satisfy statestore.Store.
+type recordingStore struct{ *patternKeysStore }
+
+func (recordingStore) Records(context.Context, []string) ([]statestore.Record, error) {
+	return nil, nil
+}
+
+func TestBuildStoreEntryStateService(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("store implementing RecordReader yields a working state service", func(t *testing.T) {
+		e := buildStoreEntry(recordingStore{&patternKeysStore{}}, "default", http.DefaultClient, nil, nil)
+		require.NotNil(t, e.state)
+		_, err := e.state.AppIDs(ctx, false)
+		require.NoError(t, err)
+	})
+
+	t.Run("store without RecordReader degrades to not-browsable", func(t *testing.T) {
+		e := buildStoreEntry(&patternKeysStore{}, "default", http.DefaultClient, nil, nil)
+		require.NotNil(t, e.state)
+		_, err := e.state.AppIDs(ctx, false)
+		require.ErrorIs(t, err, state.ErrNotBrowsable)
+	})
+
+	t.Run("nil store degrades to no-store without panicking", func(t *testing.T) {
+		e := buildStoreEntry(nil, "default", http.DefaultClient, nil, nil)
+		require.NotNil(t, e.state)
+		_, err := e.state.AppIDs(ctx, false)
+		require.ErrorIs(t, err, state.ErrNoStore)
+	})
+}
 
 // countingApps is a discovery.Service double counting Get calls (each real Get
 // costs two sidecar HTTP probes via enrich).

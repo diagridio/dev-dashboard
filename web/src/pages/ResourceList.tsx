@@ -133,6 +133,15 @@ export function ResourceList({ kind }: ResourceListProps) {
                 }}
               >
                 <span className="cn">{resource.name}</span>
+                {resource.secretRefs?.some((r) => r.status !== 'resolved' && r.status !== 'not-checked') && (
+                  <span
+                    className="cn-secretwarn"
+                    aria-label={`${resource.name} has an unresolved secret reference`}
+                    title="Unresolved secret reference"
+                  >
+                    ⚠
+                  </span>
+                )}
                 {ct && <span className="ct">{ct}</span>}
                 <span
                   className="ct"

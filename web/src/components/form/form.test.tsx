@@ -30,6 +30,13 @@ describe('SelectInput', () => {
     fireEvent.change(screen.getByLabelText('pick'), { target: { value: '2' } })
     expect(onChange).toHaveBeenCalledWith('2')
   })
+
+  // A form primitive belongs in a Field beside TextInput, so it takes the .inp
+  // form variant — not .select, the compact filter-bar variant.
+  it('uses the form-field control style', () => {
+    render(<SelectInput value="" onChange={vi.fn()} aria-label="pick" options={[]} />)
+    expect(screen.getByLabelText('pick')).toHaveClass('inp')
+  })
 })
 
 describe('Toggle', () => {

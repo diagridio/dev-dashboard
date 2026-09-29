@@ -9,6 +9,7 @@ import (
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/server"
+	"github.com/diagridio/dev-dashboard/pkg/state"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/workflow"
 )
@@ -192,11 +193,13 @@ func (r *targetResolver) Resolve(ctx context.Context, appID, instanceID string) 
 	}, nil
 }
 
-// storeEntry holds the per-store workflow service, remover, and target resolver.
+// storeEntry holds the per-store workflow service, remover, target resolver,
+// and state-record service.
 type storeEntry struct {
 	svc     workflow.Service
 	rem     server.WorkflowRemover
 	targets server.TargetResolver
+	state   state.Service
 }
 
 // contractNamespaces invokes a static aspire scanner once and returns the
@@ -231,5 +234,15 @@ func buildStoreEntry(st statestore.Store, namespace string, client *http.Client,
 	svc := workflow.New(st, namespace, workflow.WithNamespaceResolver(nsResolver))
 	rem := workflow.NewRemover(client, st, namespace)
 	res := newTargetResolver(apps, svc)
-	return storeEntry{svc: svc, rem: rem, targets: res}
+
+	// The single seam where the optional RecordReader capability is asserted.
+	// A nil store (the degraded entry) or a backend without the capability
+	// yields a service that reports ErrNoStore / ErrNotBrowsable rather than
+	// panicking.
+	var rr statestore.RecordReader
+	if st != nil {
+		rr, _ = st.(statestore.RecordReader)
+	}
+
+	return storeEntry{svc: svc, rem: rem, targets: res, state: state.New(st, rr)}
 }

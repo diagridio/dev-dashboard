@@ -1,8 +1,11 @@
 package workflow
 
 import (
+	"encoding/json"
+
 	"github.com/dapr/durabletask-go/api/protos"
 	"github.com/dapr/durabletask-go/backend/runtimestate"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -175,4 +178,37 @@ func failureFromProto(fd *protos.TaskFailureDetails) *FailureDetails {
 		Message:    fd.GetErrorMessage(),
 		StackTrace: fd.GetStackTrace().GetValue(),
 	}
+}
+
+// maxHistoryEntries mirrors Dapr's maxStateEntries bound on metadata lengths
+// (pkg/runtime/wfengine/state): a larger value is treated as corrupt and the
+// loader falls back to a key scan.
+const maxHistoryEntries = 1_000_000
+
+// historyLength extracts HistoryLength from an instance metadata record:
+// a BackendWorkflowStateMetadata proto (Dapr 1.16+) or the legacy JSON
+// object {"InboxLength","HistoryLength","Generation"}. A record starting
+// with '{' is JSON; a valid metadata proto never starts with that byte
+// (0x7b would be a field-15 group, which the message doesn't have).
+// ok is false when the record is missing, undecodable, zero, or above
+// maxHistoryEntries; the caller then scans for the instance's keys.
+func historyLength(meta []byte) (uint64, bool) {
+	if len(meta) == 0 {
+		return 0, false
+	}
+	var n uint64
+	if meta[0] == '{' {
+		var legacy struct{ HistoryLength uint64 }
+		if err := json.Unmarshal(meta, &legacy); err != nil {
+			return 0, false
+		}
+		n = legacy.HistoryLength
+	} else {
+		var md protos.BackendWorkflowStateMetadata
+		if err := proto.Unmarshal(meta, &md); err != nil {
+			return 0, false
+		}
+		n = md.GetHistoryLength()
+	}
+	return n, n > 0 && n <= maxHistoryEntries
 }

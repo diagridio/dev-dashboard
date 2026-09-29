@@ -134,6 +134,18 @@ describe('Applications', () => {
     await waitFor(() => expect(screen.getByText(/no dapr apps/i)).toBeInTheDocument())
   })
 
+  it('shows the configurable getting-started hint with its links when no apps', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([])))
+    renderAt()
+    const hint = await screen.findByTestId('empty-hint')
+    // Copy comes from src/content/empty-states.yaml, links rendered from its markdown.
+    expect(hint).toHaveTextContent(/new to dapr\?/i)
+    const link = within(hint).getByRole('link', { name: /quickstarts/i })
+    expect(link).toHaveAttribute('href', 'https://github.com/dapr/quickstarts')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveClass('celllink')
+  })
+
   it('App ID link uses the table text color (celllink class)', async () => {
     server.use(http.get('/api/apps', () => HttpResponse.json(sampleApps)))
     renderAt()
