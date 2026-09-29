@@ -9,9 +9,10 @@ export function apiUrl(path: string): string {
 /** Fetch JSON from the API and return the parsed body. Throws on non-2xx responses.
  *  The thrown Error keeps the `API error <status>` prefix and ` for <path>` suffix
  *  (so callers' `.includes('503')` checks still hold) and, when the response body
- *  carries an `error` field, embeds that server message between them. */
-export async function fetchJSON<T>(path: string): Promise<T> {
-  const res = await fetch(apiUrl(path))
+ *  carries an `error` field, embeds that server message between them.
+ *  Pass `init.signal` (e.g. TanStack Query's) so superseded requests are aborted. */
+export async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(apiUrl(path), init)
   if (!res.ok) {
     let detail = ''
     try {
