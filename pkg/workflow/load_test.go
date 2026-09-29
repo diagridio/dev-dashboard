@@ -56,6 +56,19 @@ func (c *countingStore) historyReads() int {
 	return n
 }
 
+// keysWithSuffix counts keys requested through BulkGet that end in suffix.
+func (c *countingStore) keysWithSuffix(suffix string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := 0
+	for _, k := range c.bulkKeys {
+		if strings.HasSuffix(k, suffix) {
+			n++
+		}
+	}
+	return n
+}
+
 func (c *countingStore) reset() {
 	c.keys.Store(0)
 	c.gets.Store(0)

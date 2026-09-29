@@ -32,6 +32,9 @@ const (
 )
 
 // instanceLoadConcurrency bounds how many instances List/Stats load at once.
+// Each load does its own BulkGet, which on Redis (contrib DefaultBulkStore,
+// fanned out by bulkGetParallelism = 16 in pkg/statestore) becomes parallel
+// Gets, so the fan-out can reach 8 x 16 = 128 concurrent Gets.
 const instanceLoadConcurrency = 8
 
 // instanceRef identifies one instance found by a metadata-key scan.
@@ -90,26 +93,32 @@ func forEachBounded(ctx context.Context, n int, fn func(i int)) {
 
 // loadSummaries loads refs concurrently and returns one result per ref, in
 // input order, so callers stay deterministic before their own sort. It
-// reads all metadata values in one BulkGet, reuses cached summaries whose
-// metadata bytes are unchanged, and loads the rest via loadWithMeta.
+// reads all metadata values and first history entries in one BulkGet,
+// reuses cached summaries whose metadata and first-entry bytes are both
+// unchanged, and loads the rest via loadWithMeta.
 func (s *service) loadSummaries(ctx context.Context, ns string, refs []instanceRef) ([]loaded, error) {
 	out := make([]loaded, len(refs))
 	if len(refs) == 0 {
 		return out, nil
 	}
 	metaKeys := make([]string, len(refs))
+	firstKeys := make([]string, len(refs))
 	for i, r := range refs {
-		metaKeys[i] = statestore.InstancePrefix(ns, r.appID, r.id) + statestore.SuffixMetadata
+		prefix := statestore.InstancePrefix(ns, r.appID, r.id)
+		metaKeys[i] = prefix + statestore.SuffixMetadata
+		firstKeys[i] = prefix + statestore.HistoryKey(0)
 	}
-	metas, err := s.store.BulkGet(ctx, metaKeys)
+	allKeys := make([]string, 0, 2*len(refs))
+	allKeys = append(append(allKeys, metaKeys...), firstKeys...)
+	metas, err := s.store.BulkGet(ctx, allKeys)
 	if err != nil {
 		return nil, err
 	}
 	forEachBounded(ctx, len(refs), func(i int) {
 		r := refs[i]
-		meta := metas[metaKeys[i]]
+		meta, first := metas[metaKeys[i]], metas[firstKeys[i]]
 		key := cacheKey(ns, r.appID, r.id)
-		if sum, ok := s.cache.get(key, meta); ok {
+		if sum, ok := s.cache.get(key, meta, first); ok {
 			out[i] = loaded{summary: sum, ok: true}
 			return
 		}
@@ -118,7 +127,7 @@ func (s *service) loadSummaries(ctx context.Context, ns string, refs []instanceR
 			return
 		}
 		if fromMeta {
-			s.cache.put(key, ns, r.appID, meta, ex.ExecutionSummary)
+			s.cache.put(key, ns, r.appID, meta, first, ex.ExecutionSummary)
 		}
 		out[i] = loaded{summary: ex.ExecutionSummary, ok: true}
 	})
