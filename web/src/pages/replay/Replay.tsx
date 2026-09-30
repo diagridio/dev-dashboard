@@ -12,7 +12,7 @@ import { render } from './render/canvas'
 import { blend } from './render/interpolate'
 import { readPalette, watchTheme, type Palette } from './render/palette'
 import { HatPose } from './render/pose'
-import { Game } from './runtime/game'
+import { Game, PLAYBACK_SPEEDS, type PlaybackSpeed } from './runtime/game'
 import { keyToCommand } from './runtime/keys'
 import { startLoop } from './runtime/loop'
 import { utcDate } from './runtime/daily'
@@ -87,6 +87,13 @@ export function Component() {
     // Replays from the execution ID itself; a run too long to have one replays from its tape.
     if (executionId) await replayFrom(executionId)
     else if (game.watch(structuredClone(game.tape))) stageRef.current?.focus()
+  }
+
+  const onSpeed = (speed: PlaybackSpeed) => {
+    game.setPlaybackSpeed(speed)
+    trackAction('replay_speed', { speed })
+    // Back to the game, so its keys (Esc to leave, p to pause) keep working.
+    stageRef.current?.focus()
   }
 
   const onWatch = async (code: string) => {
@@ -190,29 +197,43 @@ export function Component() {
         </div>
       </div>
       <div className="replay-grid">
-        <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game">
-          <canvas ref={canvasRef} width={VIEW_W} height={VIEW_H} aria-label="REPLAY game screen" />
-          <Overlay
-            phase={game.phase}
-            stats={game.stats}
-            best={game.best}
-            score={game.state.score}
-            level={game.state.level}
-            date={game.runDate}
-            dailyBest={game.dailyBest}
-            playback={game.playback}
-            executionId={executionId}
-            executionIdError={executionIdError}
-            idCopied={idCopied}
-            watchError={watchError}
-            onCopyExecutionId={onCopyExecutionId}
-            onReplayRun={() => void onReplayRun()}
-            onWatch={(c) => void onWatch(c)}
-            onShare={() => {
-              setShareOpen(true)
-              trackAction('share_open', { source: 'replay' })
-            }}
-          />
+        <div className="replay-main">
+          <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game">
+            <canvas ref={canvasRef} width={VIEW_W} height={VIEW_H} aria-label="REPLAY game screen" />
+            <Overlay
+              phase={game.phase}
+              stats={game.stats}
+              best={game.best}
+              score={game.state.score}
+              level={game.state.level}
+              date={game.runDate}
+              dailyBest={game.dailyBest}
+              playback={game.playback}
+              executionId={executionId}
+              executionIdError={executionIdError}
+              idCopied={idCopied}
+              watchError={watchError}
+              onCopyExecutionId={onCopyExecutionId}
+              onReplayRun={() => void onReplayRun()}
+              onWatch={(c) => void onWatch(c)}
+              onShare={() => {
+                setShareOpen(true)
+                trackAction('share_open', { source: 'replay' })
+              }}
+            />
+          </div>
+          {game.playback && (
+            <div className="replay-speed">
+              <span className="replay-keys">Playback speed</span>
+              <div className="segs" role="group" aria-label="Playback speed">
+                {PLAYBACK_SPEEDS.map((speed) => (
+                  <button key={speed} type="button" aria-pressed={game.playbackSpeed === speed} onClick={() => onSpeed(speed)}>
+                    {speed}×
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         {/* Level 0 has no durable history, so the panel only appears from level 1. Its
             grid column stays reserved so the canvas doesn't resize when it does. */}

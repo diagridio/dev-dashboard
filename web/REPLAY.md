@@ -264,6 +264,14 @@ The tape (`runtime/tape.ts`) holds everything the outside world fed a run:
 restarts restore their snapshot in any phase, and the tick loop never steps
 past a pending restart. Nothing is written to storage during playback.
 
+**Playback speed:** 1×, 2×, 5× or 10× (`PLAYBACK_SPEEDS`,
+`Game.setPlaybackSpeed`), chosen with the `.segs` control under the canvas,
+which is shown only while watching. At N× each animation frame runs N frame
+steps, so crash replays, rewinds and montages speed up too. Playback stays
+exact because it doesn't depend on frame size. Live runs always run at 1×,
+and leaving playback resets the speed. The HUD banner shows it
+(`▶ PLAYBACK · <date> · 5×`). Telemetry: `replay_speed` with `{ speed }`.
+
 A run's **execution ID** is its run code: `RPL1.` + base64url(deflate-raw(JSON))
 (`runtime/share.ts`). After every game the end card shows it with the
 standard `.copybtn` (`copyText()` from `lib/clipboard.ts`). **Replay entire

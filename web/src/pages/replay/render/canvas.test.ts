@@ -305,4 +305,10 @@ describe('render', () => {
     render(ctx, view({ kind: 'playing' }, lvl1(), { playbackDate: '2026-09-30' }), pal)
     expect(texts(calls)).toContain('▶ PLAYBACK · 2026-09-30')
   })
+
+  it('shows the playback speed in the HUD banner', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }, lvl1(), { playbackDate: '2026-09-30', playbackSpeed: 5 }), pal)
+    expect(texts(calls)).toContain('▶ PLAYBACK · 2026-09-30 · 5×')
+  })
 })

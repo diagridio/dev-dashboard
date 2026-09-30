@@ -287,6 +287,29 @@ describe('Replay page', () => {
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Press Enter to start' })).toBeNull())
   })
 
+  it('offers playback speeds only while watching a run, and switches between them', async () => {
+    const code = await encodeRun({ ...emptyTape('2026-09-30'), liveTick: 0 })
+    renderAt('/replay')
+    await gameReady('Press Enter to start')
+    expect(screen.queryByRole('group', { name: 'Playback speed' })).toBeNull()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Execution ID' }), { target: { value: code } })
+    fireEvent.click(screen.getByRole('button', { name: 'Replay run' }))
+    const speeds = await screen.findByRole('group', { name: 'Playback speed' })
+    expect(speeds).toHaveClass('segs')
+    const buttons = [...speeds.querySelectorAll('button')]
+    expect(buttons.map((b) => b.textContent)).toEqual(['1×', '2×', '5×', '10×'])
+    expect(screen.getByRole('button', { name: '1×' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: '5×' }))
+    expect(screen.getByRole('button', { name: '5×' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: '1×' })).toHaveAttribute('aria-pressed', 'false')
+    expect(trackAction).toHaveBeenCalledWith('replay_speed', { speed: 5 })
+    // Back to the game, so its keys (Esc to leave) keep working.
+    expect(document.activeElement).toBe(document.querySelector('.replay-stage'))
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    expect(screen.queryByRole('group', { name: 'Playback speed' })).toBeNull()
+  })
+
   it('does not start the game when Enter is pressed in the execution ID field', async () => {
     renderAt('/replay')
     await gameReady('Press Enter to start')

@@ -22,6 +22,8 @@ export interface RenderView {
   pixelScale?: number
   /** The UTC date of the run being played back; null or omitted for a live run. */
   playbackDate?: string | null
+  /** Playback speed (1, 2, 5 or 10); shown next to the playback date. */
+  playbackSpeed?: number | null
   /** Level-complete montage state; null or omitted outside the montage. */
   montage?: { events: number; flash: number; trail: number[] } | null
 }
@@ -152,7 +154,10 @@ function drawHud(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette):
     ctx.fillStyle = armed ? pal.player : pal.muted
     ctx.fillText(armed ? 'CB ARMED' : `CB ${state.shield}/${SHIELD_FULL}`, x0 + SHIELD_FULL * 5 + 6, 32)
   }
-  if (view.playbackDate) banner(ctx, `▶ PLAYBACK · ${view.playbackDate}`, VIEW_H - 8, pal.glitch, FONT)
+  if (view.playbackDate) {
+    const speed = view.playbackSpeed ? ` · ${view.playbackSpeed}×` : ''
+    banner(ctx, `▶ PLAYBACK · ${view.playbackDate}${speed}`, VIEW_H - 8, pal.glitch, FONT)
+  }
 }
 
 function drawCrash(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette): void {

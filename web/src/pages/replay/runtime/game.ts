@@ -19,6 +19,9 @@ export const REPLAY_MIN_TICKS_PER_FRAME = 8
 export const REPLAY_MAX_FRAMES = 120
 /** How long an on-screen notice stays up. */
 export const NOTICE_TICKS = 180
+/** Speeds a recorded run can be watched at. */
+export const PLAYBACK_SPEEDS = [1, 2, 5, 10] as const
+export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
 
 export interface GameDeps {
   /** The one deliberate source of non-determinism (Math.random at runtime). */
@@ -42,6 +45,8 @@ export interface GameView {
   montage: { events: number; flash: number; trail: number[] } | null
   /** The date of the run being played back; null during live play. */
   playbackDate: string | null
+  /** The playback speed while watching a run; null in live play. */
+  playbackSpeed: PlaybackSpeed | null
 }
 
 const emptyStats = (): RunStats => ({ replays: 0, fromHistory: 0, executed: 0, incidents: 0, retriesUsed: 0, circuitTrips: 0, boostsLost: 0 })
@@ -62,6 +67,7 @@ export class Game {
   tape: Tape
   /** Whether a recorded tape is being played back instead of live play. */
   playback = false
+  private speed: PlaybackSpeed = 1
 
   private source: Source
   private player: TapePlayer | null = null
@@ -130,6 +136,7 @@ export class Game {
       notice: n && this.state.tick < n.untilTick ? n.text : null,
       montage: m ? { events: m.events, flash: m.flash, trail: m.trail } : null,
       playbackDate: this.playback ? this.runDate : null,
+      playbackSpeed: this.playback ? this.speed : null,
     }
   }
 
@@ -189,7 +196,25 @@ export class Game {
   }
 
   /** Called once per animation frame with the number of whole 60 Hz ticks elapsed. */
+  /** Called once per animation frame; a playback at N× runs N frame steps. */
   frame(liveTicks: number): void {
+    const steps = this.playback ? this.playbackSpeed : 1
+    for (let i = 0; i < steps; i++) this.frameStep(liveTicks)
+  }
+
+  /** Watching a run: how many frame steps each animation frame runs (1× in live play). */
+  get playbackSpeed(): PlaybackSpeed {
+    return this.playback ? this.speed : 1
+  }
+
+  /** Sets the playback speed; ignored outside playback and for unsupported values. */
+  setPlaybackSpeed(speed: number): void {
+    if (!this.playback || !PLAYBACK_SPEEDS.includes(speed as PlaybackSpeed)) return
+    this.speed = speed as PlaybackSpeed
+    this.touch()
+  }
+
+  private frameStep(liveTicks: number): void {
     if (this.playback) this.autoplay()
     const p = this.phase
     if (p.kind === 'playing') {
@@ -376,6 +401,7 @@ export class Game {
   /** Back to live play: the tape's date and scores give way to today's. */
   private leavePlayback(): void {
     this.playback = false
+    this.speed = 1
     this.player = null
     this.runDate = this.deps.today()
     this.dailyBest = this.deps.store.loadDailyBest(this.runDate)

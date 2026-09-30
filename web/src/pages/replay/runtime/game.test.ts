@@ -952,6 +952,54 @@ describe('run tape', () => {
     expectPlaybackEquals(resumed, crashLevels())
   })
 
+  describe('playback speed', () => {
+    /** A short live run with a crash replay that ends in game over. */
+    function finishedRun(): Game {
+      const live = new Game(deps({ levels: crashLevels(), impure: lcg(5), chaosRand: lcg(6) }))
+      play(live)
+      runUntil(live, is('over'), ['coin'], 60_000)
+      expect(live.stats.replays).toBeGreaterThan(0)
+      return live
+    }
+
+    function watchToEnd(live: Game, speed: number): { viewer: Game; frames: number } {
+      const viewer = new Game(deps({ levels: crashLevels(), impure: noWorld, chaosRand: noWorld }))
+      viewer.watch(live.tape)
+      viewer.setPlaybackSpeed(speed)
+      let frames = 0
+      for (; frames < 60_000 && viewer.phase.kind !== 'over'; frames++) viewer.frame(1)
+      return { viewer, frames }
+    }
+
+    it.each([2, 5, 10])('plays back exactly at %i×, in proportionally fewer frames', (speed) => {
+      const live = finishedRun()
+      const normal = watchToEnd(live, 1)
+      const fast = watchToEnd(live, speed)
+      expect(fast.viewer.phase).toEqual(live.phase)
+      expect(fast.viewer.stats).toEqual(live.stats)
+      expect(fast.viewer.history).toEqual(live.history)
+      expect(hashState(fast.viewer.state)).toBe(hashState(live.state))
+      expect(fast.frames).toBeLessThanOrEqual(Math.ceil(normal.frames / speed) + 1)
+    })
+
+    it('only takes 1×, 2×, 5× or 10×, only applies to playback, and resets when playback ends', () => {
+      const live = finishedRun()
+      const game = new Game(deps({ levels: crashLevels() }))
+      expect(game.playbackSpeed).toBe(1)
+      game.setPlaybackSpeed(5)
+      expect(game.playbackSpeed).toBe(1) // not watching: live runs always run at 1×
+      game.watch(live.tape)
+      game.setPlaybackSpeed(3)
+      expect(game.playbackSpeed).toBe(1)
+      game.setPlaybackSpeed(10)
+      expect(game.playbackSpeed).toBe(10)
+      expect(game.view().playbackSpeed).toBe(10)
+      game.command('cancel') // Esc leaves playback
+      expect(game.playbackSpeed).toBe(1)
+      expect(game.view().playbackSpeed).toBeNull()
+    })
+  })
+
   it.each([2, 3, 4, 5, 7])('plays back exactly when a slow frame runs %i ticks at once', (n) => {
     // The recording resumes a save mid-play; a multi-tick frame must not step past that restart.
     expectPlaybackEquals(recording(), tapeLevels(), n)
