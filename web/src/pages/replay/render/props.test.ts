@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Entity } from '../engine/types'
 import type { Palette } from './palette'
-import { GROUND_Y } from '../engine/types'
-import { drawCoin, drawCrate, drawFallShadow, drawOrb, drawPit, drawRack } from './props'
+import { GROUND_Y, VIEW_H } from '../engine/types'
+import { PIT_DARKEN, drawCoin, drawCrate, drawFallShadow, drawOrb, drawPit, drawRack } from './props'
 
 const pal = { backdrop: 'silver', coin: 'gold', orb: 'purple', crate: 'blue', obstacle: 'red', player: 'green', ground: 'gray' } as Palette
 interface Call { name: string; args: unknown[]; fill: unknown; stroke: unknown }
@@ -284,9 +284,11 @@ describe('consistent lighting', () => {
     expect(calls.some((c) => c.name === 'moveTo')).toBe(true)
   })
 
-  it('draws a pit as a dark shaft below the ground line', () => {
+  it('draws a pit as a dark red shaft below the ground line: the obstacle colour, then a darkening layer', () => {
     const { ctx, calls } = mockCtx()
     drawPit(ctx, { id: 1, kind: 'pit', x: 100, y: GROUND_Y, w: 40, h: 0, taken: false }, pal)
-    expect(calls.some((c) => c.name === 'fillRect' && (c.args as number[])[0] === 100 && (c.args as number[])[2] === 40)).toBe(true)
+    const shaft = calls.filter((c) => c.name === 'fillRect' && (c.args as number[])[0] === 100 && (c.args as number[])[2] === 40)
+    expect(shaft.map((c) => c.fill)).toEqual([pal.obstacle, PIT_DARKEN])
+    expect(shaft.every((c) => (c.args as number[])[1] === GROUND_Y && (c.args as number[])[3] === VIEW_H - GROUND_Y)).toBe(true)
   })
 })

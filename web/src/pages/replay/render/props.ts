@@ -11,6 +11,8 @@ const LED_PERIOD = 30
 const TWO_PI = Math.PI * 2
 
 const SHADE = 'rgba(0, 0, 0, 0.25)'
+/** Darkens the obstacle red for pit shafts. */
+export const PIT_DARKEN = 'rgba(0, 0, 0, 0.45)'
 const BEZEL = 'rgba(0, 0, 0, 0.35)'
 const LIGHT = 'rgba(255, 255, 255, 0.25)'
 const LED_DIM = 'rgba(255, 255, 255, 0.12)'
@@ -148,9 +150,12 @@ export function drawGate(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette)
   ctx.fillText('fan-out ×3', e.x + e.w / 2, top - 8)
 }
 
-/** A pit: a dark shaft under a gap in the ground line. */
+/** A pit: a dark red shaft under a gap in the ground line. */
 export function drawPit(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
-  ctx.fillStyle = pal.backdrop
+  // Obstacle red, darkened, so a pit reads as a hazard in both themes and at half scale in the fan-out lanes.
+  ctx.fillStyle = pal.obstacle
+  ctx.fillRect(e.x, GROUND_Y, e.w, VIEW_H - GROUND_Y)
+  ctx.fillStyle = PIT_DARKEN
   ctx.fillRect(e.x, GROUND_Y, e.w, VIEW_H - GROUND_Y)
   ctx.fillStyle = SHADE
   ctx.fillRect(e.x, GROUND_Y, 2, VIEW_H - GROUND_Y)

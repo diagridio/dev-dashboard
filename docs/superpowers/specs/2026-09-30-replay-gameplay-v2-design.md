@@ -338,8 +338,8 @@ seeks to those cursors and runs the same replay-and-resume path, with the same
   `CB 7/10` as a 10-cell bar that reads `ARMED` when full.
 - **Grace:** the hat blinks (every 4 ticks). With reduced motion it gets a
   steady outline instead.
-- **New sprites** in `props.ts`: pit (a gap in the ground line with a dark
-  shaft), falling rack (a rack plus a warning ground shadow that grows as it
+- **New sprites** in `props.ts`: pit (a gap in the ground line over a dark
+  red shaft: the obstacle colour, darkened), falling rack (a rack plus a warning ground shadow that grows as it
   drops), tall rack, smashed-rack debris, fan-out/fan-in gates (a `WhenAll`
   arch).
 - **Fan-out:** three stacked strips of `VIEW_H / 3`. Each lane is drawn with
