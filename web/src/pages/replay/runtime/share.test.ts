@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_RUN_CODE, RUN_CODE_PREFIX, copyRunCode, decodeRun, encodeRun } from './share'
+import { MAX_RUN_CODE, MAX_TAPE_JSON, RUN_CODE_PREFIX, copyRunCode, decodeRun, encodeRun } from './share'
 import { emptyTape, type Tape } from './tape'
 import type { SaveBody } from './types'
 
@@ -57,7 +57,23 @@ describe('run codes', () => {
   })
 
   it('rejects codes over MAX_RUN_CODE without decoding them', async () => {
-    expect(await decodeRun(RUN_CODE_PREFIX + 'A'.repeat(MAX_RUN_CODE))).toBeNull()
+    const ctor = vi.fn()
+    vi.stubGlobal('DecompressionStream', ctor)
+    try {
+      expect(await decodeRun(RUN_CODE_PREFIX + 'A'.repeat(MAX_RUN_CODE))).toBeNull()
+      expect(ctor).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('rejects a small code that inflates past MAX_TAPE_JSON (deflate bomb)', async () => {
+    // A valid-shaped tape padded with highly compressible values: tiny code, huge JSON.
+    const bomb: Tape = { ...tape, impure: new Array<number>(Math.ceil(MAX_TAPE_JSON / 2) + 1000).fill(0) }
+    expect(JSON.stringify(bomb).length).toBeGreaterThan(MAX_TAPE_JSON)
+    const code = await encodeRun(bomb)
+    expect(code.length).toBeLessThan(MAX_RUN_CODE)
+    expect(await decodeRun(code)).toBeNull()
   })
 })
 
