@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -50,6 +50,18 @@ function renderAt(path: string) {
   )
 }
 
+/**
+ * Waits until the page is interactive, not merely rendered: the key listeners
+ * and the game loop are attached in effects that can run after the first
+ * heading appears (easily under a loaded test run), and keys sent before then
+ * are lost. The stage auto-focus runs in the same effect flush, so a focused
+ * stage means everything is wired up.
+ */
+async function gameReady(heading: string) {
+  await screen.findByRole('heading', { name: heading })
+  await waitFor(() => expect(document.activeElement).toBe(document.querySelector('.replay-stage')))
+}
+
 describe('Replay page', () => {
   it('lazy-loads at /replay and shows the title card', async () => {
     renderAt('/replay')
@@ -60,7 +72,7 @@ describe('Replay page', () => {
 
   it('Enter opens the level-0 tip without a docs link', async () => {
     renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    await gameReady('Press Enter to start')
     fireEvent.keyDown(window, { key: 'Enter' })
     expect(await screen.findByRole('heading', { name: 'Level 0 · No Safety Net' })).toBeInTheDocument()
     expect(screen.getByText(/keeps its progress in memory/)).toBeInTheDocument()
@@ -73,7 +85,7 @@ describe('Replay page', () => {
     vi.stubGlobal('requestAnimationFrame', vi.fn((cb: FrameRequestCallback) => frames.push(cb)))
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
     renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    await gameReady('Press Enter to start')
     let now = 0
     for (let i = 0; i < 5000 && !screen.queryByRole('heading', { name: 'Workflow FAILED' }); i++) {
       // Dismiss tip / "Progress lost" cards; the hat never jumps, so it soon hits a rack.
@@ -96,7 +108,7 @@ describe('Replay page', () => {
 
   it('pauses a running game when the window loses focus', async () => {
     renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    await gameReady('Press Enter to start')
     fireEvent.keyDown(window, { key: 'Enter' })
     fireEvent.keyDown(window, { key: 'Enter' })
     fireEvent.blur(window)
@@ -144,7 +156,7 @@ describe('Replay page', () => {
 
   it('focuses the game stage on mount and starts on Enter there', async () => {
     renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    await gameReady('Press Enter to start')
     const stage = screen.getByLabelText('REPLAY game')
     expect(stage).toHaveFocus()
     fireEvent.keyDown(stage, { key: 'Enter' })
@@ -153,7 +165,7 @@ describe('Replay page', () => {
 
   it('leaves Enter to a focused button', async () => {
     renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    await gameReady('Press Enter to start')
     const button = screen.getAllByRole('button')[0]
     button.focus()
     const e = fireEvent.keyDown(button, { key: 'Enter' })
@@ -163,7 +175,7 @@ describe('Replay page', () => {
 
   it('leaves keys pressed inside a dialog alone', async () => {
     renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    await gameReady('Press Enter to start')
     const dialog = document.createElement('div')
     dialog.setAttribute('role', 'dialog')
     const inner = document.createElement('div')
@@ -176,7 +188,7 @@ describe('Replay page', () => {
 
   it('ignores keys pressed with a modifier', async () => {
     renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    await gameReady('Press Enter to start')
     fireEvent.keyDown(window, { key: 'Enter', ctrlKey: true })
     expect(screen.getByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Level 0 · No Safety Net' })).not.toBeInTheDocument()
@@ -194,7 +206,7 @@ describe('Replay page', () => {
   it('saves a durable run and stops the loop when the page unmounts mid-run', async () => {
     localStorage.setItem(SAVE_KEY, savedRun())
     const { unmount } = renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Resume your run?' })
+    await gameReady('Resume your run?')
     fireEvent.keyDown(window, { key: 'Enter' })
     localStorage.removeItem(SAVE_KEY)
     unmount()
@@ -204,7 +216,7 @@ describe('Replay page', () => {
 
   it('never saves level 0, which has no durable history', async () => {
     const { unmount } = renderAt('/replay')
-    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    await gameReady('Press Enter to start')
     fireEvent.keyDown(window, { key: 'Enter' })
     fireEvent.keyDown(window, { key: 'Enter' })
     unmount()
