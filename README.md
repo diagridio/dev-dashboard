@@ -98,6 +98,9 @@ Compose, or Dapr Testcontainers shows up within one refresh cycle. Testcontainer
 dashboard finds the Testcontainers-managed daprd container, pairs it with your host app
 process, and even reads workflows from an in-memory state store via the sidecar itself.
 
+> **Tip:** once the dashboard is open, try the Konami code (↑ ↑ ↓ ↓ ← → ← → B A) and have
+> some fun! ;)
+
 With `--mode`/`DEVDASHBOARD_MODE` unset (the default for host use), the dashboard performs the
 complete scan across all discovery sources described above. Setting a mode restricts every
 dashboard surface — applications, workflows, state stores, the Control Plane view, and log
