@@ -59,7 +59,7 @@ export const LEVELS: LevelTable = {
     weights: { low: 3, high: 2, coin: 3, orb: 2 }, bossWeights: BOSS,
     durable: true, chaosMeanTicks: 1200, crashAfterPickup: ['orb'],
     tip: {
-      body: 'Glowing orbs give a ×3 boost, but they are Math.random(), Date.now() and fetch() called straight from workflow code. Replay gets a different answer.',
+      body: 'Workflow code must be deterministic: on replay it has to make exactly the same decisions. The purple orbs are Math.random(), Date.now() and fetch() called straight from workflow code, so avoid them. They look tempting with a ×3 boost, but replay gets a different answer.',
     },
   },
   3: {

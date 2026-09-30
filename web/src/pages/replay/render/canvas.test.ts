@@ -101,6 +101,23 @@ describe('render', () => {
     expect(calls.filter((c) => c.name === 'arc')).toHaveLength(3)
   })
 
+  it('draws coins as round coins and obstacles as racks, glinting from game time', () => {
+    const entity = (id: number, kind: 'coin' | 'low' | 'high', x: number, y: number, w: number, h: number) => ({ id, kind, x, y, w, h, taken: false })
+    const base = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false })
+    const state = { ...base, entities: [entity(0, 'coin', 200, GROUND_Y - 30, 10, 10), entity(1, 'low', 260, GROUND_Y - 20, 14, 20), entity(2, 'high', 320, 100, 22, 30)] }
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }, state), pal)
+    expect(calls.some((c) => c.name === 'arc' && c.args[0] === 205 && c.args[1] === GROUND_Y - 25 && c.args[2] === 5)).toBe(true)
+    const clips = (cs: { name: string }[]) => cs.filter((c) => c.name === 'clip').length
+    expect(calls.some((c) => c.name === 'lineTo' && c.args[0] === 331 && c.args[1] === 100)).toBe(true)
+    const still = mockCtx()
+    render(still.ctx, view({ kind: 'playing' }, { ...state, elapsed: 60 }), pal)
+    expect(clips(calls) - clips(still.calls)).toBe(1) // elapsed 0 is a glint moment for coin 0
+    const calm = mockCtx()
+    render(calm.ctx, view({ kind: 'playing' }, state, { reducedMotion: true }), pal)
+    expect(clips(calls) - clips(calm.calls)).toBe(1)
+  })
+
   it('shows the boss countdown during a boss segment', () => {
     const { ctx, calls } = mockCtx()
     const state = initialState({ level: 2, seed: 1, score: 0, elapsed: 0, distance: 0, boss: true })

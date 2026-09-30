@@ -5,6 +5,7 @@ import type { Phase } from '../runtime/types'
 import { drawBackground } from './background'
 import type { Palette } from './palette'
 import { NEUTRAL, type Pose } from './pose'
+import { drawCoin, drawRack } from './props'
 import { drawHat } from './sprites'
 
 export interface RenderView {
@@ -45,7 +46,7 @@ function drawGround(ctx: CanvasRenderingContext2D, state: GameState, pal: Palett
   for (let x = -offset; x < VIEW_W; x += 24) ctx.fillRect(x, GROUND_Y + 10, 10, 2)
 }
 
-function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, replaying: boolean): void {
+function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, replaying: boolean, elapsed: number, reducedMotion: boolean): void {
   if (e.taken) {
     // During a replay, recorded activities are served from history, not re-run.
     if (!replaying || e.kind === 'orb') return
@@ -56,7 +57,15 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, repl
     return
   }
   const kind = e.kind
-  ctx.fillStyle = kind === 'low' || kind === 'high' ? pal.obstacle : pal[kind]
+  if (kind === 'coin') {
+    drawCoin(ctx, e, pal, elapsed, reducedMotion)
+    return
+  }
+  if (kind === 'low' || kind === 'high') {
+    drawRack(ctx, e, pal, elapsed, reducedMotion)
+    return
+  }
+  ctx.fillStyle = pal[kind]
   if (kind === 'orb') {
     ctx.beginPath()
     ctx.arc(e.x + e.w / 2, e.y + e.h / 2, e.w / 2, 0, Math.PI * 2)
@@ -130,7 +139,7 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
   if (crashing && !view.reducedMotion) ctx.translate(((view.frame * 7) % 9) - 4, ((view.frame * 5) % 7) - 3)
   drawBackground(ctx, state.distance + state.scroll, pal, view.frame, view.reducedMotion)
   drawGround(ctx, state, pal)
-  for (const e of state.entities) drawEntity(ctx, e, pal, replaying)
+  for (const e of state.entities) drawEntity(ctx, e, pal, replaying, state.elapsed, view.reducedMotion)
   drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL)
   ctx.restore()
   drawHud(ctx, state, pal)
