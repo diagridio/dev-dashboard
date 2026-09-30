@@ -13,15 +13,17 @@ describe('HistoryPanel', () => {
       <HistoryPanel
         history={[
           { type: 'Input', tick: 0, kind: 'jump' },
-          { type: 'ActivityCompleted', tick: 10, id: 3, hash: 1, result: 0.25 },
+          { type: 'ActivityCrateCollected', tick: 10, id: 3, hash: 1, result: 0.25 },
           { type: 'OrbTaken', tick: 20, id: 4, hash: 2 },
+          { type: 'ActivityCoinCollected', tick: 30, id: 5, hash: 3 },
         ]}
       />,
     )
     const types = [...container.querySelectorAll('.evtype')].map((n) => n.textContent)
-    expect(types).toEqual(['#3 NonDeterministicCall', '#2 ActivityCompleted', '#1 Input'])
+    expect(types).toEqual(['#4 ActivityCoinCollected', '#3 NonDeterministicCall', '#2 ActivityCrateCollected', '#1 Input'])
+    expect(screen.getByText('coin 5')).toBeInTheDocument()
     expect(screen.getByText('crate 3 · result 0.250')).toBeInTheDocument()
     expect(screen.getByText('orb 4 · value not recorded')).toBeInTheDocument()
-    expect(screen.getByText('3 events')).toBeInTheDocument()
+    expect(screen.getByText('4 events')).toBeInTheDocument()
   })
 })

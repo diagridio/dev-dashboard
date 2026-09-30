@@ -152,7 +152,7 @@ export function step(prev: GameState, inputs: readonly InputKind[], ports: Ports
     e.taken = true
     if (e.kind === 'coin') {
       s.score += s.multiplier
-      events.push({ type: 'ActivityCompleted', tick: s.tick, id: e.id, hash: 0 })
+      events.push({ type: 'ActivityCoinCollected', tick: s.tick, id: e.id, hash: 0 })
     } else if (e.kind === 'orb') {
       s.rng = mix(s.rng, ports.impure())
       boost(s)
@@ -162,7 +162,7 @@ export function step(prev: GameState, inputs: readonly InputKind[], ports: Ports
       s.rng = mix(s.rng, result)
       boost(s)
       s.score += s.multiplier
-      events.push({ type: 'ActivityCompleted', tick: s.tick, id: e.id, hash: 0, result })
+      events.push({ type: 'ActivityCrateCollected', tick: s.tick, id: e.id, hash: 0, result })
     }
   }
 

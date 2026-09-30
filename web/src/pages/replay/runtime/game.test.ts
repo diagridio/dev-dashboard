@@ -79,7 +79,7 @@ describe('Game', () => {
     runUntil(game, is('playing'))
     expect(game.state.tick).toBe(tick)
     expect(hashState(game.state)).toBe(hash)
-    const activities = game.history.filter((e) => e.type === 'ActivityCompleted').length
+    const activities = game.history.filter((e) => e.type === 'ActivityCoinCollected').length
     expect(activities).toBeGreaterThan(0)
     expect(game.stats).toMatchObject({ replays: 1, fromHistory: activities, executed: activities, incidents: 0 })
     expect(game.view().notice).toMatch(/resumed at tick 300/)

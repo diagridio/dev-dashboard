@@ -26,7 +26,7 @@ describe('replay', () => {
   it('rebuilds a live run exactly from its history', () => {
     const levels = makeLevels()
     const live = record(600, levels, ['coin'], counter())
-    expect(live.history.some((e) => e.type === 'ActivityCompleted')).toBe(true)
+    expect(live.history.some((e) => e.type === 'ActivityCoinCollected')).toBe(true)
     const r = replay(start, live.history, live.state.tick, counter(), levels)
     expect(r.ok).toBe(true)
     expect(hashState(r.state)).toBe(hashState(live.state))
@@ -56,7 +56,7 @@ describe('replay', () => {
   it('replays crate pickups from their recorded results', () => {
     const levels = makeLevels({ weights: { crate: 1 } })
     const live = record(400, levels, ['crate'], counter())
-    expect(live.history.some((e) => e.type === 'ActivityCompleted' && e.result !== undefined)).toBe(true)
+    expect(live.history.some((e) => e.type === 'ActivityCrateCollected')).toBe(true)
     const r = replay(start, live.history, live.state.tick, () => 0.99, levels)
     expect(r.ok).toBe(true)
     expect(hashState(r.state)).toBe(hashState(live.state))

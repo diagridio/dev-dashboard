@@ -41,7 +41,7 @@ export const LEVELS: LevelTable = {
     weights: { low: 2, coin: 3 }, bossWeights: BOSS,
     durable: false, chaosMeanTicks: null, scriptedCrashAt: 900,
     tip: {
-      body: 'Your workflow keeps its progress in memory. Collect activities and see what happens when the process dies.',
+      body: 'Your workflow keeps its progress in memory. Collect activity coins and see what happens when the process dies.',
     },
   },
   1: {

@@ -1,7 +1,12 @@
 import type { HistoryEvent } from './engine/types'
 
 const SHOWN = 60
-const NODE: Record<HistoryEvent['type'], string> = { Input: 'n-sched', ActivityCompleted: 'n-done', OrbTaken: 'n-fail' }
+const NODE: Record<HistoryEvent['type'], string> = {
+  Input: 'n-sched',
+  ActivityCoinCollected: 'n-done',
+  ActivityCrateCollected: 'n-done',
+  OrbTaken: 'n-fail',
+}
 
 function describeEvent(e: HistoryEvent): { type: string; detail: string } {
   switch (e.type) {
@@ -9,11 +14,10 @@ function describeEvent(e: HistoryEvent): { type: string; detail: string } {
       return { type: 'Input', detail: e.kind }
     case 'OrbTaken':
       return { type: 'NonDeterministicCall', detail: `orb ${e.id} · value not recorded` }
-    case 'ActivityCompleted':
-      return {
-        type: 'ActivityCompleted',
-        detail: e.result === undefined ? `coin ${e.id}` : `crate ${e.id} · result ${e.result.toFixed(3)}`,
-      }
+    case 'ActivityCoinCollected':
+      return { type: 'ActivityCoinCollected', detail: `coin ${e.id}` }
+    case 'ActivityCrateCollected':
+      return { type: 'ActivityCrateCollected', detail: `crate ${e.id} · result ${e.result.toFixed(3)}` }
   }
 }
 

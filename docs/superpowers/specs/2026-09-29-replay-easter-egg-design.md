@@ -55,7 +55,8 @@ off with reduced motion).
   RNG held in game state. Hitting one ends the run: workflow status **FAILED**.
   This is the only way to lose.
 - **Activity coins.** Collecting one appends
-  `ActivityCompleted(#id, result)` to the history panel. Score = activities
+  `ActivityCoinCollected(#id)` to the history panel (crates append
+  `ActivityCrateCollected(#id, result)`). Score = activities
   completed. Best score persists in `localStorage`.
 - **Chaos crash.** At random wall-clock times: glitch effect, banner
   `daprd: signal: killed`, the live state is discarded, and the engine replays
@@ -157,8 +158,9 @@ web/src/hooks/useKonami.ts   mounted once in App; navigates to /replay
   same state, inputs and impure values it always returns the same result.
 - **History events:**
   - `Input { tick, kind: 'jump' | 'slideStart' | 'slideEnd' }`
-  - `ActivityCompleted { tick, id, result?, hash }` — `result` is set only for
-    activity crates (the recorded impure value).
+  - `ActivityCoinCollected { tick, id, hash }` — a coin (activity) collected.
+  - `ActivityCrateCollected { tick, id, hash, result }` — an activity crate;
+    `result` is the recorded impure value that replay reads back.
   - `OrbTaken { tick, id, hash }` — records *that* it happened, not the value.
   - `hash` is the state hash after the event's tick is applied.
 - **Start input.** Every history begins from a `StartInput`

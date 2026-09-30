@@ -29,7 +29,8 @@ function isEvent(v: unknown): v is HistoryEvent {
   switch (v.type) {
     case 'Input': return v.kind === 'jump' || v.kind === 'slideStart' || v.kind === 'slideEnd'
     case 'OrbTaken': return isNum(v.id) && isNum(v.hash)
-    case 'ActivityCompleted': return isNum(v.id) && isNum(v.hash) && (v.result === undefined || isNum(v.result))
+    case 'ActivityCoinCollected': return isNum(v.id) && isNum(v.hash)
+    case 'ActivityCrateCollected': return isNum(v.id) && isNum(v.hash) && isNum(v.result)
     default: return false
   }
 }

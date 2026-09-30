@@ -72,7 +72,8 @@ export interface GameState {
 
 export type HistoryEvent =
   | { type: 'Input'; tick: number; kind: InputKind }
-  | { type: 'ActivityCompleted'; tick: number; id: number; hash: number; result?: number }
+  | { type: 'ActivityCoinCollected'; tick: number; id: number; hash: number }
+  | { type: 'ActivityCrateCollected'; tick: number; id: number; hash: number; result: number }
   | { type: 'OrbTaken'; tick: number; id: number; hash: number }
 
 /** Events produced by step() itself (everything except recorded inputs). */

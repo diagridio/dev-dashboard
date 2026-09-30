@@ -31,7 +31,7 @@ export function createReplayer(
 ): Replayer {
   const crateResults = new Map<number, number>()
   for (const e of history) {
-    if (e.type === 'ActivityCompleted' && e.result !== undefined) crateResults.set(e.id, e.result)
+    if (e.type === 'ActivityCrateCollected') crateResults.set(e.id, e.result)
   }
   const ports: Ports = { impure, crateValue: (id) => crateResults.get(id) ?? impure() }
   let state = initialState(start)

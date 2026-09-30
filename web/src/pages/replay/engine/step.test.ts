@@ -106,11 +106,11 @@ describe('step', () => {
     expect(step(withEntity('low', GROUND_Y - 20, 14, 20), [], ports(), levels).state.status).toBe('failed')
   })
 
-  it('collects a coin as an ActivityCompleted event hashed with the new state', () => {
+  it('collects a coin as an ActivityCoinCollected event hashed with the new state', () => {
     const { state, events } = step(withEntity('coin', GROUND_Y - 24, 10, 10), [], ports(), levels)
     expect(state.score).toBe(1)
     expect(state.entities[0].taken).toBe(true)
-    expect(events).toEqual([{ type: 'ActivityCompleted', tick: 0, id: 99, hash: hashState(state) }])
+    expect(events).toEqual([{ type: 'ActivityCoinCollected', tick: 0, id: 99, hash: hashState(state) }])
   })
 
   it('mixes an unrecorded impure value into the RNG on an orb pickup', () => {
@@ -130,7 +130,7 @@ describe('step', () => {
     const { state, events } = step(withEntity('crate', GROUND_Y - 24, 14, 14), [], ports({ impure, crateValue }), levels)
     expect(crateValue).toHaveBeenCalledWith(99)
     expect(impure).not.toHaveBeenCalled()
-    expect(events).toEqual([{ type: 'ActivityCompleted', tick: 0, id: 99, hash: hashState(state), result: 0.5 }])
+    expect(events).toEqual([{ type: 'ActivityCrateCollected', tick: 0, id: 99, hash: hashState(state), result: 0.5 }])
     expect(state.multiplier).toBe(3)
     expect(state.score).toBe(3)
   })

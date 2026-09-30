@@ -180,7 +180,7 @@ export class Game {
         this.chaos.onPickup(state.level, 'orb', state.tick)
       } else {
         this.stats.executed += 1
-        if (e.result !== undefined) this.chaos.onPickup(state.level, 'crate', state.tick)
+        if (e.type === 'ActivityCrateCollected') this.chaos.onPickup(state.level, 'crate', state.tick)
       }
     }
 
@@ -259,7 +259,9 @@ export class Game {
     this.replayer = null
     const result = r.result()
     const served = this.history.slice(0, result.ok ? this.history.length : result.divergedAt)
-    this.stats.fromHistory += served.filter((e) => e.type === 'ActivityCompleted').length
+    this.stats.fromHistory += served.filter(
+      (e) => e.type === 'ActivityCoinCollected' || e.type === 'ActivityCrateCollected',
+    ).length
     if (result.ok) {
       this.state = result.state
       this.prevState = null
