@@ -13,6 +13,7 @@ import { renderCopyLinks } from '../lib/copy-links'
 import { trackAction } from '../lib/telemetry'
 import { useToast } from '../lib/toast'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { KonamiHint } from '../components/KonamiHint'
 import type { AppSummary } from '../types/api'
 
 // Fully stopped: both the app process/container and its daprd sidecar report 'stopped'.
@@ -55,6 +56,7 @@ export function Applications() {
         <p className="muted" data-testid="empty-hint">
           {renderCopyLinks(emptyStateContent.apps)}
         </p>
+        <KonamiHint />
       </div>
     )
   }

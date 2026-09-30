@@ -128,6 +128,22 @@ describe('Applications', () => {
     expect(num).toHaveClass('bad')
   })
 
+  it('shows the Konami code in mono, centred, at the bottom of the empty state', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([])))
+    const { container } = renderAt()
+    const hint = await screen.findByText('↑ ↑ ↓ ↓ ← → ← → B A')
+    expect(hint).toHaveClass('konami-hint')
+    expect(hint).toHaveAccessibleName('Konami code')
+    expect(container.querySelector('.page')?.lastElementChild).toBe(hint)
+  })
+
+  it('does not show the Konami code when there are apps', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json(sampleApps)))
+    renderAt()
+    await screen.findByRole('link', { name: 'order' })
+    expect(screen.queryByLabelText('Konami code')).toBeNull()
+  })
+
   it('shows an empty state when no apps', async () => {
     server.use(http.get('/api/apps', () => HttpResponse.json([])))
     renderAt()

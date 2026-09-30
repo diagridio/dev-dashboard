@@ -115,6 +115,18 @@ describe('Overlay', () => {
     expect(screen.queryByText(/run code/i)).toBeNull()
   })
 
+  it('sets the daily run, the instructions and the best scores larger on the start card', () => {
+    render(<Overlay phase={{ kind: 'title' }} {...common} dailyBest={7} />)
+    for (const text of ['Daily run · 2026-09-30 (UTC)', 'Space / ↑ jump (hold for higher) · ↓ slide · Esc pause', "Today's best: 7 · Best: 40"]) {
+      expect(screen.getByText(text)).toHaveClass('replay-keys', 'replay-start-meta')
+    }
+  })
+
+  it('keeps the smaller key hints on the other cards', () => {
+    render(<Overlay phase={{ kind: 'paused' }} {...common} />)
+    expect(screen.getByText('Esc or Enter to continue')).not.toHaveClass('replay-start-meta')
+  })
+
   it('documents variable jump height in the title-card key hint', () => {
     render(<Overlay phase={{ kind: 'title' }} {...common} />)
     expect(screen.getByText('Space / ↑ jump (hold for higher) · ↓ slide · Esc pause')).toBeInTheDocument()

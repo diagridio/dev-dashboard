@@ -89,9 +89,9 @@ export function Overlay({
         <Card>
           <h2>Press Enter to start</h2>
           <p>Guide a workflow through a datacenter full of chaos. It will crash. Dapr will replay it.</p>
-          <p className="replay-keys">Daily run · {date} (UTC)</p>
-          <p className="replay-keys">Space / ↑ jump (hold for higher) · ↓ slide · Esc pause</p>
-          {(best > 0 || dailyBest > 0) && <p className="replay-keys">Today's best: {dailyBest} · Best: {best}</p>}
+          <p className="replay-keys replay-start-meta">Daily run · {date} (UTC)</p>
+          <p className="replay-keys replay-start-meta">Space / ↑ jump (hold for higher) · ↓ slide · Esc pause</p>
+          {(best > 0 || dailyBest > 0) && <p className="replay-keys replay-start-meta">Today's best: {dailyBest} · Best: {best}</p>}
           {onWatch && <WatchForm onWatch={onWatch} error={watchError ?? null} />}
         </Card>
       )
