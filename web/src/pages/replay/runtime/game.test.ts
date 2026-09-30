@@ -403,8 +403,12 @@ describe('Game', () => {
   it('stays on the endless level 5 once reached', () => {
     const game = new Game(deps({ levels: makeLevels({ length: 300 }, { 5: { length: Number.POSITIVE_INFINITY } }) }))
     play(game)
-    runUntil(game, (g) => g.phase.kind === 'tip' && g.start.level === 5)
-    game.command('confirm')
+    for (let f = 0; f < 20_000 && game.start.level < 5; f++) {
+      if (game.phase.kind === 'tip') game.command('confirm')
+      game.frame(1)
+    }
+    expect(game.start.level).toBe(5)
+    if (game.phase.kind === 'tip') game.command('confirm')
     for (let i = 0; i < 400; i++) game.frame(1)
     expect(game.state.level).toBe(5)
   })
