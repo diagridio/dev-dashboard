@@ -121,7 +121,7 @@ export class Game {
         if (c === 'cancel' || c === 'pause') {
           this.setPhase({ kind: 'paused' })
           this.save()
-        } else if (c === 'jump' || c === 'slideStart' || c === 'slideEnd') {
+        } else if (c === 'jump' || c === 'jumpEnd' || c === 'slideStart' || c === 'slideEnd') {
           this.pending.push(c)
         }
         return

@@ -59,6 +59,19 @@ describe('Game', () => {
     expect(game.phase.kind).toBe('playing')
   })
 
+  it('records a jump release as an Input event', () => {
+    const game = new Game(deps())
+    play(game)
+    game.command('jump')
+    game.frame(1)
+    game.command('jumpEnd')
+    game.frame(1)
+    expect(game.history.slice(0, 2)).toEqual([
+      { type: 'Input', tick: 0, kind: 'jump' },
+      { type: 'Input', tick: 1, kind: 'jumpEnd' },
+    ])
+  })
+
   it('records inputs in the history at the tick they are applied', () => {
     const game = new Game(deps())
     play(game)

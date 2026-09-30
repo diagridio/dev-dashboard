@@ -7,6 +7,7 @@ const sample: Save = {
   start: { level: 2, seed: 99, score: 5, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 },
   history: [
     { type: 'Input', tick: 3, kind: 'jump' },
+    { type: 'Input', tick: 4, kind: 'jumpEnd' },
     { type: 'ActivityCoinCollected', tick: 10, id: 4, hash: 123 },
     { type: 'OrbTaken', tick: 20, id: 5, hash: 456 },
     { type: 'ActivityCrateCollected', tick: 30, id: 6, hash: 789, result: 0.5 },

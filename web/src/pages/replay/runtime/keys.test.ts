@@ -16,7 +16,11 @@ describe('keyToCommand', () => {
   it('ends a slide on keyup of the slide keys only', () => {
     expect(up('ArrowDown')).toBe('slideEnd')
     expect(up('s')).toBe('slideEnd')
-    expect(up(' ')).toBeNull()
+    expect(up('x')).toBeNull()
+  })
+
+  it('maps releasing a jump key to jumpEnd', () => {
+    for (const key of [' ', 'ArrowUp', 'w', 'W']) expect(keyToCommand({ key, repeat: false }, false)).toBe('jumpEnd')
   })
 
   it('ignores auto-repeat keydowns', () => {

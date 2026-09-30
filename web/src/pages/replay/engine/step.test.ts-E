@@ -76,7 +76,7 @@ describe('step', () => {
     const up = step(initialState(start), ['jump'], ports(), levels).state
     const a = step(up, [], ports(), levels).state
     const b = step(up, ['jump'], ports(), levels).state
-    expect({ y: b.player.y, vy: b.player.vy }).toEqual({ y: a.player.y, vy: a.player.vy })
+    expect(b.player).toEqual(a.player)
   })
 
   it('fails on a high obstacle when standing, passes under it when sliding', () => {

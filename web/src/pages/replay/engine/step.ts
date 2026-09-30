@@ -133,20 +133,29 @@ function launch(p: Player): void {
   p.jumpBufferUntil = 0
 }
 
+export const COYOTE_TICKS = 6
+export const JUMP_BUFFER_TICKS = 6
+export const JUMP_CUT_VY = -3
+
 /** Inputs, gravity and landing for one hat. Mutates `p`. */
 export function movePlayer(p: Player, inputs: readonly InputKind[], tick: number, entities: readonly Entity[]): void {
-  void tick
   const pit = overPit(entities)
   const standing = p.y === GROUND_Y && p.vy === 0 && !pit
   for (const input of inputs) {
     if (input === 'jump') {
-      if (standing) launch(p)
+      p.jumpHeld = true
+      if (standing || tick < p.coyoteUntil) launch(p)
+      else p.jumpBufferUntil = tick + JUMP_BUFFER_TICKS
+    } else if (input === 'jumpEnd') {
+      p.jumpHeld = false
+      if (p.vy < JUMP_CUT_VY) p.vy = JUMP_CUT_VY
     } else if (input === 'slideStart' || input === 'slideEnd') {
       p.sliding = input === 'slideStart'
     }
   }
-  const supported = p.y === GROUND_Y && p.vy === 0 && !pit
-  if (supported) return
+  if (p.y === GROUND_Y && p.vy === 0 && !pit) return
+  // Walking off an edge (not jumping) opens the coyote window once.
+  if (p.y === GROUND_Y && p.vy === 0) p.coyoteUntil = tick + COYOTE_TICKS
   const before = p.y
   p.vy += GRAVITY
   p.y += p.vy
@@ -154,6 +163,7 @@ export function movePlayer(p: Player, inputs: readonly InputKind[], tick: number
   if (p.vy >= 0 && before <= GROUND_Y && p.y >= GROUND_Y && !overPit(entities)) {
     p.y = GROUND_Y
     p.vy = 0
+    if (tick < p.jumpBufferUntil) launch(p)
   }
 }
 

@@ -22,7 +22,7 @@ export type Phase =
   | { kind: 'lost' }
   | { kind: 'over'; reason: string }
 
-export type Command = 'jump' | 'slideStart' | 'slideEnd' | 'pause' | 'confirm' | 'cancel'
+export type Command = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd' | 'pause' | 'confirm' | 'cancel'
 
 export interface Save {
   version: 2

@@ -12,7 +12,10 @@ export const PLAYER_X = 80
 export const SPAWN_X = 490
 
 export type Level = 0 | 1 | 2 | 3 | 4
-export type InputKind = 'jump' | 'slideStart' | 'slideEnd'
+/** Keys the player presses. */
+export type PlayerInput = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd'
+/** Everything step() accepts as an input. */
+export type InputKind = PlayerInput
 export type EntityKind = 'low' | 'high' | 'coin' | 'orb' | 'crate' | 'tall' | 'falling' | 'pit'
 
 export interface Entity {
@@ -91,7 +94,7 @@ export interface GameState {
 }
 
 export type HistoryEvent =
-  | { type: 'Input'; tick: number; kind: InputKind }
+  | { type: 'Input'; tick: number; kind: PlayerInput }
   | { type: 'ActivityCoinCollected'; tick: number; id: number; hash: number }
   | { type: 'ActivityCrateCollected'; tick: number; id: number; hash: number; result: number }
   | { type: 'OrbTaken'; tick: number; id: number; hash: number }
