@@ -139,7 +139,9 @@ export function Component() {
             }}
           />
         </div>
-        <HistoryPanel history={game.history} />
+        {/* Level 0 has no durable history, so the panel only appears from level 1. Its
+            grid column stays reserved so the canvas doesn't resize when it does. */}
+        {game.state.level >= 1 && <HistoryPanel history={game.history} />}
       </div>
       <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>

@@ -223,6 +223,24 @@ describe('Replay page', () => {
     expect(localStorage.getItem(SAVE_KEY)).toBeNull()
   })
 
+  it('hides the history panel on the title screen and in level 0', async () => {
+    const { container } = renderAt('/replay')
+    await gameReady('Press Enter to start')
+    expect(container.querySelector('.replay-grid .panel')).toBeNull()
+    fireEvent.keyDown(window, { key: 'Enter' })
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(container.querySelector('.replay-grid .panel')).toBeNull()
+  })
+
+  it('shows the history panel from level 1 onwards', async () => {
+    localStorage.setItem(SAVE_KEY, savedRun())
+    const { container } = renderAt('/replay')
+    await gameReady('Resume your run?')
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(container.querySelector('.replay-grid .panel')).not.toBeNull()
+    expect(screen.getByText(/\d+ events/)).toBeInTheDocument()
+  })
+
   it('offers to resume when a saved run exists', async () => {
     localStorage.setItem(SAVE_KEY, savedRun())
     renderAt('/replay')
