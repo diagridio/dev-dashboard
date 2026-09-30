@@ -7,6 +7,7 @@ import { routes } from '../../router'
 import { QueryProvider, makeQueryClient } from '../../lib/query'
 import { RefreshProvider } from '../../lib/refresh'
 import { ConnectionContext } from '../../lib/connection'
+import { trackAction } from '../../lib/telemetry'
 import { SAVE_KEY } from './runtime/persistence'
 
 vi.mock('../../lib/telemetry', () => ({ trackAction: vi.fn(), trackView: vi.fn(), setTelemetryContext: vi.fn(), trackError: vi.fn() }))
@@ -86,7 +87,8 @@ describe('Replay page', () => {
     }
     expect(screen.getByRole('heading', { name: 'Workflow FAILED' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    fireEvent.click(screen.getByRole('button', { name: '↗ Share' }))
+    expect(trackAction).toHaveBeenCalledWith('share_open', { source: 'replay' })
     const dialog = await screen.findByRole('dialog', { name: 'Share the dashboard' })
     fireEvent.keyDown(dialog.querySelector('button') as HTMLButtonElement, { key: 'Enter' })
     expect(screen.getByRole('heading', { name: 'Workflow FAILED' })).toBeInTheDocument()

@@ -89,12 +89,15 @@ export function Overlay({ phase, stats, best, score, level, onShare }: Props) {
             <Stat label="Executed" value={stats.executed} />
             <Stat label="Non-determinism" value={stats.incidents} />
           </div>
-          {onShare && (
-            <button type="button" className="btn ghost replay-share" onClick={onShare}>
-              Share
-            </button>
-          )}
-          <p className="replay-keys">Enter to play again</p>
+          <div className="replay-foot">
+            <p className="replay-keys">Enter to play again</p>
+            {/* Same class and label as the TopNav Share button. */}
+            {onShare && (
+              <button type="button" className="tbtn" onClick={onShare}>
+                ↗ Share
+              </button>
+            )}
+          </div>
         </Card>
       )
     default:

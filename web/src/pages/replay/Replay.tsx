@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ShareDialog } from '../../components/ShareDialog'
 import { isInteractiveTarget } from '../../lib/isEditableTarget'
+import { trackAction } from '../../lib/telemetry'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { VIEW_H, VIEW_W } from './engine/types'
 import { HistoryPanel } from './HistoryPanel'
@@ -132,7 +133,10 @@ export function Component() {
             best={game.best}
             score={game.state.score}
             level={game.state.level}
-            onShare={() => setShareOpen(true)}
+            onShare={() => {
+              setShareOpen(true)
+              trackAction('share_open', { source: 'replay' })
+            }}
           />
         </div>
         <HistoryPanel history={game.history} />
