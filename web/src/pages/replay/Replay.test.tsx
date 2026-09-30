@@ -8,11 +8,13 @@ import { QueryProvider, makeQueryClient } from '../../lib/query'
 import { RefreshProvider } from '../../lib/refresh'
 import { ConnectionContext } from '../../lib/connection'
 import { trackAction } from '../../lib/telemetry'
+import { copyText } from '../../lib/clipboard'
 import { SAVE_KEY } from './runtime/persistence'
 import { encodeRun } from './runtime/share'
 import { emptyTape } from './runtime/tape'
 
 vi.mock('../../lib/telemetry', () => ({ trackAction: vi.fn(), trackView: vi.fn(), setTelemetryContext: vi.fn(), trackError: vi.fn() }))
+vi.mock('../../lib/clipboard', () => ({ copyText: vi.fn() }))
 
 beforeEach(() => {
   localStorage.clear()
@@ -64,6 +66,36 @@ async function gameReady(heading: string) {
   await waitFor(() => expect(document.activeElement).toBe(document.querySelector('.replay-stage')))
 }
 
+/**
+ * Drives the real loop to the game-over card: captures rAF callbacks and fires them with
+ * advancing time. The hat never jumps, so it soon hits a rack. Returns a stepper for more frames.
+ */
+async function playToGameOver(): Promise<(n: number) => void> {
+  const frames: FrameRequestCallback[] = []
+  vi.stubGlobal('requestAnimationFrame', vi.fn((cb: FrameRequestCallback) => frames.push(cb)))
+  vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  renderAt('/replay')
+  await gameReady('Press Enter to start')
+  let now = 0
+  const advance = (n: number) => {
+    for (let i = 0; i < n; i++) {
+      act(() => {
+        now += 100
+        frames.shift()?.(now)
+      })
+    }
+  }
+  for (let i = 0; i < 5000 && !screen.queryByRole('heading', { name: 'Workflow FAILED' }); i++) {
+    // Dismiss tip / "Progress lost" cards.
+    if (screen.queryByRole('heading', { name: /^Level \d|Progress lost|Press Enter/ })) {
+      fireEvent.keyDown(window, { key: 'Enter' })
+    }
+    advance(1)
+  }
+  expect(screen.getByRole('heading', { name: 'Workflow FAILED' })).toBeInTheDocument()
+  return advance
+}
+
 describe('Replay page', () => {
   it('lazy-loads at /replay and shows the title card', async () => {
     renderAt('/replay')
@@ -82,24 +114,7 @@ describe('Replay page', () => {
   })
 
   it('opens the Share dialog from the game-over card, and Enter there does not restart the run', async () => {
-    // Drive the real loop: capture rAF callbacks and fire them with advancing time.
-    const frames: FrameRequestCallback[] = []
-    vi.stubGlobal('requestAnimationFrame', vi.fn((cb: FrameRequestCallback) => frames.push(cb)))
-    vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    renderAt('/replay')
-    await gameReady('Press Enter to start')
-    let now = 0
-    for (let i = 0; i < 5000 && !screen.queryByRole('heading', { name: 'Workflow FAILED' }); i++) {
-      // Dismiss tip / "Progress lost" cards; the hat never jumps, so it soon hits a rack.
-      if (screen.queryByRole('heading', { name: /^Level \d|Progress lost|Press Enter/ })) {
-        fireEvent.keyDown(window, { key: 'Enter' })
-      }
-      act(() => {
-        now += 100
-        frames.shift()?.(now)
-      })
-    }
-    expect(screen.getByRole('heading', { name: 'Workflow FAILED' })).toBeInTheDocument()
+    await playToGameOver()
 
     fireEvent.click(screen.getByRole('button', { name: '↗ Share' }))
     expect(trackAction).toHaveBeenCalledWith('share_open', { source: 'replay' })
@@ -254,30 +269,48 @@ describe('Replay page', () => {
     expect(screen.getByText(/tick 40/)).toBeInTheDocument()
   })
 
-  it('rejects an invalid run code from the title card', async () => {
+  it('rejects an invalid execution ID from the title card', async () => {
     renderAt('/replay')
     await gameReady('Press Enter to start')
-    fireEvent.change(screen.getByRole('textbox', { name: 'Paste a run code' }), { target: { value: 'not a code' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Watch a run' }))
-    expect(await screen.findByText("That run code isn't valid.")).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Execution ID' }), { target: { value: 'not a code' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Replay run' }))
+    expect(await screen.findByText("That execution ID isn't valid.")).toBeInTheDocument()
     expect(trackAction).toHaveBeenCalledWith('replay_watch')
   })
 
-  it('starts playback from a valid run code', async () => {
+  it('starts playback from a valid execution ID', async () => {
     const code = await encodeRun({ ...emptyTape('2026-09-30'), liveTick: 0 })
     renderAt('/replay')
     await gameReady('Press Enter to start')
-    fireEvent.change(screen.getByRole('textbox', { name: 'Paste a run code' }), { target: { value: code } })
-    fireEvent.click(screen.getByRole('button', { name: 'Watch a run' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Execution ID' }), { target: { value: code } })
+    fireEvent.click(screen.getByRole('button', { name: 'Replay run' }))
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Press Enter to start' })).toBeNull())
   })
 
-  it('does not start the game when Enter is pressed in the run-code field', async () => {
+  it('does not start the game when Enter is pressed in the execution ID field', async () => {
     renderAt('/replay')
     await gameReady('Press Enter to start')
-    const field = screen.getByRole('textbox', { name: 'Paste a run code' })
+    const field = screen.getByRole('textbox', { name: 'Execution ID' })
     field.focus()
     fireEvent.keyDown(field, { key: 'Enter' })
     expect(screen.getByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+  })
+
+  it('shows the execution ID after a game, copies it, and replays the entire run from it', async () => {
+    const advance = await playToGameOver()
+    const field = (await screen.findByRole('textbox', { name: 'Execution ID' })) as HTMLInputElement
+    expect(field.value).toMatch(/^RPL1\./)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy execution ID' }))
+    expect(copyText).toHaveBeenCalledWith(field.value)
+    expect(trackAction).toHaveBeenCalledWith('replay_share_copy')
+    expect(screen.getByRole('button', { name: 'Copy execution ID' })).toHaveTextContent('✓ Copied')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Replay entire run' }))
+    expect(trackAction).toHaveBeenCalledWith('replay_rerun')
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Workflow FAILED' })).toBeNull())
+    // The playback runs the same run to the same end, and its end card shows the same execution ID.
+    for (let i = 0; i < 5000 && !screen.queryByRole('heading', { name: 'Playback finished' }); i++) advance(1)
+    expect(screen.getByRole('heading', { name: 'Playback finished' })).toBeInTheDocument()
+    expect(await screen.findByRole('textbox', { name: 'Execution ID' })).toHaveValue(field.value)
   })
 })

@@ -13,7 +13,7 @@ All code lives in `src/pages/replay/`. Outside it, only the lazy route in
 ## The one rule: determinism
 
 Everything below depends on this. Break it and crash replay, rewinds,
-montages and shared run codes all go out of sync.
+montages and shared execution IDs all go out of sync.
 
 - **`engine/` is pure.** `step(state, inputs, ports, levels)` advances one
   60 Hz tick and returns a new state plus outcome events. Same inputs give the
@@ -45,7 +45,7 @@ montages and shared run codes all go out of sync.
 | `runtime/rewind.ts` | Rewind ring buffer and the "safe spot" picker |
 | `runtime/montage.ts` | Level-end montage replayer |
 | `runtime/chaos.ts` | When the "process" crashes (outside-world randomness, via the tape) |
-| `runtime/tape.ts`, `share.ts` | Run tape, `TapeRecorder`/`TapePlayer`, `RPL1.` run codes |
+| `runtime/tape.ts`, `share.ts` | Run tape, `TapeRecorder`/`TapePlayer`, `RPL1.` run codes (shown to players as the *execution ID*) |
 | `runtime/persistence.ts`, `validate.ts` | `localStorage` saves (v2) and their shape validators |
 | `runtime/keys.ts`, `loop.ts`, `daily.ts` | Key mapping, fixed-timestep rAF loop, `utcDate()` |
 | `render/*` | Canvas drawing: `canvas.ts` (scene, HUD, overlays), `props.ts` (obstacles, pickups, gate), `sprites.ts` (the Dapr hat), `palette.ts` (theme tokens) |
@@ -59,7 +59,7 @@ ticks. Every other phase is frame-driven and consumes no ticks.
 
 | Phase | What happens | Leaves on |
 |---|---|---|
-| `title` | Title card, Watch a run field | Enter → new run |
+| `title` | Title card; an Execution ID field replays a run someone shared or you copied | Enter → new run |
 | `resume` | A saved run was found | Enter → replay it · Esc → discard |
 | `tip` | Level tip card | Enter → `playing` |
 | `playing` | Ticks run; input recorded | crash, hit, level end, pause |
@@ -69,7 +69,7 @@ ticks. Every other phase is frame-driven and consumes no ticks.
 | `rewinding` | ◀◀ RetryPolicy rewind effect, `REWIND_FRAMES` (30) | → `playing` |
 | `montage` | Level-end replay of the level's history (~4 s) | Enter skips → `tip` |
 | `lost` | Level 0 crash: progress lost | Enter → level 1 |
-| `over` | Workflow FAILED card, Copy run code, Share | Enter → new run |
+| `over` | Workflow FAILED (or Playback finished) card: stats, the run's execution ID with a `⧉ Copy` button, Replay entire run, Share | Enter → new run |
 
 ## History events
 
@@ -126,7 +126,7 @@ RNG in state. Spacing scales with speed, so reaction time stays constant.
 | `falling` | 18×24 | Hangs until `FALL_LEAD_TICKS` (1 s) before reaching the hat, then drops with `RACK_GRAVITY`. It then behaves like `low` |
 | `pit` | 30–60 wide | A gap in the ground; see Support above |
 | `coin` | 10×10 | +score × multiplier; +1 circuit-breaker charge |
-| `orb` | 12×12 | ×3 for `BOOST_TICKS` (10 s); mixes an unrecorded impure value into the RNG |
+| `orb` | 12×12, at the coin heights | To avoid: ×3 for `BOOST_TICKS` (10 s) but mixes an unrecorded impure value into the RNG. A low orb is dodged by sliding, a high one by not jumping. Only the orb's box collides, never its label |
 | `crate` | 14×14 | Same boost; the impure value is recorded, so replay stays in sync |
 | `fanout` | gate | Starts fan-out when it reaches the hat (never randomly spawned) |
 
@@ -251,7 +251,7 @@ been saved, so a tab closed mid-montage resumes at tick 0 of that level.
   `devdash.replay.daily` (`{date, best}`), updated only when the run's date is
   today.
 
-## Run tape, playback and run codes
+## Run tape, playback and execution IDs
 
 The tape (`runtime/tape.ts`) holds everything the outside world fed a run:
 
@@ -264,7 +264,15 @@ The tape (`runtime/tape.ts`) holds everything the outside world fed a run:
 restarts restore their snapshot in any phase, and the tick loop never steps
 past a pending restart. Nothing is written to storage during playback.
 
-A run code is `RPL1.` + base64url(deflate-raw(JSON)) (`runtime/share.ts`).
+A run's **execution ID** is its run code: `RPL1.` + base64url(deflate-raw(JSON))
+(`runtime/share.ts`). After every game the end card shows it with the
+standard `.copybtn` (`copyText()` from `lib/clipboard.ts`). **Replay entire
+run** decodes that ID and plays it back. The title card's Execution ID field
+does the same for an ID someone shared or one copied earlier. Telemetry:
+`replay_share_copy` (copy), `replay_rerun` (Replay entire run), `replay_watch`
+(title card).
+
+
 Decoding strips whitespace, rejects codes over 256 KB, caps the inflated JSON
 at 4 MB, and validates the shape. **Caveat:** a code replays against the
 *current* level table and engine. After you retune a level or change physics,

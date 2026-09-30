@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { LEVELS } from './engine/levels'
 import type { Phase, RunStats } from './runtime/types'
 
@@ -14,14 +14,18 @@ interface Props {
   dailyBest: number
   /** Opens the dashboard's Share dialog from the end-of-run card. */
   onShare?: () => void
-  /** True while a recorded run plays back: the end card is "Playback finished" with no copy button. */
+  /** True while a recorded run plays back: the end card is "Playback finished". */
   playback?: boolean
-  onCopyRun?: () => void
-  copied?: boolean
-  /** Shown pre-selected when the run code could not be copied to the clipboard. */
-  runCode?: string | null
-  /** Why no run code could be made, shown on the game-over card. */
-  copyError?: string | null
+  /** The finished run's execution ID (its run code); null while it is being created. */
+  executionId?: string | null
+  /** Why no execution ID could be made, shown instead of it. */
+  executionIdError?: string | null
+  onCopyExecutionId?: () => void
+  /** The execution ID was just copied: the copy button shows ✓. */
+  idCopied?: boolean
+  /** Replays the finished run from its execution ID. */
+  onReplayRun?: () => void
+  /** Replays the run behind a pasted execution ID (title card). */
   onWatch?: (code: string) => void
   watchError?: string | null
 }
@@ -53,24 +57,32 @@ function WatchForm({ onWatch, error }: { onWatch: (code: string) => void; error:
         onWatch(code)
       }}
     >
-      <input className="inp" aria-label="Paste a run code" placeholder="Paste a run code" value={code} onChange={(e) => setCode(e.target.value)} />
-      <button type="submit" className="tbtn">Watch a run</button>
+      <p>Replay a run from its execution ID: one someone shared with you, or one you copied after an earlier run.</p>
+      <input className="inp" aria-label="Execution ID" placeholder="Paste an execution ID" value={code} onChange={(e) => setCode(e.target.value)} />
+      <button type="submit" className="tbtn">Replay run</button>
       {error && <p className="replay-error">{error}</p>}
     </form>
   )
 }
 
-function RunCodeBox({ code }: { code: string }) {
-  const ref = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
-    ref.current?.focus()
-    ref.current?.select()
-  }, [code])
-  return <textarea ref={ref} className="replay-code" aria-label="Run code" readOnly value={code} rows={3} />
+/** The finished run's execution ID in a read-only field, with the standard copy button behind it. */
+function ExecutionId({ id, copied, onCopy }: { id: string; copied: boolean; onCopy?: () => void }) {
+  return (
+    <div className="replay-execid">
+      <span className="replay-keys">Execution ID</span>
+      <input className="inp" aria-label="Execution ID" readOnly value={id} onFocus={(e) => e.currentTarget.select()} />
+      <button type="button" className={copied ? 'copybtn ok' : 'copybtn'} aria-label="Copy execution ID" onClick={onCopy}>
+        {copied ? '✓ Copied' : '⧉ Copy'}
+      </button>
+    </div>
+  )
 }
 
 /** DOM cards over the canvas for every phase that waits on the player. */
-export function Overlay({ phase, stats, best, score, level, date, dailyBest, onShare, playback, onCopyRun, copied, runCode, copyError, onWatch, watchError }: Props) {
+export function Overlay({
+  phase, stats, best, score, level, date, dailyBest, onShare, playback,
+  executionId, executionIdError, onCopyExecutionId, idCopied, onReplayRun, onWatch, watchError,
+}: Props) {
   switch (phase.kind) {
     case 'title':
       return (
@@ -137,13 +149,18 @@ export function Overlay({ phase, stats, best, score, level, date, dailyBest, onS
             <Stat label="Circuit trips" value={stats.circuitTrips} />
             <Stat label="Boosts lost" value={stats.boostsLost} />
           </div>
-          {runCode && <RunCodeBox code={runCode} />}
-          {copyError && <p className="replay-error">{copyError}</p>}
+          {executionId ? (
+            <ExecutionId id={executionId} copied={idCopied ?? false} onCopy={onCopyExecutionId} />
+          ) : executionIdError ? (
+            <p className="replay-error">{executionIdError}</p>
+          ) : (
+            <p className="replay-keys">Creating the execution ID…</p>
+          )}
           <div className="replay-foot">
             <p className="replay-keys">Enter to play again</p>
-            {!playback && onCopyRun && (
-              <button type="button" className="tbtn" onClick={onCopyRun}>
-                {copied ? '✓ Copied' : 'Copy run code'}
+            {onReplayRun && (
+              <button type="button" className="tbtn" onClick={onReplayRun}>
+                Replay entire run
               </button>
             )}
             {/* Same class and label as the TopNav Share button. */}

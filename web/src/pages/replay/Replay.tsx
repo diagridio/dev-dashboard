@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ShareDialog } from '../../components/ShareDialog'
+import { copyText } from '../../lib/clipboard'
 import { isInteractiveTarget } from '../../lib/isEditableTarget'
 import { trackAction } from '../../lib/telemetry'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
@@ -16,7 +17,7 @@ import { keyToCommand } from './runtime/keys'
 import { startLoop } from './runtime/loop'
 import { utcDate } from './runtime/daily'
 import { localSaveStore } from './runtime/persistence'
-import { copyRunCode, decodeRun, shareableRunCode } from './runtime/share'
+import { decodeRun, shareableRunCode } from './runtime/share'
 
 function createGame(): Game {
   return new Game({
@@ -34,57 +35,67 @@ export function Component() {
   const stageRef = useRef<HTMLDivElement>(null)
   const [game] = useState(createGame)
   const [shareOpen, setShareOpen] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [runCode, setRunCode] = useState<string | null>(null)
-  const [copyError, setCopyError] = useState<string | null>(null)
-  // Bumped whenever the game-over card goes away, so a slow copy can't land on the next one.
+  const [executionId, setExecutionId] = useState<string | null>(null)
+  const [executionIdError, setExecutionIdError] = useState<string | null>(null)
+  const [idCopied, setIdCopied] = useState(false)
+  // Bumped whenever the game-over card goes away, so a slow encode can't land on the next one.
   const cardToken = useRef(0)
   const [watchError, setWatchError] = useState<string | null>(null)
   useSyncExternalStore(game.subscribe, game.getVersion)
 
-  // A new end-of-run card starts without the previous run's copy state.
+  // Every game-over card shows the finished run's execution ID (its run code).
   useEffect(() => {
     if (game.phase.kind !== 'over') {
       cardToken.current += 1
-      setCopied(false)
-      setRunCode(null)
-      setCopyError(null)
+      setExecutionId(null)
+      setExecutionIdError(null)
+      setIdCopied(false)
+      return
     }
-  }, [game.phase.kind])
-
-  const onCopyRun = async () => {
-    trackAction('replay_share_copy')
     const token = cardToken.current
-    const stale = () => token !== cardToken.current
-    try {
-      const code = await shareableRunCode(game.tape)
-      if (stale()) return
-      if (code === null) {
-        setCopyError('This run is too long to share.')
-        return
-      }
-      const result = await copyRunCode(code, navigator.clipboard)
-      if (stale()) return
-      setCopyError(null)
-      if (result === 'copied') {
-        setCopied(true)
-        // Back to the stage, so Enter means "play again" rather than re-clicking the button.
-        stageRef.current?.focus()
-      } else setRunCode(code)
-    } catch {
-      if (!stale()) setCopyError("Couldn't create a run code.")
-    }
+    shareableRunCode(game.tape).then(
+      (id) => {
+        if (token !== cardToken.current) return
+        if (id === null) setExecutionIdError('This run is too long to share.')
+        else setExecutionId(id)
+      },
+      () => {
+        if (token === cardToken.current) setExecutionIdError("Couldn't create an execution ID.")
+      },
+    )
+  }, [game, game.phase.kind])
+
+  const onCopyExecutionId = () => {
+    if (!executionId) return
+    trackAction('replay_share_copy')
+    copyText(executionId)
+    setIdCopied(true)
+    // Back to the stage, so Enter means "play again" rather than re-clicking the button.
+    stageRef.current?.focus()
+  }
+
+  /** Plays back the run behind an execution ID; false when the ID isn't a valid one. */
+  const replayFrom = async (id: string): Promise<boolean> => {
+    const tape = await decodeRun(id)
+    if (!tape || !game.watch(tape)) return false
+    stageRef.current?.focus()
+    return true
+  }
+
+  const onReplayRun = async () => {
+    trackAction('replay_rerun')
+    // Replays from the execution ID itself; a run too long to have one replays from its tape.
+    if (executionId) await replayFrom(executionId)
+    else if (game.watch(structuredClone(game.tape))) stageRef.current?.focus()
   }
 
   const onWatch = async (code: string) => {
     trackAction('replay_watch')
-    const tape = await decodeRun(code)
-    if (!tape || !game.watch(tape)) {
-      setWatchError("That run code isn't valid.")
+    if (!(await replayFrom(code))) {
+      setWatchError("That execution ID isn't valid.")
       return
     }
     setWatchError(null)
-    stageRef.current?.focus()
   }
 
   useEffect(() => {
@@ -190,11 +201,12 @@ export function Component() {
             date={game.runDate}
             dailyBest={game.dailyBest}
             playback={game.playback}
-            copied={copied}
-            runCode={runCode}
-            copyError={copyError}
+            executionId={executionId}
+            executionIdError={executionIdError}
+            idCopied={idCopied}
             watchError={watchError}
-            onCopyRun={() => void onCopyRun()}
+            onCopyExecutionId={onCopyExecutionId}
+            onReplayRun={() => void onReplayRun()}
             onWatch={(c) => void onWatch(c)}
             onShare={() => {
               setShareOpen(true)

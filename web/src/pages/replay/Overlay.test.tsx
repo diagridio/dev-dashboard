@@ -53,41 +53,66 @@ describe('Overlay', () => {
 
   const common = { stats, best: 40, score: 12, level: 3, date: '2026-09-30', dailyBest: 0 }
 
-  it('offers Copy run code next to Share on the end-of-run card, but not in playback', () => {
-    const onCopyRun = vi.fn()
-    const { rerender } = render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onShare={vi.fn()} onCopyRun={onCopyRun} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Copy run code' }))
-    expect(onCopyRun).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('button', { name: 'Copy run code' })).toHaveClass('tbtn')
-    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onCopyRun={onCopyRun} playback />)
-    expect(screen.queryByRole('button', { name: 'Copy run code' })).toBeNull()
+  it('always shows the execution ID after a game, with the standard copy button behind it', () => {
+    const onCopy = vi.fn()
+    const { rerender } = render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionId="RPL1.abc" onCopyExecutionId={onCopy} />)
+    const field = screen.getByRole('textbox', { name: 'Execution ID' }) as HTMLInputElement
+    expect(field).toHaveAttribute('readonly')
+    expect(field.value).toBe('RPL1.abc')
+    const copy = screen.getByRole('button', { name: 'Copy execution ID' })
+    expect(copy).toHaveClass('copybtn')
+    expect(copy).toHaveTextContent('⧉ Copy')
+    // The copy button sits right behind the field.
+    expect(field.nextElementSibling).toBe(copy)
+    fireEvent.click(copy)
+    expect(onCopy).toHaveBeenCalledTimes(1)
+    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionId="RPL1.abc" onCopyExecutionId={onCopy} idCopied />)
+    expect(screen.getByRole('button', { name: 'Copy execution ID' })).toHaveClass('ok')
+    expect(screen.getByRole('button', { name: 'Copy execution ID' })).toHaveTextContent('✓ Copied')
+    // A playback's end card shows the ID of the run it played.
+    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionId="RPL1.abc" onCopyExecutionId={onCopy} playback />)
     expect(screen.getByRole('heading', { name: 'Playback finished' })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Execution ID' })).toHaveValue('RPL1.abc')
   })
 
-  it('says why a run code could not be made', () => {
-    render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onCopyRun={vi.fn()} copyError="This run is too long to share." />)
+  it('selects the whole execution ID when the field is focused, for a manual copy', () => {
+    render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionId="RPL1.abcdef" onCopyExecutionId={vi.fn()} />)
+    const field = screen.getByRole('textbox', { name: 'Execution ID' }) as HTMLInputElement
+    fireEvent.focus(field)
+    expect([field.selectionStart, field.selectionEnd]).toEqual([0, 'RPL1.abcdef'.length])
+  })
+
+  it('says the execution ID is being created, or why it could not be', () => {
+    const { rerender } = render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} />)
+    expect(screen.getByText('Creating the execution ID…')).toBeInTheDocument()
+    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionIdError="This run is too long to share." />)
     expect(screen.getByText('This run is too long to share.')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Execution ID' })).toBeNull()
   })
 
-  it('confirms a copy, and shows the code pre-selected when it could not be copied', () => {
-    const { rerender } = render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onCopyRun={vi.fn()} copied />)
-    expect(screen.getByRole('button', { name: '✓ Copied' })).toBeInTheDocument()
-    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onCopyRun={vi.fn()} runCode="RPL1.abc" />)
-    const box = screen.getByRole('textbox', { name: 'Run code' }) as HTMLTextAreaElement
-    expect(box).toHaveAttribute('readonly')
-    expect(box.value).toBe('RPL1.abc')
-    expect(document.activeElement).toBe(box)
-    expect(box.selectionStart).toBe(0)
-    expect(box.selectionEnd).toBe('RPL1.abc'.length)
+  it('offers Replay entire run instead of Copy run code, in live runs and playbacks', () => {
+    const onReplayRun = vi.fn()
+    const { rerender } = render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onShare={vi.fn()} onReplayRun={onReplayRun} />)
+    expect(screen.queryByRole('button', { name: /Copy run code/ })).toBeNull()
+    const replay = screen.getByRole('button', { name: 'Replay entire run' })
+    expect(replay).toHaveClass('tbtn')
+    fireEvent.click(replay)
+    expect(onReplayRun).toHaveBeenCalledTimes(1)
+    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onReplayRun={onReplayRun} playback />)
+    expect(screen.getByRole('button', { name: 'Replay entire run' })).toBeInTheDocument()
   })
 
-  it('submits a pasted code from the title card and shows an error', () => {
+  it('explains on the title card that a run is replayed from an execution ID someone shared or you copied', () => {
     const onWatch = vi.fn()
-    render(<Overlay phase={{ kind: 'title' }} {...common} onWatch={onWatch} watchError="That run code isn't valid." />)
-    fireEvent.change(screen.getByRole('textbox', { name: 'Paste a run code' }), { target: { value: ' RPL1.xyz ' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Watch a run' }))
+    render(<Overlay phase={{ kind: 'title' }} {...common} onWatch={onWatch} watchError="That execution ID isn't valid." />)
+    expect(screen.getByText(/Replay a run from its execution ID/)).toHaveTextContent(
+      'Replay a run from its execution ID: one someone shared with you, or one you copied after an earlier run.',
+    )
+    fireEvent.change(screen.getByRole('textbox', { name: 'Execution ID' }), { target: { value: ' RPL1.xyz ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Replay run' }))
     expect(onWatch).toHaveBeenCalledWith(' RPL1.xyz ')
-    expect(screen.getByText("That run code isn't valid.")).toBeInTheDocument()
+    expect(screen.getByText("That execution ID isn't valid.")).toBeInTheDocument()
+    expect(screen.queryByText(/run code/i)).toBeNull()
   })
 
   it('documents variable jump height in the title-card key hint', () => {

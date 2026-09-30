@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_RUN_CODE, MAX_TAPE_JSON, RUN_CODE_PREFIX, copyRunCode, decodeRun, encodeRun, shareableRunCode } from './share'
+import { MAX_RUN_CODE, MAX_TAPE_JSON, RUN_CODE_PREFIX, decodeRun, encodeRun, shareableRunCode } from './share'
 import { emptyTape, type Tape } from './tape'
 import type { SaveBody } from './types'
 
@@ -74,19 +74,6 @@ describe('run codes', () => {
     const code = await encodeRun(bomb)
     expect(code.length).toBeLessThan(MAX_RUN_CODE)
     expect(await decodeRun(code)).toBeNull()
-  })
-})
-
-describe('copyRunCode', () => {
-  it('copies to the clipboard when it can', async () => {
-    const writeText = vi.fn(async () => {})
-    expect(await copyRunCode('RPL1.x', { writeText })).toBe('copied')
-    expect(writeText).toHaveBeenCalledWith('RPL1.x')
-  })
-
-  it('falls back to manual copy when the clipboard is missing or refuses', async () => {
-    expect(await copyRunCode('RPL1.x', undefined)).toBe('manual')
-    expect(await copyRunCode('RPL1.x', { writeText: async () => { throw new Error('denied') } })).toBe('manual')
   })
 })
 

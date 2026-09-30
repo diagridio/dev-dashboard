@@ -71,14 +71,3 @@ export async function decodeRun(code: string): Promise<Tape | null> {
     return null
   }
 }
-
-/** Copies a run code; 'manual' means the page should show it for the player to copy. */
-export async function copyRunCode(code: string, clipboard: Pick<Clipboard, 'writeText'> | undefined): Promise<'copied' | 'manual'> {
-  if (!clipboard) return 'manual'
-  try {
-    await clipboard.writeText(code)
-    return 'copied'
-  } catch {
-    return 'manual'
-  }
-}
