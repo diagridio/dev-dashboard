@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeLevels } from '../testing'
 import { hashState } from './hash'
 import { LEVELS, chaosMeanTicks, speedAt } from './levels'
-import { BOOST_TICKS, BOSS_TICKS, COYOTE_TICKS, FALL_LEAD_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT_VY, HAZARDS, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, GRACE_BARGE, GRACE_BOOST, GRACE_RESUME, GRACE_RETRY, SHIELD_FULL, FAN_CLEAR_PX, FAN_LANES, LANE_SPAWN_X, continueAsNew, initialState, overPit, step } from './step'
+import { BOOST_TICKS, BOSS_TICKS, COYOTE_TICKS, FALL_LEAD_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT_VY, HAZARDS, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, GRACE_BARGE, GRACE_BOOST, GRACE_RESUME, GRACE_RETRY, SHIELD_FULL, FAN_CLEAR_PX, FAN_LANES, LANE_SCALE, LANE_SPAWN_X, MERGE_LANE, continueAsNew, initialState, overPit, step } from './step'
 import { GROUND_Y, PLAYER_X, VIEW_W, type Entity, type GameState, type InputKind, type OutcomeEvent, type Ports, type StartInput } from './types'
 
 const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
@@ -506,7 +506,12 @@ describe('fan-out', () => {
     throw new Error('no gate')
   })
 
-  it('splits into three lanes when the gate reaches the hat', () => {
+  it('fans out into two parallel lanes, spawning lane entities just off the right edge of a lane strip', () => {
+    expect(FAN_LANES).toBe(2)
+    expect(LANE_SPAWN_X).toBe(VIEW_W / LANE_SCALE + 10)
+  })
+
+  it('splits into FAN_LANES lanes when the gate reaches the hat', () => {
     const { after, events } = until(initialState(start, fanLevels), 'FanOut')
     expect(events).toContainEqual({ type: 'FanOut', tick: after.tick - 1, hash: hashState(after) })
     expect(after.fan?.lanes).toHaveLength(FAN_LANES)
@@ -518,9 +523,8 @@ describe('fan-out', () => {
   it('moves every lane with the same inputs and spawns lane entities at LANE_SPAWN_X', () => {
     let s = until(initialState(start, fanLevels), 'FanOut').after
     s = step(s, ['jump'], ports(), fanLevels).state
-    const [a, b, c] = s.fan!.lanes
+    const [a, b] = s.fan!.lanes
     expect(a.player).toEqual(b.player)
-    expect(b.player).toEqual(c.player)
     expect(a.player.vy).toBeLessThan(0)
     for (let i = 0; i < 80; i++) s = step(s, [], ports(), fanLevels).state
     const spawned = s.fan!.lanes.flatMap((l) => l.entities)
@@ -539,7 +543,7 @@ describe('fan-out', () => {
     expect(fanIn.results.reduce((a, b) => a + b, 0)).toBe(merge.after.score - scoreAtSplit)
     expect(merge.after.tick - (out.after.tick - 1)).toBe(600)
     expect(merge.after.fan).toBeNull()
-    expect(merge.after.player).toEqual(merge.before.fan!.lanes[1].player)
+    expect(merge.after.player).toEqual(merge.before.fan!.lanes[MERGE_LANE].player)
     expect(merge.after.nextGateAt).toBe(world(merge.after) + 400)
     expect(merge.after.nextSpawnAt).toBe(merge.after.scroll + FAN_CLEAR_PX)
     // Spawns stopped early enough that every lane entity was already behind the hats.
@@ -550,10 +554,10 @@ describe('fan-out', () => {
     const armed = makeLevels({ fanOut: { everyPx: 400, ticks: 600 }, shieldEnabled: true })
     const s = until(initialState(start, armed), 'FanOut', armed).after
     const rackAt = { id: 77, kind: 'low' as const, x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }
-    const lanes = s.fan!.lanes.map((l, i) => ({ ...l, entities: i === 2 ? [rackAt] : [] }))
+    const lanes = s.fan!.lanes.map((l, i) => ({ ...l, entities: i === 1 ? [rackAt] : [] }))
     const r = step({ ...s, shield: SHIELD_FULL, fan: { ...s.fan!, lanes } }, [], ports(), armed)
     expect(r.events.map((e) => e.type)).toEqual(['CircuitBreakerTripped'])
-    expect(r.state.fan!.lanes[2].entities[0].taken).toBe(true)
+    expect(r.state.fan!.lanes[1].entities[0].taken).toBe(true)
     expect(r.state.shield).toBe(0)
   })
 

@@ -1,5 +1,5 @@
 import { LEVELS } from '../engine/levels'
-import { PLAYER_H, PLAYER_W, RACKS, SHIELD_FULL, SLIDE_H } from '../engine/step'
+import { FAN_LANES, LANE_SCALE, PLAYER_H, PLAYER_W, RACKS, SHIELD_FULL, SLIDE_H } from '../engine/step'
 import { GROUND_Y, PLAYER_X, TICK_HZ, VIEW_H, VIEW_W, type Entity, type GameState } from '../engine/types'
 import { FLASH_FRAMES } from '../runtime/montage'
 import type { Phase } from '../runtime/types'
@@ -47,9 +47,8 @@ function banner(ctx: CanvasRenderingContext2D, text: string, y: number, color: s
   ctx.fillText(text, VIEW_W / 2, y)
 }
 
-export const STRIP_H = VIEW_H / 3
-export const LANE_SCALE = 0.5
-/** World y shown at the top of a lane strip: the full jump height fits above the ground. */
+export const STRIP_H = VIEW_H / FAN_LANES
+/** World y shown at the top of a lane strip: the full jump height fits above the ground (180 px of world per strip). */
 const LANE_TOP = GROUND_Y - 170
 
 function drawGround(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette, width = VIEW_W): void {

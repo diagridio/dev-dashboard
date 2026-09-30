@@ -1,3 +1,4 @@
+import { FAN_LANES } from './engine/step'
 import type { HistoryEvent } from './engine/types'
 
 const SHOWN = 60
@@ -27,7 +28,7 @@ function describeEvent(e: HistoryEvent): { type: string; detail: string } {
     case 'BoostLost':
       return { type: 'BoostLost', detail: '×3 boost absorbed the hit' }
     case 'FanOut':
-      return { type: 'FanOut', detail: '3 activities in parallel' }
+      return { type: 'FanOut', detail: `${FAN_LANES} activities in parallel` }
     case 'FanIn':
       return { type: 'FanIn', detail: `WhenAll · coins ${e.results.join(' / ')}` }
     case 'OrbTaken':

@@ -392,9 +392,9 @@ describe('Game', () => {
     const game = new Game(deps({ levels: makeLevels({ fanOut: { everyPx: 400, ticks: 120 } }) }))
     play(game)
     runUntil(game, (g) => g.state.fan !== null)
-    expect(game.view().notice).toBe('fan-out · 3 activities in parallel')
+    expect(game.view().notice).toBe('fan-out · 2 activities in parallel')
     runUntil(game, (g) => g.state.fan === null)
-    expect(game.view().notice).toMatch(/^WhenAll · fan-in \d+ \+ \d+ \+ \d+ coins$/)
+    expect(game.view().notice).toMatch(/^WhenAll · fan-in \d+ \+ \d+ coins$/)
   })
 
   it('keeps a held slide consistent across a pause during fan-out', () => {

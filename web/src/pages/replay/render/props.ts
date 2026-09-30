@@ -1,4 +1,5 @@
 import { GROUND_Y, VIEW_H, type Entity } from '../engine/types'
+import { FAN_LANES } from '../engine/step'
 import type { Palette } from './palette'
 import { groundShadow, LIGHT as LIGHT_DIR, shadeSphere, specular } from './shading'
 
@@ -147,7 +148,7 @@ export function drawGate(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette)
   ctx.fillRect(e.x - 4, top - 4, e.w + 8, 4)
   ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'
   ctx.textAlign = 'center'
-  ctx.fillText('fan-out ×3', e.x + e.w / 2, top - 8)
+  ctx.fillText(`fan-out ×${FAN_LANES}`, e.x + e.w / 2, top - 8)
 }
 
 /** A pit: a dark red shaft under a gap in the ground line. */

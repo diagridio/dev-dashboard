@@ -91,7 +91,7 @@ export const LEVELS: LevelTable = {
     durable: true, chaosMeanTicks: 1200, retries: 3, shieldEnabled: true,
     fanOut: { everyPx: 2500, ticks: 600 },
     tip: {
-      body: 'Fan-out: the workflow calls three activities in parallel. Your hat splits into three lanes that all follow your keys, and WhenAll merges them again. If any lane hits a rack the whole workflow takes the hit, just like WhenAll fails when one task fails.',
+      body: 'Fan-out: the workflow calls two activities in parallel. Your hat splits into two lanes that both follow your keys, and WhenAll merges them again. If any lane hits a rack the whole workflow takes the hit, just like WhenAll fails when one task fails.',
     },
   },
   5: {

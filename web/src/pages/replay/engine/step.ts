@@ -18,11 +18,16 @@ export const GRACE_RESUME = 60
 export const GRACE_RETRY = 60
 export const GRACE_BOOST = 60
 export const GRACE_BARGE = 30
-export const FAN_LANES = 3
+/** Parallel lanes during fan-out (three proved too hard to follow). */
+export const FAN_LANES = 2
+/** The lane whose hat becomes the main hat again at fan-in. */
+export const MERGE_LANE = 0
 /** No other spawns this close before a gate, and after a merge. */
 export const FAN_CLEAR_PX = 200
-/** Lanes are drawn at half scale, so their world is twice as wide. */
-export const LANE_SPAWN_X = 2 * VIEW_W + 10
+/** Each lane strip is drawn at this scale (VIEW_H / FAN_LANES tall), so a lane shows VIEW_W / LANE_SCALE px of world. */
+export const LANE_SCALE = 0.75
+/** Lane entities spawn just off the right edge of a lane strip. */
+export const LANE_SPAWN_X = VIEW_W / LANE_SCALE + 10
 export const GATE_W = 12
 
 // Tuning knobs: spawn spacing in px at speed 4 (scaled with speed so reaction
@@ -269,7 +274,7 @@ function clone(prev: GameState): GameState {
 
 /** The hat the player is steering: during fan-out `state.player` is frozen, so read a lane. */
 export function livePlayer(s: GameState): Player {
-  return (s.fan ? s.fan.lanes[1] : s).player
+  return (s.fan ? s.fan.lanes[MERGE_LANE] : s).player
 }
 
 function tracks(s: GameState): Track[] {
@@ -342,7 +347,7 @@ function enterGate(s: GameState, cfg: LevelConfig, events: OutcomeEvent[]): void
 function fanIn(s: GameState, cfg: LevelConfig, events: OutcomeEvent[]): void {
   const fan = s.fan
   if (!fan) return
-  s.player = { ...fan.lanes[1].player }
+  s.player = { ...fan.lanes[MERGE_LANE].player }
   s.entities = []
   events.push({ type: 'FanIn', tick: s.tick, hash: 0, results: fan.lanes.map((l) => l.coins) })
   s.fan = null

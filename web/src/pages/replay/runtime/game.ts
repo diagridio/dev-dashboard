@@ -2,7 +2,7 @@ import { LEVELS, speedAt, type LevelTable } from '../engine/levels'
 import { createReplayer, inputOf, isInputEvent, type Replayer } from '../engine/replay'
 import { seedFrom } from '../engine/rng'
 import { seedForDate } from '../engine/seed'
-import { continueAsNew, initialState, livePlayer, step } from '../engine/step'
+import { FAN_LANES, continueAsNew, initialState, livePlayer, step } from '../engine/step'
 import type { GameState, HistoryEvent, InputEvent, InputKind, Level, PlayerInput, StartInput } from '../engine/types'
 import { ChaosScheduler } from './chaos'
 import { Montage, type MontageSegment } from './montage'
@@ -311,7 +311,7 @@ export class Game {
         if (e.type === 'ActivityCrateCollected') this.chaos.onPickup(state.level, 'crate', state.tick)
       } else if (e.type === 'CircuitBreakerTripped') this.stats.circuitTrips += 1
       else if (e.type === 'BoostLost') this.stats.boostsLost += 1
-      else if (e.type === 'FanOut') this.setNotice('fan-out · 3 activities in parallel')
+      else if (e.type === 'FanOut') this.setNotice(`fan-out · ${FAN_LANES} activities in parallel`)
       else if (e.type === 'FanIn') this.setNotice(`WhenAll · fan-in ${e.results.join(' + ')} coins`)
     }
 
