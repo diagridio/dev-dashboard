@@ -17,4 +17,9 @@ describe('level tips', () => {
     expect(LEVELS[3].weights.tall).toBeGreaterThan(0)
     for (const k of ['pit', 'falling', 'tall'] as const) expect(LEVELS[4].weights[k]).toBeGreaterThan(0)
   })
+
+  it('introduces RetryPolicy and the circuit breaker in the level-1 tip', () => {
+    expect(LEVELS[1].tip.body).toMatch(/RetryPolicy/)
+    expect(LEVELS[1].tip.body).toMatch(/circuit breaker/)
+  })
 })

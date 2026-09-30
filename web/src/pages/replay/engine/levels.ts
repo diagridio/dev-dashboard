@@ -56,7 +56,7 @@ export const LEVELS: LevelTable = {
     durable: true, chaosMeanTicks: 1200, firstCrashTicks: [480, 720],
     retries: 3, shieldEnabled: true,
     tip: {
-      body: 'Dapr Workflow is enabled. Every step is written to history. After a crash the workflow replays that history to rebuild its state, and completed activities are not run again.',
+      body: 'Dapr Workflow is enabled. Every step is written to history. After a crash the workflow replays that history to rebuild its state, and completed activities are not run again. Hitting a rack is a failed activity: your RetryPolicy rewinds and tries again, 3 attempts per level. Every 10 coins arm a circuit breaker that lets you barge through one rack.',
     },
   },
   2: {

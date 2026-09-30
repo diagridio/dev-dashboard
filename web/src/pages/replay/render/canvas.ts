@@ -1,11 +1,11 @@
 import { LEVELS } from '../engine/levels'
-import { PLAYER_H, PLAYER_W, SLIDE_H } from '../engine/step'
+import { PLAYER_H, PLAYER_W, RACKS, SHIELD_FULL, SLIDE_H } from '../engine/step'
 import { GROUND_Y, PLAYER_X, TICK_HZ, VIEW_H, VIEW_W, type Entity, type GameState } from '../engine/types'
 import type { Phase } from '../runtime/types'
 import { drawBackground } from './background'
 import type { Palette } from './palette'
 import { NEUTRAL, type Pose } from './pose'
-import { drawCoin, drawCrate, drawFallShadow, drawOrb, drawPit, drawRack } from './props'
+import { drawCoin, drawCrate, drawDebris, drawFallShadow, drawOrb, drawPit, drawRack } from './props'
 import { drawHat } from './sprites'
 
 export interface RenderView {
@@ -32,6 +32,9 @@ function label(e: Entity): string | null {
   return null
 }
 
+/** Grace blink: hidden on alternate 4-tick beats. */
+const blinkHidden = (s: GameState): boolean => s.tick < s.graceUntil && Math.floor(s.tick / 4) % 2 === 1
+
 function banner(ctx: CanvasRenderingContext2D, text: string, y: number, color: string, font: string): void {
   ctx.font = font
   ctx.textAlign = 'center'
@@ -57,6 +60,10 @@ function drawGround(ctx: CanvasRenderingContext2D, state: GameState, pal: Palett
 
 function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, replaying: boolean, elapsed: number, reducedMotion: boolean): void {
   if (e.taken) {
+    if (RACKS.has(e.kind)) {
+      drawDebris(ctx, e, pal)
+      return
+    }
     // During a replay, recorded activities are served from history, not re-run.
     if (!replaying || e.kind === 'orb') return
     ctx.font = FONT
@@ -87,10 +94,18 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, repl
   }
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette, pose: Pose): void {
+function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette, pose: Pose, reducedMotion: boolean): void {
   const p = state.player
   const h = p.sliding && p.y >= GROUND_Y ? SLIDE_H : PLAYER_H
-  drawHat(ctx, { x: PLAYER_X, y: p.y - h, w: PLAYER_W, h }, pal, pose)
+  const box = { x: PLAYER_X, y: p.y - h, w: PLAYER_W, h }
+  if (state.tick < state.graceUntil && reducedMotion) {
+    ctx.strokeStyle = pal.player
+    ctx.lineWidth = 1
+    ctx.strokeRect(box.x - 2, box.y - 2, box.w + 4, box.h + 4)
+  } else if (blinkHidden(state)) {
+    return
+  }
+  drawHat(ctx, box, pal, pose)
 }
 
 function drawHud(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette): void {
@@ -101,6 +116,28 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette):
   ctx.textAlign = 'right'
   const mult = state.multiplier > 1 ? ` ×${state.multiplier}` : ''
   ctx.fillText(`SCORE ${state.score}${mult} · TICK ${state.tick}`, VIEW_W - 10, 18)
+  const cfg = LEVELS[state.level]
+  ctx.textAlign = 'left'
+  if (cfg.retries > 0) {
+    ctx.fillStyle = pal.muted
+    ctx.fillText('RETRY', 10, 32)
+    for (let i = 0; i < cfg.retries; i++) {
+      ctx.save()
+      if (i >= state.retries) ctx.globalAlpha = 0.25
+      drawHat(ctx, { x: 46 + i * 14, y: 25, w: 11, h: 6 }, pal, NEUTRAL)
+      ctx.restore()
+    }
+  }
+  if (cfg.shieldEnabled) {
+    const armed = state.shield >= SHIELD_FULL
+    const x0 = 100
+    for (let i = 0; i < SHIELD_FULL; i++) {
+      ctx.fillStyle = i < state.shield ? pal.player : pal.ground
+      ctx.fillRect(x0 + i * 5, 26, 4, 6)
+    }
+    ctx.fillStyle = armed ? pal.player : pal.muted
+    ctx.fillText(armed ? 'CB ARMED' : `CB ${state.shield}/${SHIELD_FULL}`, x0 + SHIELD_FULL * 5 + 6, 32)
+  }
 }
 
 function drawCrash(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette): void {
@@ -116,6 +153,17 @@ function drawCrash(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette
     ctx.restore()
   }
   banner(ctx, 'daprd: signal: killed', VIEW_H / 2, pal.fail, BIG_FONT)
+}
+
+function drawRewind(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette, attempt: number, of: number): void {
+  if (!view.reducedMotion) {
+    ctx.save()
+    ctx.globalAlpha = 0.25
+    ctx.fillStyle = pal.glitch
+    for (let i = 0; i < 3; i++) ctx.fillRect(0, (view.frame * 9 + i * 97) % VIEW_H, VIEW_W, 2)
+    ctx.restore()
+  }
+  banner(ctx, `◀◀ RetryPolicy · attempt ${attempt}/${of}`, VIEW_H / 2, pal.glitch, BIG_FONT)
 }
 
 function drawBoss(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette): void {
@@ -146,11 +194,12 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
   drawBackground(ctx, state.distance + state.scroll, pal, state.elapsed, view.reducedMotion)
   drawGround(ctx, state, pal)
   for (const e of state.entities) drawEntity(ctx, e, pal, replaying, state.elapsed, view.reducedMotion)
-  drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL)
+  drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL, view.reducedMotion)
   ctx.restore()
   drawHud(ctx, state, pal)
   if (view.notice) banner(ctx, view.notice, 44, pal.text, FONT)
   if (state.bossUntil > 0 && phase.kind === 'playing') drawBoss(ctx, view, pal)
   if (crashing) drawCrash(ctx, view, pal)
+  if (phase.kind === 'rewinding') drawRewind(ctx, view, pal, phase.attempt, phase.of)
   if (replaying) banner(ctx, `⏩ REPLAYING HISTORY · tick ${state.tick}`, 70, pal.glitch, BIG_FONT)
 }

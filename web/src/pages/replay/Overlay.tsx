@@ -88,6 +88,9 @@ export function Overlay({ phase, stats, best, score, level, onShare }: Props) {
             <Stat label="From history" value={stats.fromHistory} />
             <Stat label="Executed" value={stats.executed} />
             <Stat label="Non-determinism" value={stats.incidents} />
+            <Stat label="Retries used" value={stats.retriesUsed} />
+            <Stat label="Circuit trips" value={stats.circuitTrips} />
+            <Stat label="Boosts lost" value={stats.boostsLost} />
           </div>
           <div className="replay-foot">
             <p className="replay-keys">Enter to play again</p>

@@ -32,6 +32,14 @@ function view(phase: Phase, state: GameState = initialState({ level: 1, seed: 1,
   return { state, phase, notice: null, reducedMotion: false, frame: 3, ...extra }
 }
 
+const lvl1 = (over: Partial<GameState> = {}): GameState => ({
+  ...initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 3, shield: 0 }),
+  ...over,
+})
+
+/** Level 0 has no safety HUD, so the only hat on screen is the player's. */
+const lvl0 = (over: Partial<GameState> = {}): GameState => lvl1({ level: 0, ...over })
+
 const texts = (calls: { name: string; args: unknown[] }[]) => calls.filter((c) => c.name === 'fillText').map((c) => c.args[0])
 
 /** Bounds of every rounded rect / rect the hat draws (the recording ctx has roundRect). */
@@ -42,6 +50,47 @@ function hatShapes(calls: { name: string; args: unknown[] }[]) {
 }
 
 describe('render', () => {
+  it('shows retries and the circuit-breaker charge on a second HUD row', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }, lvl1({ retries: 2, shield: 7 })), pal)
+    expect(texts(calls)).toContain('RETRY')
+    expect(texts(calls)).toContain('CB 7/10')
+    render(ctx, view({ kind: 'playing' }, lvl1({ shield: 10 })), pal)
+    expect(texts(calls)).toContain('CB ARMED')
+  })
+
+  it('hides the safety HUD in level 0', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }, { ...lvl1(), level: 0 }), pal)
+    expect(texts(calls)).not.toContain('RETRY')
+    expect(texts(calls).some((t) => String(t).startsWith('CB '))).toBe(false)
+  })
+
+  it('blinks the hat during grace, and outlines it instead with reduced motion', () => {
+    const hidden = mockCtx()
+    render(hidden.ctx, view({ kind: 'playing' }, lvl1({ tick: 4, graceUntil: 60, retries: 0 })), pal)
+    const shown = mockCtx()
+    render(shown.ctx, view({ kind: 'playing' }, lvl1({ tick: 0, graceUntil: 60, retries: 0 })), pal)
+    expect(hatShapes(hidden.calls).length).toBeLessThan(hatShapes(shown.calls).length)
+    const still = mockCtx()
+    render(still.ctx, view({ kind: 'playing' }, lvl1({ tick: 4, graceUntil: 60 }), { reducedMotion: true }), pal)
+    expect(still.calls.some((c) => c.name === 'strokeRect')).toBe(true)
+  })
+
+  it('shows the rewind banner while rewinding', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'rewinding', frames: [], index: 0, attempt: 2, of: 3 }), pal)
+    expect(texts(calls)).toContain('◀◀ RetryPolicy · attempt 2/3')
+  })
+
+  it('draws a smashed rack as debris, never as "from history"', () => {
+    const { ctx, calls } = mockCtx()
+    const s = lvl1({ entities: [{ id: 5, kind: 'low', x: 200, y: GROUND_Y - 20, w: 14, h: 20, taken: true }] })
+    render(ctx, view({ kind: 'replaying' }, s), pal)
+    expect(texts(calls)).not.toContain('✓ from history')
+    expect(calls.some((c) => c.name === 'fillRect' && c.fill === pal.obstacle && (c.args as number[])[3] === 3)).toBe(true)
+  })
+
   it('draws the HUD with level, score and multiplier', () => {
     const { ctx, calls } = mockCtx()
     const state = { ...initialState({ level: 1, seed: 1, score: 5, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }), multiplier: 3 }
@@ -134,7 +183,7 @@ describe('render', () => {
 
   it('draws the player as the hat inside its hitbox', () => {
     const { ctx, calls } = mockCtx()
-    render(ctx, view({ kind: 'playing' }), pal)
+    render(ctx, view({ kind: 'playing' }, lvl0()), pal)
     const shapes = hatShapes(calls)
     expect(shapes.length).toBeGreaterThan(0)
     const left = Math.min(...shapes.map((s) => s.x))
@@ -149,14 +198,14 @@ describe('render', () => {
 
   it('flattens the hat to the slide height while sliding on the ground', () => {
     const { ctx, calls } = mockCtx()
-    const state = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 })
+    const state = lvl0()
     render(ctx, view({ kind: 'playing' }, { ...state, player: { ...state.player, sliding: true } }), pal)
     expect(Math.min(...hatShapes(calls).map((s) => s.y))).toBeGreaterThanOrEqual(GROUND_Y - SLIDE_H - 1e-6)
   })
 
   it('scales a stretched hat around its bottom centre', () => {
     const { ctx, calls } = mockCtx()
-    render(ctx, view({ kind: 'playing' }, undefined, { pose: { sx: 0.8, sy: 1.25 } }), pal)
+    render(ctx, view({ kind: 'playing' }, lvl0(), { pose: { sx: 0.8, sy: 1.25 } }), pal)
     const shapes = hatShapes(calls)
     const left = Math.min(...shapes.map((s) => s.x))
     const right = Math.max(...shapes.map((s) => s.x + s.w))

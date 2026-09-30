@@ -37,4 +37,11 @@ describe('Overlay', () => {
     render(<Overlay phase={{ kind: 'title' }} stats={stats} best={40} score={12} level={0} onShare={vi.fn()} />)
     expect(screen.queryByRole('button', { name: '↗ Share' })).toBeNull()
   })
+
+  it('shows the safety stats on the end-of-run card', () => {
+    render(<Overlay phase={{ kind: 'over', reason: 'hit an obstacle' }} stats={stats} best={40} score={12} level={3} />)
+    expect(screen.getByText('Retries used').previousElementSibling).toHaveTextContent('2')
+    expect(screen.getByText('Circuit trips').previousElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Boosts lost').previousElementSibling).toHaveTextContent('3')
+  })
 })

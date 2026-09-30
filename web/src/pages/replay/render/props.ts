@@ -156,3 +156,13 @@ export function drawFallShadow(ctx: CanvasRenderingContext2D, e: Entity, pal: Pa
   ctx.fill()
   ctx.restore()
 }
+
+/** A rack the circuit breaker barged through: a few broken units on the floor. */
+export function drawDebris(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
+  ctx.fillStyle = pal.obstacle
+  const n = 4
+  for (let i = 0; i < n; i++) {
+    const w = 3 + ((e.id + i * 7) % 4)
+    ctx.fillRect(e.x - 4 + i * (e.w / n + 3), GROUND_Y - 3 - ((e.id + i) % 3), w, 3)
+  }
+}
