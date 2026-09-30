@@ -52,7 +52,7 @@ describe('isTape', () => {
     ['restart shape', { ...ok, restarts: [[10, 1, 1]] }],
     ['restart cursor', { ...ok, restarts: [{ ...restart, impureAt: -1 }] }],
     ['restart save', { ...ok, restarts: [{ ...restart, save: { ...body, tick: -1 } }] }],
-    ['restart save tape nesting', { ...ok, restarts: [{ ...restart, save: { ...body, version: 1 } }] }],
+    ['restart save version', { ...ok, restarts: [{ ...restart, save: { ...body, version: 1 } }] }],
     ['live tick', { ...ok, liveTick: -1 }],
   ])('rejects a bad %s', (_name, bad) => expect(isTape(bad)).toBe(false))
 })

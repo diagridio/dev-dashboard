@@ -862,11 +862,11 @@ describe('run tape', () => {
   })
 
   /** Plays a viewer through `live.tape` to the same live tick and phase and compares the runs. */
-  function expectPlaybackEquals(live: Game, levels: LevelTable = tapeLevels()): void {
+  function expectPlaybackEquals(live: Game, levels: LevelTable = tapeLevels(), ticksPerFrame = 1): void {
     const viewer = new Game(deps({ levels, impure: noWorld, chaosRand: noWorld }))
     expect(viewer.watch(live.tape)).toBe(true)
     const L = live.liveTicks
-    for (let f = 0; f < 60_000 && !(viewer.liveTicks === L && viewer.phase.kind === live.phase.kind); f++) viewer.frame(1)
+    for (let f = 0; f < 60_000 && !(viewer.liveTicks === L && viewer.phase.kind === live.phase.kind); f++) viewer.frame(Math.min(ticksPerFrame, L - viewer.liveTicks))
     expect(viewer.liveTicks).toBe(L)
     expect(viewer.stats).toEqual(live.stats)
     expect(viewer.history).toEqual(live.history)
@@ -914,6 +914,11 @@ describe('run tape', () => {
     }
     expect(resumed.stats.replays).toBeGreaterThanOrEqual(2)
     expectPlaybackEquals(resumed, crashLevels())
+  })
+
+  it.each([2, 3, 4, 5, 7])('plays back exactly when a slow frame runs %i ticks at once', (n) => {
+    // The recording resumes a save mid-play; a multi-tick frame must not step past that restart.
+    expectPlaybackEquals(recording(), tapeLevels(), n)
   })
 
   it("does not overwrite today's daily best when finishing a resumed run from an earlier day", () => {

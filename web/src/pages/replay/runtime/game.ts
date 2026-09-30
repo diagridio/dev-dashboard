@@ -192,7 +192,7 @@ export class Game {
     if (this.playback) this.autoplay()
     const p = this.phase
     if (p.kind === 'playing') {
-      for (let i = 0; i < liveTicks && this.phase.kind === 'playing'; i++) this.tick()
+      for (let i = 0; i < liveTicks && this.phase.kind === 'playing' && !this.restartDue(); i++) this.tick()
     } else if (p.kind === 'crashing') {
       // Per-frame countdown only drives the glitch effect; no re-render needed.
       if (p.framesLeft > 1) this.phase = { kind: 'crashing', framesLeft: p.framesLeft - 1 }
@@ -219,6 +219,11 @@ export class Game {
       this.player.seek(r.impureAt, r.chaosAt)
       this.restoreSave(structuredClone(r.save))
     }
+  }
+
+  /** Playback only: the next recorded resume is due now, so the next frame's autoplay must apply it before any more ticks. */
+  private restartDue(): boolean {
+    return this.playback && this.tape.restarts[this.restartCursor]?.liveTick === this.liveTick
   }
 
   /** Dismisses a tip or "Progress lost" card. */
@@ -507,7 +512,8 @@ export class Game {
     this.segments = save.segments
     this.orbValues = new Map(save.orbValues)
     this.runDate = save.date
-    this.dailyBest = this.deps.store.loadDailyBest(save.date)
+    // Playback reads no storage; its dailyBest stays as it was.
+    if (!this.playback) this.dailyBest = this.deps.store.loadDailyBest(save.date)
     this.restartFromHistory(save.tick)
   }
 
