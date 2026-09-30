@@ -597,4 +597,15 @@ describe('RetryPolicy rewind', () => {
     const atR = game.history.filter((e) => e.tick === R).map((e) => (e.type === 'Input' ? e.kind : e.type))
     expect(atR).toEqual(['RetryAttempt', 'slideEnd'])
   })
+
+  it('keeps a pending crash instead of rescheduling it on a retry', () => {
+    const game = new Game(deps({ levels: makeLevels({ retries: 3, scriptedCrashAt: 400 }) }))
+    play(game)
+    game.frame(100)
+    game.state = { ...game.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+    game.frame(1)
+    expect(game.phase.kind).toBe('rewinding')
+    runUntil(game, is('crashing'))
+    expect(game.state.tick).toBe(400)
+  })
 })

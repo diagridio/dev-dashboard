@@ -250,7 +250,8 @@ export class Game {
     this.stats.retriesUsed += 1
     const attempt = cfg.retries - target.retries + 1
     this.recordInput({ type: 'RetryAttempt', tick: target.tick, attempt, failedAt: hit.failedAt })
-    this.chaos.scheduleNext(target.level, target.tick, target.elapsed)
+    // A crash already pending (scripted, teaching or post-pickup) stays; only schedule one when none is due.
+    if (this.chaos.nextCrashAt === null) this.chaos.scheduleNext(target.level, target.tick, target.elapsed)
     this.setPhase({ kind: 'rewinding', frames, index: 0, attempt, of: cfg.retries })
     this.save()
   }

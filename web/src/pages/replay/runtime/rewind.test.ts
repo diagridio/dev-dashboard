@@ -45,6 +45,10 @@ describe('RewindBuffer', () => {
     expect(b.pick(150, 60, 95).tick).toBe(95)
   })
 
+  it('never refunds a retry: with no state at or after the floor it takes the newest state', () => {
+    expect(filled(10).pick(10, 60, 50).tick).toBe(10)
+  })
+
   it('forgets the anchor once the ring has wrapped', () => {
     const b = filled(REWIND_BUFFER_TICKS + 20, () => true)
     expect(b.pick(REWIND_BUFFER_TICKS + 20, 60, 0).tick).toBe(21)
@@ -63,5 +67,7 @@ describe('sample', () => {
   it('spreads n picks evenly, keeping the first and last', () => {
     expect(sample([0, 1, 2, 3, 4, 5, 6, 7, 8, 9], 4)).toEqual([0, 3, 6, 9])
     expect(sample([1, 2], 4)).toEqual([1, 2])
+    expect(sample([1, 2, 3], 1)).toEqual([1])
+    expect(sample([1, 2, 3], 0)).toEqual([])
   })
 })

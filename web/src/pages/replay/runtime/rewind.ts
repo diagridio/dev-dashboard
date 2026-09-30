@@ -51,7 +51,8 @@ export class RewindBuffer {
   /**
    * The latest safe state at least `minBack` ticks before the hit and not before
    * `floor` (the tick after the last retry, so a rewind can't undo one). If none is
-   * safe, the oldest such candidate; if there is none at all, the newest state.
+   * safe, the oldest such candidate. Only when no state at or after `floor` exists at all
+   * (floor is beyond the buffer) does it return the newest state overall.
    */
   pick(failedAt: number, minBack: number, floor: number): GameState {
     const all = this.all()
@@ -76,6 +77,8 @@ export class RewindBuffer {
 
 /** Up to n items spread evenly over `items`, keeping the first and last. */
 export function sample<T>(items: readonly T[], n: number): T[] {
+  if (n <= 0) return []
+  if (n === 1) return items.length > 0 ? [items[0]] : []
   if (items.length <= n) return [...items]
   return Array.from({ length: n }, (_, i) => items[Math.round((i * (items.length - 1)) / (n - 1))])
 }
