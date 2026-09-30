@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { hashState } from '../engine/hash'
 import { chaosMeanTicks } from '../engine/levels'
-import { BOSS_TICKS } from '../engine/step'
+import { BOSS_TICKS, GRACE_RESUME } from '../engine/step'
 import { GROUND_Y, PLAYER_X, type EntityKind } from '../engine/types'
 import type { Palette } from '../render/palette'
 import { render } from '../render/canvas'
@@ -115,7 +115,9 @@ describe('Game', () => {
     game.command('jump')
     runUntil(game, is('playing'))
     game.frame(1)
-    expect(game.history.length).toBe(before)
+    // Only the resume's OrchestratorStarted was added; the ignored jump was not recorded.
+    expect(game.history.length).toBe(before + 1)
+    expect(game.history.some((e) => e.type === 'Input')).toBe(false)
   })
 
   it('loses all progress on a crash in a non-durable level, then enables durability on level 1', () => {
@@ -191,9 +193,45 @@ describe('Game', () => {
     expect(game.state.bossUntil).toBe(BOSS_TICKS)
     expect(game.start.boss).toBe(true)
     expect(game.divergedAt).toBe(orbIndex)
-    expect(game.history).toEqual([])
+    expect(game.history).toEqual([{ type: 'OrchestratorStarted', tick: 0 }])
     expect(game.stats.incidents).toBe(1)
     expect(game.view().notice).toBe(`NonDeterministicError at event #${orbIndex + 1}`)
+  })
+
+  it('records OrchestratorStarted when a replay resumes, and grants grace', () => {
+    const game = new Game(deps({ levels: makeLevels({ firstCrashTicks: [120, 120] }) }))
+    play(game)
+    runUntil(game, is('crashing'))
+    runUntil(game, is('playing'))
+    expect(game.history[game.history.length - 1]).toEqual({ type: 'OrchestratorStarted', tick: 120 })
+    game.frame(1)
+    expect(game.state.graceUntil).toBe(120 + GRACE_RESUME)
+  })
+
+  it('starts a boss segment with OrchestratorStarted at tick 0', () => {
+    const game = new Game(deps({ impure: counter(), levels: makeLevels({ weights: { orb: 1 }, crashAfterPickup: ['orb'] }) }))
+    play(game)
+    runUntil(game, (g) => g.state.bossUntil > 0 && g.phase.kind === 'playing', ['orb'])
+    expect(game.history[0]).toEqual({ type: 'OrchestratorStarted', tick: 0 })
+  })
+
+  it('gives each level its own retries', () => {
+    const levels = makeLevels({ length: 400 }, { 0: { retries: 0 }, 1: { retries: 3 } })
+    const game = new Game(deps({ levels }))
+    play(game)
+    expect(game.start.retries).toBe(0)
+    runUntil(game, (g) => g.phase.kind === 'tip' && g.start.level === 1)
+    expect(game.start.retries).toBe(3)
+  })
+
+  it('counts circuit trips in the run stats, and only activities as executed', () => {
+    const levels = makeLevels({ weights: { low: 1, coin: 1 }, shieldEnabled: true })
+    const game = new Game(deps({ levels }))
+    play(game)
+    game.state = { ...game.state, shield: 10 }
+    runUntil(game, (g) => g.stats.circuitTrips === 1)
+    expect(game.stats).toMatchObject({ circuitTrips: 1, boostsLost: 0, retriesUsed: 0 })
+    expect(game.stats.executed).toBe(game.history.filter((e) => e.type === 'ActivityCoinCollected').length)
   })
 
   it('replays crate pickups without divergence', () => {
@@ -263,6 +301,7 @@ describe('Game', () => {
 
   it('fails with the non-determinism reason when the player dies during the boss', () => {
     const { game, orbIndex } = bossGame()
+    for (let i = 0; i < GRACE_RESUME; i++) game.frame(1)
     // Direct poke: drop an obstacle on the player (the boss segment never replays here).
     game.state = { ...game.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
     game.frame(1)

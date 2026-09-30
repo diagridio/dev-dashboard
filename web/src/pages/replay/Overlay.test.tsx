@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Overlay } from './Overlay'
 
-const stats = { replays: 2, fromHistory: 5, executed: 9, incidents: 1 }
+const stats = { replays: 2, fromHistory: 5, executed: 9, incidents: 1, retriesUsed: 2, circuitTrips: 1, boostsLost: 3 }
 
 describe('Overlay', () => {
   it('shows the level reached on the end-of-run card', () => {

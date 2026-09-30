@@ -1,3 +1,4 @@
+import { isInputEvent } from '../engine/replay'
 import type { HistoryEvent, StartInput } from '../engine/types'
 import type { RunStats, Save } from './types'
 
@@ -41,8 +42,10 @@ function isEvent(v: unknown): v is HistoryEvent {
   }
 }
 
+const STAT_KEYS = ['replays', 'fromHistory', 'executed', 'incidents', 'retriesUsed', 'circuitTrips', 'boostsLost'] as const
+
 function isStats(v: unknown): v is RunStats {
-  return isObj(v) && isNum(v.replays) && isNum(v.fromHistory) && isNum(v.executed) && isNum(v.incidents)
+  return isObj(v) && STAT_KEYS.every((k) => isNum(v[k]))
 }
 
 export function isSave(v: unknown): v is Save {
@@ -51,8 +54,9 @@ export function isSave(v: unknown): v is Save {
   if (!(v.divergedAt === null || isNum(v.divergedAt))) return false
   if (!Array.isArray(v.history) || !v.history.every(isEvent)) return false
   const history = v.history as HistoryEvent[]
-  // Ordered by tick, and every event happened before the tick we replay to.
-  return history.every((e, i) => (i === 0 || history[i - 1].tick <= e.tick) && e.tick < (v.tick as number))
+  // Ordered by tick; outcomes happened before the tick we replay to, runtime inputs may sit on it.
+  const tick = v.tick as number
+  return history.every((e, i) => (i === 0 || history[i - 1].tick <= e.tick) && (isInputEvent(e) ? e.tick <= tick : e.tick < tick))
 }
 
 export function parseSave(raw: string | null): Save | null {

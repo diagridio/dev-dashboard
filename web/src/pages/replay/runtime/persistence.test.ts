@@ -17,7 +17,7 @@ const sample: Save = {
     { type: 'ActivityCrateCollected', tick: 30, id: 6, hash: 789, result: 0.5 },
   ],
   tick: 31,
-  stats: { replays: 1, fromHistory: 2, executed: 3, incidents: 0 },
+  stats: { replays: 1, fromHistory: 2, executed: 3, incidents: 0, retriesUsed: 0, circuitTrips: 1, boostsLost: 2 },
   divergedAt: null,
 }
 
@@ -33,6 +33,13 @@ describe('localSaveStore', () => {
   it('treats a version-1 save as no save', () => {
     localStorage.setItem(SAVE_KEY, JSON.stringify({ ...sample, version: 1 }))
     expect(localSaveStore().load()).toBeNull()
+  })
+
+  it('accepts runtime input events at the save tick but not outcomes', () => {
+    const atTick = { ...sample, history: [...sample.history, { type: 'RetryAttempt' as const, tick: 31, attempt: 1, failedAt: 90 }] }
+    expect(parseSave(JSON.stringify(atTick))).not.toBeNull()
+    const outcome = { ...sample, history: [...sample.history, { type: 'ActivityCoinCollected' as const, tick: 31, id: 1, hash: 1 }] }
+    expect(parseSave(JSON.stringify(outcome))).toBeNull()
   })
 
   it('rejects a save whose start input lacks retries or shield', () => {

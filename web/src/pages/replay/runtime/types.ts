@@ -9,6 +9,12 @@ export interface RunStats {
   executed: number
   /** Non-determinism incidents (boss phases). */
   incidents: number
+  /** RetryPolicy attempts spent (rewinds). */
+  retriesUsed: number
+  /** Hits absorbed by the circuit breaker. */
+  circuitTrips: number
+  /** Hits absorbed by losing the ×3 boost. */
+  boostsLost: number
 }
 
 export type Phase =

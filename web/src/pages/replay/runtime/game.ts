@@ -1,7 +1,7 @@
 import { LEVELS, type LevelTable } from '../engine/levels'
-import { createReplayer, type Replayer } from '../engine/replay'
+import { createReplayer, inputOf, isInputEvent, type Replayer } from '../engine/replay'
 import { continueAsNew, initialState, step } from '../engine/step'
-import type { GameState, HistoryEvent, Level, PlayerInput, StartInput } from '../engine/types'
+import type { GameState, HistoryEvent, InputEvent, InputKind, Level, PlayerInput, StartInput } from '../engine/types'
 import { ChaosScheduler } from './chaos'
 import type { SaveStore } from './persistence'
 import type { Command, Phase, RunStats, Save } from './types'
@@ -34,7 +34,7 @@ export interface GameView {
   prev: GameState | null
 }
 
-const emptyStats = (): RunStats => ({ replays: 0, fromHistory: 0, executed: 0, incidents: 0 })
+const emptyStats = (): RunStats => ({ replays: 0, fromHistory: 0, executed: 0, incidents: 0, retriesUsed: 0, circuitTrips: 0, boostsLost: 0 })
 const nextLevel = (l: Level): Level => (l >= 4 ? 4 : ((l + 1) as Level))
 
 export class Game {
@@ -51,6 +51,8 @@ export class Game {
   private prevState: GameState | null = null
   private notice: { text: string; untilTick: number } | null = null
   private pending: PlayerInput[] = []
+  /** Input events already in the history at the current tick; the next tick applies them. */
+  private queued: InputEvent[] = []
   /** Whether the slide key is down, tracked in every phase so a release is never lost. */
   private slideHeld = false
   private replayer: Replayer | null = null
@@ -113,7 +115,7 @@ export class Game {
       case 'lost':
         if (c === 'confirm') {
           this.stats = emptyStats()
-          this.beginSegment({ level: 1, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }, true)
+          this.beginSegment({ level: 1, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[1].retries, shield: 0 }, true)
           this.setNotice('Dapr Workflow enabled')
         }
         return
@@ -165,11 +167,22 @@ export class Game {
     })
   }
 
+  /** Runtime inputs (resume, retry) go into the history at once, so a save before the next tick keeps them. */
+  private recordInput(e: InputEvent): void {
+    this.history.push(e)
+    this.queued.push(e)
+  }
+
   private tick(): void {
-    const inputs = this.pending
-    this.pending = []
     const t = this.state.tick
-    for (const kind of inputs) this.history.push({ type: 'Input', tick: t, kind })
+    const inputs: InputKind[] = this.queued.map(inputOf)
+    this.queued = []
+    const pending = this.pending
+    this.pending = []
+    for (const kind of pending) {
+      this.history.push({ type: 'Input', tick: t, kind })
+      inputs.push(kind)
+    }
     const ports = { impure: this.deps.impure, crateValue: () => this.deps.impure() }
     this.prevState = this.state
     const { state, events } = step(this.state, inputs, ports, this.levels)
@@ -180,7 +193,8 @@ export class Game {
       else if (e.type === 'ActivityCoinCollected' || e.type === 'ActivityCrateCollected') {
         this.stats.executed += 1
         if (e.type === 'ActivityCrateCollected') this.chaos.onPickup(state.level, 'crate', state.tick)
-      }
+      } else if (e.type === 'CircuitBreakerTripped') this.stats.circuitTrips += 1
+      else if (e.type === 'BoostLost') this.stats.boostsLost += 1
     }
 
     if (state.status === 'failed') {
@@ -193,7 +207,8 @@ export class Game {
     if (state.status === 'levelDone') {
       // A level can end mid-boss now that distance carries across segments.
       this.divergedAt = null
-      this.beginSegment(continueAsNew(state, { level: nextLevel(state.level), elapsed: 0, distance: 0 }), true)
+      const next = nextLevel(state.level)
+      this.beginSegment(continueAsNew(state, { level: next, elapsed: 0, distance: 0, retries: this.levels[next].retries }), true)
       return
     }
     if (state.bossUntil > 0) {
@@ -213,7 +228,7 @@ export class Game {
     this.stats = emptyStats()
     this.divergedAt = null
     this.deps.store.clear()
-    this.beginSegment({ level: 0, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }, true)
+    this.beginSegment({ level: 0, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[0].retries, shield: 0 }, true)
   }
 
   private beginSegment(start: StartInput, showTip: boolean): void {
@@ -222,6 +237,7 @@ export class Game {
     this.state = initialState(start)
     this.prevState = null
     this.pending = []
+    this.queued = []
     this.notice = null
     this.chaos.start(start.level, showTip, start.elapsed)
     this.setPhase(showTip ? { kind: 'tip', level: start.level } : { kind: 'playing' })
@@ -265,6 +281,9 @@ export class Game {
       this.state = result.state
       this.prevState = null
       this.chaos.scheduleNext(this.state.level, this.state.tick, this.state.elapsed)
+      // Runtime inputs recorded at the resume tick were not applied by the replay (it stops before that tick).
+      this.queued = this.history.filter((e): e is InputEvent => isInputEvent(e) && e.tick === this.state.tick)
+      this.recordInput({ type: 'OrchestratorStarted', tick: this.state.tick })
       this.setNotice(`Replayed ${this.history.length} events · resumed at tick ${this.state.tick}`)
       this.setPhase({ kind: 'playing' })
       return
@@ -272,6 +291,7 @@ export class Game {
     this.stats.incidents += 1
     this.divergedAt = result.divergedAt
     this.beginSegment(continueAsNew(result.state, { boss: true }), false)
+    this.recordInput({ type: 'OrchestratorStarted', tick: 0 })
     this.setNotice(`NonDeterministicError at event #${result.divergedAt + 1}`)
   }
 
