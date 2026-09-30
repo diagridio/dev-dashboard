@@ -272,7 +272,7 @@ export class Game {
     }
     this.stats.incidents += 1
     this.divergedAt = result.divergedAt
-    this.beginSegment(continueAsNew(result.state, { boss: true, retries: 0, shield: 0 }), false)
+    this.beginSegment(continueAsNew(result.state, { boss: true }), false)
     this.setNotice(`NonDeterministicError at event #${result.divergedAt + 1}`)
   }
 
