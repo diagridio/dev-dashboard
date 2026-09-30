@@ -34,6 +34,9 @@ export type Phase =
 
 export type Command = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd' | 'pause' | 'confirm' | 'cancel'
 
+/** A save without its tape: what a tape's restart entries snapshot. */
+export type SaveBody = Omit<Save, 'tape'>
+
 export interface Save {
   version: 2
   /** The UTC date (YYYY-MM-DD) whose daily seed this run started from. */

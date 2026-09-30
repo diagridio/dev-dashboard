@@ -280,17 +280,18 @@ interface Tape {
   inputs: [liveTick: number, command: 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd'][]
   impure: number[]  // uint32; value = u / 2^32
   chaos: number[]   // uint32; value = u / 2^32
-  restarts: [liveTick: number, impureAt: number, chaosAt: number][] // save resumes, with the tape cursors at that moment
+  restarts: { liveTick: number; impureAt: number; chaosAt: number; save: Omit<Save, 'tape'> }[] // save resumes: tape cursors plus the snapshot resumed from
   liveTick: number   // live ticks recorded so far
 }
 ```
 
 A save resume replays history, and that replay can consume `impure` values
-(orbs). So the tape records it in `restarts`, together with where the impure
-and chaos values of the resume start. At that live tick, playback seeks to
-those cursors and
-runs the same crash-free replay-and-resume path as a resumed save, with the
-same `OrchestratorStarted`.
+(orbs). So the tape records each resume in `restarts`: the live tick, where the
+impure and chaos values of the resume start, and a snapshot of the save it
+resumed from (the save body, never nesting the tape). At that live tick,
+whatever phase it is in, playback restores the snapshot exactly as a resume does,
+seeks to those cursors and runs the same replay-and-resume path, with the same
+`OrchestratorStarted`.
 
 - `liveTick` counts `Game.tick()` calls in the run (live ticks only; frames
   spent crashing, replaying, rewinding, paused or in a montage don't count).

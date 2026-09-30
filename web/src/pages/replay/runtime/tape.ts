@@ -1,4 +1,6 @@
 import type { PlayerInput } from '../engine/types'
+import type { SaveBody } from './types'
+import { isSaveBody } from './validate'
 
 /**
  * Everything the outside world fed a run: player inputs by live tick, every
@@ -11,8 +13,11 @@ export interface Tape {
   inputs: [liveTick: number, command: PlayerInput][]
   impure: number[]
   chaos: number[]
-  /** A saved run was resumed at this live tick; the cursors are where its values start. */
-  restarts: [liveTick: number, impureAt: number, chaosAt: number][]
+  /**
+   * A saved run was resumed at this live tick: the cursors are where its values start and
+   * `save` is the snapshot it resumed from, so playback restores it whatever phase it is in.
+   */
+  restarts: { liveTick: number; impureAt: number; chaosAt: number; save: SaveBody }[]
   /** Live ticks recorded so far. */
   liveTick: number
 }
@@ -41,7 +46,11 @@ export function isTape(v: unknown): v is Tape {
       Array.isArray(x) && x.length === 2 && isTick(x[0]) && PLAYER_INPUTS.includes(x[1] as string) &&
       (i === 0 || (all[i - 1] as [number])[0] <= x[0]),
   )
-  const restartsOk = t.restarts.every((x) => Array.isArray(x) && x.length === 3 && x.every(isTick))
+  const restartsOk = t.restarts.every((x: unknown) => {
+    if (typeof x !== 'object' || x === null) return false
+    const r = x as Record<string, unknown>
+    return isTick(r.liveTick) && isTick(r.impureAt) && isTick(r.chaosAt) && isSaveBody(r.save)
+  })
   return inputsOk && restartsOk
 }
 

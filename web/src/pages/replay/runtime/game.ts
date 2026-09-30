@@ -9,7 +9,7 @@ import { Montage, type MontageSegment } from './montage'
 import type { SaveStore } from './persistence'
 import { REWIND_FRAMES, REWIND_PX, RewindBuffer, sample } from './rewind'
 import { TapePlayer, TapeRecorder, emptyTape, isTape, type Source, type Tape } from './tape'
-import type { Command, Phase, RunStats, Save } from './types'
+import type { Command, Phase, RunStats, Save, SaveBody } from './types'
 
 /** Frames the crash glitch shows before the replay starts. */
 export const CRASH_FRAMES = 36
@@ -64,6 +64,7 @@ export class Game {
   playback = false
 
   private source: Source
+  private player: TapePlayer | null = null
   private liveTick = 0
   private inputCursor = 0
   private restartCursor = 0
@@ -213,10 +214,10 @@ export class Game {
     const k = this.phase.kind
     if (k === 'tip' || k === 'lost') this.confirm()
     const r = this.tape.restarts[this.restartCursor]
-    if (r && r[0] === this.liveTick && k !== 'over' && k !== 'title') {
+    if (r && r.liveTick === this.liveTick && this.player && k !== 'over' && k !== 'title') {
       this.restartCursor += 1
-      ;(this.source as TapePlayer).seek(r[1], r[2])
-      this.restartFromHistory(k === 'crashing' || k === 'replaying' ? this.crashTick : this.state.tick)
+      this.player.seek(r.impureAt, r.chaosAt)
+      this.restoreSave(structuredClone(r.save))
     }
   }
 
@@ -368,6 +369,7 @@ export class Game {
 
   private newRun(): void {
     this.playback = false
+    this.player = null
     this.runDate = this.deps.today()
     this.dailyBest = this.deps.store.loadDailyBest(this.runDate)
     this.tape = emptyTape(this.runDate)
@@ -382,7 +384,8 @@ export class Game {
     this.playback = true
     this.runDate = tape.date
     this.tape = tape
-    this.source = new TapePlayer(tape)
+    this.player = new TapePlayer(tape)
+    this.source = this.player
     this.startRun()
     return true
   }
@@ -495,8 +498,8 @@ export class Game {
     this.startReplay()
   }
 
-  private resumeSaved(save: Save): void {
-    this.savedRun = null
+  /** Restores a saved run's fields and rebuilds it by replay; shared by live resumes and their playback. */
+  private restoreSave(save: SaveBody): void {
     this.start = save.start
     this.history = save.history
     this.stats = save.stats
@@ -505,11 +508,17 @@ export class Game {
     this.orbValues = new Map(save.orbValues)
     this.runDate = save.date
     this.dailyBest = this.deps.store.loadDailyBest(save.date)
-    this.tape = save.tape
-    this.liveTick = save.tape.liveTick
-    this.source = new TapeRecorder(this.tape, this.deps)
-    this.tape.restarts.push([this.liveTick, this.tape.impure.length, this.tape.chaos.length])
     this.restartFromHistory(save.tick)
+  }
+
+  private resumeSaved(save: Save): void {
+    this.savedRun = null
+    const { tape, ...body } = save
+    this.tape = tape
+    this.liveTick = tape.liveTick
+    this.source = new TapeRecorder(tape, this.deps)
+    tape.restarts.push({ liveTick: this.liveTick, impureAt: tape.impure.length, chaosAt: tape.chaos.length, save: structuredClone(body) })
+    this.restoreSave(body)
   }
 
   private gameOver(reason: string): void {

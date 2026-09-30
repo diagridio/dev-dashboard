@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hashState } from '../engine/hash'
-import { chaosMeanTicks, type LevelConfig } from '../engine/levels'
+import { chaosMeanTicks, type LevelConfig, type LevelTable } from '../engine/levels'
 import { replay } from '../engine/replay'
 import { seedFrom } from '../engine/rng'
 import { seedForDate } from '../engine/seed'
@@ -859,6 +859,61 @@ describe('run tape', () => {
     viewer.command('confirm')
     expect(viewer.playback).toBe(false)
     expect(viewer.phase).toEqual({ kind: 'tip', level: 0 })
+  })
+
+  /** Plays a viewer through `live.tape` to the same live tick and phase and compares the runs. */
+  function expectPlaybackEquals(live: Game, levels: LevelTable = tapeLevels()): void {
+    const viewer = new Game(deps({ levels, impure: noWorld, chaosRand: noWorld }))
+    expect(viewer.watch(live.tape)).toBe(true)
+    const L = live.liveTicks
+    for (let f = 0; f < 60_000 && !(viewer.liveTicks === L && viewer.phase.kind === live.phase.kind); f++) viewer.frame(1)
+    expect(viewer.liveTicks).toBe(L)
+    expect(viewer.stats).toEqual(live.stats)
+    expect(viewer.history).toEqual(live.history)
+    expect(hashState(viewer.state)).toBe(hashState(live.state))
+  }
+
+  const crashLevels = () => makeLevels({ firstCrashTicks: [120, 120], weights: { coin: 2, low: 1 }, retries: 3 })
+
+  it('plays back a run whose tab closed mid-crash', () => {
+    const store = memoryStore()
+    const live = new Game(deps({ store, levels: crashLevels(), impure: lcg(5), chaosRand: lcg(6) }))
+    play(live)
+    for (let f = 0; f < 2000 && live.phase.kind !== 'crashing'; f++) {
+      drive(live, false)
+      live.frame(1)
+    }
+    expect(live.phase.kind).toBe('crashing')
+    live.suspend()
+    const resumed = new Game(deps({ store, levels: crashLevels(), impure: lcg(7), chaosRand: lcg(8) }))
+    resumed.command('confirm')
+    for (let f = 0; f < 400; f++) {
+      drive(resumed, false)
+      resumed.frame(1)
+    }
+    expect(resumed.tape.restarts).toHaveLength(1)
+    expectPlaybackEquals(resumed, crashLevels())
+  })
+
+  it('plays back a run saved after a crash replay but before the next tick', () => {
+    const store = memoryStore()
+    const live = new Game(deps({ store, levels: crashLevels(), impure: lcg(5), chaosRand: lcg(6) }))
+    play(live)
+    for (let f = 0; f < 2000 && live.phase.kind !== 'crashing'; f++) {
+      drive(live, false)
+      live.frame(1)
+    }
+    for (let f = 0; f < 600 && live.phase.kind !== 'playing'; f++) live.frame(0)
+    expect(live.phase.kind).toBe('playing')
+    live.suspend()
+    const resumed = new Game(deps({ store, levels: crashLevels(), impure: lcg(7), chaosRand: lcg(8) }))
+    resumed.command('confirm')
+    for (let f = 0; f < 400; f++) {
+      drive(resumed, false)
+      resumed.frame(1)
+    }
+    expect(resumed.stats.replays).toBeGreaterThanOrEqual(2)
+    expectPlaybackEquals(resumed, crashLevels())
   })
 
   it("does not overwrite today's daily best when finishing a resumed run from an earlier day", () => {
