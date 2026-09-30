@@ -5,7 +5,7 @@ import type { Phase } from '../runtime/types'
 import { drawBackground } from './background'
 import type { Palette } from './palette'
 import { NEUTRAL, type Pose } from './pose'
-import { drawCoin, drawRack } from './props'
+import { drawCoin, drawCrate, drawOrb, drawRack } from './props'
 import { drawHat } from './sprites'
 
 export interface RenderView {
@@ -65,14 +65,9 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, repl
     drawRack(ctx, e, pal, elapsed, reducedMotion)
     return
   }
+  if (kind === 'orb') drawOrb(ctx, e, pal)
+  else drawCrate(ctx, e, pal)
   ctx.fillStyle = pal[kind]
-  if (kind === 'orb') {
-    ctx.beginPath()
-    ctx.arc(e.x + e.w / 2, e.y + e.h / 2, e.w / 2, 0, Math.PI * 2)
-    ctx.fill()
-  } else {
-    ctx.fillRect(e.x, e.y, e.w, e.h)
-  }
   const text = label(e)
   if (text) {
     ctx.font = FONT

@@ -12,11 +12,14 @@ const pal: Palette = {
 
 /** A recording stand-in for CanvasRenderingContext2D: every method call is logged. */
 function mockCtx() {
-  const calls: { name: string; args: unknown[] }[] = []
+  const calls: { name: string; args: unknown[]; fill?: unknown }[] = []
   const props: Record<string, unknown> = {}
   const ctx = new Proxy(props, {
-    get: (target, prop: string) =>
-      prop in target ? target[prop] : (...args: unknown[]) => { calls.push({ name: prop, args }) },
+    get: (target, prop: string) => {
+      if (prop in target) return target[prop]
+      if (prop === 'createRadialGradient' || prop === 'createLinearGradient') return () => ({ addColorStop: () => {} })
+      return (...args: unknown[]) => { calls.push({ name: prop, args, fill: target.fillStyle }) }
+    },
     set: (target, prop: string, value) => {
       target[prop] = value
       return true
@@ -98,7 +101,10 @@ describe('render', () => {
     const { ctx, calls } = mockCtx()
     render(ctx, view({ kind: 'playing' }, state), pal)
     expect(texts(calls)).toEqual(expect.arrayContaining(['Math.random()', 'Date.now()', 'fetch()', 'callActivity(random)']))
-    expect(calls.filter((c) => c.name === 'arc')).toHaveLength(3)
+    // Orbs and crates go through drawOrb / drawCrate: sphere bases in the orb colour, a crate rect in the crate colour.
+    const bases = calls.filter((c) => c.name === 'fill' && c.fill === 'purple').length
+    expect(bases).toBe(3)
+    expect(calls.some((c) => c.name === 'fillRect' && c.fill === 'blue' && c.args.join() === [320, GROUND_Y - 60, 12, 12].join())).toBe(true)
   })
 
   it('draws coins as round coins and obstacles as racks, glinting from game time', () => {
