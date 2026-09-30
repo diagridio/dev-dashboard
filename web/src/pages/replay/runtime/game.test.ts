@@ -3,6 +3,8 @@ import { hashState } from '../engine/hash'
 import { chaosMeanTicks } from '../engine/levels'
 import { BOSS_TICKS } from '../engine/step'
 import { GROUND_Y, PLAYER_X, type EntityKind } from '../engine/types'
+import type { Palette } from '../render/palette'
+import { render } from '../render/canvas'
 import { autopilot, counter, makeLevels } from '../testing'
 import { CRASH_FRAMES, Game, REPLAY_MAX_FRAMES, type GameDeps } from './game'
 import type { SaveStore } from './persistence'
@@ -126,6 +128,43 @@ describe('Game', () => {
     expect(game.state.score).toBe(game.start.score)
     expect(game.history).toEqual([])
     expect(game.state.tick).toBe(0)
+  })
+
+  it('carries the score across levels 1 to 3, except the deliberate level-0 reset', () => {
+    const game = new Game(deps({ levels: makeLevels({ length: 1200 }, { 0: { durable: false, scriptedCrashAt: 120 } }) }))
+    const pal = { bg: 'white', text: 'black', muted: 'gray' } as Palette
+    const hud = (): string => {
+      const texts: string[] = []
+      const props: Record<string, unknown> = {}
+      const ctx = new Proxy(props, {
+        get: (t, prop: string) => (prop in t ? t[prop] : (...args: unknown[]) => { if (prop === 'fillText') texts.push(String(args[0])) }),
+        set: (t, prop: string, v) => { t[prop] = v; return true },
+      }) as unknown as CanvasRenderingContext2D
+      render(ctx, { state: game.state, phase: game.phase, notice: null, reducedMotion: false, frame: 0 }, pal)
+      return texts.find((x) => x.startsWith('SCORE ')) ?? ''
+    }
+    play(game)
+    runUntil(game, is('lost'), ['coin'])
+    game.command('confirm')
+    expect(game.phase).toEqual({ kind: 'tip', level: 1 })
+    // Level 0 is non-durable: its progress is lost, so level 1 starts from zero.
+    expect(game.start.score).toBe(0)
+    expect(game.state.score).toBe(0)
+    game.command('confirm')
+    expect(game.phase.kind).toBe('playing')
+    let previous = 0
+    for (const level of [2, 3] as const) {
+      runUntil(game, (g) => g.phase.kind === 'tip' && g.phase.level === level, ['coin'])
+      const finalScore = game.state.score
+      expect(finalScore).toBeGreaterThan(previous)
+      expect(game.start.level).toBe(level)
+      expect(game.start.score).toBe(finalScore)
+      game.command('confirm')
+      expect(game.phase.kind).toBe('playing')
+      expect(game.state.score).toBe(finalScore)
+      expect(hud().startsWith(`SCORE ${finalScore}`)).toBe(true)
+      previous = finalScore
+    }
   })
 
   it('detects non-determinism after an orb pickup and enters the boss phase', () => {
