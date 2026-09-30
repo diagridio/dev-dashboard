@@ -657,6 +657,7 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .replay-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .replay-card .replay-keys { font-family: var(--mono); font-size: 11px; color: var(--faint); }
 .replay-stats { margin: 4px 0 0; grid-template-columns: repeat(3, 1fr); }
+.replay-share { justify-self: start; }
 .replay-count { margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); }
 .replay-empty { margin: 0; padding: 14px; color: var(--faint); font-size: 12.5px; }
 .replay-hist { max-height: 540px; overflow: auto; padding: 8px 12px; }

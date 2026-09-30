@@ -66,6 +66,32 @@ describe('Replay page', () => {
     expect(screen.queryByRole('link', { name: /learn more/i })).toBeNull()
   })
 
+  it('opens the Share dialog from the game-over card, and Enter there does not restart the run', async () => {
+    // Drive the real loop: capture rAF callbacks and fire them with advancing time.
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', vi.fn((cb: FrameRequestCallback) => frames.push(cb)))
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+    renderAt('/replay')
+    await screen.findByRole('heading', { name: 'Press Enter to start' })
+    let now = 0
+    for (let i = 0; i < 5000 && !screen.queryByRole('heading', { name: 'Workflow FAILED' }); i++) {
+      // Dismiss tip / "Progress lost" cards; the hat never jumps, so it soon hits a rack.
+      if (screen.queryByRole('heading', { name: /^Level \d|Progress lost|Press Enter/ })) {
+        fireEvent.keyDown(window, { key: 'Enter' })
+      }
+      act(() => {
+        now += 100
+        frames.shift()?.(now)
+      })
+    }
+    expect(screen.getByRole('heading', { name: 'Workflow FAILED' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Share the dashboard' })
+    fireEvent.keyDown(dialog.querySelector('button') as HTMLButtonElement, { key: 'Enter' })
+    expect(screen.getByRole('heading', { name: 'Workflow FAILED' })).toBeInTheDocument()
+  })
+
   it('pauses a running game when the window loses focus', async () => {
     renderAt('/replay')
     await screen.findByRole('heading', { name: 'Press Enter to start' })

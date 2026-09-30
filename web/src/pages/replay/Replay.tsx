@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { ShareDialog } from '../../components/ShareDialog'
 import { isInteractiveTarget } from '../../lib/isEditableTarget'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
 import { VIEW_H, VIEW_W } from './engine/types'
@@ -28,6 +29,7 @@ export function Component() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   const [game] = useState(createGame)
+  const [shareOpen, setShareOpen] = useState(false)
   useSyncExternalStore(game.subscribe, game.getVersion)
 
   useEffect(() => {
@@ -124,10 +126,18 @@ export function Component() {
       <div className="replay-grid">
         <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game">
           <canvas ref={canvasRef} width={VIEW_W} height={VIEW_H} aria-label="REPLAY game screen" />
-          <Overlay phase={game.phase} stats={game.stats} best={game.best} score={game.state.score} level={game.state.level} />
+          <Overlay
+            phase={game.phase}
+            stats={game.stats}
+            best={game.best}
+            score={game.state.score}
+            level={game.state.level}
+            onShare={() => setShareOpen(true)}
+          />
         </div>
         <HistoryPanel history={game.history} />
       </div>
+      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
     </div>
   )
 }

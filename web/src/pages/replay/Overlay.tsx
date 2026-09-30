@@ -9,6 +9,8 @@ interface Props {
   score: number
   /** The level the run reached. */
   level: number
+  /** Opens the dashboard's Share dialog from the end-of-run card. */
+  onShare?: () => void
 }
 
 function Card({ children }: { children: ReactNode }) {
@@ -29,7 +31,7 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 /** DOM cards over the canvas for every phase that waits on the player. */
-export function Overlay({ phase, stats, best, score, level }: Props) {
+export function Overlay({ phase, stats, best, score, level, onShare }: Props) {
   switch (phase.kind) {
     case 'title':
       return (
@@ -87,6 +89,11 @@ export function Overlay({ phase, stats, best, score, level }: Props) {
             <Stat label="Executed" value={stats.executed} />
             <Stat label="Non-determinism" value={stats.incidents} />
           </div>
+          {onShare && (
+            <button type="button" className="btn ghost replay-share" onClick={onShare}>
+              Share
+            </button>
+          )}
           <p className="replay-keys">Enter to play again</p>
         </Card>
       )
