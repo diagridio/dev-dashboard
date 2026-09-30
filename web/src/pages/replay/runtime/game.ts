@@ -1,5 +1,7 @@
 import { LEVELS, speedAt, type LevelTable } from '../engine/levels'
 import { createReplayer, inputOf, isInputEvent, type Replayer } from '../engine/replay'
+import { seedFrom } from '../engine/rng'
+import { seedForDate } from '../engine/seed'
 import { continueAsNew, initialState, livePlayer, step } from '../engine/step'
 import type { GameState, HistoryEvent, InputEvent, InputKind, Level, PlayerInput, StartInput } from '../engine/types'
 import { ChaosScheduler } from './chaos'
@@ -22,7 +24,8 @@ export interface GameDeps {
   impure: () => number
   /** Chaos timing (the outside world). */
   chaosRand: () => number
-  newSeed: () => number
+  /** Today's UTC date (YYYY-MM-DD); the run's seed comes from it. */
+  today: () => string
   store: SaveStore
   levels?: LevelTable
 }
@@ -43,6 +46,8 @@ const nextLevel = (l: Level): Level => (l >= 5 ? 5 : ((l + 1) as Level))
 
 export class Game {
   phase: Phase = { kind: 'title' }
+  runDate: string
+  dailyBest: number
   start: StartInput = { level: 0, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
   history: HistoryEvent[] = []
   state: GameState
@@ -78,6 +83,8 @@ export class Game {
     this.levels = deps.levels ?? LEVELS
     this.chaos = new ChaosScheduler(deps.chaosRand, this.levels)
     this.best = deps.store.loadBest()
+    this.runDate = deps.today()
+    this.dailyBest = deps.store.loadDailyBest(this.runDate)
     this.state = initialState(this.start, this.levels)
     this.savedRun = deps.store.load()
     if (this.savedRun) this.phase = { kind: 'resume', tick: this.savedRun.tick }
@@ -132,7 +139,7 @@ export class Game {
       case 'lost':
         if (c === 'confirm') {
           this.stats = emptyStats()
-          this.beginSegment({ level: 1, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[1].retries, shield: 0 }, true)
+          this.beginSegment({ level: 1, seed: seedFrom(seedForDate(this.runDate)), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[1].retries, shield: 0 }, true)
           this.setNotice('Dapr Workflow enabled')
         }
         return
@@ -186,7 +193,7 @@ export class Game {
     if (!this.levels[this.start.level].durable) return
     const tick = k === 'crashing' || k === 'replaying' ? this.crashTick : this.state.tick
     this.deps.store.save({
-      version: 2, start: this.start, history: this.history, tick, stats: this.stats, divergedAt: this.divergedAt,
+      version: 2, date: this.runDate, start: this.start, history: this.history, tick, stats: this.stats, divergedAt: this.divergedAt,
       segments: this.segments, orbValues: [...this.orbValues],
     })
   }
@@ -302,7 +309,9 @@ export class Game {
     this.divergedAt = null
     this.segments = []
     this.deps.store.clear()
-    this.beginSegment({ level: 0, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[0].retries, shield: 0 }, true)
+    this.runDate = this.deps.today()
+    this.dailyBest = this.deps.store.loadDailyBest(this.runDate)
+    this.beginSegment({ level: 0, seed: seedForDate(this.runDate), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[0].retries, shield: 0 }, true)
   }
 
   private beginSegment(start: StartInput, showTip: boolean): void {
@@ -394,6 +403,8 @@ export class Game {
 
   private resumeSaved(save: Save): void {
     this.savedRun = null
+    this.runDate = save.date
+    this.dailyBest = this.deps.store.loadDailyBest(save.date)
     this.start = save.start
     this.history = save.history
     this.stats = save.stats
@@ -412,6 +423,10 @@ export class Game {
     if (this.state.score > this.best) {
       this.best = this.state.score
       this.deps.store.saveBest(this.best)
+    }
+    if (this.state.score > this.dailyBest) {
+      this.dailyBest = this.state.score
+      this.deps.store.saveDailyBest(this.runDate, this.dailyBest)
     }
     this.setPhase({ kind: 'over', reason })
   }

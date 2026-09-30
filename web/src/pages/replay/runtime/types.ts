@@ -35,6 +35,8 @@ export type Command = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd' | 'pause' |
 
 export interface Save {
   version: 2
+  /** The UTC date (YYYY-MM-DD) whose daily seed this run started from. */
+  date: string
   start: StartInput
   history: HistoryEvent[]
   /** The tick to replay to on resume. */

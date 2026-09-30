@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { BEST_KEY, SAVE_KEY, localSaveStore, parseSave } from './persistence'
+import { BEST_KEY, DAILY_KEY, SAVE_KEY, localSaveStore, parseSave } from './persistence'
 import type { Save } from './types'
 
 const sample: Save = {
   version: 2,
+  date: '2026-09-30',
   start: { level: 2, seed: 99, score: 5, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 },
   history: [
     { type: 'Input', tick: 3, kind: 'jump' },
@@ -57,6 +58,20 @@ describe('localSaveStore', () => {
     const start: Partial<Save['start']> = { ...sample.start }
     delete start.retries
     expect(parseSave(JSON.stringify({ ...sample, start }))).toBeNull()
+  })
+
+  it('rejects a save without a valid date', () => {
+    expect(parseSave(JSON.stringify({ ...sample, date: 'yesterday' }))).toBeNull()
+  })
+
+  it("round-trips today's best and reads another day's as 0", () => {
+    const store = localSaveStore()
+    expect(store.loadDailyBest('2026-09-30')).toBe(0)
+    store.saveDailyBest('2026-09-30', 12)
+    expect(store.loadDailyBest('2026-09-30')).toBe(12)
+    expect(store.loadDailyBest('2026-10-01')).toBe(0)
+    localStorage.setItem(DAILY_KEY, '{nope')
+    expect(store.loadDailyBest('2026-09-30')).toBe(0)
   })
 
   it('returns null when there is no save, and after clear()', () => {

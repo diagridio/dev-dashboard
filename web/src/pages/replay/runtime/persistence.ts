@@ -5,9 +5,12 @@ import type { RunStats, Save } from './types'
 
 export const SAVE_KEY = 'devdash.replay.save'
 export const BEST_KEY = 'devdash.replay.best'
+export const DAILY_KEY = 'devdash.replay.daily'
 export const SAVE_VERSION = 2
 
 export interface SaveStore {
+  loadDailyBest(date: string): number
+  saveDailyBest(date: string, score: number): void
   load(): Save | null
   save(save: Save): void
   clear(): void
@@ -18,6 +21,8 @@ export interface SaveStore {
 type Obj = Record<string, unknown>
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+export const isDate = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
 
 function isStart(v: unknown): v is StartInput {
   return (
@@ -60,6 +65,7 @@ function isSegment(v: unknown): v is MontageSegment {
 
 export function isSave(v: unknown): v is Save {
   if (!isObj(v) || v.version !== SAVE_VERSION || !isStart(v.start) || !isStats(v.stats)) return false
+  if (!isDate(v.date)) return false
   if (!isNum(v.tick) || v.tick < 0) return false
   if (!(v.divergedAt === null || isNum(v.divergedAt))) return false
   if (!Array.isArray(v.history) || !v.history.every(isEvent)) return false
@@ -99,5 +105,11 @@ export function localSaveStore(storage: () => Storage = () => localStorage): Sav
         return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
       }, 0),
     saveBest: (score) => attempt((s) => s.setItem(BEST_KEY, String(score)), undefined),
+    loadDailyBest: (date) =>
+      attempt((s) => {
+        const data: unknown = JSON.parse(s.getItem(DAILY_KEY) ?? 'null')
+        return isObj(data) && data.date === date && isNum(data.best) && data.best > 0 ? Math.floor(data.best) : 0
+      }, 0),
+    saveDailyBest: (date, score) => attempt((s) => s.setItem(DAILY_KEY, JSON.stringify({ date, best: score })), undefined),
   }
 }

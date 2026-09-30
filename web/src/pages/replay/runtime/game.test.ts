@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { hashState } from '../engine/hash'
 import { chaosMeanTicks, type LevelConfig } from '../engine/levels'
 import { replay } from '../engine/replay'
+import { seedFrom } from '../engine/rng'
+import { seedForDate } from '../engine/seed'
 import { BOSS_TICKS, GRACE_RESUME } from '../engine/step'
 import { GROUND_Y, PLAYER_X, type EntityKind } from '../engine/types'
 import type { Palette } from '../render/palette'
@@ -13,23 +15,26 @@ import { MONTAGE_FRAMES } from './montage'
 import { REWIND_FRAMES } from './rewind'
 import type { Save } from './types'
 
-type MemoryStore = SaveStore & { saved: Save | null; best: number }
+type MemoryStore = SaveStore & { saved: Save | null; best: number; daily: { date: string; best: number } | null }
 
 function memoryStore(): MemoryStore {
   const s: MemoryStore = {
     saved: null,
     best: 0,
+    daily: null,
     load: () => (s.saved ? (JSON.parse(JSON.stringify(s.saved)) as Save) : null),
     save: (x) => { s.saved = JSON.parse(JSON.stringify(x)) as Save },
     clear: () => { s.saved = null },
     loadBest: () => s.best,
     saveBest: (n) => { s.best = n },
+    loadDailyBest: (date) => (s.daily && s.daily.date === date ? s.daily.best : 0),
+    saveDailyBest: (date, best) => { s.daily = { date, best } },
   }
   return s
 }
 
 function deps(overrides: Partial<GameDeps> = {}): GameDeps {
-  return { impure: counter(), chaosRand: () => 0.5, newSeed: () => 42, store: memoryStore(), levels: makeLevels(), ...overrides }
+  return { impure: counter(), chaosRand: () => 0.5, today: () => '2026-09-30', store: memoryStore(), levels: makeLevels(), ...overrides }
 }
 
 /** title → tip(0) → playing */
@@ -53,6 +58,34 @@ function runUntil(game: Game, done: (g: Game) => boolean, want: readonly EntityK
 const is = (kind: string) => (g: Game) => g.phase.kind === kind
 
 describe('Game', () => {
+  it("seeds every run from today's UTC date", () => {
+    const game = new Game(deps({ today: () => '2026-12-24' }))
+    play(game)
+    expect(game.start.seed).toBe(seedForDate('2026-12-24'))
+    expect(game.runDate).toBe('2026-12-24')
+  })
+
+  it('derives the level-1 seed after "Progress lost" from the run seed', () => {
+    const game = new Game(deps({ levels: makeLevels({}, { 0: { durable: false, scriptedCrashAt: 120 } }) }))
+    play(game)
+    runUntil(game, is('lost'))
+    game.command('confirm')
+    expect(game.start.seed).toBe(seedFrom(seedForDate('2026-09-30')))
+  })
+
+  it("records today's best next to the all-time best", () => {
+    const store = memoryStore()
+    const game = new Game(deps({ store }))
+    play(game)
+    // Direct poke: a score of 5 and a rack on the hat (makeLevels has no retries).
+    game.state = { ...game.state, score: 5, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+    game.frame(1)
+    expect(game.phase.kind).toBe('over')
+    expect(store.daily).toEqual({ date: '2026-09-30', best: 5 })
+    expect(store.best).toBe(5)
+    expect(game.dailyBest).toBe(5)
+  })
+
   it('goes from the title screen to the level-0 tip to playing', () => {
     const game = new Game(deps())
     expect(game.phase.kind).toBe('title')

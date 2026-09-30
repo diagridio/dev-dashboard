@@ -9,6 +9,9 @@ interface Props {
   score: number
   /** The level the run reached. */
   level: number
+  /** The UTC date of the daily run, and today's best score on it. */
+  date: string
+  dailyBest: number
   /** Opens the dashboard's Share dialog from the end-of-run card. */
   onShare?: () => void
 }
@@ -31,15 +34,16 @@ function Stat({ label, value }: { label: string; value: number }) {
 }
 
 /** DOM cards over the canvas for every phase that waits on the player. */
-export function Overlay({ phase, stats, best, score, level, onShare }: Props) {
+export function Overlay({ phase, stats, best, score, level, date, dailyBest, onShare }: Props) {
   switch (phase.kind) {
     case 'title':
       return (
         <Card>
           <h2>Press Enter to start</h2>
           <p>Guide a workflow through a datacenter full of chaos. It will crash. Dapr will replay it.</p>
+          <p className="replay-keys">Daily run · {date} (UTC)</p>
           <p className="replay-keys">Space / ↑ jump · ↓ slide · Esc pause</p>
-          {best > 0 && <p className="replay-keys">Best score: {best}</p>}
+          {(best > 0 || dailyBest > 0) && <p className="replay-keys">Today's best: {dailyBest} · Best: {best}</p>}
         </Card>
       )
     case 'resume':

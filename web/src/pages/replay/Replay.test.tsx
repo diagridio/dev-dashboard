@@ -196,6 +196,7 @@ describe('Replay page', () => {
 
   const savedRun = () => JSON.stringify({
     version: 2,
+    date: '2026-09-30',
     start: { level: 1, seed: 5, score: 2, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 },
     history: [{ type: 'Input', tick: 3, kind: 'jump' }],
     tick: 40,

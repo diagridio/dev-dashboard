@@ -14,13 +14,14 @@ import { HatPose } from './render/pose'
 import { Game } from './runtime/game'
 import { keyToCommand } from './runtime/keys'
 import { startLoop } from './runtime/loop'
+import { utcDate } from './runtime/daily'
 import { localSaveStore } from './runtime/persistence'
 
 function createGame(): Game {
   return new Game({
     impure: Math.random, // the one deliberate source of non-determinism
     chaosRand: Math.random, // chaos is the outside world
-    newSeed: () => Math.floor(Math.random() * 0x100000000),
+    today: () => utcDate(),
     store: localSaveStore(),
   })
 }
@@ -134,6 +135,8 @@ export function Component() {
             best={game.best}
             score={game.state.score}
             level={game.state.level}
+            date={game.runDate}
+            dailyBest={game.dailyBest}
             onShare={() => {
               setShareOpen(true)
               trackAction('share_open', { source: 'replay' })
