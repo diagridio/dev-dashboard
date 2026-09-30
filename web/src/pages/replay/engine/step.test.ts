@@ -5,7 +5,7 @@ import { LEVELS, chaosMeanTicks, speedAt } from './levels'
 import { BOOST_TICKS, BOSS_TICKS, PLAYER_H, PLAYER_W, SLIDE_H, continueAsNew, initialState, step } from './step'
 import { GROUND_Y, PLAYER_X, type Entity, type GameState, type InputKind, type Ports, type StartInput } from './types'
 
-const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false }
+const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
 const levels = makeLevels()
 const ports = (over: Partial<Ports> = {}): Ports => ({ impure: () => 0.25, crateValue: () => 0.5, ...over })
 
@@ -25,7 +25,13 @@ describe('initialState', () => {
   it('starts on the ground at tick 0', () => {
     const s = initialState(start)
     expect(s).toMatchObject({ tick: 0, level: 1, score: 0, status: 'running', bossUntil: 0 })
-    expect(s.player).toEqual({ y: GROUND_Y, vy: 0, sliding: false })
+    expect(s.player).toEqual({ y: GROUND_Y, vy: 0, sliding: false, jumpHeld: false, coyoteUntil: 0, jumpBufferUntil: 0 })
+  })
+
+  it('starts with the retries and shield charge of its start input, and no grace', () => {
+    const s = initialState({ ...start, retries: 3, shield: 7 })
+    expect(s).toMatchObject({ retries: 3, shield: 7, graceUntil: 0, failedAt: 0 })
+    expect(s.player).toEqual({ y: GROUND_Y, vy: 0, sliding: false, jumpHeld: false, coyoteUntil: 0, jumpBufferUntil: 0 })
   })
 
   it('starts the segment scroll at 0 but carries the distance already travelled', () => {
@@ -36,7 +42,7 @@ describe('initialState', () => {
   })
 
   it('arms the boss timer for a boss segment', () => {
-    expect(initialState({ ...start, boss: true }).bossUntil).toBe(BOSS_TICKS)
+    expect(initialState({ ...start, boss: true, retries: 0, shield: 0 }).bossUntil).toBe(BOSS_TICKS)
   })
 })
 
@@ -159,7 +165,7 @@ describe('step', () => {
 
   it('spawns from bossWeights during a boss segment', () => {
     const table = makeLevels({ weights: { coin: 1 }, bossWeights: { high: 1 } })
-    let s = initialState({ ...start, boss: true })
+    let s = initialState({ ...start, boss: true, retries: 0, shield: 0 })
     for (let i = 0; i < 120; i++) s = step(s, ['slideStart'], ports(), table).state
     expect(s.entities.length).toBeGreaterThan(0)
     expect(s.entities.every((e) => e.kind === 'high')).toBe(true)
@@ -167,10 +173,16 @@ describe('step', () => {
 })
 
 describe('continueAsNew', () => {
+  it('carries retries and the shield charge, unless patched', () => {
+    const s = { ...initialState(start), retries: 2, shield: 6 }
+    expect(continueAsNew(s)).toMatchObject({ retries: 2, shield: 6 })
+    expect(continueAsNew(s, { retries: 3 })).toMatchObject({ retries: 3, shield: 6 })
+  })
+
   it('carries level, score and elapsed time with a derived seed', () => {
     const s = { ...initialState(start), score: 12, elapsed: 500 }
     const next = continueAsNew(s)
-    expect(next).toMatchObject({ level: 1, score: 12, elapsed: 500, boss: false })
+    expect(next).toMatchObject({ level: 1, score: 12, elapsed: 500, boss: false, retries: 0, shield: 0 })
     expect(next.seed).not.toBe(s.rng)
     expect(continueAsNew(s, { boss: true, level: 2 })).toMatchObject({ boss: true, level: 2 })
   })
@@ -186,7 +198,7 @@ describe('continueAsNew', () => {
     let s = initialState(start)
     for (let i = 0; i < 5; i++) s = step(s, [], ports(), short).state
     expect(s.status).toBe('running')
-    s = initialState(continueAsNew(s, { boss: true }))
+    s = initialState(continueAsNew(s, { boss: true, retries: 0, shield: 0 }))
     for (let i = 0; i < 4; i++) s = step(s, [], ports(), short).state
     expect(s.status).toBe('running')
     s = step(s, [], ports(), short).state

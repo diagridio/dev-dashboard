@@ -3,7 +3,7 @@ import type { RunStats, Save } from './types'
 
 export const SAVE_KEY = 'devdash.replay.save'
 export const BEST_KEY = 'devdash.replay.best'
-export const SAVE_VERSION = 1
+export const SAVE_VERSION = 2
 
 export interface SaveStore {
   load(): Save | null
@@ -20,7 +20,8 @@ const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFin
 function isStart(v: unknown): v is StartInput {
   return (
     isObj(v) && [0, 1, 2, 3, 4].includes(v.level as number) &&
-    isNum(v.seed) && isNum(v.score) && isNum(v.elapsed) && isNum(v.distance) && typeof v.boss === 'boolean'
+    isNum(v.seed) && isNum(v.score) && isNum(v.elapsed) && isNum(v.distance) && typeof v.boss === 'boolean' &&
+    isNum(v.retries) && v.retries >= 0 && isNum(v.shield) && v.shield >= 0
   )
 }
 

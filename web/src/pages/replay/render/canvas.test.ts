@@ -28,7 +28,7 @@ function mockCtx() {
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls }
 }
 
-function view(phase: Phase, state: GameState = initialState({ level: 1, seed: 1, score: 5, elapsed: 0, distance: 0, boss: false }), extra: Partial<RenderView> = {}): RenderView {
+function view(phase: Phase, state: GameState = initialState({ level: 1, seed: 1, score: 5, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }), extra: Partial<RenderView> = {}): RenderView {
   return { state, phase, notice: null, reducedMotion: false, frame: 3, ...extra }
 }
 
@@ -44,7 +44,7 @@ function hatShapes(calls: { name: string; args: unknown[] }[]) {
 describe('render', () => {
   it('draws the HUD with level, score and multiplier', () => {
     const { ctx, calls } = mockCtx()
-    const state = { ...initialState({ level: 1, seed: 1, score: 5, elapsed: 0, distance: 0, boss: false }), multiplier: 3 }
+    const state = { ...initialState({ level: 1, seed: 1, score: 5, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }), multiplier: 3 }
     render(ctx, view({ kind: 'playing' }, state), pal)
     expect(texts(calls)).toContain('LEVEL 1 · REPLAY')
     expect(texts(calls).some((t) => String(t).startsWith('SCORE 5 ×3'))).toBe(true)
@@ -80,7 +80,7 @@ describe('render', () => {
 
   it('badges activities served from history only while replaying', () => {
     const state = {
-      ...initialState({ level: 1, seed: 1, score: 1, elapsed: 0, distance: 0, boss: false }),
+      ...initialState({ level: 1, seed: 1, score: 1, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }),
       entities: [{ id: 1, kind: 'coin' as const, x: 200, y: GROUND_Y - 30, w: 10, h: 10, taken: true }],
     }
     const replaying = mockCtx()
@@ -95,7 +95,7 @@ describe('render', () => {
   it('labels orbs as unrecorded calls and crates as an activity, drawing orbs as circles', () => {
     const entity = (id: number, kind: 'orb' | 'crate') => ({ id, kind, x: 200 + id * 20, y: GROUND_Y - 60, w: 12, h: 12, taken: false })
     const state = {
-      ...initialState({ level: 3, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false }),
+      ...initialState({ level: 3, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }),
       entities: [entity(3, 'orb'), entity(4, 'orb'), entity(5, 'orb'), entity(6, 'crate')],
     }
     const { ctx, calls } = mockCtx()
@@ -109,7 +109,7 @@ describe('render', () => {
 
   it('draws coins as round coins and obstacles as racks, glinting from game time', () => {
     const entity = (id: number, kind: 'coin' | 'low' | 'high', x: number, y: number, w: number, h: number) => ({ id, kind, x, y, w, h, taken: false })
-    const base = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false })
+    const base = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 })
     const state = { ...base, entities: [entity(0, 'coin', 200, GROUND_Y - 30, 10, 10), entity(1, 'low', 260, GROUND_Y - 20, 14, 20), entity(2, 'high', 320, 100, 22, 30)] }
     const { ctx, calls } = mockCtx()
     render(ctx, view({ kind: 'playing' }, state), pal)
@@ -126,7 +126,7 @@ describe('render', () => {
 
   it('shows the boss countdown during a boss segment', () => {
     const { ctx, calls } = mockCtx()
-    const state = initialState({ level: 2, seed: 1, score: 0, elapsed: 0, distance: 0, boss: true })
+    const state = initialState({ level: 2, seed: 1, score: 0, elapsed: 0, distance: 0, boss: true, retries: 0, shield: 0 })
     expect(state.bossUntil).toBe(BOSS_TICKS)
     render(ctx, view({ kind: 'playing' }, state), pal)
     expect(texts(calls)).toContain('NonDeterministicError · survive 15s')
@@ -149,7 +149,7 @@ describe('render', () => {
 
   it('flattens the hat to the slide height while sliding on the ground', () => {
     const { ctx, calls } = mockCtx()
-    const state = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false })
+    const state = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 })
     render(ctx, view({ kind: 'playing' }, { ...state, player: { ...state.player, sliding: true } }), pal)
     expect(Math.min(...hatShapes(calls).map((s) => s.y))).toBeGreaterThanOrEqual(GROUND_Y - SLIDE_H - 1e-6)
   })
@@ -187,7 +187,7 @@ describe('render', () => {
           return true
         },
       }) as unknown as CanvasRenderingContext2D
-      const state = { ...initialState({ level: 1, seed: 1, score: 0, elapsed, distance: 0, boss: false }), elapsed }
+      const state = { ...initialState({ level: 1, seed: 1, score: 0, elapsed, distance: 0, boss: false, retries: 0, shield: 0 }), elapsed }
       render(ctx, view({ kind: 'playing' }, state, { frame }), pal)
       return calls
     }

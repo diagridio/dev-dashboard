@@ -25,7 +25,7 @@ export type Phase =
 export type Command = 'jump' | 'slideStart' | 'slideEnd' | 'pause' | 'confirm' | 'cancel'
 
 export interface Save {
-  version: 1
+  version: 2
   start: StartInput
   history: HistoryEvent[]
   /** The tick to replay to on resume. */

@@ -195,8 +195,8 @@ describe('Replay page', () => {
   })
 
   const savedRun = () => JSON.stringify({
-    version: 1,
-    start: { level: 1, seed: 5, score: 2, elapsed: 0, distance: 0, boss: false },
+    version: 2,
+    start: { level: 1, seed: 5, score: 2, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 },
     history: [{ type: 'Input', tick: 3, kind: 'jump' }],
     tick: 40,
     stats: { replays: 0, fromHistory: 0, executed: 0, incidents: 0 },

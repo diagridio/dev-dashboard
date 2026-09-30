@@ -39,7 +39,7 @@ const nextLevel = (l: Level): Level => (l >= 4 ? 4 : ((l + 1) as Level))
 
 export class Game {
   phase: Phase = { kind: 'title' }
-  start: StartInput = { level: 0, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false }
+  start: StartInput = { level: 0, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
   history: HistoryEvent[] = []
   state: GameState
   stats: RunStats = emptyStats()
@@ -113,7 +113,7 @@ export class Game {
       case 'lost':
         if (c === 'confirm') {
           this.stats = emptyStats()
-          this.beginSegment({ level: 1, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false }, true)
+          this.beginSegment({ level: 1, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }, true)
           this.setNotice('Dapr Workflow enabled')
         }
         return
@@ -161,7 +161,7 @@ export class Game {
     if (!this.levels[this.start.level].durable) return
     const tick = k === 'crashing' || k === 'replaying' ? this.crashTick : this.state.tick
     this.deps.store.save({
-      version: 1, start: this.start, history: this.history, tick, stats: this.stats, divergedAt: this.divergedAt,
+      version: 2, start: this.start, history: this.history, tick, stats: this.stats, divergedAt: this.divergedAt,
     })
   }
 
@@ -214,7 +214,7 @@ export class Game {
     this.stats = emptyStats()
     this.divergedAt = null
     this.deps.store.clear()
-    this.beginSegment({ level: 0, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false }, true)
+    this.beginSegment({ level: 0, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }, true)
   }
 
   private beginSegment(start: StartInput, showTip: boolean): void {
@@ -272,7 +272,7 @@ export class Game {
     }
     this.stats.incidents += 1
     this.divergedAt = result.divergedAt
-    this.beginSegment(continueAsNew(result.state, { boss: true }), false)
+    this.beginSegment(continueAsNew(result.state, { boss: true, retries: 0, shield: 0 }), false)
     this.setNotice(`NonDeterministicError at event #${result.divergedAt + 1}`)
   }
 

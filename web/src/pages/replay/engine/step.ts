@@ -3,7 +3,7 @@ import { LEVELS, speedAt, type LevelConfig, type LevelTable } from './levels'
 import { mix, nextRandom, seedFrom } from './rng'
 import {
   GROUND_Y, PLAYER_X, SPAWN_X, TICK_HZ,
-  type EntityKind, type GameState, type InputKind, type OutcomeEvent, type Ports, type StartInput,
+  type EntityKind, type GameState, type InputKind, type OutcomeEvent, type Player, type Ports, type StartInput,
 } from './types'
 
 export const GRAVITY = 0.5
@@ -36,6 +36,10 @@ export interface StepResult {
   events: OutcomeEvent[]
 }
 
+export function newPlayer(): Player {
+  return { y: GROUND_Y, vy: 0, sliding: false, jumpHeld: false, coyoteUntil: 0, jumpBufferUntil: 0 }
+}
+
 export function initialState(start: StartInput): GameState {
   return {
     level: start.level,
@@ -45,7 +49,7 @@ export function initialState(start: StartInput): GameState {
     score: start.score,
     multiplier: 1,
     multUntil: 0,
-    player: { y: GROUND_Y, vy: 0, sliding: false },
+    player: newPlayer(),
     scroll: 0,
     distance: start.distance,
     nextSpawnAt: FIRST_SPAWN_AT,
@@ -53,6 +57,10 @@ export function initialState(start: StartInput): GameState {
     entities: [],
     bossUntil: start.boss ? BOSS_TICKS : 0,
     status: 'running',
+    retries: start.retries,
+    shield: start.shield,
+    graceUntil: 0,
+    failedAt: 0,
   }
 }
 
@@ -60,6 +68,7 @@ export function initialState(start: StartInput): GameState {
 export function continueAsNew(s: GameState, patch: Partial<StartInput> = {}): StartInput {
   return {
     level: s.level, seed: seedFrom(s.rng), score: s.score, elapsed: s.elapsed, distance: s.distance + s.scroll, boss: false,
+    retries: s.retries, shield: s.shield,
     ...patch,
   }
 }

@@ -25,6 +25,8 @@ export interface Entity {
   w: number
   h: number
   taken: boolean
+  /** Vertical speed; only falling racks move vertically. */
+  vy?: number
 }
 
 export interface Player {
@@ -32,6 +34,12 @@ export interface Player {
   y: number
   vy: number
   sliding: boolean
+  /** A jump key is down: releasing it early cuts the jump short. */
+  jumpHeld: boolean
+  /** The player can still jump while tick < coyoteUntil after walking off an edge. */
+  coyoteUntil: number
+  /** A jump pressed in the air fires on landing while tick < jumpBufferUntil. */
+  jumpBufferUntil: number
 }
 
 /** The input a history segment starts from (a new run, a level, continue-as-new). */
@@ -45,6 +53,10 @@ export interface StartInput {
   distance: number
   /** True when this segment is the NonDeterministicError boss phase. */
   boss: boolean
+  /** RetryPolicy attempts left in this level. */
+  retries: number
+  /** Circuit-breaker charge (coins), 0..SHIELD_FULL. */
+  shield: number
 }
 
 export interface GameState {
@@ -67,7 +79,15 @@ export interface GameState {
   entities: Entity[]
   /** Tick at which the boss phase ends; 0 when not in a boss phase. */
   bossUntil: number
-  status: 'running' | 'failed' | 'levelDone'
+  /** RetryPolicy attempts left in this level. */
+  retries: number
+  /** Circuit-breaker charge, 0..SHIELD_FULL. */
+  shield: number
+  /** Hits are ignored while tick < graceUntil. */
+  graceUntil: number
+  /** Tick of the hit that set status 'retry'; 0 otherwise. */
+  failedAt: number
+  status: 'running' | 'failed' | 'levelDone' | 'retry'
 }
 
 export type HistoryEvent =

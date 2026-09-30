@@ -6,7 +6,7 @@ import { blend } from './interpolate'
 const ent = (id: number, x: number): Entity => ({ id, kind: 'coin', x, y: 100, w: 10, h: 10, taken: false })
 
 function states() {
-  const base = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false })
+  const base = initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 })
   const prev: GameState = { ...base, scroll: 100, player: { ...base.player, y: 200 }, entities: [ent(1, 300)] }
   const curr: GameState = {
     ...base, tick: 1, scroll: 104, player: { ...base.player, y: 190 },

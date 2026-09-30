@@ -3,8 +3,8 @@ import { BEST_KEY, SAVE_KEY, localSaveStore, parseSave } from './persistence'
 import type { Save } from './types'
 
 const sample: Save = {
-  version: 1,
-  start: { level: 2, seed: 99, score: 5, elapsed: 0, distance: 0, boss: false },
+  version: 2,
+  start: { level: 2, seed: 99, score: 5, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 },
   history: [
     { type: 'Input', tick: 3, kind: 'jump' },
     { type: 'ActivityCoinCollected', tick: 10, id: 4, hash: 123 },
@@ -23,6 +23,17 @@ describe('localSaveStore', () => {
     const store = localSaveStore()
     store.save(sample)
     expect(store.load()).toEqual(sample)
+  })
+
+  it('treats a version-1 save as no save', () => {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({ ...sample, version: 1 }))
+    expect(localSaveStore().load()).toBeNull()
+  })
+
+  it('rejects a save whose start input lacks retries or shield', () => {
+    const start: Partial<Save['start']> = { ...sample.start }
+    delete start.retries
+    expect(parseSave(JSON.stringify({ ...sample, start }))).toBeNull()
   })
 
   it('returns null when there is no save, and after clear()', () => {
@@ -82,7 +93,7 @@ describe('parseSave', () => {
   it.each([
     ['null', null],
     ['corrupt JSON', 'not json{'],
-    ['another version', mutate((s) => { s.version = 2 })],
+    ['another version', mutate((s) => { s.version = 3 })],
     ['a missing distance', mutate((s) => { delete (s.start as Record<string, unknown>).distance })],
     ['a bad level', mutate((s) => { (s.start as Record<string, unknown>).level = 7 })],
     ['an unknown event type', mutate((s) => { (s.history as unknown[]).push({ type: 'Nope', tick: 30 }) })],
