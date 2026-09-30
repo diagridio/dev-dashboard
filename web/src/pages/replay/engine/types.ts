@@ -13,7 +13,7 @@ export const SPAWN_X = 490
 
 export type Level = 0 | 1 | 2 | 3 | 4
 export type InputKind = 'jump' | 'slideStart' | 'slideEnd'
-export type EntityKind = 'low' | 'high' | 'coin' | 'orb' | 'crate'
+export type EntityKind = 'low' | 'high' | 'coin' | 'orb' | 'crate' | 'tall' | 'falling' | 'pit'
 
 export interface Entity {
   id: number

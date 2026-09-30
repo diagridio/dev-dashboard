@@ -1,6 +1,6 @@
 import type { EntityKind, GameState } from './types'
 
-const KIND: Record<EntityKind, number> = { low: 1, high: 2, coin: 3, orb: 4, crate: 5 }
+const KIND: Record<EntityKind, number> = { low: 1, high: 2, coin: 3, orb: 4, crate: 5, tall: 6, falling: 7, pit: 8 }
 const STATUS: Record<GameState['status'], number> = { running: 0, failed: 1, levelDone: 2, retry: 3 }
 
 /** Quantises a float so equal-by-simulation values hash identically. */

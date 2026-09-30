@@ -61,7 +61,8 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, repl
     drawCoin(ctx, e, pal, elapsed, reducedMotion)
     return
   }
-  if (kind === 'low' || kind === 'high') {
+  if (kind === 'pit') return
+  if (kind === 'low' || kind === 'high' || kind === 'tall' || kind === 'falling') {
     drawRack(ctx, e, pal, elapsed, reducedMotion)
     return
   }

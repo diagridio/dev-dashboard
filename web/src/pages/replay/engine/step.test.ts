@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeLevels } from '../testing'
 import { hashState } from './hash'
 import { LEVELS, chaosMeanTicks, speedAt } from './levels'
-import { BOOST_TICKS, BOSS_TICKS, PLAYER_H, PLAYER_W, SLIDE_H, continueAsNew, initialState, step } from './step'
+import { BOOST_TICKS, BOSS_TICKS, FALL_LEAD_TICKS, HAZARDS, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, continueAsNew, initialState, overPit, step } from './step'
 import { GROUND_Y, PLAYER_X, type Entity, type GameState, type InputKind, type Ports, type StartInput } from './types'
 
 const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
@@ -228,5 +228,89 @@ describe('levels', () => {
   it('only level 0 is non-durable', () => {
     expect(LEVELS[0].durable).toBe(false)
     for (const l of [1, 2, 3, 4] as const) expect(LEVELS[l].durable).toBe(true)
+  })
+})
+
+/** A pit whose span covers the player's foot centre after this tick's scroll (speed 4). */
+function withPit(w = 40): GameState {
+  const s = initialState(start)
+  const foot = PLAYER_X + PLAYER_W / 2
+  return { ...s, entities: [{ id: 50, kind: 'pit', x: foot - 10 + 4, y: GROUND_Y, w, h: 0, taken: false }] }
+}
+
+describe('pits', () => {
+  it('drops the player when the foot centre is over a pit', () => {
+    const s = step(withPit(), [], ports(), levels).state
+    expect(s.player.y).toBeGreaterThan(GROUND_Y)
+    expect(s.status).toBe('running')
+  })
+
+  it('fails once the player has fallen PIT_HIT_DEPTH into the pit', () => {
+    let s = withPit(200)
+    for (let i = 0; i < 30 && s.status === 'running'; i++) s = step(s, [], ports(), levels).state
+    expect(s.status).toBe('failed')
+    expect(s.player.y).toBeGreaterThanOrEqual(GROUND_Y + PIT_HIT_DEPTH)
+  })
+
+  it('jumps over a pit', () => {
+    let s: GameState = { ...initialState(start), entities: [{ id: 50, kind: 'pit' as const, x: 200, y: GROUND_Y, w: 50, h: 0, taken: false }] }
+    for (let i = 0; i < 200 && s.status === 'running' && s.entities.length > 0; i++) {
+      const gap = s.entities[0].x - (PLAYER_X + PLAYER_W)
+      s = step(s, s.player.y === GROUND_Y && gap > 0 && gap <= 12 ? ['jump'] : [], ports(), levels).state
+    }
+    expect(s.status).toBe('running')
+    expect(s.player.y).toBe(GROUND_Y)
+  })
+
+  it('finds the pit under the foot centre only', () => {
+    const foot = PLAYER_X + PLAYER_W / 2
+    const pit = { id: 1, kind: 'pit' as const, x: foot - 5, y: GROUND_Y, w: 10, h: 0, taken: false }
+    expect(overPit([pit])?.id).toBe(1)
+    expect(overPit([{ ...pit, x: foot + 1 }])).toBeUndefined()
+  })
+})
+
+describe('tall and falling racks', () => {
+  it('classifies racks and hazards', () => {
+    expect([...RACKS].sort()).toEqual(['falling', 'high', 'low', 'tall'])
+    expect(HAZARDS.has('pit')).toBe(true)
+    expect(HAZARDS.has('coin')).toBe(false)
+  })
+
+  it('fails on a tall rack when standing', () => {
+    expect(step(withEntity('tall', GROUND_Y - 44, 16, 44), [], ports(), levels).state.status).toBe('failed')
+  })
+
+  it('keeps a falling rack hanging until it is one second away, then lands it well ahead of the player', () => {
+    // speed 4: the drop starts FALL_LEAD_TICKS * 4 = 240 px ahead of PLAYER_X.
+    const rack = { id: 7, kind: 'falling' as const, x: PLAYER_X + FALL_LEAD_TICKS * 4 + 40, y: -24, w: 18, h: 24, taken: false, vy: 0 }
+    let s: GameState = { ...initialState(start), entities: [rack] }
+    s = step(s, [], ports(), levels).state
+    expect(s.entities[0].y).toBe(-24)
+    for (let i = 0; i < 12; i++) s = step(s, [], ports(), levels).state
+    expect(s.entities[0].y).toBeGreaterThan(-24)
+    for (let i = 0; i < 30; i++) s = step(s, [], ports(), levels).state
+    const landed = s.entities.find((e) => e.id === 7)!
+    expect(landed.y + landed.h).toBe(GROUND_Y)
+    expect(landed.x - PLAYER_X).toBeGreaterThan(80)
+    expect(s.status).toBe('running')
+  })
+
+  it('spawns pits 30–60 px wide at ground level', () => {
+    const table = makeLevels({ weights: { pit: 1, low: 1 } })
+    let s = initialState(start)
+    const seen: Entity[] = []
+    for (let i = 0; i < 3000; i++) {
+      s = step(s, [], ports(), table).state
+      for (const e of s.entities) if (!seen.some((x) => x.id === e.id)) seen.push({ ...e })
+      if (s.status !== 'running') s = { ...s, status: 'running', player: { ...s.player, y: GROUND_Y, vy: 0 } }
+    }
+    const pits = seen.filter((e) => e.kind === 'pit')
+    expect(pits.length).toBeGreaterThan(3)
+    for (const p of pits) {
+      expect(p.w).toBeGreaterThanOrEqual(30)
+      expect(p.w).toBeLessThanOrEqual(60)
+      expect(p.y).toBe(GROUND_Y)
+    }
   })
 })
