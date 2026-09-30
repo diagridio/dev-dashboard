@@ -51,4 +51,9 @@ describe('HistoryPanel', () => {
     expect(screen.getByText('3 activities in parallel')).toBeInTheDocument()
     expect(screen.getByText('WhenAll · coins 3 / 1 / 2')).toBeInTheDocument()
   })
+
+  it('marks fan-in as scheduled, like fan-out', () => {
+    const { container } = render(<HistoryPanel history={[{ type: 'FanIn', tick: 2, hash: 2, results: [3, 1, 2] }]} />)
+    expect(container.querySelector('.node')).toHaveClass('n-sched')
+  })
 })

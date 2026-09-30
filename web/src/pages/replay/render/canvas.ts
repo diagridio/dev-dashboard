@@ -20,9 +20,9 @@ export interface RenderView {
   pose?: Pose
   /** Backing-store pixels per logical pixel (device resolution); 1 when omitted. */
   pixelScale?: number
-  /** Level-complete montage state; null or omitted outside the montage. */
   /** The UTC date of the run being played back; null or omitted for a live run. */
   playbackDate?: string | null
+  /** Level-complete montage state; null or omitted outside the montage. */
   montage?: { events: number; flash: number; trail: number[] } | null
 }
 

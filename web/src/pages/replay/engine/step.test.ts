@@ -353,6 +353,11 @@ describe('jump feel', () => {
     expect(s.player.vy).toBeLessThan(0)
   })
 
+  it('launches a jump pressed on the very first tick over a pit', () => {
+    const s = step(withPit(200), ['jump'], ports(), levels).state
+    expect(s.player.vy).toBeLessThan(0)
+  })
+
   it('does not allow a coyote jump after COYOTE_TICKS', () => {
     let s = withPit(200)
     for (let i = 0; i < COYOTE_TICKS; i++) s = step(s, [], ports(), levels).state

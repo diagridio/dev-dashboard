@@ -142,11 +142,12 @@ export class Game {
         return
       }
       if (c === 'cancel' && this.phase.kind !== 'paused') {
-        this.playback = false
+        this.leavePlayback()
         this.setPhase({ kind: 'title' })
         return
       }
-      if (c !== 'pause' && c !== 'cancel') return
+      const unpause = c === 'confirm' && this.phase.kind === 'paused'
+      if (c !== 'pause' && c !== 'cancel' && !unpause) return
     }
     switch (this.phase.kind) {
       case 'title':
@@ -372,11 +373,16 @@ export class Game {
     this.save()
   }
 
-  private newRun(): void {
+  /** Back to live play: the tape's date and scores give way to today's. */
+  private leavePlayback(): void {
     this.playback = false
     this.player = null
     this.runDate = this.deps.today()
     this.dailyBest = this.deps.store.loadDailyBest(this.runDate)
+  }
+
+  private newRun(): void {
+    this.leavePlayback()
     this.tape = emptyTape(this.runDate)
     this.source = new TapeRecorder(this.tape, this.deps)
     this.deps.store.clear()
@@ -421,6 +427,9 @@ export class Game {
   }
 
   private closeSegment(endTick: number): void {
+    // Only durable, finite levels end in a montage; elsewhere segments would pile up unused.
+    const cfg = this.levels[this.start.level]
+    if (!cfg.durable || !Number.isFinite(cfg.length)) return
     this.segments.push({ start: this.start, history: [...this.history], endTick, orbValues: [...this.orbValues] })
   }
 

@@ -8,7 +8,7 @@ const NODE: Record<HistoryEvent['type'], string> = {
   CircuitBreakerTripped: 'n-done',
   BoostLost: 'n-fail',
   FanOut: 'n-sched',
-  FanIn: 'n-done',
+  FanIn: 'n-sched',
   ActivityCoinCollected: 'n-done',
   ActivityCrateCollected: 'n-done',
   OrbTaken: 'n-fail',

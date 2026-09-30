@@ -64,6 +64,11 @@ describe('Overlay', () => {
     expect(screen.getByRole('heading', { name: 'Playback finished' })).toBeInTheDocument()
   })
 
+  it('says why a run code could not be made', () => {
+    render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onCopyRun={vi.fn()} copyError="This run is too long to share." />)
+    expect(screen.getByText('This run is too long to share.')).toBeInTheDocument()
+  })
+
   it('confirms a copy, and shows the code pre-selected when it could not be copied', () => {
     const { rerender } = render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} onCopyRun={vi.fn()} copied />)
     expect(screen.getByRole('button', { name: '✓ Copied' })).toBeInTheDocument()

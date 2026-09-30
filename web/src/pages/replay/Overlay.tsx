@@ -20,6 +20,8 @@ interface Props {
   copied?: boolean
   /** Shown pre-selected when the run code could not be copied to the clipboard. */
   runCode?: string | null
+  /** Why no run code could be made, shown on the game-over card. */
+  copyError?: string | null
   onWatch?: (code: string) => void
   watchError?: string | null
 }
@@ -68,7 +70,7 @@ function RunCodeBox({ code }: { code: string }) {
 }
 
 /** DOM cards over the canvas for every phase that waits on the player. */
-export function Overlay({ phase, stats, best, score, level, date, dailyBest, onShare, playback, onCopyRun, copied, runCode, onWatch, watchError }: Props) {
+export function Overlay({ phase, stats, best, score, level, date, dailyBest, onShare, playback, onCopyRun, copied, runCode, copyError, onWatch, watchError }: Props) {
   switch (phase.kind) {
     case 'title':
       return (
@@ -136,6 +138,7 @@ export function Overlay({ phase, stats, best, score, level, date, dailyBest, onS
             <Stat label="Boosts lost" value={stats.boostsLost} />
           </div>
           {runCode && <RunCodeBox code={runCode} />}
+          {copyError && <p className="replay-error">{copyError}</p>}
           <div className="replay-foot">
             <p className="replay-keys">Enter to play again</p>
             {!playback && onCopyRun && (

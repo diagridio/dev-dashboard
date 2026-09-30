@@ -52,6 +52,12 @@ export async function encodeRun(tape: Tape): Promise<string> {
   return RUN_CODE_PREFIX + toBase64Url(await pipe(json, new CompressionStream('deflate-raw'), Number.POSITIVE_INFINITY))
 }
 
+/** The run code for a tape, or null when it is longer than decodeRun accepts. */
+export async function shareableRunCode(tape: Tape): Promise<string | null> {
+  const code = await encodeRun(tape)
+  return code.length > MAX_RUN_CODE ? null : code
+}
+
 /** The tape inside a run code, or null for anything that isn't a valid code. Whitespace is ignored. */
 export async function decodeRun(code: string): Promise<Tape | null> {
   const clean = code.replace(/\s+/g, '')

@@ -16,7 +16,7 @@ import { keyToCommand } from './runtime/keys'
 import { startLoop } from './runtime/loop'
 import { utcDate } from './runtime/daily'
 import { localSaveStore } from './runtime/persistence'
-import { copyRunCode, decodeRun, encodeRun } from './runtime/share'
+import { copyRunCode, decodeRun, shareableRunCode } from './runtime/share'
 
 function createGame(): Game {
   return new Game({
@@ -36,22 +36,44 @@ export function Component() {
   const [shareOpen, setShareOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [runCode, setRunCode] = useState<string | null>(null)
+  const [copyError, setCopyError] = useState<string | null>(null)
+  // Bumped whenever the game-over card goes away, so a slow copy can't land on the next one.
+  const cardToken = useRef(0)
   const [watchError, setWatchError] = useState<string | null>(null)
   useSyncExternalStore(game.subscribe, game.getVersion)
 
   // A new end-of-run card starts without the previous run's copy state.
   useEffect(() => {
     if (game.phase.kind !== 'over') {
+      cardToken.current += 1
       setCopied(false)
       setRunCode(null)
+      setCopyError(null)
     }
   }, [game.phase.kind])
 
   const onCopyRun = async () => {
     trackAction('replay_share_copy')
-    const code = await encodeRun(game.tape)
-    if ((await copyRunCode(code, navigator.clipboard)) === 'copied') setCopied(true)
-    else setRunCode(code)
+    const token = cardToken.current
+    const stale = () => token !== cardToken.current
+    try {
+      const code = await shareableRunCode(game.tape)
+      if (stale()) return
+      if (code === null) {
+        setCopyError('This run is too long to share.')
+        return
+      }
+      const result = await copyRunCode(code, navigator.clipboard)
+      if (stale()) return
+      setCopyError(null)
+      if (result === 'copied') {
+        setCopied(true)
+        // Back to the stage, so Enter means "play again" rather than re-clicking the button.
+        stageRef.current?.focus()
+      } else setRunCode(code)
+    } catch {
+      if (!stale()) setCopyError("Couldn't create a run code.")
+    }
   }
 
   const onWatch = async (code: string) => {
@@ -170,6 +192,7 @@ export function Component() {
             playback={game.playback}
             copied={copied}
             runCode={runCode}
+            copyError={copyError}
             watchError={watchError}
             onCopyRun={() => void onCopyRun()}
             onWatch={(c) => void onWatch(c)}

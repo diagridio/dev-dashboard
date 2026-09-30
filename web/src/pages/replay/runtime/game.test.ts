@@ -300,6 +300,17 @@ describe('Game', () => {
     expect(game.view().notice).toBe('Hotfix deployed · continue-as-new')
   })
 
+  it('records no montage segments in an endless level', () => {
+    const levels = makeLevels({ weights: { orb: 1 }, crashAfterPickup: ['orb'], length: Number.POSITIVE_INFINITY })
+    const game = new Game(deps({ levels }))
+    play(game)
+    runUntil(game, is('crashing'), ['orb'])
+    runUntil(game, (g) => g.phase.kind === 'playing' && g.state.bossUntil > 0)
+    runUntil(game, (g) => g.phase.kind === 'playing' && g.state.bossUntil === 0)
+    expect(game.view().notice).toBe('Hotfix deployed · continue-as-new')
+    expect((game as unknown as { segments: unknown[] }).segments).toHaveLength(0)
+  })
+
   it('keeps the level distance across the boss and hotfix segments', () => {
     const { game } = bossGame()
     const before = game.start.distance
@@ -843,6 +854,29 @@ describe('run tape', () => {
     viewer.command('cancel')
     expect(viewer.phase.kind).toBe('title')
     expect(viewer.playback).toBe(false)
+  })
+
+  it('lets Enter unpause a paused playback', () => {
+    const viewer = new Game(deps({ levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
+    viewer.watch(recording().tape)
+    for (let f = 0; f < 10 && viewer.phase.kind !== 'playing'; f++) viewer.frame(1)
+    expect(viewer.phase.kind).toBe('playing')
+    viewer.command('pause')
+    expect(viewer.phase.kind).toBe('paused')
+    viewer.command('confirm')
+    expect(viewer.phase.kind).toBe('playing')
+  })
+
+  it('shows today, not the tape date, after leaving a playback with Esc', () => {
+    const store = memoryStore()
+    store.daily = { date: '2026-10-01', best: 77 }
+    const viewer = new Game(deps({ store, levels: tapeLevels(), today: () => '2026-10-01' }))
+    viewer.watch(emptyTape('2026-09-30'))
+    expect(viewer.runDate).toBe('2026-09-30')
+    viewer.command('cancel')
+    expect(viewer.phase.kind).toBe('title')
+    expect(viewer.runDate).toBe('2026-10-01')
+    expect(viewer.dailyBest).toBe(77)
   })
 
   it('refuses a malformed tape', () => {
