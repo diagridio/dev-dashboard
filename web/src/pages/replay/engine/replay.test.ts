@@ -4,7 +4,8 @@ import { hashState } from './hash'
 import type { LevelTable } from './levels'
 import { createReplayer, replay } from './replay'
 import { initialState, step } from './step'
-import type { EntityKind, GameState, HistoryEvent, StartInput } from './types'
+import { SHIELD_FULL } from './step'
+import type { EntityKind, GameState, HistoryEvent, InputKind, StartInput } from './types'
 
 const start: StartInput = { level: 1, seed: 42, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
 
@@ -82,5 +83,42 @@ describe('replay', () => {
     expect(r.ok).toBe(false)
     expect(r.state.status).toBe('running')
     expect(r.state.tick).toBe(live.state.tick - 1)
+  })
+
+  it('replays runtime inputs and safety-layer outcomes exactly', () => {
+    const levels = makeLevels({ weights: { low: 1 }, shieldEnabled: true })
+    const s0: StartInput = { ...start, retries: 3, shield: SHIELD_FULL }
+    const ports = { impure: () => 0.25, crateValue: () => 0.5 }
+    let state = initialState(s0)
+    const history: HistoryEvent[] = []
+    for (let i = 0; i < 2000; i++) {
+      const inputs: InputKind[] = []
+      const tick = state.tick
+      if (tick === 5) {
+        history.push({ type: 'OrchestratorStarted', tick })
+        inputs.push('resume')
+      }
+      if (tick === 20) {
+        history.push({ type: 'RetryAttempt', tick, attempt: 1, failedAt: 19 })
+        inputs.push('retry')
+      }
+      const r = step(state, inputs, ports, levels)
+      if (r.state.status !== 'running') break
+      history.push(...r.events)
+      state = r.state
+    }
+    expect(history.some((e) => e.type === 'CircuitBreakerTripped')).toBe(true)
+    const r = replay(s0, history, state.tick, () => 0.25, levels)
+    expect(r.ok).toBe(true)
+    expect(hashState(r.state)).toBe(hashState(state))
+    expect(r.state.retries).toBe(2)
+  })
+
+  it('treats a replay step that asks for a retry as divergence', () => {
+    const levels = makeLevels({ weights: { low: 1 } })
+    const s0: StartInput = { ...start, retries: 3, shield: 0 }
+    // A history that recorded no hit: the replay runs into the first rack and asks for a retry.
+    const r = replay(s0, [{ type: 'OrchestratorStarted', tick: 0 }], 2000, () => 0.25, levels)
+    expect(r.ok).toBe(false)
   })
 })

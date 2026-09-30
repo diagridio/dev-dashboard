@@ -15,7 +15,7 @@ export type Level = 0 | 1 | 2 | 3 | 4
 /** Keys the player presses. */
 export type PlayerInput = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd'
 /** Everything step() accepts as an input. */
-export type InputKind = PlayerInput
+export type InputKind = PlayerInput | 'resume' | 'retry'
 export type EntityKind = 'low' | 'high' | 'coin' | 'orb' | 'crate' | 'tall' | 'falling' | 'pit'
 
 export interface Entity {
@@ -95,12 +95,21 @@ export interface GameState {
 
 export type HistoryEvent =
   | { type: 'Input'; tick: number; kind: PlayerInput }
+  /** Recorded by the runtime whenever a replay resumes live play (grants grace). */
+  | { type: 'OrchestratorStarted'; tick: number }
+  /** Recorded by the runtime after a retry rewind (spends a retry, grants grace). */
+  | { type: 'RetryAttempt'; tick: number; attempt: number; failedAt: number }
   | { type: 'ActivityCoinCollected'; tick: number; id: number; hash: number }
   | { type: 'ActivityCrateCollected'; tick: number; id: number; hash: number; result: number }
   | { type: 'OrbTaken'; tick: number; id: number; hash: number }
+  /** id is the smashed rack, or 0 for a pit. */
+  | { type: 'CircuitBreakerTripped'; tick: number; id: number; hash: number }
+  | { type: 'BoostLost'; tick: number; id: number; hash: number }
 
-/** Events produced by step() itself (everything except recorded inputs). */
-export type OutcomeEvent = Exclude<HistoryEvent, { type: 'Input' }>
+/** History events that are fed back to step() as inputs. */
+export type InputEvent = Extract<HistoryEvent, { type: 'Input' | 'OrchestratorStarted' | 'RetryAttempt' }>
+/** Events produced by step() itself; replay checks each one. */
+export type OutcomeEvent = Exclude<HistoryEvent, InputEvent>
 
 /**
  * The only way non-determinism reaches the engine.

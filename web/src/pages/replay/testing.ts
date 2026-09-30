@@ -1,13 +1,14 @@
 // Shared helpers for REPLAY tests. Not imported by production code.
 import type { LevelConfig, LevelTable } from './engine/levels'
 import { PLAYER_H, PLAYER_W } from './engine/step'
-import { GROUND_Y, PLAYER_X, type EntityKind, type GameState, type InputKind, type Level } from './engine/types'
+import { GROUND_Y, PLAYER_X, type EntityKind, type GameState, type Level, type PlayerInput } from './engine/types'
 
 const BASE: LevelConfig = {
   name: 'Test',
   length: Number.POSITIVE_INFINITY, speed: 4, ramp: 0, maxSpeed: 4,
   weights: { coin: 1 }, bossWeights: { coin: 1 },
   durable: true, chaosMeanTicks: null,
+  retries: 0, shieldEnabled: false,
   tip: { body: 'Test level' },
 }
 
@@ -31,7 +32,7 @@ export function counter(): () => number {
  * With speed 4 and JUMP_VY -9 that reaches pickups 48–70 px above the ground;
  * low coins are collected by running through them, so it doesn't jump for those.
  */
-export function autopilot(state: GameState, want: readonly EntityKind[]): InputKind[] {
+export function autopilot(state: GameState, want: readonly EntityKind[]): PlayerInput[] {
   if (state.player.y < GROUND_Y) return []
   const ahead = state.entities.some((e) => {
     const gap = e.x - (PLAYER_X + PLAYER_W)

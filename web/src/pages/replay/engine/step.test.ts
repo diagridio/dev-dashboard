@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeLevels } from '../testing'
 import { hashState } from './hash'
 import { LEVELS, chaosMeanTicks, speedAt } from './levels'
-import { BOOST_TICKS, BOSS_TICKS, COYOTE_TICKS, FALL_LEAD_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT_VY, HAZARDS, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, continueAsNew, initialState, overPit, step } from './step'
-import { GROUND_Y, PLAYER_X, type Entity, type GameState, type InputKind, type Ports, type StartInput } from './types'
+import { BOOST_TICKS, BOSS_TICKS, COYOTE_TICKS, FALL_LEAD_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT_VY, HAZARDS, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, GRACE_BARGE, GRACE_BOOST, GRACE_RESUME, GRACE_RETRY, SHIELD_FULL, continueAsNew, initialState, overPit, step } from './step'
+import { GROUND_Y, PLAYER_X, type Entity, type GameState, type InputKind, type OutcomeEvent, type Ports, type StartInput } from './types'
 
 const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
 const levels = makeLevels()
@@ -374,5 +374,93 @@ describe('jump feel', () => {
     s = step(s, ['jump'], ports(), levels).state // far from the ground
     while (s.player.y < GROUND_Y) s = step(s, [], ports(), levels).state
     expect(s.player.vy).toBe(0)
+  })
+})
+
+const armed = makeLevels({ shieldEnabled: true })
+const rack = (): GameState => withEntity('low', GROUND_Y - 20, 14, 20)
+
+describe('hit chain', () => {
+  it('ignores racks during grace', () => {
+    const r = step({ ...rack(), graceUntil: 10 }, [], ports(), armed)
+    expect(r.state.status).toBe('running')
+    expect(r.events).toEqual([])
+    expect(r.state.entities[0].taken).toBe(false)
+  })
+
+  it('spends an armed circuit breaker first and smashes the rack', () => {
+    const r = step({ ...rack(), shield: SHIELD_FULL, multiplier: 3, multUntil: 100, retries: 3 }, [], ports(), armed)
+    expect(r.state).toMatchObject({ status: 'running', shield: 0, multiplier: 3, retries: 3, graceUntil: GRACE_BARGE })
+    expect(r.state.entities[0].taken).toBe(true)
+    expect(r.events).toEqual([{ type: 'CircuitBreakerTripped', tick: 0, id: 99, hash: hashState(r.state) }])
+  })
+
+  it('has no circuit breaker in a level without one', () => {
+    expect(step({ ...rack(), shield: SHIELD_FULL }, [], ports(), levels).state.status).toBe('failed')
+  })
+
+  it('loses an active boost next, keeping the rack in place', () => {
+    const r = step({ ...rack(), shield: 5, multiplier: 3, multUntil: 100, retries: 3 }, [], ports(), armed)
+    expect(r.state).toMatchObject({ status: 'running', shield: 5, multiplier: 1, retries: 3, graceUntil: GRACE_BOOST })
+    expect(r.state.entities[0].taken).toBe(false)
+    expect(r.events).toEqual([{ type: 'BoostLost', tick: 0, id: 99, hash: hashState(r.state) }])
+  })
+
+  it('asks the runtime for a retry next, without spending it', () => {
+    const r = step({ ...rack(), retries: 2 }, [], ports(), armed)
+    expect(r.state).toMatchObject({ status: 'retry', failedAt: 0, retries: 2 })
+    expect(r.events).toEqual([])
+  })
+
+  it('fails when no layer is left', () => {
+    expect(step({ ...rack(), retries: 0 }, [], ports(), armed).state.status).toBe('failed')
+  })
+
+  it('bounces out of a pit when a layer absorbs the fall, recording id 0', () => {
+    let s: GameState = { ...withPit(200), shield: SHIELD_FULL }
+    let event: OutcomeEvent | undefined
+    for (let i = 0; i < 40 && !event; i++) {
+      const r = step(s, [], ports(), armed)
+      event = r.events.find((e) => e.type === 'CircuitBreakerTripped')
+      s = r.state
+    }
+    expect(event).toMatchObject({ type: 'CircuitBreakerTripped', id: 0 })
+    expect(s.player.vy).toBeLessThan(0)
+    expect(s.status).toBe('running')
+  })
+
+  it('bounces out of a pit during grace without an event', () => {
+    let s: GameState = { ...withPit(200), graceUntil: 1000 }
+    let events = 0
+    for (let i = 0; i < 12; i++) {
+      const r = step(s, [], ports(), armed)
+      events += r.events.length
+      s = r.state
+    }
+    expect(s.status).toBe('running')
+    expect(s.player.vy).toBeLessThan(0)
+    expect(events).toBe(0)
+  })
+
+  it('resolves only one hit per tick', () => {
+    const s = rack()
+    const twin = { ...s.entities[0], id: 98 }
+    const r = step({ ...s, entities: [s.entities[0], twin], shield: SHIELD_FULL, multiplier: 3, multUntil: 100 }, [], ports(), armed)
+    expect(r.events.map((e) => e.type)).toEqual(['CircuitBreakerTripped'])
+    expect(r.state.multiplier).toBe(3)
+  })
+
+  it('charges the circuit breaker with coins, capped at SHIELD_FULL, only where it is enabled', () => {
+    const coin = withEntity('coin', GROUND_Y - 24, 10, 10)
+    expect(step({ ...coin, shield: 8 }, [], ports(), armed).state.shield).toBe(9)
+    expect(step({ ...coin, shield: SHIELD_FULL }, [], ports(), armed).state.shield).toBe(SHIELD_FULL)
+    expect(step({ ...coin, shield: 8 }, [], ports(), levels).state.shield).toBe(8)
+  })
+
+  it("grants grace on 'resume' and spends a retry with grace on 'retry'", () => {
+    const s = { ...initialState(start), retries: 3 }
+    expect(step(s, ['resume'], ports(), armed).state.graceUntil).toBe(GRACE_RESUME)
+    expect(step(s, ['retry'], ports(), armed).state).toMatchObject({ retries: 2, graceUntil: GRACE_RETRY })
+    expect(step({ ...s, retries: 0 }, ['retry'], ports(), armed).state.retries).toBe(0)
   })
 })

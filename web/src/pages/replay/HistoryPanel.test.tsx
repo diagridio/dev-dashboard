@@ -26,4 +26,23 @@ describe('HistoryPanel', () => {
     expect(screen.getByText('orb 4 · value not recorded')).toBeInTheDocument()
     expect(screen.getByText('4 events')).toBeInTheDocument()
   })
+
+  it('describes the safety events', () => {
+    render(
+      <HistoryPanel
+        history={[
+          { type: 'OrchestratorStarted', tick: 1 },
+          { type: 'CircuitBreakerTripped', tick: 2, id: 9, hash: 1 },
+          { type: 'CircuitBreakerTripped', tick: 3, id: 0, hash: 1 },
+          { type: 'BoostLost', tick: 4, id: 3, hash: 1 },
+          { type: 'RetryAttempt', tick: 5, attempt: 2, failedAt: 90 },
+        ]}
+      />,
+    )
+    expect(screen.getByText('replay resumed · 1 s grace')).toBeInTheDocument()
+    expect(screen.getByText('rack 9 smashed')).toBeInTheDocument()
+    expect(screen.getByText('pit bridged')).toBeInTheDocument()
+    expect(screen.getByText('×3 boost absorbed the hit')).toBeInTheDocument()
+    expect(screen.getByText('attempt 2 · failed at t90')).toBeInTheDocument()
+  })
 })

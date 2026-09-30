@@ -13,6 +13,11 @@ export const PLAYER_H = 16
 export const SLIDE_H = 9
 export const BOOST_TICKS = 10 * TICK_HZ
 export const BOSS_TICKS = 15 * TICK_HZ
+export const SHIELD_FULL = 10
+export const GRACE_RESUME = 60
+export const GRACE_RETRY = 60
+export const GRACE_BOOST = 60
+export const GRACE_BARGE = 30
 
 // Tuning knobs: spawn spacing in px at speed 4 (scaled with speed so reaction
 // time stays constant), and how much denser the boss phase is.
@@ -182,6 +187,45 @@ function overlaps(a: Box, b: Box): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
 }
 
+function bounce(p: Player): void {
+  p.vy = JUMP_VY
+  p.sliding = false
+}
+
+/**
+ * One hit (a rack, or `pit` = fallen too deep), resolved by the first layer that
+ * can absorb it: grace, circuit breaker, boost, retry; otherwise the run fails.
+ */
+function resolveHit(s: GameState, cfg: LevelConfig, p: Player, rack: Entity | undefined, pit: boolean, events: OutcomeEvent[]): void {
+  const id = pit ? 0 : (rack?.id ?? 0)
+  if (s.tick < s.graceUntil) {
+    if (pit) bounce(p)
+    return
+  }
+  if (cfg.shieldEnabled && s.shield >= SHIELD_FULL) {
+    s.shield = 0
+    s.graceUntil = s.tick + GRACE_BARGE
+    if (pit) bounce(p)
+    else if (rack) rack.taken = true
+    events.push({ type: 'CircuitBreakerTripped', tick: s.tick, id, hash: 0 })
+    return
+  }
+  if (s.multiplier > 1) {
+    s.multiplier = 1
+    s.multUntil = s.tick
+    s.graceUntil = s.tick + GRACE_BOOST
+    if (pit) bounce(p)
+    events.push({ type: 'BoostLost', tick: s.tick, id, hash: 0 })
+    return
+  }
+  if (s.retries > 0) {
+    s.status = 'retry'
+    s.failedAt = s.tick
+    return
+  }
+  s.status = 'failed'
+}
+
 function boost(s: GameState): void {
   s.multiplier = 3
   s.multUntil = s.tick + BOOST_TICKS
@@ -196,6 +240,14 @@ export function step(prev: GameState, inputs: readonly InputKind[], ports: Ports
   const events: OutcomeEvent[] = []
 
   if (s.multiplier > 1 && s.tick >= s.multUntil) s.multiplier = 1
+
+  for (const input of inputs) {
+    if (input === 'resume') s.graceUntil = Math.max(s.graceUntil, s.tick + GRACE_RESUME)
+    else if (input === 'retry') {
+      s.retries = Math.max(0, s.retries - 1)
+      s.graceUntil = Math.max(s.graceUntil, s.tick + GRACE_RETRY)
+    }
+  }
 
   movePlayer(p, inputs, s.tick, s.entities)
 
@@ -222,17 +274,23 @@ export function step(prev: GameState, inputs: readonly InputKind[], ports: Ports
 
   const height = p.sliding && p.y >= GROUND_Y ? SLIDE_H : PLAYER_H
   const box: Box = { x: PLAYER_X, y: p.y - height, w: PLAYER_W, h: height }
-  if (p.y >= GROUND_Y + PIT_HIT_DEPTH) s.status = 'failed'
+  let hitDone = false
+  if (p.y >= GROUND_Y + PIT_HIT_DEPTH) {
+    resolveHit(s, cfg, p, undefined, true, events)
+    hitDone = true
+  }
   for (const e of s.entities) {
     if (s.status !== 'running') break
     if (e.taken || e.kind === 'pit' || !overlaps(box, e)) continue
     if (RACKS.has(e.kind)) {
-      s.status = 'failed'
-      break
+      if (!hitDone) resolveHit(s, cfg, p, e, false, events)
+      hitDone = true
+      continue
     }
     e.taken = true
     if (e.kind === 'coin') {
       s.score += s.multiplier
+      if (cfg.shieldEnabled) s.shield = Math.min(SHIELD_FULL, s.shield + 1)
       events.push({ type: 'ActivityCoinCollected', tick: s.tick, id: e.id, hash: 0 })
     } else if (e.kind === 'orb') {
       s.rng = mix(s.rng, ports.impure())

@@ -29,6 +29,11 @@ function isEvent(v: unknown): v is HistoryEvent {
   if (!isObj(v) || !isNum(v.tick) || v.tick < 0) return false
   switch (v.type) {
     case 'Input': return v.kind === 'jump' || v.kind === 'jumpEnd' || v.kind === 'slideStart' || v.kind === 'slideEnd'
+    case 'OrchestratorStarted': return true
+    case 'RetryAttempt': return isNum(v.attempt) && isNum(v.failedAt)
+    case 'CircuitBreakerTripped':
+    case 'BoostLost':
+      return isNum(v.id) && isNum(v.hash)
     case 'OrbTaken': return isNum(v.id) && isNum(v.hash)
     case 'ActivityCoinCollected': return isNum(v.id) && isNum(v.hash)
     case 'ActivityCrateCollected': return isNum(v.id) && isNum(v.hash) && isNum(v.result)

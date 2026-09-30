@@ -1,7 +1,7 @@
 import { LEVELS, type LevelTable } from '../engine/levels'
 import { createReplayer, type Replayer } from '../engine/replay'
 import { continueAsNew, initialState, step } from '../engine/step'
-import type { GameState, HistoryEvent, InputKind, Level, StartInput } from '../engine/types'
+import type { GameState, HistoryEvent, Level, PlayerInput, StartInput } from '../engine/types'
 import { ChaosScheduler } from './chaos'
 import type { SaveStore } from './persistence'
 import type { Command, Phase, RunStats, Save } from './types'
@@ -50,7 +50,7 @@ export class Game {
   /** The state before the latest live tick; null whenever `state` was replaced wholesale. */
   private prevState: GameState | null = null
   private notice: { text: string; untilTick: number } | null = null
-  private pending: InputKind[] = []
+  private pending: PlayerInput[] = []
   /** Whether the slide key is down, tracked in every phase so a release is never lost. */
   private slideHeld = false
   private replayer: Replayer | null = null
@@ -176,9 +176,8 @@ export class Game {
     this.state = state
     for (const e of events) {
       this.history.push(e)
-      if (e.type === 'OrbTaken') {
-        this.chaos.onPickup(state.level, 'orb', state.tick)
-      } else {
+      if (e.type === 'OrbTaken') this.chaos.onPickup(state.level, 'orb', state.tick)
+      else if (e.type === 'ActivityCoinCollected' || e.type === 'ActivityCrateCollected') {
         this.stats.executed += 1
         if (e.type === 'ActivityCrateCollected') this.chaos.onPickup(state.level, 'crate', state.tick)
       }
