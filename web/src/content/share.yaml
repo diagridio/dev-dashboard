@@ -1,7 +1,7 @@
 # Copy shown by the Share dialog. Edit wording here — no code changes needed.
 # NOTE: keep the install commands in sync with the README (the source of truth).
 
-emailSubject: "Check out the Diagrid Dev Dashboard for local Dapr development"
+emailSubject: "Check out the Diagrid Dapr Dev Dashboard for local Dapr development"
 
 # Full message — used by Copy and Email. Install commands included.
 fullMessage: |
