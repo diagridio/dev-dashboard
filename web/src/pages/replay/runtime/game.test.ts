@@ -9,6 +9,7 @@ import { render } from '../render/canvas'
 import { autopilot, counter, makeLevels } from '../testing'
 import { CRASH_FRAMES, Game, REPLAY_MAX_FRAMES, type GameDeps } from './game'
 import type { SaveStore } from './persistence'
+import { MONTAGE_FRAMES } from './montage'
 import { REWIND_FRAMES } from './rewind'
 import type { Save } from './types'
 
@@ -283,6 +284,8 @@ describe('Game', () => {
     // Direct poke: put the player at the end of the level mid-boss.
     game.state = { ...game.state, scroll: 1_000_000 - game.state.distance }
     game.frame(1)
+    expect(game.phase.kind).toBe('montage')
+    game.command('confirm')
     expect(game.phase).toEqual({ kind: 'tip', level: 1 })
     expect(game.start.distance).toBe(0)
     expect(game.divergedAt).toBeNull()
@@ -644,5 +647,77 @@ describe('RetryPolicy rewind', () => {
     expect(game.phase.kind).toBe('rewinding')
     runUntil(game, is('crashing'))
     expect(game.state.tick).toBe(400)
+  })
+})
+
+describe('level montage', () => {
+  const short = () => makeLevels({ length: 1200 })
+
+  it('plays a montage at the end of a durable level, then shows the next tip', () => {
+    const game = new Game(deps({ levels: short() }))
+    play(game)
+    runUntil(game, is('montage'), ['coin'])
+    expect(game.phase).toMatchObject({ kind: 'montage' })
+    expect(game.start.level).toBe(1)
+    expect(game.view().montage?.events).toBeGreaterThan(0)
+    const frames = runUntil(game, is('tip'))
+    expect(frames).toBeLessThanOrEqual(MONTAGE_FRAMES + 2)
+    expect(game.phase).toEqual({ kind: 'tip', level: 1 })
+  })
+
+  it('skips the montage on Enter', () => {
+    const game = new Game(deps({ levels: short() }))
+    play(game)
+    runUntil(game, is('montage'), ['coin'])
+    game.command('confirm')
+    expect(game.phase).toEqual({ kind: 'tip', level: 1 })
+  })
+
+  it('has no montage after a non-durable level', () => {
+    const game = new Game(deps({ levels: makeLevels({ length: 1200 }, { 0: { durable: false } }) }))
+    play(game)
+    runUntil(game, (g) => g.phase.kind === 'montage' || g.phase.kind === 'tip', ['coin'])
+    expect(game.phase.kind).toBe('tip')
+  })
+
+  it('does not touch the outside world while playing a montage', () => {
+    let calls = 0
+    const impure = counter()
+    const game = new Game(deps({ levels: makeLevels({ length: 1200, weights: { coin: 2, orb: 1 } }), impure: () => { calls++; return impure() } }))
+    play(game)
+    runUntil(game, is('montage'), ['coin', 'orb'])
+    const before = calls
+    runUntil(game, is('tip'))
+    expect(calls).toBe(before)
+  })
+
+  it('includes the boss and hotfix segments of the level', () => {
+    const levels = makeLevels({ weights: { orb: 1 }, crashAfterPickup: ['orb'], length: 6000 })
+    const game = new Game(deps({ levels }))
+    play(game)
+    runUntil(game, (g) => g.stats.incidents === 1, ['orb'])
+    runUntil(game, is('montage'), ['orb'])
+    const m = game.view().montage
+    expect(m).not.toBeNull()
+    let boundaries = 0
+    runUntil(game, (g) => {
+      if ((g.view().montage?.flash ?? 0) === 8) boundaries++
+      return g.phase.kind === 'tip'
+    })
+    expect(boundaries).toBeGreaterThanOrEqual(1)
+  })
+
+  it('saves during a montage and resumes at the start of the next level', () => {
+    const store = memoryStore()
+    const game = new Game(deps({ store, levels: short() }))
+    play(game)
+    runUntil(game, is('montage'), ['coin'])
+    game.suspend()
+    const resumed = new Game(deps({ store, levels: short() }))
+    expect(resumed.phase.kind).toBe('resume')
+    resumed.command('confirm')
+    runUntil(resumed, is('playing'))
+    expect(resumed.start.level).toBe(1)
+    expect(resumed.state.tick).toBe(0)
   })
 })

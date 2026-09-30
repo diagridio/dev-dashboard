@@ -19,7 +19,18 @@ const sample: Save = {
   tick: 31,
   stats: { replays: 1, fromHistory: 2, executed: 3, incidents: 0, retriesUsed: 0, circuitTrips: 1, boostsLost: 2 },
   divergedAt: null,
+  segments: [],
+  orbValues: [],
 }
+
+describe('montage save fields', () => {
+  it('round-trips montage segments and rejects malformed ones', () => {
+    const seg = { start: sample.start, history: sample.history, endTick: 31, orbValues: [[5, 0.25]] }
+    const withSeg = { ...sample, segments: [seg], orbValues: [[9, 0.5]] }
+    expect(parseSave(JSON.stringify(withSeg))).toEqual(withSeg)
+    expect(parseSave(JSON.stringify({ ...withSeg, segments: [{ ...seg, orbValues: [[5]] }] }))).toBeNull()
+  })
+})
 
 describe('localSaveStore', () => {
   beforeEach(() => localStorage.clear())

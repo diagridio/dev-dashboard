@@ -1,5 +1,6 @@
 import { isInputEvent } from '../engine/replay'
 import type { HistoryEvent, StartInput } from '../engine/types'
+import type { MontageSegment } from './montage'
 import type { RunStats, Save } from './types'
 
 export const SAVE_KEY = 'devdash.replay.save'
@@ -50,11 +51,19 @@ function isStats(v: unknown): v is RunStats {
   return isObj(v) && STAT_KEYS.every((k) => isNum(v[k]))
 }
 
+const isPairs = (v: unknown): v is [number, number][] =>
+  Array.isArray(v) && v.every((p) => Array.isArray(p) && p.length === 2 && isNum(p[0]) && isNum(p[1]))
+
+function isSegment(v: unknown): v is MontageSegment {
+  return isObj(v) && isStart(v.start) && Array.isArray(v.history) && v.history.every(isEvent) && isNum(v.endTick) && isPairs(v.orbValues)
+}
+
 export function isSave(v: unknown): v is Save {
   if (!isObj(v) || v.version !== SAVE_VERSION || !isStart(v.start) || !isStats(v.stats)) return false
   if (!isNum(v.tick) || v.tick < 0) return false
   if (!(v.divergedAt === null || isNum(v.divergedAt))) return false
   if (!Array.isArray(v.history) || !v.history.every(isEvent)) return false
+  if (!Array.isArray(v.segments) || !v.segments.every(isSegment) || !isPairs(v.orbValues)) return false
   const history = v.history as HistoryEvent[]
   // Ordered by tick; outcomes happened before the tick we replay to, runtime inputs may sit on it.
   const tick = v.tick as number

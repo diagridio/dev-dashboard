@@ -3,6 +3,7 @@ import { createReplayer, inputOf, isInputEvent, type Replayer } from '../engine/
 import { continueAsNew, initialState, livePlayer, step } from '../engine/step'
 import type { GameState, HistoryEvent, InputEvent, InputKind, Level, PlayerInput, StartInput } from '../engine/types'
 import { ChaosScheduler } from './chaos'
+import { Montage, type MontageSegment } from './montage'
 import type { SaveStore } from './persistence'
 import { REWIND_FRAMES, REWIND_PX, RewindBuffer, sample } from './rewind'
 import type { Command, Phase, RunStats, Save } from './types'
@@ -33,6 +34,8 @@ export interface GameView {
   divergedAt: number | null
   /** The state one tick before `state` while playing live, for display interpolation; otherwise null. */
   prev: GameState | null
+  /** The level montage playing now, for the renderer; otherwise null. */
+  montage: { events: number; flash: number; trail: number[] } | null
 }
 
 const emptyStats = (): RunStats => ({ replays: 0, fromHistory: 0, executed: 0, incidents: 0, retriesUsed: 0, circuitTrips: 0, boostsLost: 0 })
@@ -56,6 +59,11 @@ export class Game {
   private queued: InputEvent[] = []
   /** Whether the slide key is down, tracked in every phase so a release is never lost. */
   private slideHeld = false
+  /** Closed segments of the current level, for its montage. */
+  private segments: MontageSegment[] = []
+  /** Live impure values of this segment's orb pickups, by orb id. */
+  private orbValues = new Map<number, number>()
+  private montage: Montage | null = null
   private replayer: Replayer | null = null
   private replayTicksPerFrame = REPLAY_MIN_TICKS_PER_FRAME
   private crashTick = 0
@@ -86,12 +94,16 @@ export class Game {
 
   view(): GameView {
     const n = this.notice
+    const p = this.phase
+    const m = p.kind === 'montage' ? this.montage : null
+    const state = m ? m.state : p.kind === 'rewinding' ? (p.frames[p.index] ?? this.state) : this.state
     return {
-      state: this.phase.kind === 'rewinding' ? (this.phase.frames[this.phase.index] ?? this.state) : this.state,
-      phase: this.phase,
+      state,
+      phase: p,
       divergedAt: this.divergedAt,
-      prev: this.phase.kind === 'playing' && this.prevState && this.prevState.tick === this.state.tick - 1 ? this.prevState : null,
+      prev: p.kind === 'playing' && this.prevState && this.prevState.tick === this.state.tick - 1 ? this.prevState : null,
       notice: n && this.state.tick < n.untilTick ? n.text : null,
+      montage: m ? { events: m.events, flash: m.flash, trail: m.trail } : null,
     }
   }
 
@@ -113,6 +125,9 @@ export class Game {
         return
       case 'tip':
         if (c === 'confirm') this.setPhase({ kind: 'playing' })
+        return
+      case 'montage':
+        if (c === 'confirm') this.endMontage()
         return
       case 'lost':
         if (c === 'confirm') {
@@ -152,6 +167,9 @@ export class Game {
     } else if (p.kind === 'rewinding') {
       if (p.index + 1 < p.frames.length) this.phase = { ...p, index: p.index + 1 }
       else this.setPhase({ kind: 'playing' })
+    } else if (p.kind === 'montage') {
+      this.montage?.advance()
+      if (!this.montage || this.montage.done) this.endMontage()
     }
   }
 
@@ -169,6 +187,7 @@ export class Game {
     const tick = k === 'crashing' || k === 'replaying' ? this.crashTick : this.state.tick
     this.deps.store.save({
       version: 2, start: this.start, history: this.history, tick, stats: this.stats, divergedAt: this.divergedAt,
+      segments: this.segments, orbValues: [...this.orbValues],
     })
   }
 
@@ -188,7 +207,13 @@ export class Game {
       this.history.push({ type: 'Input', tick: t, kind })
       inputs.push(kind)
     }
-    const ports = { impure: this.deps.impure, crateValue: () => this.deps.impure() }
+    const calls: number[] = []
+    const impure = () => {
+      const v = this.deps.impure()
+      calls.push(v)
+      return v
+    }
+    const ports = { impure, crateValue: () => impure() }
     this.prevState = this.state
     const { state, events } = step(this.state, inputs, ports, this.levels)
     if (state.status === 'retry') {
@@ -196,6 +221,12 @@ export class Game {
       return
     }
     this.state = state
+    // Each orb and each crate calls impure exactly once, in event order.
+    let c = 0
+    for (const e of events) {
+      if (e.type === 'OrbTaken') this.orbValues.set(e.id, calls[c++])
+      else if (e.type === 'ActivityCrateCollected') c++
+    }
     for (const e of events) {
       this.history.push(e)
       if (e.type === 'OrbTaken') this.chaos.onPickup(state.level, 'orb', state.tick)
@@ -218,8 +249,16 @@ export class Game {
     if (state.status === 'levelDone') {
       // A level can end mid-boss now that distance carries across segments.
       this.divergedAt = null
+      this.closeSegment(state.tick)
+      const segments = this.levels[state.level].durable ? this.segments : []
+      this.segments = []
       const next = nextLevel(state.level)
+      // The next level starts (and is saved) first, so a tab closed during the montage resumes there.
       this.beginSegment(continueAsNew(state, { level: next, elapsed: 0, distance: 0, retries: this.levels[next].retries }), true)
+      if (segments.length > 0) {
+        this.montage = new Montage(segments, this.levels)
+        this.setPhase({ kind: 'montage', events: this.montage.events })
+      }
       return
     }
     this.rewind.push(state)
@@ -261,6 +300,7 @@ export class Game {
   private newRun(): void {
     this.stats = emptyStats()
     this.divergedAt = null
+    this.segments = []
     this.deps.store.clear()
     this.beginSegment({ level: 0, seed: this.deps.newSeed() >>> 0, score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[0].retries, shield: 0 }, true)
   }
@@ -268,6 +308,7 @@ export class Game {
   private beginSegment(start: StartInput, showTip: boolean): void {
     this.start = start
     this.history = []
+    this.orbValues = new Map()
     this.state = initialState(start, this.levels)
     this.rewind.reset(this.state)
     this.prevState = null
@@ -277,6 +318,15 @@ export class Game {
     this.chaos.start(start.level, showTip, start.elapsed)
     this.setPhase(showTip ? { kind: 'tip', level: start.level } : { kind: 'playing' })
     this.save()
+  }
+
+  private closeSegment(endTick: number): void {
+    this.segments.push({ start: this.start, history: [...this.history], endTick, orbValues: [...this.orbValues] })
+  }
+
+  private endMontage(): void {
+    this.montage = null
+    this.setPhase({ kind: 'tip', level: this.start.level })
   }
 
   private crash(): void {
@@ -329,6 +379,7 @@ export class Game {
     }
     this.stats.incidents += 1
     this.divergedAt = result.divergedAt
+    this.closeSegment(this.crashTick)
     this.beginSegment(continueAsNew(result.state, { boss: true }), false)
     this.recordInput({ type: 'OrchestratorStarted', tick: 0 })
     this.setNotice(`NonDeterministicError at event #${result.divergedAt + 1}`)
@@ -336,6 +387,7 @@ export class Game {
 
   private hotfix(): void {
     this.divergedAt = null
+    this.closeSegment(this.state.tick)
     this.beginSegment(continueAsNew(this.state), false)
     this.setNotice('Hotfix deployed · continue-as-new')
   }
@@ -346,6 +398,8 @@ export class Game {
     this.history = save.history
     this.stats = save.stats
     this.divergedAt = save.divergedAt
+    this.segments = save.segments
+    this.orbValues = new Map(save.orbValues)
     this.crashTick = save.tick
     this.pending = []
     this.notice = null

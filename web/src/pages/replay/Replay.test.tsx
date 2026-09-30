@@ -201,6 +201,8 @@ describe('Replay page', () => {
     tick: 40,
     stats: { replays: 0, fromHistory: 0, executed: 0, incidents: 0, retriesUsed: 0, circuitTrips: 0, boostsLost: 0 },
     divergedAt: null,
+    segments: [],
+    orbValues: [],
   })
 
   it('saves a durable run and stops the loop when the page unmounts mid-run', async () => {
