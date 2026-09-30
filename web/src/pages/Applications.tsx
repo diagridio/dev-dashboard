@@ -49,7 +49,8 @@ export function Applications() {
 
   if (!apps || apps.length === 0) {
     return (
-      <div className="page">
+      // Fills the frame so the Konami hint can sit near its bottom.
+      <div className="page page-fill">
         {PAGE_HEADER}
         <p className="muted">No Dapr apps running</p>
         {/* Getting-started hint — copy lives in src/content/empty-states.yaml. */}

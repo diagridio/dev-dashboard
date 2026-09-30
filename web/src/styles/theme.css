@@ -293,8 +293,11 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .banner-dismiss { font: inherit; color: inherit; background: none; border: none; padding: 0; text-decoration: underline; cursor: pointer; }
 .banner-dismiss:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .hint { font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: center; margin-top: 14px; }
-/* Applications empty state: the REPLAY easter egg's Konami code, centred near the bottom. */
+/* A page that fills the frame below the top bar, so content can be pushed to its bottom. */
+.page.page-fill { display: flex; flex-direction: column; min-height: calc(100vh - var(--topbar-h, 46px)); }
+/* Applications empty state: the REPLAY easter egg's Konami code, centred near the bottom of the frame. */
 .konami-hint { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; color: var(--faint); text-align: center; margin: 48px 0 8px; }
+.page-fill > .konami-hint { margin-top: auto; }
 .none { color: var(--faint); }
 .hidden { display: none !important; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }

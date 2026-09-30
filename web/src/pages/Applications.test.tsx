@@ -134,14 +134,18 @@ describe('Applications', () => {
     const hint = await screen.findByText('↑ ↑ ↓ ↓ ← → ← → B A')
     expect(hint).toHaveClass('konami-hint')
     expect(hint).toHaveAccessibleName('Konami code')
-    expect(container.querySelector('.page')?.lastElementChild).toBe(hint)
+    const page = container.querySelector('.page')
+    expect(page?.lastElementChild).toBe(hint)
+    // The empty state fills the frame, so the hint sits near its bottom (see .page-fill in theme.css).
+    expect(page).toHaveClass('page-fill')
   })
 
   it('does not show the Konami code when there are apps', async () => {
     server.use(http.get('/api/apps', () => HttpResponse.json(sampleApps)))
-    renderAt()
+    const { container } = renderAt()
     await screen.findByRole('link', { name: 'order' })
     expect(screen.queryByLabelText('Konami code')).toBeNull()
+    expect(container.querySelector('.page-fill')).toBeNull()
   })
 
   it('shows an empty state when no apps', async () => {
