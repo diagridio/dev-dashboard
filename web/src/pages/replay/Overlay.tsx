@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { LEVELS } from './engine/levels'
 import type { Phase, RunStats } from './runtime/types'
 
@@ -14,6 +14,14 @@ interface Props {
   dailyBest: number
   /** Opens the dashboard's Share dialog from the end-of-run card. */
   onShare?: () => void
+  /** True while a recorded run plays back: the end card is "Playback finished" with no copy button. */
+  playback?: boolean
+  onCopyRun?: () => void
+  copied?: boolean
+  /** Shown pre-selected when the run code could not be copied to the clipboard. */
+  runCode?: string | null
+  onWatch?: (code: string) => void
+  watchError?: string | null
 }
 
 function Card({ children }: { children: ReactNode }) {
@@ -33,8 +41,34 @@ function Stat({ label, value }: { label: string; value: number }) {
   )
 }
 
+function WatchForm({ onWatch, error }: { onWatch: (code: string) => void; error: string | null }) {
+  const [code, setCode] = useState('')
+  return (
+    <form
+      className="replay-watch"
+      onSubmit={(e) => {
+        e.preventDefault()
+        onWatch(code)
+      }}
+    >
+      <input className="inp" aria-label="Paste a run code" placeholder="Paste a run code" value={code} onChange={(e) => setCode(e.target.value)} />
+      <button type="submit" className="tbtn">Watch a run</button>
+      {error && <p className="replay-error">{error}</p>}
+    </form>
+  )
+}
+
+function RunCodeBox({ code }: { code: string }) {
+  const ref = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    ref.current?.focus()
+    ref.current?.select()
+  }, [code])
+  return <textarea ref={ref} className="replay-code" aria-label="Run code" readOnly value={code} rows={3} />
+}
+
 /** DOM cards over the canvas for every phase that waits on the player. */
-export function Overlay({ phase, stats, best, score, level, date, dailyBest, onShare }: Props) {
+export function Overlay({ phase, stats, best, score, level, date, dailyBest, onShare, playback, onCopyRun, copied, runCode, onWatch, watchError }: Props) {
   switch (phase.kind) {
     case 'title':
       return (
@@ -42,8 +76,9 @@ export function Overlay({ phase, stats, best, score, level, date, dailyBest, onS
           <h2>Press Enter to start</h2>
           <p>Guide a workflow through a datacenter full of chaos. It will crash. Dapr will replay it.</p>
           <p className="replay-keys">Daily run · {date} (UTC)</p>
-          <p className="replay-keys">Space / ↑ jump · ↓ slide · Esc pause</p>
+          <p className="replay-keys">Space / ↑ jump (hold for higher) · ↓ slide · Esc pause</p>
           {(best > 0 || dailyBest > 0) && <p className="replay-keys">Today's best: {dailyBest} · Best: {best}</p>}
+          {onWatch && <WatchForm onWatch={onWatch} error={watchError ?? null} />}
         </Card>
       )
     case 'resume':
@@ -82,7 +117,11 @@ export function Overlay({ phase, stats, best, score, level, date, dailyBest, onS
     case 'over':
       return (
         <Card>
-          <h2>Workflow <span className="pill s-fail">FAILED</span></h2>
+          {playback ? (
+            <h2>Playback finished</h2>
+          ) : (
+            <h2>Workflow <span className="pill s-fail">FAILED</span></h2>
+          )}
           <p>Reason: {phase.reason}</p>
           <div className="stats replay-stats">
             <Stat label="Level" value={level} />
@@ -96,8 +135,14 @@ export function Overlay({ phase, stats, best, score, level, date, dailyBest, onS
             <Stat label="Circuit trips" value={stats.circuitTrips} />
             <Stat label="Boosts lost" value={stats.boostsLost} />
           </div>
+          {runCode && <RunCodeBox code={runCode} />}
           <div className="replay-foot">
             <p className="replay-keys">Enter to play again</p>
+            {!playback && onCopyRun && (
+              <button type="button" className="tbtn" onClick={onCopyRun}>
+                {copied ? '✓ Copied' : 'Copy run code'}
+              </button>
+            )}
             {/* Same class and label as the TopNav Share button. */}
             {onShare && (
               <button type="button" className="tbtn" onClick={onShare}>

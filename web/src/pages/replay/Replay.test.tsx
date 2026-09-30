@@ -9,6 +9,8 @@ import { RefreshProvider } from '../../lib/refresh'
 import { ConnectionContext } from '../../lib/connection'
 import { trackAction } from '../../lib/telemetry'
 import { SAVE_KEY } from './runtime/persistence'
+import { encodeRun } from './runtime/share'
+import { emptyTape } from './runtime/tape'
 
 vi.mock('../../lib/telemetry', () => ({ trackAction: vi.fn(), trackView: vi.fn(), setTelemetryContext: vi.fn(), trackError: vi.fn() }))
 
@@ -250,5 +252,32 @@ describe('Replay page', () => {
     renderAt('/replay')
     expect(await screen.findByRole('heading', { name: 'Resume your run?' })).toBeInTheDocument()
     expect(screen.getByText(/tick 40/)).toBeInTheDocument()
+  })
+
+  it('rejects an invalid run code from the title card', async () => {
+    renderAt('/replay')
+    await gameReady('Press Enter to start')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Paste a run code' }), { target: { value: 'not a code' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Watch a run' }))
+    expect(await screen.findByText("That run code isn't valid.")).toBeInTheDocument()
+    expect(trackAction).toHaveBeenCalledWith('replay_watch')
+  })
+
+  it('starts playback from a valid run code', async () => {
+    const code = await encodeRun({ ...emptyTape('2026-09-30'), liveTick: 0 })
+    renderAt('/replay')
+    await gameReady('Press Enter to start')
+    fireEvent.change(screen.getByRole('textbox', { name: 'Paste a run code' }), { target: { value: code } })
+    fireEvent.click(screen.getByRole('button', { name: 'Watch a run' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Press Enter to start' })).toBeNull())
+  })
+
+  it('does not start the game when Enter is pressed in the run-code field', async () => {
+    renderAt('/replay')
+    await gameReady('Press Enter to start')
+    const field = screen.getByRole('textbox', { name: 'Paste a run code' })
+    field.focus()
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(screen.getByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
   })
 })

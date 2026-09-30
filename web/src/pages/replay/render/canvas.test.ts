@@ -298,4 +298,10 @@ describe('render', () => {
     render(ctx, view({ kind: 'montage', events: 1 }, lvl1(), { montage, reducedMotion: true }), pal)
     expect(calls.some((c) => c.name === 'fillRect' && c.fill === pal.text && c.args[2] === VIEW_W)).toBe(false)
   })
+
+  it('marks playback in the HUD', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }, lvl1(), { playbackDate: '2026-09-30' }), pal)
+    expect(texts(calls)).toContain('▶ PLAYBACK · 2026-09-30')
+  })
 })

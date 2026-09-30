@@ -658,6 +658,10 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .replay-card .replay-keys { font-family: var(--mono); font-size: 11px; color: var(--faint); }
 .replay-stats { margin: 4px 0 0; grid-template-columns: repeat(3, 1fr); }
 .replay-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.replay-watch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.replay-watch .inp { flex: 1 1 180px; min-width: 0; width: auto; }
+.replay-card .replay-error { width: 100%; color: var(--fail-fg); }
+.replay-code { width: 100%; font-family: var(--mono); font-size: 11px; color: var(--text); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; resize: none; word-break: break-all; }
 .replay-count { margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); }
 .replay-empty { margin: 0; padding: 14px; color: var(--faint); font-size: 12.5px; }
 .replay-hist { max-height: 540px; overflow: auto; padding: 8px 12px; }

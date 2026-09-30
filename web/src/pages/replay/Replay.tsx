@@ -16,6 +16,7 @@ import { keyToCommand } from './runtime/keys'
 import { startLoop } from './runtime/loop'
 import { utcDate } from './runtime/daily'
 import { localSaveStore } from './runtime/persistence'
+import { copyRunCode, decodeRun, encodeRun } from './runtime/share'
 
 function createGame(): Game {
   return new Game({
@@ -33,7 +34,36 @@ export function Component() {
   const stageRef = useRef<HTMLDivElement>(null)
   const [game] = useState(createGame)
   const [shareOpen, setShareOpen] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [runCode, setRunCode] = useState<string | null>(null)
+  const [watchError, setWatchError] = useState<string | null>(null)
   useSyncExternalStore(game.subscribe, game.getVersion)
+
+  // A new end-of-run card starts without the previous run's copy state.
+  useEffect(() => {
+    if (game.phase.kind !== 'over') {
+      setCopied(false)
+      setRunCode(null)
+    }
+  }, [game.phase.kind])
+
+  const onCopyRun = async () => {
+    trackAction('replay_share_copy')
+    const code = await encodeRun(game.tape)
+    if ((await copyRunCode(code, navigator.clipboard)) === 'copied') setCopied(true)
+    else setRunCode(code)
+  }
+
+  const onWatch = async (code: string) => {
+    trackAction('replay_watch')
+    const tape = await decodeRun(code)
+    if (!tape || !game.watch(tape)) {
+      setWatchError("That run code isn't valid.")
+      return
+    }
+    setWatchError(null)
+    stageRef.current?.focus()
+  }
 
   useEffect(() => {
     // Arriving from a sidebar link leaves focus there; move it to the game so Enter starts it.
@@ -137,6 +167,12 @@ export function Component() {
             level={game.state.level}
             date={game.runDate}
             dailyBest={game.dailyBest}
+            playback={game.playback}
+            copied={copied}
+            runCode={runCode}
+            watchError={watchError}
+            onCopyRun={() => void onCopyRun()}
+            onWatch={(c) => void onWatch(c)}
             onShare={() => {
               setShareOpen(true)
               trackAction('share_open', { source: 'replay' })

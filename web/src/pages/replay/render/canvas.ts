@@ -21,6 +21,8 @@ export interface RenderView {
   /** Backing-store pixels per logical pixel (device resolution); 1 when omitted. */
   pixelScale?: number
   /** Level-complete montage state; null or omitted outside the montage. */
+  /** The UTC date of the run being played back; null or omitted for a live run. */
+  playbackDate?: string | null
   montage?: { events: number; flash: number; trail: number[] } | null
 }
 
@@ -120,7 +122,8 @@ function drawPlayer(ctx: CanvasRenderingContext2D, state: GameState, pal: Palett
   drawHat(ctx, box, pal, pose)
 }
 
-function drawHud(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette): void {
+function drawHud(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette): void {
+  const state = view.state
   ctx.font = FONT
   ctx.fillStyle = pal.muted
   ctx.textAlign = 'left'
@@ -150,6 +153,7 @@ function drawHud(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette):
     ctx.fillStyle = armed ? pal.player : pal.muted
     ctx.fillText(armed ? 'CB ARMED' : `CB ${state.shield}/${SHIELD_FULL}`, x0 + SHIELD_FULL * 5 + 6, 32)
   }
+  if (view.playbackDate) banner(ctx, `▶ PLAYBACK · ${view.playbackDate}`, VIEW_H - 8, pal.glitch, FONT)
 }
 
 function drawCrash(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette): void {
@@ -236,7 +240,7 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
     if (view.montage) drawTrail(ctx, view.montage.trail, pal, view.pose ?? NEUTRAL)
   }
   ctx.restore()
-  drawHud(ctx, state, pal)
+  drawHud(ctx, view, pal)
   if (view.notice) banner(ctx, view.notice, 44, pal.text, FONT)
   if (state.bossUntil > 0 && phase.kind === 'playing') drawBoss(ctx, view, pal)
   if (crashing) drawCrash(ctx, view, pal)
