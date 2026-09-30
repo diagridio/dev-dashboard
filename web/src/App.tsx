@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useMatches, useSearchParams } from 'react-router-dom'
+import { Outlet, useLocation, useMatches, useNavigate, useSearchParams } from 'react-router-dom'
 import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
 import { ResourcesSidebar } from './components/ResourcesSidebar'
@@ -8,6 +8,7 @@ import { getTheme, type Theme } from './lib/prefs'
 import { safeGet } from './lib/safeStorage'
 import { trackAction, trackView } from './lib/telemetry'
 import { useDiscoveryTelemetry } from './hooks/useDiscoveryTelemetry'
+import { useKonami } from './hooks/useKonami'
 
 const SIDEBAR_COLLAPSED_KEY = 'devdash.sidebarCollapsed'
 
@@ -42,6 +43,13 @@ export function App() {
   // every route, keeping the `modes` telemetry context live app-wide — do
   // not "optimize" this by moving it closer to where apps are displayed.
   useDiscoveryTelemetry()
+  // Easter egg: ↑↑↓↓←→←→BA opens the REPLAY game (pages/replay).
+  // useLocation's pathname is router-relative (no basename), like the '/replay' route.
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  useKonami(() => {
+    if (pathname !== '/replay') navigate('/replay')
+  })
 
   useEffect(() => {
     trackAction('app_startup')
