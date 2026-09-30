@@ -1,4 +1,5 @@
 import type { MontageSegment } from './montage'
+import type { Tape } from './tape'
 import type { GameState, HistoryEvent, Level, StartInput } from '../engine/types'
 
 export interface RunStats {
@@ -47,4 +48,6 @@ export interface Save {
   segments: MontageSegment[]
   /** Live impure values of the open segment's orb pickups, by orb id. */
   orbValues: [number, number][]
+  /** Everything the outside world fed the run so far. */
+  tape: Tape
 }

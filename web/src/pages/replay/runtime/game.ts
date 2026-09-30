@@ -8,6 +8,7 @@ import { ChaosScheduler } from './chaos'
 import { Montage, type MontageSegment } from './montage'
 import type { SaveStore } from './persistence'
 import { REWIND_FRAMES, REWIND_PX, RewindBuffer, sample } from './rewind'
+import { TapePlayer, TapeRecorder, emptyTape, isTape, type Source, type Tape } from './tape'
 import type { Command, Phase, RunStats, Save } from './types'
 
 /** Frames the crash glitch shows before the replay starts. */
@@ -39,6 +40,8 @@ export interface GameView {
   prev: GameState | null
   /** The level montage playing now, for the renderer; otherwise null. */
   montage: { events: number; flash: number; trail: number[] } | null
+  /** The date of the run being played back; null during live play. */
+  playbackDate: string | null
 }
 
 const emptyStats = (): RunStats => ({ replays: 0, fromHistory: 0, executed: 0, incidents: 0, retriesUsed: 0, circuitTrips: 0, boostsLost: 0 })
@@ -55,7 +58,15 @@ export class Game {
   best: number
   /** History index of the non-deterministic event behind the current boss phase. */
   divergedAt: number | null = null
+  /** Everything the outside world has fed this run. */
+  tape: Tape
+  /** Whether a recorded tape is being played back instead of live play. */
+  playback = false
 
+  private source: Source
+  private liveTick = 0
+  private inputCursor = 0
+  private restartCursor = 0
   /** The state before the latest live tick; null whenever `state` was replaced wholesale. */
   private prevState: GameState | null = null
   private notice: { text: string; untilTick: number } | null = null
@@ -79,11 +90,17 @@ export class Game {
   private readonly levels: LevelTable
   private readonly chaos: ChaosScheduler
 
+  get liveTicks(): number {
+    return this.liveTick
+  }
+
   constructor(private readonly deps: GameDeps) {
     this.levels = deps.levels ?? LEVELS
-    this.chaos = new ChaosScheduler(deps.chaosRand, this.levels)
+    this.chaos = new ChaosScheduler(() => this.source.chaos(), this.levels)
     this.best = deps.store.loadBest()
     this.runDate = deps.today()
+    this.tape = emptyTape(this.runDate)
+    this.source = new TapeRecorder(this.tape, deps)
     this.dailyBest = deps.store.loadDailyBest(this.runDate)
     this.state = initialState(this.start, this.levels)
     this.savedRun = deps.store.load()
@@ -111,12 +128,25 @@ export class Game {
       prev: p.kind === 'playing' && this.prevState && this.prevState.tick === this.state.tick - 1 ? this.prevState : null,
       notice: n && this.state.tick < n.untilTick ? n.text : null,
       montage: m ? { events: m.events, flash: m.flash, trail: m.trail } : null,
+      playbackDate: this.playback ? this.runDate : null,
     }
   }
 
   command(c: Command): void {
     if (c === 'slideStart') this.slideHeld = true
     else if (c === 'slideEnd') this.slideHeld = false
+    if (this.playback) {
+      if (c === 'confirm' && this.phase.kind === 'over') {
+        this.newRun()
+        return
+      }
+      if (c === 'cancel' && this.phase.kind !== 'paused') {
+        this.playback = false
+        this.setPhase({ kind: 'title' })
+        return
+      }
+      if (c !== 'pause' && c !== 'cancel') return
+    }
     switch (this.phase.kind) {
       case 'title':
       case 'over':
@@ -131,17 +161,13 @@ export class Game {
         }
         return
       case 'tip':
-        if (c === 'confirm') this.setPhase({ kind: 'playing' })
+        if (c === 'confirm') this.confirm()
         return
       case 'montage':
         if (c === 'confirm') this.endMontage()
         return
       case 'lost':
-        if (c === 'confirm') {
-          this.stats = emptyStats()
-          this.beginSegment({ level: 1, seed: seedFrom(seedForDate(this.runDate)), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[1].retries, shield: 0 }, true)
-          this.setNotice('Dapr Workflow enabled')
-        }
+        if (c === 'confirm') this.confirm()
         return
       case 'playing':
         if (c === 'cancel' || c === 'pause') {
@@ -162,6 +188,7 @@ export class Game {
 
   /** Called once per animation frame with the number of whole 60 Hz ticks elapsed. */
   frame(liveTicks: number): void {
+    if (this.playback) this.autoplay()
     const p = this.phase
     if (p.kind === 'playing') {
       for (let i = 0; i < liveTicks && this.phase.kind === 'playing'; i++) this.tick()
@@ -178,6 +205,30 @@ export class Game {
       this.montage?.advance()
       if (!this.montage || this.montage.done) this.endMontage()
     }
+    if (this.playback && this.source.exhausted && this.phase.kind !== 'over') this.gameOver('Run code ended early')
+  }
+
+  /** Playback confirms cards by itself and repeats the recorded tab-close resumes. */
+  private autoplay(): void {
+    const k = this.phase.kind
+    if (k === 'tip' || k === 'lost') this.confirm()
+    const r = this.tape.restarts[this.restartCursor]
+    if (r && r[0] === this.liveTick && k !== 'over' && k !== 'title') {
+      this.restartCursor += 1
+      ;(this.source as TapePlayer).seek(r[1], r[2])
+      this.restartFromHistory(k === 'crashing' || k === 'replaying' ? this.crashTick : this.state.tick)
+    }
+  }
+
+  /** Dismisses a tip or "Progress lost" card. */
+  private confirm(): void {
+    if (this.phase.kind === 'tip') {
+      this.setPhase({ kind: 'playing' })
+    } else if (this.phase.kind === 'lost') {
+      this.stats = emptyStats()
+      this.beginSegment({ level: 1, seed: seedFrom(seedForDate(this.runDate)), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[1].retries, shield: 0 }, true)
+      this.setNotice('Dapr Workflow enabled')
+    }
   }
 
   /** Tab hidden or page left: pause a running game and persist it. */
@@ -187,6 +238,7 @@ export class Game {
   }
 
   save(): void {
+    if (this.playback) return
     const k = this.phase.kind
     if (k === 'title' || k === 'resume' || k === 'over' || k === 'lost') return
     // A non-durable level keeps nothing: a save would promise a resume it can't deliver.
@@ -194,7 +246,7 @@ export class Game {
     const tick = k === 'crashing' || k === 'replaying' ? this.crashTick : this.state.tick
     this.deps.store.save({
       version: 2, date: this.runDate, start: this.start, history: this.history, tick, stats: this.stats, divergedAt: this.divergedAt,
-      segments: this.segments, orbValues: [...this.orbValues],
+      segments: this.segments, orbValues: [...this.orbValues], tape: this.tape,
     })
   }
 
@@ -208,7 +260,17 @@ export class Game {
     const t = this.state.tick
     const inputs: InputKind[] = this.queued.map(inputOf)
     this.queued = []
-    const pending = this.pending
+    const L = this.liveTick++
+    let pending: PlayerInput[]
+    if (this.playback) {
+      pending = []
+      const ins = this.tape.inputs
+      while (this.inputCursor < ins.length && ins[this.inputCursor][0] === L) pending.push(ins[this.inputCursor++][1])
+    } else {
+      pending = this.pending
+      for (const kind of pending) this.tape.inputs.push([L, kind])
+      this.tape.liveTick = this.liveTick
+    }
     this.pending = []
     for (const kind of pending) {
       this.history.push({ type: 'Input', tick: t, kind })
@@ -216,7 +278,7 @@ export class Game {
     }
     const calls: number[] = []
     const impure = () => {
-      const v = this.deps.impure()
+      const v = this.source.impure()
       calls.push(v)
       return v
     }
@@ -305,12 +367,33 @@ export class Game {
   }
 
   private newRun(): void {
+    this.playback = false
+    this.runDate = this.deps.today()
+    this.dailyBest = this.deps.store.loadDailyBest(this.runDate)
+    this.tape = emptyTape(this.runDate)
+    this.source = new TapeRecorder(this.tape, this.deps)
+    this.deps.store.clear()
+    this.startRun()
+  }
+
+  /** Plays a recorded run back. Returns false (and changes nothing) for a malformed tape. */
+  watch(tape: Tape): boolean {
+    if (!isTape(tape)) return false
+    this.playback = true
+    this.runDate = tape.date
+    this.tape = tape
+    this.source = new TapePlayer(tape)
+    this.startRun()
+    return true
+  }
+
+  private startRun(): void {
     this.stats = emptyStats()
     this.divergedAt = null
     this.segments = []
-    this.deps.store.clear()
-    this.runDate = this.deps.today()
-    this.dailyBest = this.deps.store.loadDailyBest(this.runDate)
+    this.liveTick = 0
+    this.inputCursor = 0
+    this.restartCursor = 0
     this.beginSegment({ level: 0, seed: seedForDate(this.runDate), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[0].retries, shield: 0 }, true)
   }
 
@@ -346,12 +429,12 @@ export class Game {
 
   private startReplay(): void {
     if (!this.levels[this.start.level].durable) {
-      this.deps.store.clear()
+      if (!this.playback) this.deps.store.clear()
       this.setPhase({ kind: 'lost' })
       return
     }
     this.stats.replays += 1
-    this.replayer = createReplayer(this.start, this.history, this.crashTick, this.deps.impure, this.levels)
+    this.replayer = createReplayer(this.start, this.history, this.crashTick, () => this.source.impure(), this.levels)
     this.rewind.reset(this.replayer.state)
     this.replayTicksPerFrame = Math.max(REPLAY_MIN_TICKS_PER_FRAME, Math.ceil(this.crashTick / REPLAY_MAX_FRAMES))
     this.state = this.replayer.state
@@ -401,32 +484,46 @@ export class Game {
     this.setNotice('Hotfix deployed · continue-as-new')
   }
 
+  /** The process restarted on a saved history: rebuild it by replay, then resume. */
+  private restartFromHistory(tick: number): void {
+    this.montage = null
+    this.crashTick = tick
+    this.pending = []
+    this.queued = []
+    this.notice = null
+    this.chaos.start(this.start.level, false, this.start.elapsed)
+    this.startReplay()
+  }
+
   private resumeSaved(save: Save): void {
     this.savedRun = null
-    this.runDate = save.date
-    this.dailyBest = this.deps.store.loadDailyBest(save.date)
     this.start = save.start
     this.history = save.history
     this.stats = save.stats
     this.divergedAt = save.divergedAt
     this.segments = save.segments
     this.orbValues = new Map(save.orbValues)
-    this.crashTick = save.tick
-    this.pending = []
-    this.notice = null
-    this.chaos.start(save.start.level, false, save.start.elapsed)
-    this.startReplay()
+    this.runDate = save.date
+    this.dailyBest = this.deps.store.loadDailyBest(save.date)
+    this.tape = save.tape
+    this.liveTick = save.tape.liveTick
+    this.source = new TapeRecorder(this.tape, this.deps)
+    this.tape.restarts.push([this.liveTick, this.tape.impure.length, this.tape.chaos.length])
+    this.restartFromHistory(save.tick)
   }
 
   private gameOver(reason: string): void {
-    this.deps.store.clear()
-    if (this.state.score > this.best) {
-      this.best = this.state.score
-      this.deps.store.saveBest(this.best)
-    }
-    if (this.state.score > this.dailyBest) {
-      this.dailyBest = this.state.score
-      this.deps.store.saveDailyBest(this.runDate, this.dailyBest)
+    if (!this.playback) {
+      this.deps.store.clear()
+      if (this.state.score > this.best) {
+        this.best = this.state.score
+        this.deps.store.saveBest(this.best)
+      }
+      // A resumed run from an earlier UTC day must not touch today's slot.
+      if (this.runDate === this.deps.today() && this.state.score > this.dailyBest) {
+        this.dailyBest = this.state.score
+        this.deps.store.saveDailyBest(this.runDate, this.dailyBest)
+      }
     }
     this.setPhase({ kind: 'over', reason })
   }

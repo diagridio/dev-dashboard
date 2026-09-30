@@ -41,3 +41,12 @@ export function autopilot(state: GameState, want: readonly EntityKind[]): Player
   })
   return ahead ? ['jump'] : []
 }
+
+/** A small seeded generator in [0, 1): a stand-in for Math.random in determinism tests. */
+export function lcg(seed: number): () => number {
+  let x = seed >>> 0
+  return () => {
+    x = (Math.imul(x, 1664525) + 1013904223) >>> 0
+    return x / 4294967296
+  }
+}

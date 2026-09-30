@@ -204,6 +204,7 @@ describe('Replay page', () => {
     divergedAt: null,
     segments: [],
     orbValues: [],
+    tape: { v: 1, date: '2026-09-30', inputs: [], impure: [], chaos: [], restarts: [], liveTick: 40 },
   })
 
   it('saves a durable run and stops the loop when the page unmounts mid-run', async () => {

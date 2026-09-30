@@ -1,6 +1,7 @@
 import { isInputEvent } from '../engine/replay'
 import type { HistoryEvent, StartInput } from '../engine/types'
 import type { MontageSegment } from './montage'
+import { isTape } from './tape'
 import type { RunStats, Save } from './types'
 
 export const SAVE_KEY = 'devdash.replay.save'
@@ -65,7 +66,7 @@ function isSegment(v: unknown): v is MontageSegment {
 
 export function isSave(v: unknown): v is Save {
   if (!isObj(v) || v.version !== SAVE_VERSION || !isStart(v.start) || !isStats(v.stats)) return false
-  if (!isDate(v.date)) return false
+  if (!isDate(v.date) || !isTape(v.tape)) return false
   if (!isNum(v.tick) || v.tick < 0) return false
   if (!(v.divergedAt === null || isNum(v.divergedAt))) return false
   if (!Array.isArray(v.history) || !v.history.every(isEvent)) return false

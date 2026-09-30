@@ -8,11 +8,12 @@ import { BOSS_TICKS, GRACE_RESUME } from '../engine/step'
 import { GROUND_Y, PLAYER_X, type EntityKind } from '../engine/types'
 import type { Palette } from '../render/palette'
 import { render } from '../render/canvas'
-import { autopilot, counter, makeLevels } from '../testing'
+import { autopilot, counter, lcg, makeLevels } from '../testing'
 import { CRASH_FRAMES, Game, REPLAY_MAX_FRAMES, type GameDeps } from './game'
 import type { SaveStore } from './persistence'
 import { MONTAGE_FRAMES } from './montage'
 import { REWIND_FRAMES } from './rewind'
+import { emptyTape, type Tape } from './tape'
 import type { Save } from './types'
 
 type MemoryStore = SaveStore & { saved: Save | null; best: number; daily: { date: string; best: number } | null }
@@ -752,5 +753,129 @@ describe('level montage', () => {
     runUntil(resumed, is('playing'))
     expect(resumed.start.level).toBe(1)
     expect(resumed.state.tick).toBe(0)
+  })
+})
+
+describe('run tape', () => {
+  const WANT: readonly EntityKind[] = ['coin', 'orb', 'crate']
+  const tapeLevels = () =>
+    makeLevels({
+      weights: { low: 2, coin: 3, orb: 1, crate: 1 }, retries: 3, shieldEnabled: true,
+      crashAfterPickup: ['orb', 'crate'], firstCrashTicks: [200, 260], chaosMeanTicks: 600, length: 3000,
+    })
+  const noWorld = (): number => {
+    throw new Error('playback must not read the outside world')
+  }
+
+  /** Jumps low racks (unless careless) and otherwise steers toward pickups. */
+  function drive(g: Game, careless: boolean): void {
+    if (g.phase.kind === 'tip') g.command('confirm')
+    if (g.phase.kind !== 'playing') return
+    const s = g.state
+    const gap = (x: number) => x - (PLAYER_X + 30)
+    const rack = !careless && s.player.y >= GROUND_Y && s.entities.some((e) => e.kind === 'low' && !e.taken && gap(e.x) > 0 && gap(e.x) <= 24)
+    for (const c of rack ? (['jump'] as const) : autopilot(s, WANT)) g.command(c)
+  }
+
+  /** A live run with crashes, retries and a tab-close resume in the middle. */
+  function recordRun(): Game {
+    const store = memoryStore()
+    const live = new Game(deps({ store, levels: tapeLevels(), impure: lcg(1), chaosRand: lcg(2) }))
+    play(live)
+    for (let f = 0; f < 6000 && !(live.stats.replays >= 1 && live.phase.kind === 'playing' && live.liveTicks > 300); f++) {
+      drive(live, false)
+      live.frame(1)
+    }
+    live.suspend()
+    const resumed = new Game(deps({ store, levels: tapeLevels(), impure: lcg(3), chaosRand: lcg(4) }))
+    resumed.command('confirm')
+    for (let f = 0; f < 5000 && resumed.phase.kind !== 'over'; f++) {
+      drive(resumed, f % 600 > 200 && f % 600 < 350)
+      resumed.frame(1)
+    }
+    for (let f = 0; f < 600 && resumed.phase.kind !== 'playing' && resumed.phase.kind !== 'over'; f++) resumed.frame(1)
+    return resumed
+  }
+
+  let recorded: Game | null = null
+  const recording = (): Game => (recorded ??= recordRun())
+
+  it('plays a recorded run back exactly, across crashes, retries and a tab-close resume', () => {
+    const live = recording()
+    expect(live.tape.restarts).toHaveLength(1)
+    expect(live.stats.replays).toBeGreaterThanOrEqual(2)
+    expect(live.stats.retriesUsed).toBeGreaterThan(0)
+    const viewer = new Game(deps({ levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
+    expect(viewer.watch(live.tape)).toBe(true)
+    expect(viewer.playback).toBe(true)
+    const L = live.liveTicks
+    for (let f = 0; f < 60_000 && !(viewer.liveTicks === L && viewer.phase.kind === live.phase.kind); f++) viewer.frame(1)
+    expect(viewer.liveTicks).toBe(L)
+    expect(viewer.stats).toEqual(live.stats)
+    expect(viewer.history).toEqual(live.history)
+    expect(hashState(viewer.state)).toBe(hashState(live.state))
+  })
+
+  it('stops with "Run code ended early" on a truncated tape and writes nothing', () => {
+    const live = recording()
+    const store = memoryStore()
+    const viewer = new Game(deps({ store, levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
+    viewer.watch({ ...live.tape, chaos: live.tape.chaos.slice(0, 1), impure: [] })
+    for (let f = 0; f < 60_000 && viewer.phase.kind !== 'over'; f++) viewer.frame(1)
+    expect(viewer.phase).toEqual({ kind: 'over', reason: 'Run code ended early' })
+    expect(store.saved).toBeNull()
+    expect(store.best).toBe(0)
+    expect(store.daily).toBeNull()
+  })
+
+  it('ignores game keys during playback; Esc returns to the title', () => {
+    const live = recording()
+    const viewer = new Game(deps({ levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
+    viewer.watch(live.tape)
+    const L = live.liveTicks
+    for (let f = 0; f < 60_000 && !(viewer.liveTicks === L && viewer.phase.kind === live.phase.kind); f++) {
+      // Mashing keys must not change the run being played back.
+      viewer.command('jump')
+      viewer.command(f % 2 ? 'slideStart' : 'slideEnd')
+      viewer.frame(1)
+    }
+    expect(viewer.history).toEqual(live.history)
+    viewer.command('cancel')
+    expect(viewer.phase.kind).toBe('title')
+    expect(viewer.playback).toBe(false)
+  })
+
+  it('refuses a malformed tape', () => {
+    const viewer = new Game(deps())
+    expect(viewer.watch({ ...emptyTape('2026-09-30'), v: 2 } as unknown as Tape)).toBe(false)
+    expect(viewer.phase.kind).toBe('title')
+  })
+
+  it('starts a fresh live run on Enter at the end of a playback', () => {
+    const viewer = new Game(deps({ levels: tapeLevels() }))
+    viewer.watch(emptyTape('2026-09-30'))
+    for (let f = 0; f < 60_000 && viewer.phase.kind !== 'over'; f++) viewer.frame(1)
+    expect(viewer.phase).toEqual({ kind: 'over', reason: 'Run code ended early' })
+    viewer.command('confirm')
+    expect(viewer.playback).toBe(false)
+    expect(viewer.phase).toEqual({ kind: 'tip', level: 0 })
+  })
+
+  it("does not overwrite today's daily best when finishing a resumed run from an earlier day", () => {
+    const store = memoryStore()
+    store.daily = { date: '2026-09-30', best: 50 }
+    const a = new Game(deps({ store, today: () => '2026-09-29' }))
+    play(a)
+    a.frame(5)
+    a.suspend()
+    expect(store.saved).not.toBeNull()
+    const b = new Game(deps({ store, today: () => '2026-09-30' }))
+    b.command('confirm')
+    expect(b.runDate).toBe('2026-09-29')
+    // Direct poke: a high score, then the run fails.
+    b.state = { ...b.state, score: 999 }
+    ;(b as unknown as { gameOver(r: string): void }).gameOver('hit an obstacle')
+    expect(store.best).toBe(999)
+    expect(store.daily).toEqual({ date: '2026-09-30', best: 50 })
   })
 })

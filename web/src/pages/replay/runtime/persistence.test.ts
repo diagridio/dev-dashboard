@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { BEST_KEY, DAILY_KEY, SAVE_KEY, localSaveStore, parseSave } from './persistence'
+import { emptyTape } from './tape'
 import type { Save } from './types'
 
 const sample: Save = {
@@ -22,6 +23,7 @@ const sample: Save = {
   divergedAt: null,
   segments: [],
   orbValues: [],
+  tape: { ...emptyTape('2026-09-30'), liveTick: 31 },
 }
 
 describe('montage save fields', () => {
@@ -58,6 +60,13 @@ describe('localSaveStore', () => {
     const start: Partial<Save['start']> = { ...sample.start }
     delete start.retries
     expect(parseSave(JSON.stringify({ ...sample, start }))).toBeNull()
+  })
+
+  it('rejects a save whose tape is malformed', () => {
+    expect(parseSave(JSON.stringify({ ...sample, tape: { ...sample.tape, v: 2 } }))).toBeNull()
+    const noTape: Partial<Save> = { ...sample }
+    delete noTape.tape
+    expect(parseSave(JSON.stringify(noTape))).toBeNull()
   })
 
   it('rejects a save without a valid date', () => {
