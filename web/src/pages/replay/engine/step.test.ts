@@ -155,6 +155,28 @@ describe('step', () => {
     expect(step(s, [], ports(), short).state).toBe(s)
   })
 
+  it('spawns orbs at the same two heights as coins', () => {
+    const orbs = makeLevels({ weights: { orb: 1 } })
+    let s = initialState(start)
+    const heights = new Set<number>()
+    for (let i = 0; i < 3000; i++) {
+      s = step(s, ['slideStart'], ports(), orbs).state
+      for (const e of s.entities) heights.add(e.y)
+      if (s.status !== 'running') break
+    }
+    expect([...heights].sort((a, b) => a - b)).toEqual([GROUND_Y - 70, GROUND_Y - 24])
+  })
+
+  it('only the orb itself counts, not the label drawn above it', () => {
+    // A low orb whose label (drawn a few px above its top edge) crosses the hat, while the orb stays clear: sliding.
+    const low = withEntity('orb', GROUND_Y - 24, 12, 12)
+    const slid = step(low, ['slideStart'], ports(), levels)
+    expect(slid.events).toEqual([])
+    expect(slid.state.entities[0].taken).toBe(false)
+    // Standing, the hat runs into the low orb itself.
+    expect(step(low, [], ports(), levels).events.map((e) => e.type)).toEqual(['OrbTaken'])
+  })
+
   it('spawns only the kinds the level weights allow', () => {
     const crates = makeLevels({ weights: { crate: 1 } })
     let s = initialState(start)

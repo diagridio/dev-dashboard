@@ -135,7 +135,10 @@ function spawnY(kind: EntityKind, r: number): number {
     case 'tall': return GROUND_Y - 44
     case 'falling': return -SIZE.falling.h
     case 'pit': return GROUND_Y
-    case 'coin': return r < 0.5 ? GROUND_Y - 24 : GROUND_Y - 70
+    // Orbs sit at the coin heights: a low one is dodged by sliding, a high one by not jumping.
+    case 'coin':
+    case 'orb':
+      return r < 0.5 ? GROUND_Y - 24 : GROUND_Y - 70
     default: return GROUND_Y - 60
   }
 }

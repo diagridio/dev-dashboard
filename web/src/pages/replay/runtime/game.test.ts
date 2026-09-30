@@ -345,6 +345,8 @@ describe('Game', () => {
     runUntil(game, (g) => g.phase.kind === 'playing' && g.state.bossUntil === 0)
     const expected = Math.round(chaosMeanTicks(levels[0], game.start.elapsed) ?? 0)
     expect(expected).toBeLessThan(1000)
+    // Slide under the low orbs (high ones pass overhead): an orb pickup would force an earlier crash.
+    game.command('slideStart')
     runUntil(game, is('crashing'))
     expect(game.state.tick).toBe(expected)
   })
