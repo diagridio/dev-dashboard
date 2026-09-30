@@ -1,4 +1,5 @@
 import type { LevelTable } from '../engine/levels'
+import { livePlayer } from '../engine/step'
 import { createReplayer, type Replayer } from '../engine/replay'
 import type { GameState, HistoryEvent, StartInput } from '../engine/types'
 
@@ -54,7 +55,7 @@ export class Montage {
     if (this.done) return
     if (this.flash > 0) this.flash -= 1
     this.replayer.advance(this.ticksPerFrame)
-    this.trail = [this.replayer.state.player.y, ...this.trail].slice(0, TRAIL)
+    this.trail = [livePlayer(this.replayer.state).y, ...this.trail].slice(0, TRAIL)
     if (!this.replayer.done) return
     this.index += 1
     if (this.done) return

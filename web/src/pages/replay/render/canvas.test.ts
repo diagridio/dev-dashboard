@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { BOSS_TICKS, initialState, PLAYER_H, PLAYER_W, SLIDE_H } from '../engine/step'
-import { GROUND_Y, PLAYER_X, type GameState } from '../engine/types'
+import { GROUND_Y, PLAYER_X, VIEW_W, type GameState } from '../engine/types'
 import type { Phase } from '../runtime/types'
 import { render, type RenderView } from './canvas'
 import type { Palette } from './palette'
@@ -277,5 +277,25 @@ describe('render', () => {
     const [a, b] = groundLines.map((c) => c.args as number[])
     expect(a[0] + a[2]).toBe(200)
     expect(b[0]).toBe(240)
+  })
+
+  it('shows the montage banner, a ghost trail and the continue-as-new flash', () => {
+    const { ctx, calls } = mockCtx()
+    const montage = { events: 42, flash: 8, trail: [GROUND_Y, GROUND_Y - 10, GROUND_Y - 20] }
+    render(ctx, view({ kind: 'montage', events: 42 }, lvl1(), { montage }), pal)
+    expect(texts(calls)).toContain('LEVEL COMPLETE · replaying 42 events')
+    const plain = mockCtx()
+    render(plain.ctx, view({ kind: 'montage', events: 42 }, lvl1(), { montage: { ...montage, trail: [], flash: 0 } }), pal)
+    expect(hatShapes(calls).length).toBeGreaterThan(hatShapes(plain.calls).length)
+    const flash = (cs: typeof calls) => cs.some((c) => c.name === 'fillRect' && c.fill === pal.text && c.args[2] === VIEW_W)
+    expect(flash(calls)).toBe(true)
+    expect(flash(plain.calls)).toBe(false)
+  })
+
+  it('skips the flash with reduced motion', () => {
+    const { ctx, calls } = mockCtx()
+    const montage = { events: 1, flash: 8, trail: [] }
+    render(ctx, view({ kind: 'montage', events: 1 }, lvl1(), { montage, reducedMotion: true }), pal)
+    expect(calls.some((c) => c.name === 'fillRect' && c.fill === pal.text && c.args[2] === VIEW_W)).toBe(false)
   })
 })

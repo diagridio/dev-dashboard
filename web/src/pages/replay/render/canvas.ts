@@ -1,6 +1,7 @@
 import { LEVELS } from '../engine/levels'
 import { PLAYER_H, PLAYER_W, RACKS, SHIELD_FULL, SLIDE_H } from '../engine/step'
 import { GROUND_Y, PLAYER_X, TICK_HZ, VIEW_H, VIEW_W, type Entity, type GameState } from '../engine/types'
+import { FLASH_FRAMES } from '../runtime/montage'
 import type { Phase } from '../runtime/types'
 import { drawBackground } from './background'
 import type { Palette } from './palette'
@@ -19,6 +20,8 @@ export interface RenderView {
   pose?: Pose
   /** Backing-store pixels per logical pixel (device resolution); 1 when omitted. */
   pixelScale?: number
+  /** Level-complete montage state; null or omitted outside the montage. */
+  montage?: { events: number; flash: number; trail: number[] } | null
 }
 
 const FONT = '10px ui-monospace, Menlo, Consolas, monospace'
@@ -230,6 +233,7 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
     drawGround(ctx, state, pal)
     for (const e of state.entities) drawEntity(ctx, e, pal, replaying, state.elapsed, view.reducedMotion)
     drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL, view.reducedMotion)
+    if (view.montage) drawTrail(ctx, view.montage.trail, pal, view.pose ?? NEUTRAL)
   }
   ctx.restore()
   drawHud(ctx, state, pal)
@@ -238,4 +242,26 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
   if (crashing) drawCrash(ctx, view, pal)
   if (phase.kind === 'rewinding') drawRewind(ctx, view, pal, phase.attempt, phase.of)
   if (replaying) banner(ctx, `⏩ REPLAYING HISTORY · tick ${state.tick}`, 70, pal.glitch, BIG_FONT)
+  if (phase.kind === 'montage' && view.montage) drawMontage(ctx, view, pal, view.montage)
+}
+
+/** Ghost hats behind the player at earlier replayed heights, fading out. */
+function drawTrail(ctx: CanvasRenderingContext2D, trail: readonly number[], pal: Palette, pose: Pose): void {
+  trail.slice(1).forEach((y, i) => {
+    ctx.save()
+    ctx.globalAlpha = 0.35 * (1 - (i + 1) / trail.length)
+    drawHat(ctx, { x: PLAYER_X - (i + 1) * 10, y: y - PLAYER_H, w: PLAYER_W, h: PLAYER_H }, pal, pose)
+    ctx.restore()
+  })
+}
+
+function drawMontage(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette, m: { events: number; flash: number }): void {
+  if (m.flash > 0 && !view.reducedMotion) {
+    ctx.save()
+    ctx.globalAlpha = 0.5 * (m.flash / FLASH_FRAMES)
+    ctx.fillStyle = pal.text
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H)
+    ctx.restore()
+  }
+  banner(ctx, `LEVEL COMPLETE · replaying ${m.events} events`, 70, pal.glitch, BIG_FONT)
 }

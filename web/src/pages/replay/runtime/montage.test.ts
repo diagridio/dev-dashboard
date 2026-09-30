@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hashState } from '../engine/hash'
-import { initialState, step } from '../engine/step'
+import { initialState, livePlayer, step } from '../engine/step'
 import type { GameState, HistoryEvent, StartInput } from '../engine/types'
 import { autopilot, counter, makeLevels } from '../testing'
 import { MONTAGE_FRAMES, Montage, type MontageSegment } from './montage'
@@ -68,5 +68,31 @@ describe('Montage', () => {
       expect(m.trail.length).toBeLessThanOrEqual(6)
     }
     expect(flashed).toBe(true)
+  })
+
+  it('trails the steered lane hat during fan-out, not the frozen player', () => {
+    const fanLevels = makeLevels({ fanOut: { everyPx: 300, ticks: 600 } })
+    const impure = counter()
+    let state = initialState(start, fanLevels)
+    const history: HistoryEvent[] = []
+    let jumped = false
+    for (let i = 0; i < 900; i++) {
+      const inputs: 'jump'[] = state.fan && !jumped ? ['jump'] : []
+      jumped ||= inputs.length > 0
+      for (const kind of inputs) history.push({ type: 'Input', tick: state.tick, kind })
+      const r = step(state, inputs, { impure, crateValue: impure }, fanLevels)
+      history.push(...r.events)
+      state = r.state
+    }
+    const m = new Montage([{ start, history, endTick: state.tick, orbValues: [] }], fanLevels)
+    let checked = false
+    while (!m.done) {
+      m.advance()
+      if (m.state.fan) {
+        expect(m.trail[0]).toBe(livePlayer(m.state).y)
+        checked ||= livePlayer(m.state).y !== m.state.player.y
+      }
+    }
+    expect(checked).toBe(true)
   })
 })
