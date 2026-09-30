@@ -7,7 +7,7 @@ emailSubject: "Check out the Diagrid Dev Dashboard for local Dapr development"
 fullMessage: |
   Hi!
 
-  I'm using the Diagrid Dev Dashboard, a practical companion for local Dapr development. It gives you a live view of everything Dapr running locally — apps, workflows, actors, components, logs, plus guided builders for Dapr component files and resiliency policies. It's free & open source.
+  I'm using the Diagrid Dapr Dev Dashboard, a practical companion for local Dapr development. It gives you a live view of everything Dapr running locally — apps, workflows, actors, components, logs, plus guided builders for Dapr component files and resiliency policies. It's free & open source.
 
   GitHub: https://github.com/diagridio/dev-dashboard
 
@@ -25,4 +25,4 @@ fullMessage: |
 # appended by each builder. Keep it under 254 chars so it still fits X's
 # 280-char limit once the repo URL is added. Avoid literal "&": LinkedIn's
 # feed composer truncates its text param at the first ampersand (write "and").
-shortSocial: "I'm using the Diagrid Dev Dashboard, a practical companion for local Dapr development. A live view of everything Dapr running locally, plus guided builders for component files and resiliency policies. Free and open source, get it here: "
+shortSocial: "I'm using the Dapr Dev Dashboard, a practical companion for local Dapr development. A live view of everything Dapr running locally, plus guided builders for component files and resiliency policies. Free and open source, get it here: "
