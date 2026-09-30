@@ -54,7 +54,7 @@ export const LEVELS: LevelTable = {
     length: 6300, speed: 3.5, ramp: 0, maxSpeed: 3.5,
     weights: { low: 3, high: 2, coin: 4, pit: 2 }, bossWeights: BOSS,
     durable: true, chaosMeanTicks: 1200, firstCrashTicks: [480, 720],
-    retries: 0, shieldEnabled: true,
+    retries: 3, shieldEnabled: true,
     tip: {
       body: 'Dapr Workflow is enabled. Every step is written to history. After a crash the workflow replays that history to rebuild its state, and completed activities are not run again.',
     },
@@ -64,7 +64,7 @@ export const LEVELS: LevelTable = {
     length: 8000, speed: 4, ramp: 0, maxSpeed: 4,
     weights: { low: 3, high: 2, coin: 3, orb: 2, pit: 1, falling: 2 }, bossWeights: BOSS,
     durable: true, chaosMeanTicks: 1200, crashAfterPickup: ['orb'],
-    retries: 0, shieldEnabled: true,
+    retries: 3, shieldEnabled: true,
     tip: {
       body: 'Workflow code must be deterministic: on replay it has to make exactly the same decisions. The purple orbs are Math.random(), Date.now() and fetch() called straight from workflow code, so avoid them. They look tempting with a ×3 boost, but replay gets a different answer.',
     },
@@ -74,7 +74,7 @@ export const LEVELS: LevelTable = {
     length: 9000, speed: 4.5, ramp: 0, maxSpeed: 4.5,
     weights: { low: 2, high: 2, coin: 3, orb: 1, crate: 2, pit: 1, falling: 1, tall: 2 }, bossWeights: BOSS,
     durable: true, chaosMeanTicks: 1200, crashAfterPickup: ['orb', 'crate'],
-    retries: 0, shieldEnabled: true,
+    retries: 3, shieldEnabled: true,
     tip: {
       body: 'Crates give the same boost through callActivity(). The activity result is saved to history, so replay reads it back instead of calling it again.',
     },
@@ -84,7 +84,7 @@ export const LEVELS: LevelTable = {
     length: Number.POSITIVE_INFINITY, speed: 5, ramp: 0.5, maxSpeed: 9,
     weights: { low: 2, high: 2, coin: 3, orb: 1, crate: 1, pit: 2, falling: 1, tall: 1 }, bossWeights: BOSS,
     durable: true, chaosMeanTicks: 1200, chaosFloorTicks: 480,
-    retries: 0, shieldEnabled: true,
+    retries: 3, shieldEnabled: true,
     tip: {
       body: 'Everything at once, faster, with more chaos. How far can your workflow get?',
     },

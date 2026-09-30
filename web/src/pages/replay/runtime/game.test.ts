@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { hashState } from '../engine/hash'
-import { chaosMeanTicks } from '../engine/levels'
+import { chaosMeanTicks, type LevelConfig } from '../engine/levels'
+import { replay } from '../engine/replay'
 import { BOSS_TICKS, GRACE_RESUME } from '../engine/step'
 import { GROUND_Y, PLAYER_X, type EntityKind } from '../engine/types'
 import type { Palette } from '../render/palette'
@@ -8,6 +9,7 @@ import { render } from '../render/canvas'
 import { autopilot, counter, makeLevels } from '../testing'
 import { CRASH_FRAMES, Game, REPLAY_MAX_FRAMES, type GameDeps } from './game'
 import type { SaveStore } from './persistence'
+import { REWIND_FRAMES } from './rewind'
 import type { Save } from './types'
 
 type MemoryStore = SaveStore & { saved: Save | null; best: number }
@@ -494,5 +496,105 @@ describe('Game', () => {
     expect(calls).toBeGreaterThan(0)
     expect(game.getVersion()).toBeGreaterThan(v)
     unsubscribe()
+  })
+})
+
+const retryLevels = (over: Partial<LevelConfig> = {}) => makeLevels({ weights: { low: 1 }, retries: 3, ...over })
+
+describe('RetryPolicy rewind', () => {
+  it('rewinds at least half a screen on a hit, truncates the history and records the retry', () => {
+    const game = new Game(deps({ levels: retryLevels() }))
+    play(game)
+    runUntil(game, is('rewinding'))
+    const R = game.state.tick
+    const retry = game.history[game.history.length - 1]
+    if (retry?.type !== 'RetryAttempt') throw new Error('no retry recorded')
+    expect(retry).toMatchObject({ tick: R, attempt: 1 })
+    expect(retry.failedAt - R).toBeGreaterThanOrEqual(60)
+    expect(game.history.slice(0, -1).every((e) => e.tick < R)).toBe(true)
+    expect(game.stats.retriesUsed).toBe(1)
+    const frames = runUntil(game, is('playing'))
+    expect(frames).toBeLessThanOrEqual(REWIND_FRAMES + 1)
+    game.frame(1)
+    expect(game.state.retries).toBe(2)
+    expect(game.state.graceUntil).toBe(R + 60)
+  })
+
+  it('rolls back coins collected in the rewound span', () => {
+    const game = new Game(deps({ levels: retryLevels({ weights: { low: 1, coin: 3 } }) }))
+    play(game)
+    runUntil(game, is('rewinding'))
+    const coins = game.history.filter((e) => e.type === 'ActivityCoinCollected').length
+    expect(game.state.score).toBe(coins)
+  })
+
+  it('keeps the history replayable after a retry', () => {
+    const game = new Game(deps({ levels: retryLevels() }))
+    play(game)
+    runUntil(game, is('rewinding'))
+    runUntil(game, is('playing'))
+    for (let i = 0; i < 90; i++) game.frame(1)
+    const r = replay(game.start, game.history, game.state.tick, counter(), retryLevels())
+    expect(r.ok).toBe(true)
+    expect(hashState(r.state)).toBe(hashState(game.state))
+  })
+
+  it('rewinds to the segment start when hit on the very first tick', () => {
+    const game = new Game(deps({ levels: retryLevels() }))
+    play(game)
+    game.state = { ...game.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+    game.frame(1)
+    expect(game.phase.kind).toBe('rewinding')
+    expect(game.state.tick).toBe(0)
+    runUntil(game, is('playing'))
+    game.frame(1)
+    expect(game.state).toMatchObject({ retries: 2, graceUntil: 60 })
+  })
+
+  it('fails the run when no retries are left', () => {
+    const game = new Game(deps({ levels: retryLevels({ retries: 1 }) }))
+    play(game)
+    runUntil(game, is('rewinding'))
+    runUntil(game, is('over'))
+    expect(game.stats.retriesUsed).toBe(1)
+  })
+
+  it('never rewinds past an earlier retry', () => {
+    const game = new Game(deps({ levels: retryLevels() }))
+    play(game)
+    runUntil(game, is('rewinding'))
+    const first = game.state.tick
+    runUntil(game, (g) => g.phase.kind === 'rewinding' && g.stats.retriesUsed === 2)
+    expect(game.state.tick).toBeGreaterThan(first)
+    expect(game.history.filter((e) => e.type === 'RetryAttempt').map((e) => e.tick)).toEqual([first, game.state.tick])
+  })
+
+  it('saves during a rewind and resumes with the retry applied once', () => {
+    const store = memoryStore()
+    const game = new Game(deps({ store, levels: retryLevels() }))
+    play(game)
+    runUntil(game, is('rewinding'))
+    game.suspend()
+    const resumed = new Game(deps({ store, levels: retryLevels() }))
+    expect(resumed.phase.kind).toBe('resume')
+    resumed.command('confirm')
+    runUntil(resumed, is('playing'))
+    resumed.frame(1)
+    expect(resumed.state.retries).toBe(2)
+    expect(resumed.history.filter((e) => e.type === 'RetryAttempt')).toHaveLength(1)
+  })
+
+  it('ends a slide released during the rewind once play continues, and records it', () => {
+    const game = new Game(deps({ levels: retryLevels() }))
+    play(game)
+    game.command('slideStart')
+    runUntil(game, is('rewinding'))
+    game.command('slideEnd')
+    runUntil(game, is('playing'))
+    const R = game.state.tick
+    game.frame(1)
+    expect(game.state.player.sliding).toBe(false)
+    const atR = game.history.filter((e) => e.tick === R).map((e) => (e.type === 'Input' ? e.kind : e.type))
+    expect(atR).toEqual(['RetryAttempt', 'slideEnd'])
   })
 })

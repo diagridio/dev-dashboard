@@ -1,4 +1,4 @@
-import type { HistoryEvent, Level, StartInput } from '../engine/types'
+import type { GameState, HistoryEvent, Level, StartInput } from '../engine/types'
 
 export interface RunStats {
   /** Crash recoveries (and resumes) that replayed history. */
@@ -25,6 +25,7 @@ export type Phase =
   | { kind: 'paused' }
   | { kind: 'crashing'; framesLeft: number }
   | { kind: 'replaying' }
+  | { kind: 'rewinding'; frames: GameState[]; index: number; attempt: number; of: number }
   | { kind: 'lost' }
   | { kind: 'over'; reason: string }
 

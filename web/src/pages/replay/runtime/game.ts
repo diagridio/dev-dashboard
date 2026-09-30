@@ -1,9 +1,10 @@
-import { LEVELS, type LevelTable } from '../engine/levels'
+import { LEVELS, speedAt, type LevelTable } from '../engine/levels'
 import { createReplayer, inputOf, isInputEvent, type Replayer } from '../engine/replay'
 import { continueAsNew, initialState, step } from '../engine/step'
 import type { GameState, HistoryEvent, InputEvent, InputKind, Level, PlayerInput, StartInput } from '../engine/types'
 import { ChaosScheduler } from './chaos'
 import type { SaveStore } from './persistence'
+import { REWIND_FRAMES, REWIND_PX, RewindBuffer, sample } from './rewind'
 import type { Command, Phase, RunStats, Save } from './types'
 
 /** Frames the crash glitch shows before the replay starts. */
@@ -61,6 +62,7 @@ export class Game {
   private savedRun: Save | null
   private version = 0
   private readonly listeners = new Set<() => void>()
+  private readonly rewind = new RewindBuffer()
   private readonly levels: LevelTable
   private readonly chaos: ChaosScheduler
 
@@ -85,7 +87,7 @@ export class Game {
   view(): GameView {
     const n = this.notice
     return {
-      state: this.state,
+      state: this.phase.kind === 'rewinding' ? (this.phase.frames[this.phase.index] ?? this.state) : this.state,
       phase: this.phase,
       divergedAt: this.divergedAt,
       prev: this.phase.kind === 'playing' && this.prevState && this.prevState.tick === this.state.tick - 1 ? this.prevState : null,
@@ -147,6 +149,9 @@ export class Game {
       else this.startReplay()
     } else if (p.kind === 'replaying') {
       this.advanceReplay()
+    } else if (p.kind === 'rewinding') {
+      if (p.index + 1 < p.frames.length) this.phase = { ...p, index: p.index + 1 }
+      else this.setPhase({ kind: 'playing' })
     }
   }
 
@@ -186,6 +191,10 @@ export class Game {
     const ports = { impure: this.deps.impure, crateValue: () => this.deps.impure() }
     this.prevState = this.state
     const { state, events } = step(this.state, inputs, ports, this.levels)
+    if (state.status === 'retry') {
+      this.retry(state)
+      return
+    }
     this.state = state
     for (const e of events) {
       this.history.push(e)
@@ -211,6 +220,7 @@ export class Game {
       this.beginSegment(continueAsNew(state, { level: next, elapsed: 0, distance: 0, retries: this.levels[next].retries }), true)
       return
     }
+    this.rewind.push(state)
     if (state.bossUntil > 0) {
       if (state.tick >= state.bossUntil) this.hotfix()
       else if (events.length > 0 || inputs.length > 0) this.touch()
@@ -224,6 +234,27 @@ export class Game {
     if (events.length > 0 || inputs.length > 0) this.touch()
   }
 
+  /** RetryPolicy: rewind to a safe spot about half a screen back and try again. */
+  private retry(hit: GameState): void {
+    const cfg = this.levels[hit.level]
+    const lastRetry = [...this.history].reverse().find((e) => e.type === 'RetryAttempt')
+    const floor = lastRetry ? lastRetry.tick + 1 : 0
+    const target = this.rewind.pick(hit.failedAt, Math.ceil(REWIND_PX / speedAt(cfg, hit.elapsed)), floor)
+    const frames = sample(this.rewind.between(target.tick, hit.failedAt).reverse(), REWIND_FRAMES)
+    this.history = this.history.filter((e) => e.tick < target.tick)
+    this.rewind.dropAfter(target.tick)
+    this.state = target
+    this.prevState = null
+    this.pending = []
+    this.queued = []
+    this.stats.retriesUsed += 1
+    const attempt = cfg.retries - target.retries + 1
+    this.recordInput({ type: 'RetryAttempt', tick: target.tick, attempt, failedAt: hit.failedAt })
+    this.chaos.scheduleNext(target.level, target.tick, target.elapsed)
+    this.setPhase({ kind: 'rewinding', frames, index: 0, attempt, of: cfg.retries })
+    this.save()
+  }
+
   private newRun(): void {
     this.stats = emptyStats()
     this.divergedAt = null
@@ -235,6 +266,7 @@ export class Game {
     this.start = start
     this.history = []
     this.state = initialState(start)
+    this.rewind.reset(this.state)
     this.prevState = null
     this.pending = []
     this.queued = []
@@ -258,6 +290,7 @@ export class Game {
     }
     this.stats.replays += 1
     this.replayer = createReplayer(this.start, this.history, this.crashTick, this.deps.impure, this.levels)
+    this.rewind.reset(this.replayer.state)
     this.replayTicksPerFrame = Math.max(REPLAY_MIN_TICKS_PER_FRAME, Math.ceil(this.crashTick / REPLAY_MAX_FRAMES))
     this.state = this.replayer.state
     this.prevState = null
@@ -267,7 +300,10 @@ export class Game {
   private advanceReplay(): void {
     const r = this.replayer
     if (!r) return
-    r.advance(this.replayTicksPerFrame)
+    for (let i = 0; i < this.replayTicksPerFrame && !r.done; i++) {
+      r.advance(1)
+      if (r.state.status === 'running') this.rewind.push(r.state)
+    }
     this.state = r.state
     this.prevState = null
     if (!r.done) return
