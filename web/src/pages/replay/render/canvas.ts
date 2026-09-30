@@ -137,7 +137,7 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
   ctx.fillStyle = pal.bg
   ctx.fillRect(0, 0, VIEW_W, VIEW_H)
   if (crashing && !view.reducedMotion) ctx.translate(((view.frame * 7) % 9) - 4, ((view.frame * 5) % 7) - 3)
-  drawBackground(ctx, state.distance + state.scroll, pal, view.frame, view.reducedMotion)
+  drawBackground(ctx, state.distance + state.scroll, pal, state.elapsed, view.reducedMotion)
   drawGround(ctx, state, pal)
   for (const e of state.entities) drawEntity(ctx, e, pal, replaying, state.elapsed, view.reducedMotion)
   drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL)

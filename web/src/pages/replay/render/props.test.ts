@@ -107,8 +107,9 @@ describe('drawRack', () => {
       const light = calls.filter((c) => c.name === 'fillRect' && c.fill === 'rgba(255, 255, 255, 0.25)')
       expect(light.length).toBeGreaterThan(2)
       expect(leds(calls).length).toBeGreaterThanOrEqual(1)
-      // The cable mount clip (gray) is the only thing allowed outside the hitbox.
-      for (const c of calls.filter((k) => k.name === 'fillRect' && k.fill !== 'gray')) {
+      // The cable mount clip is the only thing allowed outside the hitbox.
+      const isMountClip = (k: Call) => e.kind === 'high' && k.fill === 'gray' && (k.args as number[]).join() === [e.x + e.w / 2 - 2, e.y - 2, 4, 2].join()
+      for (const c of calls.filter((k) => k.name === 'fillRect' && !isMountClip(k))) {
         const [x, y, w, h] = c.args as number[]
         expect(x).toBeGreaterThanOrEqual(e.x - 1e-6)
         expect(y).toBeGreaterThanOrEqual(e.y - 1e-6)

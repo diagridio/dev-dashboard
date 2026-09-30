@@ -27,6 +27,7 @@ export function drawCoin(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette,
   circle(ctx, cx, cy, r)
   ctx.fillStyle = pal.coin
   ctx.fill()
+  ctx.save()
   ctx.lineWidth = 1.2
   circle(ctx, cx, cy, r - 0.6)
   ctx.strokeStyle = pal.coin
@@ -37,6 +38,7 @@ export function drawCoin(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette,
   circle(ctx, cx, cy, r * 0.62)
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)'
   ctx.stroke()
+  ctx.restore()
   circle(ctx, cx - r * 0.35, cy - r * 0.35, r * 0.2)
   ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
   ctx.fill()

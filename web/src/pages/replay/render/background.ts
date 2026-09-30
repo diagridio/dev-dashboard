@@ -10,8 +10,8 @@ const FAR_PARALLAX = 0.2
 const FAR_TILE = 64
 const NEAR_PARALLAX = 0.5
 const NEAR_TILE = 120
-/** LEDs change state every this many frames. */
-const BLINK_FRAMES = 30
+/** LEDs change state every this many game ticks (30 = 0.5 s at the fixed 60 Hz). */
+const BLINK_TICKS = 30
 
 /** Small deterministic integer hash of (a, b) → unsigned 32 bit. */
 function hash(a: number, b: number): number {
@@ -21,9 +21,9 @@ function hash(a: number, b: number): number {
   return (h ^ (h >>> 15)) >>> 0
 }
 
-/** Whether an LED with this hash is lit on this frame; static under reduced motion. */
-function lit(h: number, frame: number, reducedMotion: boolean): boolean {
-  return (h + (reducedMotion ? 0 : Math.floor(frame / BLINK_FRAMES))) % 4 === 0
+/** Whether an LED with this hash is lit at this game time; static under reduced motion. */
+function lit(h: number, ticks: number, reducedMotion: boolean): boolean {
+  return (h + (reducedMotion ? 0 : Math.floor(ticks / BLINK_TICKS))) % 4 === 0
 }
 
 function led(ctx: CanvasRenderingContext2D, pal: Palette, x: number, y: number): void {
@@ -44,7 +44,7 @@ function panel(ctx: CanvasRenderingContext2D, pal: Palette, x: number, y: number
 }
 
 /** Far layer: server racks, one per 64 px tile. */
-export function drawRacks(ctx: CanvasRenderingContext2D, worldX: number, pal: Palette, frame: number, reducedMotion: boolean): void {
+export function drawRacks(ctx: CanvasRenderingContext2D, worldX: number, pal: Palette, ticks: number, reducedMotion: boolean): void {
   const offset = worldX * FAR_PARALLAX
   for (let i = Math.floor(offset / FAR_TILE); i * FAR_TILE - offset < VIEW_W; i++) {
     const tileX = i * FAR_TILE - offset
@@ -61,13 +61,13 @@ export function drawRacks(ctx: CanvasRenderingContext2D, worldX: number, pal: Pa
       ctx.fillStyle = pal.ground
       ctx.fillRect(x, top + row * 8, w, 1)
       const hl = hash(i, row)
-      if ((hl >>> 4) % 2 === 0 && lit(hl, frame, reducedMotion)) led(ctx, pal, x + w - 6, top + row * 8 - 5)
+      if ((hl >>> 4) % 2 === 0 && lit(hl, ticks, reducedMotion)) led(ctx, pal, x + w - 6, top + row * 8 - 5)
     }
   }
 }
 
 /** Near layer: desks with a monitor and sometimes a tower PC, on about 60% of 120 px tiles. */
-export function drawDesks(ctx: CanvasRenderingContext2D, worldX: number, pal: Palette, frame: number, reducedMotion: boolean): void {
+export function drawDesks(ctx: CanvasRenderingContext2D, worldX: number, pal: Palette, ticks: number, reducedMotion: boolean): void {
   const offset = worldX * NEAR_PARALLAX
   for (let i = Math.floor(offset / NEAR_TILE); i * NEAR_TILE - offset < VIEW_W; i++) {
     const tileX = i * NEAR_TILE - offset
@@ -86,19 +86,19 @@ export function drawDesks(ctx: CanvasRenderingContext2D, worldX: number, pal: Pa
     ctx.fillRect(x + 15, deskY - 4, 4, 4)
     ctx.fillRect(x + 11, deskY - 1, 12, 1)
     panel(ctx, pal, x + 6, deskY - 18, 22, 14, 0.9, 0.6)
-    if (lit(hash(i, 2), frame, reducedMotion)) led(ctx, pal, x + 24, deskY - 7)
+    if (lit(hash(i, 2), ticks, reducedMotion)) led(ctx, pal, x + 24, deskY - 7)
     // Tower PC beside it.
     if ((h >>> 16) % 2 === 0) {
       panel(ctx, pal, x + 34, deskY - 20, 9, 20, 0.9, 0.6)
-      if (lit(hash(i, 3), frame, reducedMotion)) led(ctx, pal, x + 37, deskY - 16)
+      if (lit(hash(i, 3), ticks, reducedMotion)) led(ctx, pal, x + 37, deskY - 16)
     }
   }
 }
 
-/** Draws both layers; `worldX` is distance + scroll so the scenery keeps moving across segments. */
-export function drawBackground(ctx: CanvasRenderingContext2D, worldX: number, pal: Palette, frame: number, reducedMotion: boolean): void {
+/** Draws both layers; `worldX` is distance + scroll so the scenery keeps moving across segments; `ticks` is game time, so LEDs blink at the same rate on any display. */
+export function drawBackground(ctx: CanvasRenderingContext2D, worldX: number, pal: Palette, ticks: number, reducedMotion: boolean): void {
   ctx.save()
-  drawRacks(ctx, worldX, pal, frame, reducedMotion)
-  drawDesks(ctx, worldX, pal, frame, reducedMotion)
+  drawRacks(ctx, worldX, pal, ticks, reducedMotion)
+  drawDesks(ctx, worldX, pal, ticks, reducedMotion)
   ctx.restore()
 }

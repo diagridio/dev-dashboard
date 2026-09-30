@@ -22,16 +22,16 @@ function mockCtx() {
 }
 
 type Layer = typeof drawRacks
-const record = (draw: Layer, worldX: number, frame = 0, reduced = false) => {
+const record = (draw: Layer, worldX: number, ticks = 0, reduced = false) => {
   const m = mockCtx()
-  draw(m.ctx, worldX, pal, frame, reduced)
+  draw(m.ctx, worldX, pal, ticks, reduced)
   return m.calls
 }
 const rects = (calls: Call[]) => calls.filter((c) => c.name === 'fillRect' || c.name === 'strokeRect')
 const leds = (calls: Call[]) => calls.filter((c) => c.name === 'fillRect' && c.fill === 'green')
 
 describe('drawBackground', () => {
-  it('draws the same thing for the same position and frame', () => {
+  it('draws the same thing for the same position and ticks', () => {
     const a = mockCtx()
     const b = mockCtx()
     drawBackground(a.ctx, 1234, pal, 17, false)
@@ -67,18 +67,19 @@ describe('drawBackground', () => {
     for (const b of bottoms) expect(b).toBe(GROUND_Y)
   })
 
-  it('blinks LEDs with the frame, but holds a static pattern with reduced motion', () => {
+  it('blinks LEDs with game ticks, but holds a static pattern with reduced motion', () => {
     for (const draw of [drawRacks, drawDesks]) {
       const still = record(draw, 0, 0, true)
-      for (const frame of [30, 60, 90, 300]) expect(leds(record(draw, 0, frame, true))).toEqual(leds(still))
+      for (const ticks of [30, 60, 90, 300]) expect(leds(record(draw, 0, ticks, true))).toEqual(leds(still))
       expect(leds(still).length).toBeGreaterThan(0)
     }
     const across = [0, 30, 60, 90].map((f) => JSON.stringify(leds(record(drawRacks, 0, f))))
     expect(new Set(across).size).toBeGreaterThan(1)
   })
 
-  it('holds an LED pattern steady within a blink interval', () => {
+  it('holds an LED pattern steady within a blink interval and changes it across the boundary', () => {
     expect(leds(record(drawRacks, 0, 0))).toEqual(leds(record(drawRacks, 0, 29)))
+    expect(leds(record(drawRacks, 0, 29))).not.toEqual(leds(record(drawRacks, 0, 30)))
   })
 
   it('only draws tiles that touch the screen', () => {

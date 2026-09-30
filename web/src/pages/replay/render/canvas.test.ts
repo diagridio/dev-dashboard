@@ -167,4 +167,27 @@ describe('render', () => {
     render(ctx, view({ kind: 'playing' }, undefined, { notice: 'Dapr Workflow enabled' }), pal)
     expect(texts(calls)).toContain('Dapr Workflow enabled')
   })
+
+  it('blinks background LEDs on game time, not on the rendered frame', () => {
+    const ledCalls = (elapsed: number, frame: number) => {
+      const calls: string[] = []
+      const props: Record<string, unknown> = {}
+      const ctx = new Proxy(props, {
+        get: (target, prop: string) => (prop in target ? target[prop] : (...args: unknown[]) => {
+          if (prop === 'fillRect' && target.globalAlpha === 0.45 && target.fillStyle === 'green' && args[2] === 2 && args[3] === 2) calls.push(args.join())
+        }),
+        set: (target, prop: string, value) => {
+          target[prop] = value
+          return true
+        },
+      }) as unknown as CanvasRenderingContext2D
+      const state = { ...initialState({ level: 1, seed: 1, score: 0, elapsed, distance: 0, boss: false }), elapsed }
+      render(ctx, view({ kind: 'playing' }, state, { frame }), pal)
+      return calls
+    }
+    const base = ledCalls(0, 0)
+    expect(base.length).toBeGreaterThan(0)
+    for (const frame of [1, 7, 30, 500]) expect(ledCalls(0, frame)).toEqual(base)
+    expect(ledCalls(30, 0)).not.toEqual(base)
+  })
 })
