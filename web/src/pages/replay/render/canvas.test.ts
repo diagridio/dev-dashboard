@@ -50,6 +50,27 @@ function hatShapes(calls: { name: string; args: unknown[] }[]) {
 }
 
 describe('render', () => {
+  it('draws three clipped half-scale strips with one hat each during fan-out', () => {
+    const single = mockCtx()
+    // Level 0 has no RETRY hats in the HUD, so every hat shape belongs to a player.
+    const s = { ...lvl1(), level: 0 as const }
+    render(single.ctx, view({ kind: 'playing' }, s), pal)
+    const lane = { player: { ...s.player }, entities: [], nextSpawnAt: 0, coins: 0 }
+    const fanned = mockCtx()
+    render(fanned.ctx, view({ kind: 'playing' }, { ...s, fan: { until: 99, lanes: [lane, lane, lane] } }), pal)
+    // The hat sprite clips too: each lane adds its own strip clip on top of the hats' clips.
+    const clips = (calls: { name: string }[]) => calls.filter((c) => c.name === 'clip').length
+    expect(clips(fanned.calls)).toBe(3 * clips(single.calls) + 3)
+    expect(fanned.calls.filter((c) => c.name === 'scale' && c.args[0] === 0.5)).toHaveLength(3)
+    expect(hatShapes(fanned.calls).length).toBe(3 * hatShapes(single.calls).length)
+  })
+
+  it('draws the fan-out gate with its label', () => {
+    const { ctx, calls } = mockCtx()
+    render(ctx, view({ kind: 'playing' }, lvl1({ entities: [{ id: 4, kind: 'fanout', x: 300, y: 0, w: 12, h: GROUND_Y, taken: false }] })), pal)
+    expect(texts(calls)).toContain('fan-out ×3')
+  })
+
   it('shows retries and the circuit-breaker charge on a second HUD row', () => {
     const { ctx, calls } = mockCtx()
     render(ctx, view({ kind: 'playing' }, lvl1({ retries: 2, shield: 7 })), pal)

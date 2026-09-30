@@ -18,9 +18,10 @@ export function hatSafe(p: Player, entities: readonly Entity[]): boolean {
   return !entities.some((e) => HAZARDS.has(e.kind) && !e.taken && e.x < hi && e.x + e.w > lo)
 }
 
-/** The hat stands on solid ground with no hazard close by: a fair place to try again. */
+/** Every hat (all lanes during fan-out) stands on solid ground with no hazard close by. */
 export function isSafe(s: GameState): boolean {
-  return hatSafe(s.player, s.entities)
+  const hats = s.fan ? s.fan.lanes : [s]
+  return hats.every((t) => hatSafe(t.player, t.entities))
 }
 
 /** Recent states of the current segment, for the RetryPolicy rewind. */

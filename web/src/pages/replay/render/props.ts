@@ -137,6 +137,18 @@ export function drawRack(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette,
 }
 
 /** A pit: a dark shaft under a gap in the ground line. */
+/** The fan-out gate: an arch the hat runs through, labelled with the fan-out. */
+export function drawGate(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
+  const top = GROUND_Y - 64
+  ctx.fillStyle = pal.glitch
+  ctx.fillRect(e.x, top, 3, GROUND_Y - top)
+  ctx.fillRect(e.x + e.w - 3, top, 3, GROUND_Y - top)
+  ctx.fillRect(e.x - 4, top - 4, e.w + 8, 4)
+  ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText('fan-out ×3', e.x + e.w / 2, top - 8)
+}
+
 export function drawPit(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
   ctx.fillStyle = pal.backdrop
   ctx.fillRect(e.x, GROUND_Y, e.w, VIEW_H - GROUND_Y)

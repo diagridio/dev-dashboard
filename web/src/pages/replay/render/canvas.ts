@@ -5,7 +5,7 @@ import type { Phase } from '../runtime/types'
 import { drawBackground } from './background'
 import type { Palette } from './palette'
 import { NEUTRAL, type Pose } from './pose'
-import { drawCoin, drawCrate, drawDebris, drawFallShadow, drawOrb, drawPit, drawRack } from './props'
+import { drawCoin, drawCrate, drawDebris, drawFallShadow, drawGate, drawOrb, drawPit, drawRack } from './props'
 import { drawHat } from './sprites'
 
 export interface RenderView {
@@ -42,7 +42,12 @@ function banner(ctx: CanvasRenderingContext2D, text: string, y: number, color: s
   ctx.fillText(text, VIEW_W / 2, y)
 }
 
-function drawGround(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette): void {
+export const STRIP_H = VIEW_H / 3
+export const LANE_SCALE = 0.5
+/** World y shown at the top of a lane strip: the full jump height fits above the ground. */
+const LANE_TOP = GROUND_Y - 170
+
+function drawGround(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette, width = VIEW_W): void {
   const pits = state.entities.filter((e) => e.kind === 'pit').sort((a, b) => a.x - b.x)
   for (const p of pits) drawPit(ctx, p, pal)
   ctx.fillStyle = pal.ground
@@ -51,9 +56,9 @@ function drawGround(ctx: CanvasRenderingContext2D, state: GameState, pal: Palett
     if (p.x > x) ctx.fillRect(x, GROUND_Y, p.x - x, 2)
     x = Math.max(x, p.x + p.w)
   }
-  if (x < VIEW_W) ctx.fillRect(x, GROUND_Y, VIEW_W - x, 2)
+  if (x < width) ctx.fillRect(x, GROUND_Y, width - x, 2)
   const offset = state.scroll % 24
-  for (let dx = -offset; dx < VIEW_W; dx += 24) {
+  for (let dx = -offset; dx < width; dx += 24) {
     if (!pits.some((p) => dx + 10 > p.x && dx < p.x + p.w)) ctx.fillRect(dx, GROUND_Y + 10, 10, 2)
   }
 }
@@ -77,7 +82,11 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, repl
     drawCoin(ctx, e, pal, elapsed, reducedMotion)
     return
   }
-  if (kind === 'pit' || kind === 'fanout') return
+  if (kind === 'fanout') {
+    drawGate(ctx, e, pal)
+    return
+  }
+  if (kind === 'pit') return
   if (kind === 'low' || kind === 'high' || kind === 'tall' || kind === 'falling') {
     if (kind === 'falling' && e.y + e.h < GROUND_Y) drawFallShadow(ctx, e, pal)
     drawRack(ctx, e, pal, elapsed, reducedMotion)
@@ -180,6 +189,30 @@ function drawBoss(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette)
   banner(ctx, `NonDeterministicError · survive ${left}s`, 64, pal.fail, BIG_FONT)
 }
 
+function drawLanes(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette, pose: Pose): void {
+  const { state } = view
+  const fan = state.fan
+  if (!fan) return
+  fan.lanes.forEach((lane, i) => {
+    const track: GameState = { ...state, player: lane.player, entities: lane.entities }
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(0, i * STRIP_H, VIEW_W, STRIP_H)
+    ctx.clip()
+    ctx.translate(0, i * STRIP_H)
+    ctx.scale(LANE_SCALE, LANE_SCALE)
+    ctx.translate(0, -LANE_TOP)
+    drawGround(ctx, track, pal, VIEW_W / LANE_SCALE)
+    for (const e of lane.entities) drawEntity(ctx, e, pal, view.phase.kind === 'replaying', state.elapsed, view.reducedMotion)
+    drawPlayer(ctx, track, pal, pose, view.reducedMotion)
+    ctx.restore()
+    if (i > 0) {
+      ctx.fillStyle = pal.ground
+      ctx.fillRect(0, i * STRIP_H, VIEW_W, 1)
+    }
+  })
+}
+
 export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette): void {
   const { state, phase } = view
   const crashing = phase.kind === 'crashing'
@@ -192,9 +225,12 @@ export function render(ctx: CanvasRenderingContext2D, view: RenderView, pal: Pal
   ctx.fillRect(0, 0, VIEW_W, VIEW_H)
   if (crashing && !view.reducedMotion) ctx.translate(((view.frame * 7) % 9) - 4, ((view.frame * 5) % 7) - 3)
   drawBackground(ctx, state.distance + state.scroll, pal, state.elapsed, view.reducedMotion)
-  drawGround(ctx, state, pal)
-  for (const e of state.entities) drawEntity(ctx, e, pal, replaying, state.elapsed, view.reducedMotion)
-  drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL, view.reducedMotion)
+  if (state.fan) drawLanes(ctx, view, pal, view.pose ?? NEUTRAL)
+  else {
+    drawGround(ctx, state, pal)
+    for (const e of state.entities) drawEntity(ctx, e, pal, replaying, state.elapsed, view.reducedMotion)
+    drawPlayer(ctx, state, pal, view.pose ?? NEUTRAL, view.reducedMotion)
+  }
   ctx.restore()
   drawHud(ctx, state, pal)
   if (view.notice) banner(ctx, view.notice, 44, pal.text, FONT)

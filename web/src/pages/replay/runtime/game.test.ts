@@ -340,6 +340,30 @@ describe('Game', () => {
     expect(game.state.tick).toBe(11)
   })
 
+  it('announces fan-out and fan-in', () => {
+    const game = new Game(deps({ levels: makeLevels({ fanOut: { everyPx: 400, ticks: 120 } }) }))
+    play(game)
+    runUntil(game, (g) => g.state.fan !== null)
+    expect(game.view().notice).toBe('fan-out · 3 activities in parallel')
+    runUntil(game, (g) => g.state.fan === null)
+    expect(game.view().notice).toMatch(/^WhenAll · fan-in \d+ \+ \d+ \+ \d+ coins$/)
+  })
+
+  it('keeps a held slide consistent across a pause during fan-out', () => {
+    const game = new Game(deps({ levels: makeLevels({ fanOut: { everyPx: 400, ticks: 600 } }) }))
+    play(game)
+    runUntil(game, (g) => g.state.fan !== null)
+    game.command('slideStart')
+    game.frame(2)
+    expect(game.state.fan?.lanes.every((l) => l.player.sliding)).toBe(true)
+    const before = game.history.length
+    game.command('pause')
+    game.command('pause')
+    game.frame(2)
+    expect(game.history.slice(before).filter((e) => e.type === 'Input')).toEqual([])
+    expect(game.state.fan?.lanes.every((l) => l.player.sliding)).toBe(true)
+  })
+
   it('ends a slide released while paused once play continues, and records it', () => {
     const game = new Game(deps())
     play(game)

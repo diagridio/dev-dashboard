@@ -3,6 +3,7 @@ import { ShareDialog } from '../../components/ShareDialog'
 import { isInteractiveTarget } from '../../lib/isEditableTarget'
 import { trackAction } from '../../lib/telemetry'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
+import { livePlayer } from './engine/step'
 import { VIEW_H, VIEW_W } from './engine/types'
 import { HistoryPanel } from './HistoryPanel'
 import { Overlay } from './Overlay'
@@ -90,7 +91,7 @@ export function Component() {
     const loop = startLoop((ticks, alpha) => {
       game.frame(ticks)
       frame += 1
-      const pose = hatPose.update(game.state.player, reducedMotion)
+      const pose = hatPose.update(livePlayer(game.state), reducedMotion)
       const view = game.view()
       if (ctx && palette) {
         render(ctx, { ...view, state: blend(view.prev, view.state, alpha), reducedMotion, frame, pose, pixelScale }, palette)

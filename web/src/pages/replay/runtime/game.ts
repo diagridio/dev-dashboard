@@ -1,6 +1,6 @@
 import { LEVELS, speedAt, type LevelTable } from '../engine/levels'
 import { createReplayer, inputOf, isInputEvent, type Replayer } from '../engine/replay'
-import { continueAsNew, initialState, step } from '../engine/step'
+import { continueAsNew, initialState, livePlayer, step } from '../engine/step'
 import type { GameState, HistoryEvent, InputEvent, InputKind, Level, PlayerInput, StartInput } from '../engine/types'
 import { ChaosScheduler } from './chaos'
 import type { SaveStore } from './persistence'
@@ -204,6 +204,8 @@ export class Game {
         if (e.type === 'ActivityCrateCollected') this.chaos.onPickup(state.level, 'crate', state.tick)
       } else if (e.type === 'CircuitBreakerTripped') this.stats.circuitTrips += 1
       else if (e.type === 'BoostLost') this.stats.boostsLost += 1
+      else if (e.type === 'FanOut') this.setNotice('fan-out · 3 activities in parallel')
+      else if (e.type === 'FanIn') this.setNotice(`WhenAll · fan-in ${e.results.join(' + ')} coins`)
     }
 
     if (state.status === 'failed') {
@@ -378,7 +380,7 @@ export class Game {
    */
   private syncSlide(): void {
     this.pending = this.pending.filter((k) => k === 'jump')
-    const sliding = this.state.player.sliding
+    const sliding = livePlayer(this.state).sliding
     if (sliding && !this.slideHeld) this.pending.push('slideEnd')
     else if (!sliding && this.slideHeld) this.pending.push('slideStart')
   }

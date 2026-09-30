@@ -18,6 +18,14 @@ describe('isSafe', () => {
   })
 })
 
+describe('isSafe during fan-out', () => {
+  it('checks every lane during fan-out', () => {
+    const lane = (entities: Entity[]) => ({ player: { ...base.player }, entities, nextSpawnAt: 0, coins: 0 })
+    expect(isSafe(at(1, { fan: { until: 99, lanes: [lane([]), lane([]), lane([])] } }))).toBe(true)
+    expect(isSafe(at(1, { fan: { until: 99, lanes: [lane([]), lane([]), lane([rack(PLAYER_X + 60)])] } }))).toBe(false)
+  })
+})
+
 describe('RewindBuffer', () => {
   function filled(n: number, unsafe: (t: number) => boolean = () => false): RewindBuffer {
     const b = new RewindBuffer()

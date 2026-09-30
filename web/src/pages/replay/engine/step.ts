@@ -263,6 +263,11 @@ function clone(prev: GameState): GameState {
   }
 }
 
+/** The hat the player is steering: during fan-out `state.player` is frozen, so read a lane. */
+export function livePlayer(s: GameState): Player {
+  return (s.fan ? s.fan.lanes[1] : s).player
+}
+
 function tracks(s: GameState): Track[] {
   return s.fan ? s.fan.lanes : [s]
 }
