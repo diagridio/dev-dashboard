@@ -151,16 +151,37 @@ export function drawGate(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette)
   ctx.fillText(`fan-out ×${FAN_LANES}`, e.x + e.w / 2, top - 8)
 }
 
-/** A pit: a dark red shaft under a gap in the ground line. */
+/**
+ * `color` with its alpha multiplied by `alpha`, as an rgba() string. Palette colours are
+ * theme tokens in any CSS syntax; the canvas normalises what it is given to #rrggbb or
+ * rgba(...), so that is what gets parsed. A colour it can't read fades to transparent.
+ */
+export function withAlpha(ctx: CanvasRenderingContext2D, color: string, alpha: number): string {
+  ctx.save()
+  ctx.fillStyle = color
+  const norm = String(ctx.fillStyle)
+  ctx.restore()
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(norm)
+  if (hex) return `rgba(${parseInt(hex[1], 16)}, ${parseInt(hex[2], 16)}, ${parseInt(hex[3], 16)}, ${alpha})`
+  const rgba = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(norm)
+  if (rgba) return `rgba(${rgba[1]}, ${rgba[2]}, ${rgba[3]}, ${Number(rgba[4] ?? 1) * alpha})`
+  return alpha >= 1 ? color : 'transparent'
+}
+
+/** A pit: a shaft under a gap in the ground line, dark red at the top and fading to transparent. */
 export function drawPit(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
-  // Obstacle red, darkened, so a pit reads as a hazard in both themes and at half scale in the fan-out lanes.
-  ctx.fillStyle = pal.obstacle
-  ctx.fillRect(e.x, GROUND_Y, e.w, VIEW_H - GROUND_Y)
-  ctx.fillStyle = PIT_DARKEN
-  ctx.fillRect(e.x, GROUND_Y, e.w, VIEW_H - GROUND_Y)
-  ctx.fillStyle = SHADE
-  ctx.fillRect(e.x, GROUND_Y, 2, VIEW_H - GROUND_Y)
-  ctx.fillRect(e.x + e.w - 2, GROUND_Y, 2, VIEW_H - GROUND_Y)
+  // Obstacle red, darkened, so a pit reads as a hazard in both themes and at lane scale during fan-out.
+  const h = VIEW_H - GROUND_Y
+  const color = ctx.createLinearGradient(0, GROUND_Y, 0, VIEW_H)
+  color.addColorStop(0, pal.obstacle)
+  color.addColorStop(1, withAlpha(ctx, pal.obstacle, 0))
+  ctx.fillStyle = color
+  ctx.fillRect(e.x, GROUND_Y, e.w, h)
+  const darken = ctx.createLinearGradient(0, GROUND_Y, 0, VIEW_H)
+  darken.addColorStop(0, PIT_DARKEN)
+  darken.addColorStop(1, 'rgba(0, 0, 0, 0)')
+  ctx.fillStyle = darken
+  ctx.fillRect(e.x, GROUND_Y, e.w, h)
 }
 
 /** Where a falling rack will land: a shadow that darkens as the rack drops. */
