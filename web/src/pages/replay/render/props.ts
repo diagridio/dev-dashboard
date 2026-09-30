@@ -1,4 +1,4 @@
-import type { Entity } from '../engine/types'
+import { GROUND_Y, VIEW_H, type Entity } from '../engine/types'
 import type { Palette } from './palette'
 import { groundShadow, LIGHT as LIGHT_DIR, shadeSphere, specular } from './shading'
 
@@ -105,7 +105,7 @@ export function drawCoin(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette,
 
 /** A mini server rack in the obstacle's exact hitbox; high ones hang from a cable to the top edge. */
 export function drawRack(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, elapsed: number, reducedMotion: boolean): void {
-  if (e.kind === 'high') {
+  if (e.kind === 'high' || (e.kind === 'falling' && e.y + e.h < GROUND_Y)) {
     const cx = e.x + e.w / 2
     ctx.beginPath()
     ctx.moveTo(cx, 0)
@@ -134,4 +134,25 @@ export function drawRack(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette,
     ctx.fillStyle = on ? pal.player : LED_DIM
     ctx.fillRect(i === 0 ? x0 + 1 : x0 + iw - 3, y0 + 1.5, 2, 2)
   }
+}
+
+/** A pit: a dark shaft under a gap in the ground line. */
+export function drawPit(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
+  ctx.fillStyle = pal.backdrop
+  ctx.fillRect(e.x, GROUND_Y, e.w, VIEW_H - GROUND_Y)
+  ctx.fillStyle = SHADE
+  ctx.fillRect(e.x, GROUND_Y, 2, VIEW_H - GROUND_Y)
+  ctx.fillRect(e.x + e.w - 2, GROUND_Y, 2, VIEW_H - GROUND_Y)
+}
+
+/** Where a falling rack will land: a shadow that darkens as the rack drops. */
+export function drawFallShadow(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
+  const drop = Math.max(0, Math.min(1, (e.y + e.h) / GROUND_Y))
+  ctx.save()
+  ctx.globalAlpha = 0.2 + 0.5 * drop
+  ctx.fillStyle = pal.obstacle
+  ctx.beginPath()
+  ctx.ellipse(e.x + e.w / 2, GROUND_Y + 1, (e.w / 2) * (0.5 + 0.5 * drop), 2, 0, 0, TWO_PI)
+  ctx.fill()
+  ctx.restore()
 }

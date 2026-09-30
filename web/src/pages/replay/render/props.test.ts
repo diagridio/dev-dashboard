@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { Entity } from '../engine/types'
 import type { Palette } from './palette'
 import { GROUND_Y } from '../engine/types'
-import { drawCoin, drawCrate, drawOrb, drawRack } from './props'
+import { drawCoin, drawCrate, drawFallShadow, drawOrb, drawPit, drawRack } from './props'
 
-const pal = { coin: 'gold', orb: 'purple', crate: 'blue', obstacle: 'red', player: 'green', ground: 'gray' } as Palette
+const pal = { backdrop: 'silver', coin: 'gold', orb: 'purple', crate: 'blue', obstacle: 'red', player: 'green', ground: 'gray' } as Palette
 interface Call { name: string; args: unknown[]; fill: unknown; stroke: unknown }
 interface Grad { kind: 'radial' | 'linear'; args: number[]; stops: [number, string][] }
 
@@ -269,5 +269,24 @@ describe('consistent lighting', () => {
       expect(spec.args[0]).toBeLessThan(e.x + e.w / 2)
       expect(spec.args[1]).toBeLessThan(e.y + e.h / 2)
     }
+  })
+
+  it('draws a falling rack hanging from the top edge with a ground warning shadow', () => {
+    const { ctx, calls } = mockCtx()
+    const e = { id: 3, kind: 'falling' as const, x: 300, y: -24, w: 18, h: 24, taken: false, vy: 0 }
+    drawFallShadow(ctx, e, pal)
+    expect(calls.some((c) => c.name === 'ellipse')).toBe(true)
+  })
+
+  it('draws a hanging cable for a falling rack that has not landed', () => {
+    const { ctx, calls } = mockCtx()
+    drawRack(ctx, { id: 3, kind: 'falling', x: 300, y: 40, w: 18, h: 24, taken: false, vy: 0 }, pal, 0, true)
+    expect(calls.some((c) => c.name === 'moveTo')).toBe(true)
+  })
+
+  it('draws a pit as a dark shaft below the ground line', () => {
+    const { ctx, calls } = mockCtx()
+    drawPit(ctx, { id: 1, kind: 'pit', x: 100, y: GROUND_Y, w: 40, h: 0, taken: false }, pal)
+    expect(calls.some((c) => c.name === 'fillRect' && (c.args as number[])[0] === 100 && (c.args as number[])[2] === 40)).toBe(true)
   })
 })

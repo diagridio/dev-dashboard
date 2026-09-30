@@ -196,4 +196,16 @@ describe('render', () => {
     for (const frame of [1, 7, 30, 500]) expect(ledCalls(0, frame)).toEqual(base)
     expect(ledCalls(30, 0)).not.toEqual(base)
   })
+
+  it('leaves a gap in the ground line over a pit', () => {
+    const { ctx, calls } = mockCtx()
+    const s = { ...initialState({ level: 1, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }),
+      entities: [{ id: 1, kind: 'pit' as const, x: 200, y: GROUND_Y, w: 40, h: 0, taken: false }] }
+    render(ctx, view({ kind: 'playing' }, s), pal)
+    const groundLines = calls.filter((c) => c.name === 'fillRect' && c.fill === pal.ground && c.args[1] === GROUND_Y && c.args[3] === 2)
+    expect(groundLines.length).toBe(2)
+    const [a, b] = groundLines.map((c) => c.args as number[])
+    expect(a[0] + a[2]).toBe(200)
+    expect(b[0]).toBe(240)
+  })
 })

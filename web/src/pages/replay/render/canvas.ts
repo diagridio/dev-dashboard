@@ -5,7 +5,7 @@ import type { Phase } from '../runtime/types'
 import { drawBackground } from './background'
 import type { Palette } from './palette'
 import { NEUTRAL, type Pose } from './pose'
-import { drawCoin, drawCrate, drawOrb, drawRack } from './props'
+import { drawCoin, drawCrate, drawFallShadow, drawOrb, drawPit, drawRack } from './props'
 import { drawHat } from './sprites'
 
 export interface RenderView {
@@ -40,10 +40,19 @@ function banner(ctx: CanvasRenderingContext2D, text: string, y: number, color: s
 }
 
 function drawGround(ctx: CanvasRenderingContext2D, state: GameState, pal: Palette): void {
+  const pits = state.entities.filter((e) => e.kind === 'pit').sort((a, b) => a.x - b.x)
+  for (const p of pits) drawPit(ctx, p, pal)
   ctx.fillStyle = pal.ground
-  ctx.fillRect(0, GROUND_Y, VIEW_W, 2)
+  let x = 0
+  for (const p of pits) {
+    if (p.x > x) ctx.fillRect(x, GROUND_Y, p.x - x, 2)
+    x = Math.max(x, p.x + p.w)
+  }
+  if (x < VIEW_W) ctx.fillRect(x, GROUND_Y, VIEW_W - x, 2)
   const offset = state.scroll % 24
-  for (let x = -offset; x < VIEW_W; x += 24) ctx.fillRect(x, GROUND_Y + 10, 10, 2)
+  for (let dx = -offset; dx < VIEW_W; dx += 24) {
+    if (!pits.some((p) => dx + 10 > p.x && dx < p.x + p.w)) ctx.fillRect(dx, GROUND_Y + 10, 10, 2)
+  }
 }
 
 function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, replaying: boolean, elapsed: number, reducedMotion: boolean): void {
@@ -63,6 +72,7 @@ function drawEntity(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, repl
   }
   if (kind === 'pit') return
   if (kind === 'low' || kind === 'high' || kind === 'tall' || kind === 'falling') {
+    if (kind === 'falling' && e.y + e.h < GROUND_Y) drawFallShadow(ctx, e, pal)
     drawRack(ctx, e, pal, elapsed, reducedMotion)
     return
   }
