@@ -16,7 +16,7 @@ export type Level = 0 | 1 | 2 | 3 | 4 | 5
 export type PlayerInput = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd'
 /** Everything step() accepts as an input. */
 export type InputKind = PlayerInput | 'resume' | 'retry'
-export type EntityKind = 'low' | 'high' | 'coin' | 'orb' | 'crate' | 'tall' | 'falling' | 'pit'
+export type EntityKind = 'low' | 'high' | 'coin' | 'orb' | 'crate' | 'tall' | 'falling' | 'pit' | 'fanout'
 
 export interface Entity {
   id: number
@@ -45,12 +45,21 @@ export interface Player {
   jumpBufferUntil: number
 }
 
+/** One parallel branch during fan-out: its own hat and its own entities. */
+export interface Lane {
+  player: Player
+  entities: Entity[]
+  nextSpawnAt: number
+  /** Coins this lane collected (reported by FanIn). */
+  coins: number
+}
+
 /** The input a history segment starts from (a new run, a level, continue-as-new). */
 export interface StartInput {
   level: Level
   seed: number
   score: number
-  /** Ticks already spent in this level, drives the level-4 speed ramp. */
+  /** Ticks already spent in this level, drives the level-5 speed ramp. */
   elapsed: number
   /** Distance (px) already travelled in this level by earlier segments. */
   distance: number
@@ -90,6 +99,10 @@ export interface GameState {
   graceUntil: number
   /** Tick of the hit that set status 'retry'; 0 otherwise. */
   failedAt: number
+  /** Fan-out in progress: the lanes replace `player`/`entities` until `until`. */
+  fan: { until: number; lanes: Lane[] } | null
+  /** World distance (distance + scroll) of the next fan-out gate; Infinity when the level has none. */
+  nextGateAt: number
   status: 'running' | 'failed' | 'levelDone' | 'retry'
 }
 
@@ -105,6 +118,9 @@ export type HistoryEvent =
   /** id is the smashed rack, or 0 for a pit. */
   | { type: 'CircuitBreakerTripped'; tick: number; id: number; hash: number }
   | { type: 'BoostLost'; tick: number; id: number; hash: number }
+  | { type: 'FanOut'; tick: number; hash: number }
+  /** results = coins per lane. */
+  | { type: 'FanIn'; tick: number; hash: number; results: number[] }
 
 /** History events that are fed back to step() as inputs. */
 export type InputEvent = Extract<HistoryEvent, { type: 'Input' | 'OrchestratorStarted' | 'RetryAttempt' }>

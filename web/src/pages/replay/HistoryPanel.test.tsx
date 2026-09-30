@@ -45,4 +45,10 @@ describe('HistoryPanel', () => {
     expect(screen.getByText('×3 boost absorbed the hit')).toBeInTheDocument()
     expect(screen.getByText('attempt 2 · failed at t90')).toBeInTheDocument()
   })
+
+  it('describes fan-out and fan-in', () => {
+    render(<HistoryPanel history={[{ type: 'FanOut', tick: 1, hash: 1 }, { type: 'FanIn', tick: 2, hash: 2, results: [3, 1, 2] }]} />)
+    expect(screen.getByText('3 activities in parallel')).toBeInTheDocument()
+    expect(screen.getByText('WhenAll · coins 3 / 1 / 2')).toBeInTheDocument()
+  })
 })

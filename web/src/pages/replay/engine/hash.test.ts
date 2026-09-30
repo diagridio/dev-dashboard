@@ -10,6 +10,7 @@ function state(): GameState {
     entities: [{ id: 1, kind: 'coin', x: 300, y: GROUND_Y - 30, w: 10, h: 10, taken: false }],
     bossUntil: 0, status: 'running',
     retries: 3, shield: 0, graceUntil: 0, failedAt: 0,
+    fan: null, nextGateAt: Number.POSITIVE_INFINITY,
   }
 }
 
@@ -25,6 +26,8 @@ describe('hashState', () => {
 
   it.each([
     ['tick', (s: GameState) => { s.tick += 1 }],
+    ['next gate', (s: GameState) => { s.nextGateAt = 400 }],
+    ['fan-out', (s: GameState) => { s.fan = { until: 100, lanes: [{ player: { ...s.player }, entities: [], nextSpawnAt: 0, coins: 0 }] } }],
     ['retries', (s: GameState) => { s.retries -= 1 }],
     ['shield', (s: GameState) => { s.shield += 1 }],
     ['grace', (s: GameState) => { s.graceUntil = 60 }],
@@ -48,5 +51,15 @@ describe('hashState', () => {
     const b = state()
     mutate(b)
     expect(hashState(b)).not.toBe(hashState(a))
+  })
+
+  it('covers lane players, lane entities and lane coins', () => {
+    const lane = () => ({ player: { ...state().player }, entities: [{ ...state().entities[0] }], nextSpawnAt: 10, coins: 1 })
+    const withFan = (): GameState => ({ ...state(), fan: { until: 100, lanes: [lane(), lane(), lane()] } })
+    const base = hashState(withFan())
+    const a = withFan(); a.fan!.lanes[2].player.y -= 1
+    const b = withFan(); b.fan!.lanes[1].entities[0].x -= 1
+    const c = withFan(); c.fan!.lanes[0].coins += 1
+    for (const x of [a, b, c]) expect(hashState(x)).not.toBe(base)
   })
 })

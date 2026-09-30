@@ -70,7 +70,7 @@ export class Game {
     this.levels = deps.levels ?? LEVELS
     this.chaos = new ChaosScheduler(deps.chaosRand, this.levels)
     this.best = deps.store.loadBest()
-    this.state = initialState(this.start)
+    this.state = initialState(this.start, this.levels)
     this.savedRun = deps.store.load()
     if (this.savedRun) this.phase = { kind: 'resume', tick: this.savedRun.tick }
   }
@@ -266,7 +266,7 @@ export class Game {
   private beginSegment(start: StartInput, showTip: boolean): void {
     this.start = start
     this.history = []
-    this.state = initialState(start)
+    this.state = initialState(start, this.levels)
     this.rewind.reset(this.state)
     this.prevState = null
     this.pending = []

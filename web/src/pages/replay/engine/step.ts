@@ -2,8 +2,8 @@ import { hashState } from './hash'
 import { LEVELS, speedAt, type LevelConfig, type LevelTable } from './levels'
 import { mix, nextRandom, seedFrom } from './rng'
 import {
-  GROUND_Y, PLAYER_X, SPAWN_X, TICK_HZ,
-  type Entity, type EntityKind, type GameState, type InputKind, type OutcomeEvent, type Player, type Ports, type StartInput,
+  GROUND_Y, PLAYER_X, SPAWN_X, TICK_HZ, VIEW_W,
+  type Entity, type EntityKind, type GameState, type InputKind, type Lane, type OutcomeEvent, type Player, type Ports, type StartInput,
 } from './types'
 
 export const GRAVITY = 0.5
@@ -18,6 +18,12 @@ export const GRACE_RESUME = 60
 export const GRACE_RETRY = 60
 export const GRACE_BOOST = 60
 export const GRACE_BARGE = 30
+export const FAN_LANES = 3
+/** No other spawns this close before a gate, and after a merge. */
+export const FAN_CLEAR_PX = 200
+/** Lanes are drawn at half scale, so their world is twice as wide. */
+export const LANE_SPAWN_X = 2 * VIEW_W + 10
+export const GATE_W = 12
 
 // Tuning knobs: spawn spacing in px at speed 4 (scaled with speed so reaction
 // time stays constant), and how much denser the boss phase is.
@@ -46,6 +52,7 @@ const SIZE: Record<EntityKind, { w: number; h: number }> = {
   tall: { w: 16, h: 44 },
   falling: { w: 18, h: 24 },
   pit: { w: PIT_MIN_W, h: 0 },
+  fanout: { w: GATE_W, h: GROUND_Y },
 }
 // Fixed order so weighted picks don't depend on object key order. New kinds go last,
 // so the v1 kinds keep their cumulative weights.
@@ -60,7 +67,17 @@ export function newPlayer(): Player {
   return { y: GROUND_Y, vy: 0, sliding: false, jumpHeld: false, coyoteUntil: 0, jumpBufferUntil: 0 }
 }
 
-export function initialState(start: StartInput): GameState {
+interface Track {
+  player: Player
+  entities: Entity[]
+}
+
+function firstGate(cfg: LevelConfig, distance: number): number {
+  if (!cfg.fanOut) return Number.POSITIVE_INFINITY
+  return (Math.floor(distance / cfg.fanOut.everyPx) + 1) * cfg.fanOut.everyPx
+}
+
+export function initialState(start: StartInput, levels: LevelTable = LEVELS): GameState {
   return {
     level: start.level,
     tick: 0,
@@ -81,6 +98,8 @@ export function initialState(start: StartInput): GameState {
     shield: start.shield,
     graceUntil: 0,
     failedAt: 0,
+    fan: null,
+    nextGateAt: firstGate(levels[start.level], start.distance),
   }
 }
 
@@ -231,16 +250,150 @@ function boost(s: GameState): void {
   s.multUntil = s.tick + BOOST_TICKS
 }
 
+function clone(prev: GameState): GameState {
+  const copy = (es: readonly Entity[]) => es.map((e) => ({ ...e }))
+  return {
+    ...prev,
+    player: { ...prev.player },
+    entities: copy(prev.entities),
+    fan: prev.fan && {
+      until: prev.fan.until,
+      lanes: prev.fan.lanes.map((l) => ({ ...l, player: { ...l.player }, entities: copy(l.entities) })),
+    },
+  }
+}
+
+function tracks(s: GameState): Track[] {
+  return s.fan ? s.fan.lanes : [s]
+}
+
+function scrollTrack(t: Track, speed: number): void {
+  for (const e of t.entities) {
+    e.x -= speed
+    updateFalling(e, speed)
+  }
+  t.entities = t.entities.filter((e) => e.x + e.w > 0)
+}
+
+/** Three rolls from the level RNG: kind, y (or pit width) and gap. */
+function roll(s: GameState): { kind: number; y: number; gap: number } {
+  const kindRoll = nextRandom(s.rng)
+  const yRoll = nextRandom(kindRoll.state)
+  const gapRoll = nextRandom(yRoll.state)
+  s.rng = gapRoll.state
+  return { kind: kindRoll.value, y: yRoll.value, gap: gapRoll.value }
+}
+
+function spawnMain(s: GameState, cfg: LevelConfig, speed: number): void {
+  const boss = s.bossUntil > 0
+  const at = s.distance + s.scroll
+  if (cfg.fanOut && !boss && at >= s.nextGateAt - FAN_CLEAR_PX) {
+    // Quiet run-up to the gate; the gate itself appears once, at nextGateAt.
+    if (at >= s.nextGateAt && !s.entities.some((e) => e.kind === 'fanout')) {
+      s.entities.push({ id: s.nextId, kind: 'fanout', x: SPAWN_X, y: 0, w: GATE_W, h: GROUND_Y, taken: false })
+      s.nextId += 1
+    }
+    return
+  }
+  const weights = boss ? cfg.bossWeights : cfg.weights
+  while (s.scroll >= s.nextSpawnAt) {
+    const r = roll(s)
+    s.entities.push(spawn(chooseKind(weights, r.kind), s.nextId, SPAWN_X, r.y))
+    s.nextId += 1
+    s.nextSpawnAt += (MIN_GAP + r.gap * GAP_RANGE) * (boss ? BOSS_GAP_SCALE : 1) * (speed / 4)
+  }
+}
+
+function spawnLanes(s: GameState, cfg: LevelConfig, speed: number): void {
+  const fan = s.fan
+  if (!fan) return
+  // Stop early enough that everything spawned passes the hats, plus a clear run-out, before the merge.
+  if ((fan.until - s.tick) * speed <= LANE_SPAWN_X - PLAYER_X + FAN_CLEAR_PX) return
+  for (const lane of fan.lanes) {
+    while (s.scroll >= lane.nextSpawnAt) {
+      const r = roll(s)
+      lane.entities.push(spawn(chooseKind(cfg.laneWeights, r.kind), s.nextId, LANE_SPAWN_X, r.y))
+      s.nextId += 1
+      lane.nextSpawnAt += (MIN_GAP + r.gap * GAP_RANGE) * (speed / 4)
+    }
+  }
+}
+
+function enterGate(s: GameState, cfg: LevelConfig, events: OutcomeEvent[]): void {
+  const gate = s.entities.find((e) => e.kind === 'fanout')
+  if (!gate || gate.x > PLAYER_X || !cfg.fanOut) return
+  s.fan = {
+    until: s.tick + cfg.fanOut.ticks,
+    lanes: Array.from({ length: FAN_LANES }, () => ({ player: { ...s.player }, entities: [], nextSpawnAt: s.scroll + FAN_CLEAR_PX, coins: 0 })),
+  }
+  s.entities = []
+  events.push({ type: 'FanOut', tick: s.tick, hash: 0 })
+}
+
+function fanIn(s: GameState, cfg: LevelConfig, events: OutcomeEvent[]): void {
+  const fan = s.fan
+  if (!fan) return
+  s.player = { ...fan.lanes[1].player }
+  s.entities = []
+  events.push({ type: 'FanIn', tick: s.tick, hash: 0, results: fan.lanes.map((l) => l.coins) })
+  s.fan = null
+  // The next gate is measured from the merge, so fan-outs never follow each other directly.
+  s.nextGateAt = s.distance + s.scroll + (cfg.fanOut?.everyPx ?? Number.POSITIVE_INFINITY)
+  s.nextSpawnAt = s.scroll + FAN_CLEAR_PX
+}
+
+function pickup(s: GameState, cfg: LevelConfig, e: Entity, lane: Lane | null, ports: Ports, events: OutcomeEvent[]): void {
+  e.taken = true
+  if (e.kind === 'coin') {
+    s.score += s.multiplier
+    if (lane) lane.coins += 1
+    if (cfg.shieldEnabled) s.shield = Math.min(SHIELD_FULL, s.shield + 1)
+    events.push({ type: 'ActivityCoinCollected', tick: s.tick, id: e.id, hash: 0 })
+  } else if (e.kind === 'orb') {
+    s.rng = mix(s.rng, ports.impure())
+    boost(s)
+    events.push({ type: 'OrbTaken', tick: s.tick, id: e.id, hash: 0 })
+  } else {
+    const result = ports.crateValue(e.id)
+    s.rng = mix(s.rng, result)
+    boost(s)
+    s.score += s.multiplier
+    events.push({ type: 'ActivityCrateCollected', tick: s.tick, id: e.id, hash: 0, result })
+  }
+}
+
+function collide(s: GameState, cfg: LevelConfig, ports: Ports, events: OutcomeEvent[]): void {
+  let hitDone = false
+  const lanes = s.fan?.lanes ?? null
+  tracks(s).forEach((t, i) => {
+    const p = t.player
+    const height = p.sliding && p.y >= GROUND_Y ? SLIDE_H : PLAYER_H
+    const box: Box = { x: PLAYER_X, y: p.y - height, w: PLAYER_W, h: height }
+    if (!hitDone && p.y >= GROUND_Y + PIT_HIT_DEPTH) {
+      resolveHit(s, cfg, p, undefined, true, events)
+      hitDone = true
+    }
+    for (const e of t.entities) {
+      if (s.status !== 'running') return
+      if (e.taken || e.kind === 'pit' || e.kind === 'fanout' || !overlaps(box, e)) continue
+      if (RACKS.has(e.kind)) {
+        if (!hitDone) resolveHit(s, cfg, p, e, false, events)
+        hitDone = true
+        continue
+      }
+      pickup(s, cfg, e, lanes ? lanes[i] : null, ports, events)
+    }
+  })
+}
+
 /** Advances exactly one 1/60 s tick. Pure: same (prev, inputs, port values) → same result. */
 export function step(prev: GameState, inputs: readonly InputKind[], ports: Ports, levels: LevelTable = LEVELS): StepResult {
   if (prev.status !== 'running') return { state: prev, events: [] }
   const cfg = levels[prev.level]
-  const s: GameState = { ...prev, player: { ...prev.player }, entities: prev.entities.map((e) => ({ ...e })) }
-  const p = s.player
+  const s = clone(prev)
   const events: OutcomeEvent[] = []
 
   if (s.multiplier > 1 && s.tick >= s.multUntil) s.multiplier = 1
-
   for (const input of inputs) {
     if (input === 'resume') s.graceUntil = Math.max(s.graceUntil, s.tick + GRACE_RESUME)
     else if (input === 'retry') {
@@ -248,64 +401,21 @@ export function step(prev: GameState, inputs: readonly InputKind[], ports: Ports
       s.graceUntil = Math.max(s.graceUntil, s.tick + GRACE_RETRY)
     }
   }
-
-  movePlayer(p, inputs, s.tick, s.entities)
+  for (const t of tracks(s)) movePlayer(t.player, inputs, s.tick, t.entities)
 
   const speed = speedAt(cfg, s.elapsed)
   s.scroll += speed
-  for (const e of s.entities) {
-    e.x -= speed
-    updateFalling(e, speed)
-  }
-  s.entities = s.entities.filter((e) => e.x + e.w > 0)
-
-  const boss = s.bossUntil > 0
-  const weights = boss ? cfg.bossWeights : cfg.weights
-  while (s.scroll >= s.nextSpawnAt) {
-    const kindRoll = nextRandom(s.rng)
-    const yRoll = nextRandom(kindRoll.state)
-    const gapRoll = nextRandom(yRoll.state)
-    s.rng = gapRoll.state
-    const kind = chooseKind(weights, kindRoll.value)
-    s.entities.push(spawn(kind, s.nextId, SPAWN_X, yRoll.value))
-    s.nextId += 1
-    s.nextSpawnAt += (MIN_GAP + gapRoll.value * GAP_RANGE) * (boss ? BOSS_GAP_SCALE : 1) * (speed / 4)
+  for (const t of tracks(s)) scrollTrack(t, speed)
+  if (s.fan) spawnLanes(s, cfg, speed)
+  else {
+    spawnMain(s, cfg, speed)
+    enterGate(s, cfg, events)
   }
 
-  const height = p.sliding && p.y >= GROUND_Y ? SLIDE_H : PLAYER_H
-  const box: Box = { x: PLAYER_X, y: p.y - height, w: PLAYER_W, h: height }
-  let hitDone = false
-  if (p.y >= GROUND_Y + PIT_HIT_DEPTH) {
-    resolveHit(s, cfg, p, undefined, true, events)
-    hitDone = true
-  }
-  for (const e of s.entities) {
-    if (s.status !== 'running') break
-    if (e.taken || e.kind === 'pit' || !overlaps(box, e)) continue
-    if (RACKS.has(e.kind)) {
-      if (!hitDone) resolveHit(s, cfg, p, e, false, events)
-      hitDone = true
-      continue
-    }
-    e.taken = true
-    if (e.kind === 'coin') {
-      s.score += s.multiplier
-      if (cfg.shieldEnabled) s.shield = Math.min(SHIELD_FULL, s.shield + 1)
-      events.push({ type: 'ActivityCoinCollected', tick: s.tick, id: e.id, hash: 0 })
-    } else if (e.kind === 'orb') {
-      s.rng = mix(s.rng, ports.impure())
-      boost(s)
-      events.push({ type: 'OrbTaken', tick: s.tick, id: e.id, hash: 0 })
-    } else {
-      const result = ports.crateValue(e.id)
-      s.rng = mix(s.rng, result)
-      boost(s)
-      s.score += s.multiplier
-      events.push({ type: 'ActivityCrateCollected', tick: s.tick, id: e.id, hash: 0, result })
-    }
-  }
+  collide(s, cfg, ports, events)
 
-  if (s.status === 'running' && s.distance + s.scroll >= cfg.length) s.status = 'levelDone'
+  if (s.fan && s.status === 'running' && s.tick + 1 >= s.fan.until) fanIn(s, cfg, events)
+  if (s.status === 'running' && !s.fan && s.distance + s.scroll >= cfg.length) s.status = 'levelDone'
   s.tick += 1
   s.elapsed += 1
   const hash = hashState(s)

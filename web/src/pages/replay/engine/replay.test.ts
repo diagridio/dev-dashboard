@@ -11,7 +11,7 @@ const start: StartInput = { level: 1, seed: 42, score: 0, elapsed: 0, distance: 
 
 /** Plays live like the runtime does: inputs recorded before the step, then its events. */
 function record(ticks: number, levels: LevelTable, want: readonly EntityKind[], impure: () => number) {
-  let state: GameState = initialState(start)
+  let state: GameState = initialState(start, levels)
   const history: HistoryEvent[] = []
   for (let i = 0; i < ticks && state.status === 'running'; i++) {
     const inputs = autopilot(state, want)
@@ -120,5 +120,14 @@ describe('replay', () => {
     // A history that recorded no hit: the replay runs into the first rack and asks for a retry.
     const r = replay(s0, [{ type: 'OrchestratorStarted', tick: 0 }], 2000, () => 0.25, levels)
     expect(r.ok).toBe(false)
+  })
+
+  it('replays a fan-out section exactly', () => {
+    const levels = makeLevels({ fanOut: { everyPx: 400, ticks: 600 }, weights: { coin: 1 }, laneWeights: { coin: 1 } })
+    const live = record(1500, levels, ['coin'], counter())
+    expect(live.history.some((e) => e.type === 'FanIn')).toBe(true)
+    const r = replay(start, live.history, live.state.tick, counter(), levels)
+    expect(r.ok).toBe(true)
+    expect(hashState(r.state)).toBe(hashState(live.state))
   })
 })

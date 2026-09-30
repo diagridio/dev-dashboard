@@ -35,6 +35,8 @@ function isEvent(v: unknown): v is HistoryEvent {
     case 'CircuitBreakerTripped':
     case 'BoostLost':
       return isNum(v.id) && isNum(v.hash)
+    case 'FanOut': return isNum(v.hash)
+    case 'FanIn': return isNum(v.hash) && Array.isArray(v.results) && v.results.every(isNum)
     case 'OrbTaken': return isNum(v.id) && isNum(v.hash)
     case 'ActivityCoinCollected': return isNum(v.id) && isNum(v.hash)
     case 'ActivityCrateCollected': return isNum(v.id) && isNum(v.hash) && isNum(v.result)

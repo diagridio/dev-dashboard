@@ -45,7 +45,7 @@ export function createReplayer(
     if (e.type === 'ActivityCrateCollected') crateResults.set(e.id, e.result)
   }
   const ports: Ports = { impure, crateValue: (id) => crateResults.get(id) ?? impure() }
-  let state = initialState(start)
+  let state = initialState(start, levels)
   let cursor = 0
   let divergedAt: number | null = null
   let done = toTick <= 0

@@ -18,7 +18,7 @@ export interface LevelConfig {
   durable: boolean
   /** Mean ticks between chaos crashes; null for no random chaos. */
   chaosMeanTicks: number | null
-  /** Lower bound the mean shrinks toward with elapsed time (level 4). */
+  /** Lower bound the mean shrinks toward with elapsed time (level 5). */
   chaosFloorTicks?: number
   /** Window for the first crash of the level, so the lesson always shows. */
   firstCrashTicks?: readonly [number, number]

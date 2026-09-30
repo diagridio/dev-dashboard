@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeLevels } from '../testing'
 import { hashState } from './hash'
 import { LEVELS, chaosMeanTicks, speedAt } from './levels'
-import { BOOST_TICKS, BOSS_TICKS, COYOTE_TICKS, FALL_LEAD_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT_VY, HAZARDS, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, GRACE_BARGE, GRACE_BOOST, GRACE_RESUME, GRACE_RETRY, SHIELD_FULL, continueAsNew, initialState, overPit, step } from './step'
-import { GROUND_Y, PLAYER_X, type Entity, type GameState, type InputKind, type OutcomeEvent, type Ports, type StartInput } from './types'
+import { BOOST_TICKS, BOSS_TICKS, COYOTE_TICKS, FALL_LEAD_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT_VY, HAZARDS, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, GRACE_BARGE, GRACE_BOOST, GRACE_RESUME, GRACE_RETRY, SHIELD_FULL, FAN_CLEAR_PX, FAN_LANES, LANE_SPAWN_X, continueAsNew, initialState, overPit, step } from './step'
+import { GROUND_Y, PLAYER_X, VIEW_W, type Entity, type GameState, type InputKind, type OutcomeEvent, type Ports, type StartInput } from './types'
 
 const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
 const levels = makeLevels()
@@ -462,5 +462,110 @@ describe('hit chain', () => {
     expect(step(s, ['resume'], ports(), armed).state.graceUntil).toBe(GRACE_RESUME)
     expect(step(s, ['retry'], ports(), armed).state).toMatchObject({ retries: 2, graceUntil: GRACE_RETRY })
     expect(step({ ...s, retries: 0 }, ['retry'], ports(), armed).state.retries).toBe(0)
+  })
+})
+
+// 600 ticks at speed 4 = 2400 px of lanes, long enough for lane spawns before the early stop.
+const fanLevels = makeLevels({ fanOut: { everyPx: 400, ticks: 600 }, weights: { coin: 1 }, laneWeights: { coin: 1 } })
+const world = (s: GameState) => s.distance + s.scroll
+
+/** Steps until an event of `type` is emitted; returns the state before and after that tick. */
+function until(s: GameState, type: string, table = fanLevels, max = 3000) {
+  for (let i = 0; i < max; i++) {
+    const r = step(s, [], ports(), table)
+    if (r.events.some((e) => e.type === type)) return { before: s, after: r.state, events: r.events }
+    s = r.state
+  }
+  throw new Error(`no ${type}`)
+}
+
+describe('fan-out', () => {
+  it('places the first gate at the next multiple of everyPx', () => {
+    expect(initialState(start, fanLevels).nextGateAt).toBe(400)
+    expect(initialState({ ...start, distance: 900 }, fanLevels).nextGateAt).toBe(1200)
+    expect(initialState(start, levels).nextGateAt).toBe(Number.POSITIVE_INFINITY)
+  })
+
+  it('spawns nothing else from FAN_CLEAR_PX before the gate until the gate', () => {
+    let s = initialState(start, fanLevels)
+    let idAtQuiet: number | null = null
+    for (let i = 0; i < 400; i++) {
+      s = step(s, [], ports(), fanLevels).state
+      if (idAtQuiet === null && world(s) >= 400 - FAN_CLEAR_PX) idAtQuiet = s.nextId
+      const gate = s.entities.find((e) => e.kind === 'fanout')
+      if (gate) {
+        expect(gate.id).toBe(idAtQuiet)
+        return
+      }
+    }
+    throw new Error('no gate')
+  })
+
+  it('splits into three lanes when the gate reaches the hat', () => {
+    const { after, events } = until(initialState(start, fanLevels), 'FanOut')
+    expect(events).toContainEqual({ type: 'FanOut', tick: after.tick - 1, hash: hashState(after) })
+    expect(after.fan?.lanes).toHaveLength(FAN_LANES)
+    for (const lane of after.fan!.lanes) expect(lane.player).toEqual(after.player)
+    expect(after.entities).toEqual([])
+    expect(after.fan!.until).toBe(after.tick - 1 + 600)
+  })
+
+  it('moves every lane with the same inputs and spawns lane entities at LANE_SPAWN_X', () => {
+    let s = until(initialState(start, fanLevels), 'FanOut').after
+    s = step(s, ['jump'], ports(), fanLevels).state
+    const [a, b, c] = s.fan!.lanes
+    expect(a.player).toEqual(b.player)
+    expect(b.player).toEqual(c.player)
+    expect(a.player.vy).toBeLessThan(0)
+    for (let i = 0; i < 80; i++) s = step(s, [], ports(), fanLevels).state
+    const spawned = s.fan!.lanes.flatMap((l) => l.entities)
+    expect(spawned.length).toBeGreaterThan(0)
+    expect(Math.max(...spawned.map((e) => e.x))).toBeGreaterThan(VIEW_W)
+    expect(Math.max(...spawned.map((e) => e.x))).toBeLessThanOrEqual(LANE_SPAWN_X)
+  })
+
+  it('merges after `ticks` with coins per lane, clears the lanes and resumes normal spawns after a run-out', () => {
+    const out = until(initialState(start, fanLevels), 'FanOut')
+    const scoreAtSplit = out.after.score
+    const merge = until(out.after, 'FanIn')
+    const fanIn = merge.events.find((e) => e.type === 'FanIn')
+    if (fanIn?.type !== 'FanIn') throw new Error('no FanIn')
+    expect(fanIn.results).toHaveLength(FAN_LANES)
+    expect(fanIn.results.reduce((a, b) => a + b, 0)).toBe(merge.after.score - scoreAtSplit)
+    expect(merge.after.tick - (out.after.tick - 1)).toBe(600)
+    expect(merge.after.fan).toBeNull()
+    expect(merge.after.player).toEqual(merge.before.fan!.lanes[1].player)
+    expect(merge.after.nextGateAt).toBe(world(merge.after) + 400)
+    expect(merge.after.nextSpawnAt).toBe(merge.after.scroll + FAN_CLEAR_PX)
+    // Spawns stopped early enough that every lane entity was already behind the hats.
+    for (const lane of merge.before.fan!.lanes) for (const e of lane.entities) expect(e.x + e.w).toBeLessThan(PLAYER_X)
+  })
+
+  it('runs the hit chain once for a rack in any lane', () => {
+    const armed = makeLevels({ fanOut: { everyPx: 400, ticks: 600 }, shieldEnabled: true })
+    const s = until(initialState(start, armed), 'FanOut', armed).after
+    const rackAt = { id: 77, kind: 'low' as const, x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }
+    const lanes = s.fan!.lanes.map((l, i) => ({ ...l, entities: i === 2 ? [rackAt] : [] }))
+    const r = step({ ...s, shield: SHIELD_FULL, fan: { ...s.fan!, lanes } }, [], ports(), armed)
+    expect(r.events.map((e) => e.type)).toEqual(['CircuitBreakerTripped'])
+    expect(r.state.fan!.lanes[2].entities[0].taken).toBe(true)
+    expect(r.state.shield).toBe(0)
+  })
+
+  it('defers the end of the level until the lanes merge', () => {
+    // The gate spawns at world 400 and reaches the hat about 410 px later, before the level's end at 1000.
+    const short = makeLevels({ fanOut: { everyPx: 400, ticks: 600 }, length: 1000 })
+    const out = until(initialState(start, short), 'FanOut', short)
+    expect(world(out.after)).toBeLessThan(1000)
+    let s = out.after
+    for (let i = 0; i < 100; i++) s = step(s, [], ports(), short).state
+    expect(world(s)).toBeGreaterThan(1000)
+    expect(s.status).toBe('running')
+    expect(until(s, 'FanIn', short).after.status).toBe('levelDone')
+  })
+
+  it('does not carry the lanes across continue-as-new', () => {
+    const s = until(initialState(start, fanLevels), 'FanOut').after
+    expect(initialState(continueAsNew(s, { boss: true }), fanLevels).fan).toBeNull()
   })
 })
