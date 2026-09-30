@@ -1,7 +1,7 @@
 # REPLAY gameplay v2 — safety layers, fan-out, daily seed, shared runs — design
 
 **Date:** 2026-09-30
-**Status:** Draft, awaiting review
+**Status:** Implemented
 **Builds on:** `2026-09-29-replay-easter-egg-design.md` (v1). Everything in v1
 stays true unless this document changes it.
 

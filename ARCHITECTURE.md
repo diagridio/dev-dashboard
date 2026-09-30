@@ -575,6 +575,7 @@ lazy route (`lazy: () => import('./pages/replay/Replay')`), so it ships as its o
 It is browser-only: a pure, event-sourced engine in `pages/replay/engine/` (guarded by
 `purity.test.ts`), a runtime state machine in `pages/replay/runtime/`, and its only
 persistence is `localStorage` (`devdash.replay.*`). Design: `docs/superpowers/specs/2026-09-29-replay-easter-egg-design.md`.
+v2 adds safety layers (circuit breaker, ×3 boost, a RetryPolicy rewind), a fan-out level, level montages, a daily seed and shareable run codes: a run is reproducible from its *tape* (inputs by live tick plus the quantised random values), which is what a run code carries. Design: `docs/superpowers/specs/2026-09-30-replay-gameplay-v2-design.md`.
 
 ### Data fetching & live data
 
