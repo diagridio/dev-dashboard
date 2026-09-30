@@ -12,6 +12,8 @@ export interface LevelConfig {
   weights: Partial<Record<EntityKind, number>>
   /** What the NonDeterministicError boss phase spawns. */
   bossWeights: Partial<Record<EntityKind, number>>
+  /** What each of the three fan-out lanes spawns (they are drawn at half height). */
+  laneWeights: Partial<Record<EntityKind, number>>
   /** false: a crash loses everything (level 0). */
   durable: boolean
   /** Mean ticks between chaos crashes; null for no random chaos. */
@@ -28,6 +30,8 @@ export interface LevelConfig {
   retries: number
   /** Coins charge a circuit breaker that absorbs one hit. */
   shieldEnabled: boolean
+  /** Fan-out gates every `everyPx` of distance; the lanes run for `ticks`. */
+  fanOut?: { everyPx: number; ticks: number }
   tip: { body: string }
 }
 
@@ -37,12 +41,13 @@ export type LevelTable = Record<Level, LevelConfig>
 export const CRASH_AFTER_PICKUP: readonly [number, number] = [60, 300]
 
 const BOSS: LevelConfig['bossWeights'] = { low: 3, high: 3 }
+const LANES: LevelConfig['laneWeights'] = { low: 2, pit: 2, coin: 4 }
 
 export const LEVELS: LevelTable = {
   0: {
     name: 'No Safety Net',
     length: Number.POSITIVE_INFINITY, speed: 3, ramp: 0, maxSpeed: 3,
-    weights: { low: 2, coin: 3 }, bossWeights: BOSS,
+    weights: { low: 2, coin: 3 }, bossWeights: BOSS, laneWeights: LANES,
     durable: false, chaosMeanTicks: null, scriptedCrashAt: 900,
     retries: 0, shieldEnabled: false,
     tip: {
@@ -52,7 +57,7 @@ export const LEVELS: LevelTable = {
   1: {
     name: 'Replay',
     length: 6300, speed: 3.5, ramp: 0, maxSpeed: 3.5,
-    weights: { low: 3, high: 2, coin: 4, pit: 2 }, bossWeights: BOSS,
+    weights: { low: 3, high: 2, coin: 4, pit: 2 }, bossWeights: BOSS, laneWeights: LANES,
     durable: true, chaosMeanTicks: 1200, firstCrashTicks: [480, 720],
     retries: 3, shieldEnabled: true,
     tip: {
@@ -62,7 +67,7 @@ export const LEVELS: LevelTable = {
   2: {
     name: 'Temptation',
     length: 8000, speed: 4, ramp: 0, maxSpeed: 4,
-    weights: { low: 3, high: 2, coin: 3, orb: 2, pit: 1, falling: 2 }, bossWeights: BOSS,
+    weights: { low: 3, high: 2, coin: 3, orb: 2, pit: 1, falling: 2 }, bossWeights: BOSS, laneWeights: LANES,
     durable: true, chaosMeanTicks: 1200, crashAfterPickup: ['orb'],
     retries: 3, shieldEnabled: true,
     tip: {
@@ -72,7 +77,7 @@ export const LEVELS: LevelTable = {
   3: {
     name: 'Wrap It',
     length: 9000, speed: 4.5, ramp: 0, maxSpeed: 4.5,
-    weights: { low: 2, high: 2, coin: 3, orb: 1, crate: 2, pit: 1, falling: 1, tall: 2 }, bossWeights: BOSS,
+    weights: { low: 2, high: 2, coin: 3, orb: 1, crate: 2, pit: 1, falling: 1, tall: 2 }, bossWeights: BOSS, laneWeights: LANES,
     durable: true, chaosMeanTicks: 1200, crashAfterPickup: ['orb', 'crate'],
     retries: 3, shieldEnabled: true,
     tip: {
@@ -80,11 +85,22 @@ export const LEVELS: LevelTable = {
     },
   },
   4: {
+    name: 'Fan Out',
+    length: 9000, speed: 4.5, ramp: 0, maxSpeed: 4.5,
+    weights: { low: 2, high: 2, coin: 3, crate: 1, pit: 2, falling: 1, tall: 1 }, bossWeights: BOSS, laneWeights: LANES,
+    durable: true, chaosMeanTicks: 1200, retries: 3, shieldEnabled: true,
+    fanOut: { everyPx: 2500, ticks: 600 },
+    tip: {
+      body: 'Fan-out: the workflow calls three activities in parallel. Your hat splits into three lanes that all follow your keys, and WhenAll merges them again. If any lane hits a rack the whole workflow takes the hit, just like WhenAll fails when one task fails.',
+    },
+  },
+  5: {
     name: 'Production',
     length: Number.POSITIVE_INFINITY, speed: 5, ramp: 0.5, maxSpeed: 9,
-    weights: { low: 2, high: 2, coin: 3, orb: 1, crate: 1, pit: 2, falling: 1, tall: 1 }, bossWeights: BOSS,
+    weights: { low: 2, high: 2, coin: 3, orb: 1, crate: 1, pit: 2, falling: 1, tall: 1 }, bossWeights: BOSS, laneWeights: LANES,
     durable: true, chaosMeanTicks: 1200, chaosFloorTicks: 480,
     retries: 3, shieldEnabled: true,
+    fanOut: { everyPx: 4000, ticks: 600 },
     tip: {
       body: 'Everything at once, faster, with more chaos. How far can your workflow get?',
     },

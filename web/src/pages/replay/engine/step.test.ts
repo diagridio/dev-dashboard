@@ -213,21 +213,21 @@ describe('continueAsNew', () => {
 
 describe('levels', () => {
   it('ramps speed with elapsed time up to the cap', () => {
-    const cfg = LEVELS[4]
+    const cfg = LEVELS[5]
     expect(speedAt(cfg, 0)).toBe(5)
     expect(speedAt(cfg, 3600)).toBeCloseTo(5.5)
     expect(speedAt(cfg, 10_000_000)).toBe(9)
   })
 
-  it('shrinks the level-4 chaos mean toward its floor', () => {
-    expect(chaosMeanTicks(LEVELS[4], 0)).toBe(1200)
-    expect(chaosMeanTicks(LEVELS[4], 100_000)).toBe(480)
+  it('shrinks the level-5 chaos mean toward its floor', () => {
+    expect(chaosMeanTicks(LEVELS[5], 0)).toBe(1200)
+    expect(chaosMeanTicks(LEVELS[5], 100_000)).toBe(480)
     expect(chaosMeanTicks(LEVELS[0], 0)).toBeNull()
   })
 
   it('only level 0 is non-durable', () => {
     expect(LEVELS[0].durable).toBe(false)
-    for (const l of [1, 2, 3, 4] as const) expect(LEVELS[l].durable).toBe(true)
+    for (const l of [1, 2, 3, 4, 5] as const) expect(LEVELS[l].durable).toBe(true)
   })
 })
 

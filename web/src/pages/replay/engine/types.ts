@@ -11,7 +11,7 @@ export const PLAYER_X = 80
 /** Screen x where new entities appear (just off the right edge). */
 export const SPAWN_X = 490
 
-export type Level = 0 | 1 | 2 | 3 | 4
+export type Level = 0 | 1 | 2 | 3 | 4 | 5
 /** Keys the player presses. */
 export type PlayerInput = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd'
 /** Everything step() accepts as an input. */

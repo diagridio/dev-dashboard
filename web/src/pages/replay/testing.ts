@@ -6,7 +6,7 @@ import { GROUND_Y, PLAYER_X, type EntityKind, type GameState, type Level, type P
 const BASE: LevelConfig = {
   name: 'Test',
   length: Number.POSITIVE_INFINITY, speed: 4, ramp: 0, maxSpeed: 4,
-  weights: { coin: 1 }, bossWeights: { coin: 1 },
+  weights: { coin: 1 }, bossWeights: { coin: 1 }, laneWeights: { coin: 1 },
   durable: true, chaosMeanTicks: null,
   retries: 0, shieldEnabled: false,
   tip: { body: 'Test level' },
@@ -18,7 +18,7 @@ export function makeLevels(
   perLevel: Partial<Record<Level, Partial<LevelConfig>>> = {},
 ): LevelTable {
   const lv = (l: Level): LevelConfig => ({ ...BASE, ...overrides, ...perLevel[l] })
-  return { 0: lv(0), 1: lv(1), 2: lv(2), 3: lv(3), 4: lv(4) }
+  return { 0: lv(0), 1: lv(1), 2: lv(2), 3: lv(3), 4: lv(4), 5: lv(5) }
 }
 
 /** A deterministic "impure" source that returns a different value on every call. */

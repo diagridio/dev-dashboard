@@ -36,7 +36,7 @@ export interface GameView {
 }
 
 const emptyStats = (): RunStats => ({ replays: 0, fromHistory: 0, executed: 0, incidents: 0, retriesUsed: 0, circuitTrips: 0, boostsLost: 0 })
-const nextLevel = (l: Level): Level => (l >= 4 ? 4 : ((l + 1) as Level))
+const nextLevel = (l: Level): Level => (l >= 5 ? 5 : ((l + 1) as Level))
 
 export class Game {
   phase: Phase = { kind: 'title' }

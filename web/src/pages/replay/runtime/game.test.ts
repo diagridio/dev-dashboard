@@ -400,6 +400,15 @@ describe('Game', () => {
     expect(store.saved).not.toBeNull()
   })
 
+  it('stays on the endless level 5 once reached', () => {
+    const game = new Game(deps({ levels: makeLevels({ length: 300 }, { 5: { length: Number.POSITIVE_INFINITY } }) }))
+    play(game)
+    runUntil(game, (g) => g.phase.kind === 'tip' && g.start.level === 5)
+    game.command('confirm')
+    for (let i = 0; i < 400; i++) game.frame(1)
+    expect(game.state.level).toBe(5)
+  })
+
   describe('view().prev', () => {
     it('is the state one tick back after a live tick', () => {
       const game = new Game(deps())

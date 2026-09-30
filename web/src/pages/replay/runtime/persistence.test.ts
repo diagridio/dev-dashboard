@@ -121,4 +121,8 @@ describe('parseSave', () => {
   it('accepts a valid save', () => {
     expect(parseSave(JSON.stringify(sample))).toEqual(sample)
   })
+
+  it('accepts a level-5 save', () => {
+    expect(parseSave(JSON.stringify({ ...sample, start: { ...sample.start, level: 5 } }))).not.toBeNull()
+  })
 })
