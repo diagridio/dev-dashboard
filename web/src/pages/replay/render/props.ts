@@ -1,4 +1,5 @@
-import type { Entity } from '../engine/types'
+import { GROUND_Y, VIEW_H, type Entity } from '../engine/types'
+import { FAN_LANES } from '../engine/step'
 import type { Palette } from './palette'
 import { groundShadow, LIGHT as LIGHT_DIR, shadeSphere, specular } from './shading'
 
@@ -11,6 +12,8 @@ const LED_PERIOD = 30
 const TWO_PI = Math.PI * 2
 
 const SHADE = 'rgba(0, 0, 0, 0.25)'
+/** Darkens the obstacle red for pit shafts. */
+export const PIT_DARKEN = 'rgba(0, 0, 0, 0.45)'
 const BEZEL = 'rgba(0, 0, 0, 0.35)'
 const LIGHT = 'rgba(255, 255, 255, 0.25)'
 const LED_DIM = 'rgba(255, 255, 255, 0.12)'
@@ -105,7 +108,7 @@ export function drawCoin(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette,
 
 /** A mini server rack in the obstacle's exact hitbox; high ones hang from a cable to the top edge. */
 export function drawRack(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette, elapsed: number, reducedMotion: boolean): void {
-  if (e.kind === 'high') {
+  if (e.kind === 'high' || (e.kind === 'falling' && e.y + e.h < GROUND_Y)) {
     const cx = e.x + e.w / 2
     ctx.beginPath()
     ctx.moveTo(cx, 0)
@@ -133,5 +136,72 @@ export function drawRack(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette,
     const on = reducedMotion || Math.floor((elapsed + e.id * 11 + i * 17) / LED_PERIOD) % 2 === 0
     ctx.fillStyle = on ? pal.player : LED_DIM
     ctx.fillRect(i === 0 ? x0 + 1 : x0 + iw - 3, y0 + 1.5, 2, 2)
+  }
+}
+
+/** The fan-out gate: an arch the hat runs through, labelled with the fan-out. */
+export function drawGate(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
+  const top = GROUND_Y - 64
+  ctx.fillStyle = pal.glitch
+  ctx.fillRect(e.x, top, 3, GROUND_Y - top)
+  ctx.fillRect(e.x + e.w - 3, top, 3, GROUND_Y - top)
+  ctx.fillRect(e.x - 4, top - 4, e.w + 8, 4)
+  ctx.font = '10px ui-monospace, Menlo, Consolas, monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText(`fan-out ×${FAN_LANES}`, e.x + e.w / 2, top - 8)
+}
+
+/**
+ * `color` with its alpha multiplied by `alpha`, as an rgba() string. Palette colours are
+ * theme tokens in any CSS syntax; the canvas normalises what it is given to #rrggbb or
+ * rgba(...), so that is what gets parsed. A colour it can't read fades to transparent.
+ */
+export function withAlpha(ctx: CanvasRenderingContext2D, color: string, alpha: number): string {
+  ctx.save()
+  ctx.fillStyle = color
+  const norm = String(ctx.fillStyle)
+  ctx.restore()
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(norm)
+  if (hex) return `rgba(${parseInt(hex[1], 16)}, ${parseInt(hex[2], 16)}, ${parseInt(hex[3], 16)}, ${alpha})`
+  const rgba = /^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/.exec(norm)
+  if (rgba) return `rgba(${rgba[1]}, ${rgba[2]}, ${rgba[3]}, ${Number(rgba[4] ?? 1) * alpha})`
+  return alpha >= 1 ? color : 'transparent'
+}
+
+/** A pit: a shaft under a gap in the ground line, dark red at the top and fading to transparent. */
+export function drawPit(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
+  // Obstacle red, darkened, so a pit reads as a hazard in both themes and at lane scale during fan-out.
+  const h = VIEW_H - GROUND_Y
+  const color = ctx.createLinearGradient(0, GROUND_Y, 0, VIEW_H)
+  color.addColorStop(0, pal.obstacle)
+  color.addColorStop(1, withAlpha(ctx, pal.obstacle, 0))
+  ctx.fillStyle = color
+  ctx.fillRect(e.x, GROUND_Y, e.w, h)
+  const darken = ctx.createLinearGradient(0, GROUND_Y, 0, VIEW_H)
+  darken.addColorStop(0, PIT_DARKEN)
+  darken.addColorStop(1, 'rgba(0, 0, 0, 0)')
+  ctx.fillStyle = darken
+  ctx.fillRect(e.x, GROUND_Y, e.w, h)
+}
+
+/** Where a falling rack will land: a shadow that darkens as the rack drops. */
+export function drawFallShadow(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
+  const drop = Math.max(0, Math.min(1, (e.y + e.h) / GROUND_Y))
+  ctx.save()
+  ctx.globalAlpha = 0.2 + 0.5 * drop
+  ctx.fillStyle = pal.obstacle
+  ctx.beginPath()
+  ctx.ellipse(e.x + e.w / 2, GROUND_Y + 1, (e.w / 2) * (0.5 + 0.5 * drop), 2, 0, 0, TWO_PI)
+  ctx.fill()
+  ctx.restore()
+}
+
+/** A rack the circuit breaker barged through: a few broken units on the floor. */
+export function drawDebris(ctx: CanvasRenderingContext2D, e: Entity, pal: Palette): void {
+  ctx.fillStyle = pal.obstacle
+  const n = 4
+  for (let i = 0; i < n; i++) {
+    const w = 3 + ((e.id + i * 7) % 4)
+    ctx.fillRect(e.x - 4 + i * (e.w / n + 3), GROUND_Y - 3 - ((e.id + i) % 3), w, 3)
   }
 }

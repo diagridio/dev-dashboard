@@ -11,9 +11,12 @@ export const PLAYER_X = 80
 /** Screen x where new entities appear (just off the right edge). */
 export const SPAWN_X = 490
 
-export type Level = 0 | 1 | 2 | 3 | 4
-export type InputKind = 'jump' | 'slideStart' | 'slideEnd'
-export type EntityKind = 'low' | 'high' | 'coin' | 'orb' | 'crate'
+export type Level = 0 | 1 | 2 | 3 | 4 | 5
+/** Keys the player presses. */
+export type PlayerInput = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd'
+/** Everything step() accepts as an input. */
+export type InputKind = PlayerInput | 'resume' | 'retry'
+export type EntityKind = 'low' | 'high' | 'coin' | 'orb' | 'crate' | 'tall' | 'falling' | 'pit' | 'fanout'
 
 export interface Entity {
   id: number
@@ -25,6 +28,8 @@ export interface Entity {
   w: number
   h: number
   taken: boolean
+  /** Vertical speed; only falling racks move vertically. */
+  vy?: number
 }
 
 export interface Player {
@@ -32,6 +37,21 @@ export interface Player {
   y: number
   vy: number
   sliding: boolean
+  /** A jump key is down: releasing it early cuts the jump short. */
+  jumpHeld: boolean
+  /** The player can still jump while tick < coyoteUntil after walking off an edge. */
+  coyoteUntil: number
+  /** A jump pressed in the air fires on landing while tick < jumpBufferUntil. */
+  jumpBufferUntil: number
+}
+
+/** One parallel branch during fan-out: its own hat and its own entities. */
+export interface Lane {
+  player: Player
+  entities: Entity[]
+  nextSpawnAt: number
+  /** Coins this lane collected (reported by FanIn). */
+  coins: number
 }
 
 /** The input a history segment starts from (a new run, a level, continue-as-new). */
@@ -39,12 +59,16 @@ export interface StartInput {
   level: Level
   seed: number
   score: number
-  /** Ticks already spent in this level, drives the level-4 speed ramp. */
+  /** Ticks already spent in this level, drives the level-5 speed ramp. */
   elapsed: number
   /** Distance (px) already travelled in this level by earlier segments. */
   distance: number
   /** True when this segment is the NonDeterministicError boss phase. */
   boss: boolean
+  /** RetryPolicy attempts left in this level. */
+  retries: number
+  /** Circuit-breaker charge (coins), 0..SHIELD_FULL. */
+  shield: number
 }
 
 export interface GameState {
@@ -67,17 +91,41 @@ export interface GameState {
   entities: Entity[]
   /** Tick at which the boss phase ends; 0 when not in a boss phase. */
   bossUntil: number
-  status: 'running' | 'failed' | 'levelDone'
+  /** RetryPolicy attempts left in this level. */
+  retries: number
+  /** Circuit-breaker charge, 0..SHIELD_FULL. */
+  shield: number
+  /** Hits are ignored while tick < graceUntil. */
+  graceUntil: number
+  /** Tick of the hit that set status 'retry'; 0 otherwise. */
+  failedAt: number
+  /** Fan-out in progress: the lanes replace `player`/`entities` until `until`. */
+  fan: { until: number; lanes: Lane[] } | null
+  /** World distance (distance + scroll) of the next fan-out gate; Infinity when the level has none. */
+  nextGateAt: number
+  status: 'running' | 'failed' | 'levelDone' | 'retry'
 }
 
 export type HistoryEvent =
-  | { type: 'Input'; tick: number; kind: InputKind }
+  | { type: 'Input'; tick: number; kind: PlayerInput }
+  /** Recorded by the runtime whenever a replay resumes live play (grants grace). */
+  | { type: 'OrchestratorStarted'; tick: number }
+  /** Recorded by the runtime after a retry rewind (spends a retry, grants grace). */
+  | { type: 'RetryAttempt'; tick: number; attempt: number; failedAt: number }
   | { type: 'ActivityCoinCollected'; tick: number; id: number; hash: number }
   | { type: 'ActivityCrateCollected'; tick: number; id: number; hash: number; result: number }
   | { type: 'OrbTaken'; tick: number; id: number; hash: number }
+  /** id is the smashed rack, or 0 for a pit. */
+  | { type: 'CircuitBreakerTripped'; tick: number; id: number; hash: number }
+  | { type: 'BoostLost'; tick: number; id: number; hash: number }
+  | { type: 'FanOut'; tick: number; hash: number }
+  /** results = coins per lane. */
+  | { type: 'FanIn'; tick: number; hash: number; results: number[] }
 
-/** Events produced by step() itself (everything except recorded inputs). */
-export type OutcomeEvent = Exclude<HistoryEvent, { type: 'Input' }>
+/** History events that are fed back to step() as inputs. */
+export type InputEvent = Extract<HistoryEvent, { type: 'Input' | 'OrchestratorStarted' | 'RetryAttempt' }>
+/** Events produced by step() itself; replay checks each one. */
+export type OutcomeEvent = Exclude<HistoryEvent, InputEvent>
 
 /**
  * The only way non-determinism reaches the engine.

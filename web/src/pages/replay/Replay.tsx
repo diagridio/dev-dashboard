@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ShareDialog } from '../../components/ShareDialog'
+import { copyText } from '../../lib/clipboard'
 import { isInteractiveTarget } from '../../lib/isEditableTarget'
 import { trackAction } from '../../lib/telemetry'
 import { useDocumentTitle } from '../../lib/useDocumentTitle'
+import { livePlayer } from './engine/step'
 import { VIEW_H, VIEW_W } from './engine/types'
 import { HistoryPanel } from './HistoryPanel'
 import { Overlay } from './Overlay'
@@ -10,16 +12,18 @@ import { render } from './render/canvas'
 import { blend } from './render/interpolate'
 import { readPalette, watchTheme, type Palette } from './render/palette'
 import { HatPose } from './render/pose'
-import { Game } from './runtime/game'
+import { Game, PLAYBACK_SPEEDS, type PlaybackSpeed } from './runtime/game'
 import { keyToCommand } from './runtime/keys'
 import { startLoop } from './runtime/loop'
+import { utcDate } from './runtime/daily'
 import { localSaveStore } from './runtime/persistence'
+import { decodeRun, shareableRunCode } from './runtime/share'
 
 function createGame(): Game {
   return new Game({
     impure: Math.random, // the one deliberate source of non-determinism
     chaosRand: Math.random, // chaos is the outside world
-    newSeed: () => Math.floor(Math.random() * 0x100000000),
+    today: () => utcDate(),
     store: localSaveStore(),
   })
 }
@@ -31,7 +35,75 @@ export function Component() {
   const stageRef = useRef<HTMLDivElement>(null)
   const [game] = useState(createGame)
   const [shareOpen, setShareOpen] = useState(false)
+  const [executionId, setExecutionId] = useState<string | null>(null)
+  const [executionIdError, setExecutionIdError] = useState<string | null>(null)
+  const [idCopied, setIdCopied] = useState(false)
+  // Bumped whenever the game-over card goes away, so a slow encode can't land on the next one.
+  const cardToken = useRef(0)
+  const [watchError, setWatchError] = useState<string | null>(null)
   useSyncExternalStore(game.subscribe, game.getVersion)
+
+  // Every game-over card shows the finished run's execution ID (its run code).
+  useEffect(() => {
+    if (game.phase.kind !== 'over') {
+      cardToken.current += 1
+      setExecutionId(null)
+      setExecutionIdError(null)
+      setIdCopied(false)
+      return
+    }
+    const token = cardToken.current
+    shareableRunCode(game.tape).then(
+      (id) => {
+        if (token !== cardToken.current) return
+        if (id === null) setExecutionIdError('This run is too long to share.')
+        else setExecutionId(id)
+      },
+      () => {
+        if (token === cardToken.current) setExecutionIdError("Couldn't create an execution ID.")
+      },
+    )
+  }, [game, game.phase.kind])
+
+  const onCopyExecutionId = () => {
+    if (!executionId) return
+    trackAction('replay_share_copy')
+    copyText(executionId)
+    setIdCopied(true)
+    // Back to the stage, so Enter means "play again" rather than re-clicking the button.
+    stageRef.current?.focus()
+  }
+
+  /** Plays back the run behind an execution ID; false when the ID isn't a valid one. */
+  const replayFrom = async (id: string): Promise<boolean> => {
+    const tape = await decodeRun(id)
+    if (!tape || !game.watch(tape)) return false
+    stageRef.current?.focus()
+    return true
+  }
+
+  const onReplayRun = async () => {
+    trackAction('replay_rerun')
+    // Replays from the execution ID itself; a run too long to have one replays from its tape.
+    if (executionId) await replayFrom(executionId)
+    else if (game.watch(structuredClone(game.tape))) stageRef.current?.focus()
+  }
+
+  const onSpeed = (speed: PlaybackSpeed) => {
+    game.setPlaybackSpeed(speed)
+    trackAction('replay_speed', { speed })
+    // Back to the game, so its keys (Esc to leave, p to pause) keep working.
+    stageRef.current?.focus()
+  }
+
+  const onWatch = async (code: string) => {
+    trackAction('replay_watch')
+    if (!(await replayFrom(code))) {
+      setWatchError("That execution ID isn't valid.")
+      return
+    }
+    setWatchError(null)
+  }
 
   useEffect(() => {
     // Arriving from a sidebar link leaves focus there; move it to the game so Enter starts it.
@@ -90,7 +162,7 @@ export function Component() {
     const loop = startLoop((ticks, alpha) => {
       game.frame(ticks)
       frame += 1
-      const pose = hatPose.update(game.state.player, reducedMotion)
+      const pose = hatPose.update(livePlayer(game.state), reducedMotion)
       const view = game.view()
       if (ctx && palette) {
         render(ctx, { ...view, state: blend(view.prev, view.state, alpha), reducedMotion, frame, pose, pixelScale }, palette)
@@ -125,19 +197,43 @@ export function Component() {
         </div>
       </div>
       <div className="replay-grid">
-        <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game">
-          <canvas ref={canvasRef} width={VIEW_W} height={VIEW_H} aria-label="REPLAY game screen" />
-          <Overlay
-            phase={game.phase}
-            stats={game.stats}
-            best={game.best}
-            score={game.state.score}
-            level={game.state.level}
-            onShare={() => {
-              setShareOpen(true)
-              trackAction('share_open', { source: 'replay' })
-            }}
-          />
+        <div className="replay-main">
+          <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game">
+            <canvas ref={canvasRef} width={VIEW_W} height={VIEW_H} aria-label="REPLAY game screen" />
+            <Overlay
+              phase={game.phase}
+              stats={game.stats}
+              best={game.best}
+              score={game.state.score}
+              level={game.state.level}
+              date={game.runDate}
+              dailyBest={game.dailyBest}
+              playback={game.playback}
+              executionId={executionId}
+              executionIdError={executionIdError}
+              idCopied={idCopied}
+              watchError={watchError}
+              onCopyExecutionId={onCopyExecutionId}
+              onReplayRun={() => void onReplayRun()}
+              onWatch={(c) => void onWatch(c)}
+              onShare={() => {
+                setShareOpen(true)
+                trackAction('share_open', { source: 'replay' })
+              }}
+            />
+          </div>
+          {game.playback && (
+            <div className="replay-speed">
+              <span className="replay-keys">Playback speed</span>
+              <div className="segs" role="group" aria-label="Playback speed">
+                {PLAYBACK_SPEEDS.map((speed) => (
+                  <button key={speed} type="button" aria-pressed={game.playbackSpeed === speed} onClick={() => onSpeed(speed)}>
+                    {speed}×
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         {/* Level 0 has no durable history, so the panel only appears from level 1. Its
             grid column stays reserved so the canvas doesn't resize when it does. */}

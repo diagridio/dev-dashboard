@@ -1,6 +1,6 @@
 import { LEVELS, type LevelTable } from './levels'
 import { initialState, step } from './step'
-import type { GameState, HistoryEvent, InputKind, OutcomeEvent, Ports, ReplayResult, StartInput } from './types'
+import type { GameState, HistoryEvent, InputEvent, InputKind, OutcomeEvent, Ports, ReplayResult, StartInput } from './types'
 
 export interface Replayer {
   readonly state: GameState
@@ -10,10 +10,21 @@ export interface Replayer {
   result(): ReplayResult
 }
 
+export function isInputEvent(e: HistoryEvent): e is InputEvent {
+  return e.type === 'Input' || e.type === 'OrchestratorStarted' || e.type === 'RetryAttempt'
+}
+
+export function inputOf(e: InputEvent): InputKind {
+  if (e.type === 'Input') return e.kind
+  return e.type === 'OrchestratorStarted' ? 'resume' : 'retry'
+}
+
+const idOf = (e: OutcomeEvent): number => ('id' in e ? e.id : 0)
+
 function matches(expected: readonly OutcomeEvent[], actual: readonly OutcomeEvent[]): boolean {
   return (
     expected.length === actual.length &&
-    expected.every((e, i) => e.type === actual[i].type && e.id === actual[i].id && e.hash === actual[i].hash)
+    expected.every((e, i) => e.type === actual[i].type && idOf(e) === idOf(actual[i]) && e.hash === actual[i].hash)
   )
 }
 
@@ -34,7 +45,7 @@ export function createReplayer(
     if (e.type === 'ActivityCrateCollected') crateResults.set(e.id, e.result)
   }
   const ports: Ports = { impure, crateValue: (id) => crateResults.get(id) ?? impure() }
-  let state = initialState(start)
+  let state = initialState(start, levels)
   let cursor = 0
   let divergedAt: number | null = null
   let done = toTick <= 0
@@ -54,17 +65,17 @@ export function createReplayer(
         const firstIndex = cursor
         while (cursor < history.length && history[cursor].tick <= tick) {
           const e = history[cursor]
-          if (e.type === 'Input') inputs.push(e.kind)
+          if (isInputEvent(e)) inputs.push(inputOf(e))
           else expected.push(e)
           cursor++
         }
         const next = step(state, inputs, ports, levels)
         if (divergedAt === null && !matches(expected, next.events)) {
-          const firstOutcome = history.slice(firstIndex, cursor).findIndex((e) => e.type !== 'Input')
+          const firstOutcome = history.slice(firstIndex, cursor).findIndex((e) => !isInputEvent(e))
           divergedAt = firstOutcome >= 0 ? firstIndex + firstOutcome : cursor
         }
-        if (next.state.status === 'failed') {
-          // A replay that dies has diverged from a run that didn't: stop just before.
+        if (next.state.status === 'failed' || next.state.status === 'retry') {
+          // A replay that dies (or needs a retry) has diverged from a run that didn't: stop just before.
           if (divergedAt === null) divergedAt = cursor
           done = true
           break

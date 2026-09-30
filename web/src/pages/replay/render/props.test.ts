@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Entity } from '../engine/types'
 import type { Palette } from './palette'
-import { GROUND_Y } from '../engine/types'
-import { drawCoin, drawCrate, drawOrb, drawRack } from './props'
+import { GROUND_Y, VIEW_H } from '../engine/types'
+import { PIT_DARKEN, drawCoin, withAlpha, drawCrate, drawFallShadow, drawOrb, drawPit, drawRack } from './props'
 
-const pal = { coin: 'gold', orb: 'purple', crate: 'blue', obstacle: 'red', player: 'green', ground: 'gray' } as Palette
+const pal = { backdrop: 'silver', coin: 'gold', orb: 'purple', crate: 'blue', obstacle: 'red', player: 'green', ground: 'gray' } as Palette
 interface Call { name: string; args: unknown[]; fill: unknown; stroke: unknown }
 interface Grad { kind: 'radial' | 'linear'; args: number[]; stops: [number, string][] }
 
@@ -269,5 +269,44 @@ describe('consistent lighting', () => {
       expect(spec.args[0]).toBeLessThan(e.x + e.w / 2)
       expect(spec.args[1]).toBeLessThan(e.y + e.h / 2)
     }
+  })
+
+  it('draws a falling rack hanging from the top edge with a ground warning shadow', () => {
+    const { ctx, calls } = mockCtx()
+    const e = { id: 3, kind: 'falling' as const, x: 300, y: -24, w: 18, h: 24, taken: false, vy: 0 }
+    drawFallShadow(ctx, e, pal)
+    expect(calls.some((c) => c.name === 'ellipse')).toBe(true)
+  })
+
+  it('draws a hanging cable for a falling rack that has not landed', () => {
+    const { ctx, calls } = mockCtx()
+    drawRack(ctx, { id: 3, kind: 'falling', x: 300, y: 40, w: 18, h: 24, taken: false, vy: 0 }, pal, 0, true)
+    expect(calls.some((c) => c.name === 'moveTo')).toBe(true)
+  })
+
+  it('draws a pit as a vertical fade from dark red at the ground line to transparent at the bottom', () => {
+    const { ctx, calls, gradients } = mockCtx()
+    const red = { ...pal, obstacle: '#b30a45' }
+    drawPit(ctx, { id: 1, kind: 'pit', x: 100, y: GROUND_Y, w: 40, h: 0, taken: false }, red)
+    const shaft = calls.filter((c) => c.name === 'fillRect')
+    // One colour layer and one darkening layer, both covering the whole shaft, and nothing else (no hard side edges).
+    expect(shaft.map((c) => c.args)).toEqual([[100, GROUND_Y, 40, VIEW_H - GROUND_Y], [100, GROUND_Y, 40, VIEW_H - GROUND_Y]])
+    expect(gradients).toHaveLength(2)
+    for (const g of gradients) expect(g).toMatchObject({ kind: 'linear', args: [0, GROUND_Y, 0, VIEW_H] })
+    expect(gradients[0].stops).toEqual([[0, '#b30a45'], [1, 'rgba(179, 10, 69, 0)']])
+    expect(gradients[1].stops).toEqual([[0, PIT_DARKEN], [1, 'rgba(0, 0, 0, 0)']])
+  })
+
+  it('fades any colour the canvas can normalise, and falls back to transparent for one it cannot read', () => {
+    // A 2D context serialises fillStyle as #rrggbb or rgba(...); this stub does the same for two inputs.
+    let style = ''
+    const ctx = {
+      save() {}, restore() {},
+      get fillStyle() { return style },
+      set fillStyle(v: string) { style = v === 'crimson' ? '#dc143c' : v === 'hsla(0, 0%, 0%, 0.5)' ? 'rgba(0, 0, 0, 0.5)' : v },
+    } as unknown as CanvasRenderingContext2D
+    expect(withAlpha(ctx, 'crimson', 0)).toBe('rgba(220, 20, 60, 0)')
+    expect(withAlpha(ctx, 'hsla(0, 0%, 0%, 0.5)', 0.5)).toBe('rgba(0, 0, 0, 0.25)')
+    expect(withAlpha(ctx, 'var(--nope)', 0)).toBe('transparent')
   })
 })

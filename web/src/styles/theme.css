@@ -293,6 +293,11 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .banner-dismiss { font: inherit; color: inherit; background: none; border: none; padding: 0; text-decoration: underline; cursor: pointer; }
 .banner-dismiss:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .hint { font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: center; margin-top: 14px; }
+/* A page that fills the frame below the top bar, so content can be pushed to its bottom. */
+.page.page-fill { display: flex; flex-direction: column; min-height: calc(100vh - var(--topbar-h, 46px)); }
+/* Applications empty state: the REPLAY easter egg's Konami code, centred near the bottom of the frame. */
+.konami-hint { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; color: var(--faint); text-align: center; margin: 48px 0 8px; }
+.page-fill > .konami-hint { margin-top: auto; }
 .none { color: var(--faint); }
 .hidden { display: none !important; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
@@ -647,6 +652,8 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
    REPLAY easter egg (pages/replay)
    ============================================================ */
 .replay-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; align-items: start; }
+.replay-main { display: grid; gap: 10px; align-content: start; min-width: 0; }
+.replay-speed { display: flex; align-items: center; justify-content: flex-end; gap: 10px; max-width: 960px; }
 .replay-stage { position: relative; max-width: 960px; border-radius: 13px; }
 .replay-stage:focus { outline: none; }
 .replay-stage:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
@@ -656,8 +663,15 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .replay-card h2 { margin: 0; font-size: 17px; font-weight: 680; display: flex; align-items: center; gap: 8px; }
 .replay-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .replay-card .replay-keys { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+.replay-card .replay-keys.replay-start-meta { font-size: 13px; color: var(--muted); }
 .replay-stats { margin: 4px 0 0; grid-template-columns: repeat(3, 1fr); }
 .replay-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.replay-watch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.replay-watch .inp { flex: 1 1 180px; min-width: 0; width: auto; }
+.replay-card .replay-error { width: 100%; color: var(--fail-fg); }
+.replay-execid { display: flex; align-items: center; gap: 8px; }
+.replay-execid .inp { flex: 1 1 auto; min-width: 0; width: auto; font-family: var(--mono); font-size: 11px; text-overflow: ellipsis; }
+.replay-watch p { width: 100%; }
 .replay-count { margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); }
 .replay-empty { margin: 0; padding: 14px; color: var(--faint); font-size: 12.5px; }
 .replay-hist { max-height: 540px; overflow: auto; padding: 8px 12px; }

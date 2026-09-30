@@ -1,8 +1,15 @@
+import { FAN_LANES } from './engine/step'
 import type { HistoryEvent } from './engine/types'
 
 const SHOWN = 60
 const NODE: Record<HistoryEvent['type'], string> = {
   Input: 'n-sched',
+  OrchestratorStarted: 'n-sched',
+  RetryAttempt: 'n-sched',
+  CircuitBreakerTripped: 'n-done',
+  BoostLost: 'n-fail',
+  FanOut: 'n-sched',
+  FanIn: 'n-sched',
   ActivityCoinCollected: 'n-done',
   ActivityCrateCollected: 'n-done',
   OrbTaken: 'n-fail',
@@ -12,6 +19,18 @@ function describeEvent(e: HistoryEvent): { type: string; detail: string } {
   switch (e.type) {
     case 'Input':
       return { type: 'Input', detail: e.kind }
+    case 'OrchestratorStarted':
+      return { type: 'OrchestratorStarted', detail: 'replay resumed · 1 s grace' }
+    case 'RetryAttempt':
+      return { type: 'RetryAttempt', detail: `attempt ${e.attempt} · failed at t${e.failedAt}` }
+    case 'CircuitBreakerTripped':
+      return { type: 'CircuitBreakerTripped', detail: e.id === 0 ? 'pit bridged' : `rack ${e.id} smashed` }
+    case 'BoostLost':
+      return { type: 'BoostLost', detail: '×3 boost absorbed the hit' }
+    case 'FanOut':
+      return { type: 'FanOut', detail: `${FAN_LANES} activities in parallel` }
+    case 'FanIn':
+      return { type: 'FanIn', detail: `WhenAll · coins ${e.results.join(' / ')}` }
     case 'OrbTaken':
       return { type: 'NonDeterministicCall', detail: `orb ${e.id} · value not recorded` }
     case 'ActivityCoinCollected':

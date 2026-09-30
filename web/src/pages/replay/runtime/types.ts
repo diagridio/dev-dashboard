@@ -1,4 +1,6 @@
-import type { HistoryEvent, Level, StartInput } from '../engine/types'
+import type { MontageSegment } from './montage'
+import type { Tape } from './tape'
+import type { GameState, HistoryEvent, Level, StartInput } from '../engine/types'
 
 export interface RunStats {
   /** Crash recoveries (and resumes) that replayed history. */
@@ -9,6 +11,12 @@ export interface RunStats {
   executed: number
   /** Non-determinism incidents (boss phases). */
   incidents: number
+  /** RetryPolicy attempts spent (rewinds). */
+  retriesUsed: number
+  /** Hits absorbed by the circuit breaker. */
+  circuitTrips: number
+  /** Hits absorbed by losing the ×3 boost. */
+  boostsLost: number
 }
 
 export type Phase =
@@ -19,17 +27,30 @@ export type Phase =
   | { kind: 'paused' }
   | { kind: 'crashing'; framesLeft: number }
   | { kind: 'replaying' }
+  | { kind: 'rewinding'; frames: GameState[]; index: number; attempt: number; of: number }
+  | { kind: 'montage'; events: number }
   | { kind: 'lost' }
   | { kind: 'over'; reason: string }
 
-export type Command = 'jump' | 'slideStart' | 'slideEnd' | 'pause' | 'confirm' | 'cancel'
+export type Command = 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd' | 'pause' | 'confirm' | 'cancel'
+
+/** A save without its tape: what a tape's restart entries snapshot. */
+export type SaveBody = Omit<Save, 'tape'>
 
 export interface Save {
-  version: 1
+  version: 2
+  /** The UTC date (YYYY-MM-DD) whose daily seed this run started from. */
+  date: string
   start: StartInput
   history: HistoryEvent[]
   /** The tick to replay to on resume. */
   tick: number
   stats: RunStats
   divergedAt: number | null
+  /** Closed segments of the current level, for its montage. */
+  segments: MontageSegment[]
+  /** Live impure values of the open segment's orb pickups, by orb id. */
+  orbValues: [number, number][]
+  /** Everything the outside world fed the run so far. */
+  tape: Tape
 }

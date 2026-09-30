@@ -13,6 +13,7 @@ import { renderCopyLinks } from '../lib/copy-links'
 import { trackAction } from '../lib/telemetry'
 import { useToast } from '../lib/toast'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { KonamiHint } from '../components/KonamiHint'
 import type { AppSummary } from '../types/api'
 
 // Fully stopped: both the app process/container and its daprd sidecar report 'stopped'.
@@ -48,13 +49,15 @@ export function Applications() {
 
   if (!apps || apps.length === 0) {
     return (
-      <div className="page">
+      // Fills the frame so the Konami hint can sit near its bottom.
+      <div className="page page-fill">
         {PAGE_HEADER}
         <p className="muted">No Dapr apps running</p>
         {/* Getting-started hint — copy lives in src/content/empty-states.yaml. */}
         <p className="muted" data-testid="empty-hint">
           {renderCopyLinks(emptyStateContent.apps)}
         </p>
+        <KonamiHint />
       </div>
     )
   }

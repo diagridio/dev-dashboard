@@ -1,11 +1,15 @@
-import type { HistoryEvent, StartInput } from '../engine/types'
-import type { RunStats, Save } from './types'
+import { isTape } from './tape'
+import type { Save } from './types'
+import { isDate, isNum, isObj, isSaveBody } from './validate'
 
 export const SAVE_KEY = 'devdash.replay.save'
 export const BEST_KEY = 'devdash.replay.best'
-export const SAVE_VERSION = 1
+export const DAILY_KEY = 'devdash.replay.daily'
+export const SAVE_VERSION = 2
 
 export interface SaveStore {
+  loadDailyBest(date: string): number
+  saveDailyBest(date: string, score: number): void
   load(): Save | null
   save(save: Save): void
   clear(): void
@@ -13,40 +17,10 @@ export interface SaveStore {
   saveBest(score: number): void
 }
 
-type Obj = Record<string, unknown>
-const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null
-const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
-
-function isStart(v: unknown): v is StartInput {
-  return (
-    isObj(v) && [0, 1, 2, 3, 4].includes(v.level as number) &&
-    isNum(v.seed) && isNum(v.score) && isNum(v.elapsed) && isNum(v.distance) && typeof v.boss === 'boolean'
-  )
-}
-
-function isEvent(v: unknown): v is HistoryEvent {
-  if (!isObj(v) || !isNum(v.tick) || v.tick < 0) return false
-  switch (v.type) {
-    case 'Input': return v.kind === 'jump' || v.kind === 'slideStart' || v.kind === 'slideEnd'
-    case 'OrbTaken': return isNum(v.id) && isNum(v.hash)
-    case 'ActivityCoinCollected': return isNum(v.id) && isNum(v.hash)
-    case 'ActivityCrateCollected': return isNum(v.id) && isNum(v.hash) && isNum(v.result)
-    default: return false
-  }
-}
-
-function isStats(v: unknown): v is RunStats {
-  return isObj(v) && isNum(v.replays) && isNum(v.fromHistory) && isNum(v.executed) && isNum(v.incidents)
-}
+export { isDate }
 
 export function isSave(v: unknown): v is Save {
-  if (!isObj(v) || v.version !== SAVE_VERSION || !isStart(v.start) || !isStats(v.stats)) return false
-  if (!isNum(v.tick) || v.tick < 0) return false
-  if (!(v.divergedAt === null || isNum(v.divergedAt))) return false
-  if (!Array.isArray(v.history) || !v.history.every(isEvent)) return false
-  const history = v.history as HistoryEvent[]
-  // Ordered by tick, and every event happened before the tick we replay to.
-  return history.every((e, i) => (i === 0 || history[i - 1].tick <= e.tick) && e.tick < (v.tick as number))
+  return isSaveBody(v) && isTape((v as Record<string, unknown>).tape)
 }
 
 export function parseSave(raw: string | null): Save | null {
@@ -78,5 +52,11 @@ export function localSaveStore(storage: () => Storage = () => localStorage): Sav
         return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
       }, 0),
     saveBest: (score) => attempt((s) => s.setItem(BEST_KEY, String(score)), undefined),
+    loadDailyBest: (date) =>
+      attempt((s) => {
+        const data: unknown = JSON.parse(s.getItem(DAILY_KEY) ?? 'null')
+        return isObj(data) && data.date === date && isNum(data.best) && data.best > 0 ? Math.floor(data.best) : 0
+      }, 0),
+    saveDailyBest: (date, score) => attempt((s) => s.setItem(DAILY_KEY, JSON.stringify({ date, best: score })), undefined),
   }
 }
