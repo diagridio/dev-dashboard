@@ -17,7 +17,8 @@ mechanics:
   real resiliency concept (circuit breaker, retry policy) or a classic runner
   mechanic (Sonic-style: losing a boost instead of a life).
 - A retry **rewinds** the run to a safe spot about half a screen back.
-- Fan-out/fan-in becomes a level: the hat splits into three parallel lanes.
+- Fan-out/fan-in becomes a level: the hat splits into two parallel lanes
+  (originally three; reduced to two after playtesting, 2026-10-01).
 - Each completed level ends with a **montage** that really replays the level's
   history.
 - Movement gets modern runner feel: variable jump height, coyote time, jump
@@ -55,7 +56,7 @@ tokens for colours, `localStorage` as the only write.
 |---|---|
 | Hit order | Circuit breaker → ×3 boost → retry → FAILED. The circuit breaker triggers on contact. |
 | Rewind | History after the rewind tick is dropped; coins collected in that span come back. 3 retries per level. |
-| Fan-out | 3 mirrored hats on 3 stacked lanes. A hit in any lane runs the hit chain for the whole workflow (`WhenAll` fails if any task fails). |
+| Fan-out | 2 mirrored hats on 2 stacked lanes (first 3; 3 proved too hard). A hit in any lane runs the hit chain for the whole workflow (`WhenAll` fails if any task fails). |
 | Daily seed | Every run uses the seed derived from the UTC date; there is no random-seed mode. |
 | Share | A copyable run code; a "Watch a run" field on the title card plays it back. |
 
@@ -103,7 +104,7 @@ entities. `Entity.vy` is quantised like the other floats.
 | `ActivityCoinCollected`, `ActivityCrateCollected`, `OrbTaken` | `step` | outcome (hash-checked) | As in v1. |
 | `CircuitBreakerTripped {tick, id, hash}` | `step` | outcome | The shield absorbed a hit on entity `id`. |
 | `BoostLost {tick, id, hash}` | `step` | outcome | The ×3 boost absorbed a hit. |
-| `FanOut {tick, hash}` / `FanIn {tick, hash, results: [n, n, n]}` | `step` | outcome | Lanes split / merge; `results` = coins per lane. |
+| `FanOut {tick, hash}` / `FanIn {tick, hash, results: [n, n]}` | `step` | outcome | Lanes split / merge; `results` = coins per lane. |
 
 Replay feeds `OrchestratorStarted` and `RetryAttempt` to `step` at their
 ticks, together with the `Input` events, as inputs. It checks every outcome
@@ -172,18 +173,18 @@ constants: `GRACE_RESUME = GRACE_RETRY = GRACE_BOOST = 60`,
 - Levels with `fanOut: { everyPx, ticks }` spawn a `fanout` gate entity when
   `distance + scroll` reaches `nextGateAt`. Nothing else spawns from 200 px
   before the gate to 200 px after it. When the gate's `x <= PLAYER_X`:
-  `fan = { until: tick + ticks, lanes: 3 × { player: copy of player, entities: [], nextSpawnAt, coins: 0 } }`,
+  `fan = { until: tick + ticks, lanes: FAN_LANES (2) × { player: copy of player, entities: [], nextSpawnAt, coins: 0 } }`,
   the main entity list is cleared, and `FanOut` is emitted.
 - While `fan` is set, every lane gets the same inputs and physics, and lanes
-  spawn from the shared RNG in lane order (0, 1, 2) using the level's
-  `laneWeights` (`low`, `pit`, `coin` only, which fit the half-height
-  strips). Lane spawns start at `LANE_SPAWN_X = 2 * VIEW_W + 10`, because
-  lanes are drawn at half scale (see *Rendering*). A lane coin adds to
+  spawn from the shared RNG in lane order (0, 1) using the level's
+  `laneWeights` (`low`, `pit`, `coin` only, which fit the lane
+  strips). Lane spawns start at `LANE_SPAWN_X = VIEW_W / LANE_SCALE + 10`, because
+  lanes are drawn at `LANE_SCALE` 0.75 (see *Rendering*). A lane coin adds to
   `score` (× multiplier), to `lane.coins` and to the shield charge.
 - A hit in any lane runs the hit chain once for the workflow. A smash marks
   that lane's entity; a bounce bounces that lane's player.
 - Lanes stop spawning 200 px before `until`. At `until`: the main player
-  becomes lane 1's player, `fan = null`, `FanIn {results}` is emitted, and
+  becomes lane `MERGE_LANE` (0)'s player, `fan = null`, `FanIn {results}` is emitted, and
   `nextGateAt` = the merge distance + `everyPx` (so fan-outs never follow each other directly).
 - `levelDone` is deferred while `fan` is set. Continue-as-new does not carry
   `fan` (like on-screen entities in v1), so a boss phase that starts during
@@ -342,8 +343,8 @@ seeks to those cursors and runs the same replay-and-resume path, with the same
   that fades from dark red, the darkened obstacle colour, to transparent), falling rack (a rack plus a warning ground shadow that grows as it
   drops), tall rack, smashed-rack debris, fan-out/fan-in gates (a `WhenAll`
   arch).
-- **Fan-out:** three stacked strips of `VIEW_H / 3`. Each lane is drawn with
-  `ctx.scale(0.5, 0.5)` into its strip, so lane physics stay in full-size
+- **Fan-out:** two stacked strips of `VIEW_H / FAN_LANES`. Each lane is drawn with
+  `ctx.scale(0.75, 0.75)` into its strip, so lane physics stay in full-size
   world coordinates.
 - **Rewind:** a VHS look (scanline offset, `◀◀`). Reduced motion keeps only
   the banner.
