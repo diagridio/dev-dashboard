@@ -138,7 +138,7 @@ Constants (ticks at 60 Hz): `COYOTE_TICKS = 6`, `JUMP_BUFFER_TICKS = 6`,
 | `low`, `high` | v1 | v1 | Unchanged. |
 | `tall` | 16×44 | on the ground | Needs a (nearly) full-height jump. |
 | `pit` | 30–60 × 0 (from `yRoll`) | in the ground | Not an overlap hazard. Falling to `y >= GROUND_Y + PIT_HIT_DEPTH` (14) is a hit. |
-| `falling` | 18×24 | spawns with its bottom at `y = 0` | Starts dropping (`vy += GRAVITY`) once `x - PLAYER_X <= FALL_TRIGGER` (140). Stops with its bottom at `GROUND_Y`, then behaves like a `low` rack. |
+| `falling` | 18×24 | spawns with its bottom at `y = 0` | Starts dropping (`vy += RACK_GRAVITY`, 1) once `x - PLAYER_X <= FALL_LEAD_TICKS * speed` (one second before it would reach the hat), so it lands well ahead of the player. Stops with its bottom at `GROUND_Y`, then behaves like a `low` rack. |
 
 The spawner keeps the v1 gap logic, so hazards never overlap. Coins never
 spawn at ground height directly above a pit (they move to the high height
@@ -184,7 +184,7 @@ constants: `GRACE_RESUME = GRACE_RETRY = GRACE_BOOST = 60`,
   that lane's entity; a bounce bounces that lane's player.
 - Lanes stop spawning 200 px before `until`. At `until`: the main player
   becomes lane 1's player, `fan = null`, `FanIn {results}` is emitted, and
-  `nextGateAt += everyPx`.
+  `nextGateAt` = the merge distance + `everyPx` (so fan-outs never follow each other directly).
 - `levelDone` is deferred while `fan` is set. Continue-as-new does not carry
   `fan` (like on-screen entities in v1), so a boss phase that starts during
   fan-out starts with a single hat.
@@ -280,13 +280,15 @@ interface Tape {
   inputs: [liveTick: number, command: 'jump' | 'jumpEnd' | 'slideStart' | 'slideEnd'][]
   impure: number[]  // uint32; value = u / 2^32
   chaos: number[]   // uint32; value = u / 2^32
-  restarts: number[] // live ticks at which a saved run was resumed (tab closed and reopened)
+  restarts: [liveTick: number, impureAt: number, chaosAt: number][] // save resumes, with the tape cursors at that moment
   liveTick: number   // live ticks recorded so far
 }
 ```
 
 A save resume replays history, and that replay can consume `impure` values
-(orbs). So the tape records it in `restarts`. At that live tick, playback
+(orbs). So the tape records it in `restarts`, together with where the impure
+and chaos values of the resume start. At that live tick, playback seeks to
+those cursors and
 runs the same crash-free replay-and-resume path as a resumed save, with the
 same `OrchestratorStarted`.
 
