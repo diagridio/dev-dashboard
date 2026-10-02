@@ -75,6 +75,12 @@ type Capabilities struct {
 	// adapt static fallbacks (e.g. the Logs page's dapr_* targets) to the
 	// server's discovery filter.
 	Mode string `json:"mode"`
+	// ContainerPosture is true when the dashboard runs as a container inside
+	// the orchestrator it inspects. Mode alone cannot express this: Mode is
+	// "compose" both for a host-run compose scan and for a dashboard running
+	// as a compose service, and Instance.Source is "compose" in both. The SPA
+	// needs the distinction for posture-specific copy.
+	ContainerPosture bool `json:"containerPosture"`
 	// SecretReveal gates the per-field secret reveal endpoint. It is off
 	// whenever the dashboard is served off-host (AllowNonLoopback), because
 	// that posture can be reached through a proxy from another machine.
