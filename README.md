@@ -226,8 +226,12 @@ Developers use the dashboard to observe and debug Dapr apps while building local
 
 - **See what's running** — a live table of all running apps/sidecars: app id, health,
   runtime/language, app/HTTP/gRPC ports, daprd + app PIDs, age, and owning run process.
+  Apps that have fully stopped can be removed from the list one by one or all at once with
+  **Clear inactive**. This only hides them from the dashboard; no containers or files are
+  deleted, and an app that starts running again reappears.
 - **Inspect an application** — drill into a single app for its ports, PIDs, command,
-  resource/config paths, runtime metadata, enabled features, and loaded components.
+  resource/config paths, runtime metadata, enabled features, and loaded components. Stop
+  works for every discovery mode; Start and Restart are offered for Docker Compose apps only.
 - **Debug workflows** — browse workflow executions across all apps with status filters and
   search, then open a run to watch its **live event history**, input/output, custom status,
   and a continuously-ticking wall-clock while it runs.
@@ -248,10 +252,21 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   Testcontainers app, for example — cannot be browsed at all: Dapr's state API has no way to
   enumerate keys, so there is nothing to page over.
 - **Review actors & subscriptions** — global pages aggregating active actor types and pub/sub
-  subscriptions across all apps, each linkable back to the owning application.
+  subscriptions across all apps, each linkable back to the owning application. The
+  Subscriptions page shows each subscription's type (declarative, programmatic, streaming) and
+  expands multi-rule subscriptions to show every match expression and its route.
+- **Publish a test message** — every subscription row has a **Publish** button that sends a
+  real message to its pub/sub topic through the app's sidecar, with a payload editor, a
+  content-type selector, and advanced options (`ttlInSeconds`, `rawPayload`).
+- **Copy the matching Dapr CLI command** — a **CLI** drawer on the right edge of the page lists
+  the self-hosted Dapr CLI commands that fit the current page, already filled in with the app
+  ID and workflow instance ID you're looking at.
 - **Read components & configurations** — read-only YAML viewers, enriched with which apps
   loaded each component; components that only exist inside a Testcontainers daprd container
-  are extracted and shown too, with a container-prefixed path.
+  are extracted and shown too, with a container-prefixed path. A component's `secretKeyRef`
+  and `envRef` values are resolved against your local secret stores (`local.file`,
+  `local.env`), and each reference shows whether it resolved, and if not, which env var or
+  file path was tried.
 - **Build component YAML** — a guided wizard over the full Dapr component catalog: pick a
   type, fill in its metadata fields (with per-field docs and defaults), choose an
   authentication profile, then copy or download the generated YAML.
@@ -272,6 +287,37 @@ control that doubles as a backend-connection indicator (data polling pauses whil
 backend is unreachable and resumes on recovery), full keyboard operability, and
 cross-navigation between related entities (app →
 component → "loaded by" app, etc.).
+
+### CLI drawer
+
+Open the **CLI** tab on the right edge of the page to see the Dapr CLI commands for what
+you're looking at. On a workflow instance, for example, it lists the commands to view the
+history, raise an event, terminate, suspend, resume, re-run, or purge that instance, and to
+inspect its scheduler reminder. Each command has a link to its docs and a **Copy** button.
+The drawer shows on the Applications, Application detail, Workflows, Workflow detail, Actors,
+and Subscriptions pages. Only self-hosted commands are listed; Kubernetes-only (`-k`) commands
+are left out.
+
+![Dev Dashboard - CLI drawer](docs/images/cli-drawer.png)
+
+### State records
+
+The **State** page lists the key/value records in a connected state store. Filter by app
+prefix, search by key, and expand a row to see the full value with its size, version, and
+encoding. Workflow and actor state is hidden unless you tick *Show internal keys*.
+**+ New record** adds a record, and records can be deleted one at a time or by multi-select.
+
+![Dev Dashboard - State records](docs/images/state-records.png)
+
+### Publish a message
+
+On the **Subscriptions** page, **Publish** opens a dialog that sends a message to that
+subscription's pub/sub component and topic. Enter the payload, pick a content type, and
+optionally set `ttlInSeconds` or `rawPayload` under *Show advanced*. The message goes through
+the app's sidecar to the real broker, so the subscriber receives it like any other message.
+The button is disabled when the sidecar is unreachable, and errors from daprd are shown as-is.
+
+![Dev Dashboard - Publish a message](docs/images/publish-message.png)
 
 ## Non-Goals
 
