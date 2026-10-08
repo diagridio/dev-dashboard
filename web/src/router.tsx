@@ -41,6 +41,8 @@ const gatedChildren: RouteObject[] = [
     ? [{ path: 'control-plane', element: <ControlPlane />, handle: { rumView: 'ControlPlane' } }]
     : []),
   ...(caps.logs ? [{ path: 'logs', element: <Logs />, handle: { rumView: 'Logs' } }] : []),
+  // Hidden easter egg (Konami code / direct URL); its own lazy chunk.
+  { path: 'replay', lazy: () => import('./pages/replay/Replay'), handle: { rumView: 'Replay' } },
 ]
 
 export const routes: RouteObject[] = [

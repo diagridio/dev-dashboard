@@ -4,12 +4,35 @@ package cmd
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/version"
 	"github.com/stretchr/testify/require"
 )
+
+func TestWriteStartupBanner(t *testing.T) {
+	const konami = "Make sure to try the Konami code and have some fun! ;)"
+	for _, tc := range []struct {
+		name      string
+		telemetry bool
+		notice    string
+	}{
+		{"telemetry on", true, "Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required)."},
+		{"telemetry opted out", false, "Anonymous usage telemetry is disabled (DEVDASHBOARD_TELEMETRY_OPTOUT=true)."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			writeStartupBanner(&buf, "http://localhost:9090/", tc.telemetry)
+			lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+			require.Len(t, lines, 3)
+			require.Equal(t, "Diagrid Dapr Dev Dashboard is starting → http://localhost:9090/", lines[0])
+			require.Contains(t, lines[1], tc.notice)
+			require.Equal(t, konami, lines[2], "the Konami hint follows the telemetry notice")
+		})
+	}
+}
 
 func TestVersionFlag(t *testing.T) {
 	c := NewRootCmd()

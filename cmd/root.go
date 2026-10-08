@@ -4,6 +4,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -236,12 +237,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		interactive := isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
 		maybeOfferUpdate(ctx, check, os.Stdin, os.Stdout, interactive, selfUpdateAndRestart)
 	}
-	fmt.Printf("Diagrid Dev Dashboard is starting → %s\n", url)
-	if telemetry {
-		fmt.Println("We're using anonymous usage telemetry to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
-	} else {
-		fmt.Println("Anonymous usage telemetry is disabled (DEVDASHBOARD_TELEMETRY_OPTOUT=true).")
-	}
+	writeStartupBanner(os.Stdout, url, telemetry)
 	if !noOpen && !containerPosture {
 		go func() { time.Sleep(400 * time.Millisecond); _ = openBrowser(url) }()
 	}
@@ -266,6 +262,18 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		}
 		return nil
 	}
+}
+
+// writeStartupBanner prints the lines shown when the server starts: the URL,
+// the telemetry notice, and a hint at the REPLAY easter egg.
+func writeStartupBanner(w io.Writer, url string, telemetry bool) {
+	fmt.Fprintf(w, "Diagrid Dapr Dev Dashboard is starting → %s\n", url)
+	if telemetry {
+		fmt.Fprintln(w, "We're using anonymous usage telemetry to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
+	} else {
+		fmt.Fprintln(w, "Anonymous usage telemetry is disabled (DEVDASHBOARD_TELEMETRY_OPTOUT=true).")
+	}
+	fmt.Fprintln(w, "Make sure to try the Konami code and have some fun! ;)")
 }
 
 // telemetryEnabled reports whether RUM telemetry should run, based on the

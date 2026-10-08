@@ -21,6 +21,10 @@ describe('shareContent', () => {
     expect(shareContent.fullMessage).toContain('scripts/install.sh | sh')
     expect(shareContent.fullMessage).toContain('scripts/install.ps1 | iex')
   })
+
+  it('full message hints at the Konami code easter egg', () => {
+    expect(shareContent.fullMessage).toContain('Make sure to try the Konami code and have some fun! ;)')
+  })
 })
 
 describe('channel URL builders', () => {
