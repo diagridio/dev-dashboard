@@ -64,11 +64,53 @@ func TestContainerPosture(t *testing.T) {
 	if containerPosture(ModeAspire, none) {
 		t.Fatal("aspire without the contract must stay host posture")
 	}
-	if containerPosture(ModeCompose, withContract) {
-		t.Fatal("non-aspire modes are never container posture")
-	}
 	if containerPosture(ModeDefault, withContract) {
 		t.Fatal("mode-unset is never container posture")
+	}
+}
+
+func TestContainerPostureMatrix(t *testing.T) {
+	withContract := map[string]string{"DEVDASHBOARD_APP_COUNT": "1"}
+	tests := []struct {
+		name string
+		mode Mode
+		env  map[string]string
+		want bool
+	}{
+		{name: "compose with contract is container posture", mode: ModeCompose, env: withContract, want: true},
+		{name: "compose without contract stays host posture", mode: ModeCompose, env: nil, want: false},
+		{name: "aspire with contract is container posture", mode: ModeAspire, env: withContract, want: true},
+		{name: "aspire without contract stays host posture", mode: ModeAspire, env: nil, want: false},
+		{name: "dapr-run with contract is never container posture", mode: ModeDaprRun, env: withContract, want: false},
+		{name: "test-containers with contract is never container posture", mode: ModeTestcontainers, env: withContract, want: false},
+		{name: "mode unset with contract is never container posture", mode: ModeDefault, env: withContract, want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			getenv := func(k string) string { return tc.env[k] }
+			if got := containerPosture(tc.mode, getenv); got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Compose container posture must inherit the same serving defaults as aspire
+// container posture — this is behavior that falls out of resolveServeSettings
+// keying off the posture bool, and this test pins it.
+func TestComposeContainerPostureServeDefaults(t *testing.T) {
+	getenv := func(string) string { return "" }
+	unchanged := func(string) bool { return false }
+
+	got, err := resolveServeSettings(true, unchanged, 9090, "127.0.0.1", "", "default", getenv)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Port != 8080 {
+		t.Fatalf("port: got %d want 8080", got.Port)
+	}
+	if got.Bind != "0.0.0.0" {
+		t.Fatalf("bind: got %q want 0.0.0.0", got.Bind)
 	}
 }
 

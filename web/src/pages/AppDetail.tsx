@@ -40,6 +40,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const isCompose = app.source === 'compose'
   const isTestcontainers = app.source === 'testcontainers'
   const unreachable = isCompose && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
+  const containerPosture = caps.containerPosture === true
 
   const now = useNow()
   const appRunning = app.appStatus === 'running'
@@ -229,10 +230,19 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
 
       {/* Metadata unavailable note */}
       {unreachable ? (
-        <div className="hint">
-          sidecar unreachable — publish the daprd HTTP port (e.g. <span className="mono">3500:3500</span>) in
-          your compose file to enable health &amp; metadata
-        </div>
+        containerPosture ? (
+          <div className="hint">
+            sidecar unreachable — make sure the dashboard and{' '}
+            <span className="mono">{app.appId}</span>&apos;s sidecar are on the same Docker
+            network, and that <span className="mono">DEVDASHBOARD_APP_*_DAPR_HTTP</span> uses
+            the service name that owns the network namespace
+          </div>
+        ) : (
+          <div className="hint">
+            sidecar unreachable — publish the daprd HTTP port (e.g. <span className="mono">3500:3500</span>) in
+            your compose file to enable health &amp; metadata
+          </div>
+        )
       ) : (
         !app.metadataOk && <div className="hint">metadata unavailable — showing process-scan data only</div>
       )}

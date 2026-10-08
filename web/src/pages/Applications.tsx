@@ -172,6 +172,10 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
     v ? <td className="mono tabnum">{v}</td> : <td className="mono tabnum faint">—</td>
   const state = appDisplayState(app)
   const unreachable = app.source === 'compose' && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
+  const containerPosture = caps.containerPosture === true
+  const unreachableHint = containerPosture
+    ? 'sidecar unreachable — the dashboard and this app must share a Docker network'
+    : 'publish the daprd HTTP port (e.g. 3500:3500) to enable health & metadata'
   const key = appKey(app)
   const hasContainerName = key !== app.appId
   const hasLabel = !hasContainerName && !!app.label && app.label !== app.appId
@@ -181,7 +185,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       <td>
         <span
           className="health"
-          title={state.hint ?? (unreachable ? 'publish the daprd HTTP port (e.g. 3500:3500) to enable health & metadata' : undefined)}
+          title={state.hint ?? (unreachable ? unreachableHint : undefined)}
         >
           <span className={`led ${state.led}`} /> {state.label}
           {unreachable && ' ⓘ'}

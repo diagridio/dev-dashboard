@@ -67,8 +67,8 @@ func NewRootCmd() *cobra.Command {
 	}
 	c.SetVersionTemplate(fmt.Sprintf("diagrid-dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
-	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (aspire container posture defaults to 0.0.0.0); binding a non-loopback address outside container posture leaves the loopback Host guard in place, which rejects remote clients")
-	c.Flags().StringVar(&modeFlag, "mode", "", `discovery filter: "dapr-run", "compose", "test-containers", or "aspire" show only that source's resources ("aspire" also switches to container posture when the DEVDASHBOARD_APP_* contract is present); unset scans every source`)
+	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (container posture defaults to 0.0.0.0); binding a non-loopback address outside container posture leaves the loopback Host guard in place, which rejects remote clients")
+	c.Flags().StringVar(&modeFlag, "mode", "", `discovery filter: "dapr-run", "compose", "test-containers", or "aspire" show only that source's resources ("aspire" and "compose" also switch to container posture when the DEVDASHBOARD_APP_* contract is present); unset scans every source`)
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")
 	c.Flags().StringVar(&stateStore, "statestore", "", "path to a state-store component YAML (overrides auto-detect)")
@@ -101,7 +101,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	}
 	addr := listenAddr(settings.Bind, settings.Port)
 	if !containerPosture && !isLoopbackBind(settings.Bind) {
-		logger.Warn("binding a non-loopback address without container posture; the loopback Host guard will reject remote clients (set --mode aspire for container serving posture)", "bind", settings.Bind)
+		logger.Warn("binding a non-loopback address without container posture; the loopback Host guard will reject remote clients (set --mode aspire or --mode compose with the DEVDASHBOARD_APP_* contract for container serving posture)", "bind", settings.Bind)
 	}
 	urlPath := ""
 	if trimmed := trimSlash(basePath); trimmed != "" {
@@ -113,7 +113,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	}
 	url := fmt.Sprintf("http://%s:%d%s/", displayHost, settings.Port, urlPath)
 
-	// Aspire/container mode disables registry persistence entirely (no home
+	// Container posture (aspire or compose) disables registry persistence entirely (no home
 	// directory), so the "no home" warning is suppressed via QuietRegistry.
 	home := ""
 	if !containerPosture {
@@ -139,19 +139,24 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	)
 	switch {
 	case containerPosture:
-		scan, err := discovery.NewAspireScanner(os.Getenv)
+		scan, err := discovery.NewContractScanner(os.Getenv, contractSource(mode))
 		if err != nil {
 			return err
 		}
 		appNS = contractNamespaces(scan)
 		appsSvc = discovery.New(scan, client)
 		caps = &server.Capabilities{
-			Workflows: settings.StateStore != "",
-			State:     settings.StateStore != "",
-			Mode:      string(ModeAspire),
+			// Sidecar-gRPC inspection needs no store, so in compose a declared
+			// app is enough to enable the workflow routes. Aspire apps are
+			// never sidecar-sourced (Task 5), so aspire keeps the store gate.
+			Workflows: workflowsEnabled(mode, settings.StateStore != "", mode == ModeCompose && anyGRPCAddr(scan)),
+			// The State page has no sidecar fallback, so it still needs a store.
+			State:            settings.StateStore != "",
+			Mode:             string(mode),
+			ContainerPosture: true,
 		}
 	default:
-		src := sourcesFor(mode, discovery.AspireContractPresent(os.Getenv))
+		src := sourcesFor(mode, discovery.ContractPresent(os.Getenv))
 		_, crtRunner := containerruntime.Detect()
 		if src.NeedsRuntime && crtRunner == nil {
 			return fmt.Errorf("--mode %s requires a container runtime: install docker or podman (or set DASH_CONTAINER_RUNTIME)", mode)
@@ -171,7 +176,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 			extraRes = tcExtraResources(tcSrc)
 		}
 		if src.AspireContract {
-			as, err := discovery.NewAspireScanner(os.Getenv)
+			as, err := discovery.NewContractScanner(os.Getenv, discovery.SourceAspire)
 			if err != nil {
 				return err
 			}
@@ -336,4 +341,30 @@ func openBrowser(url string) error {
 	}
 	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+// workflowsEnabled decides whether the workflow routes are on in container
+// posture: a configured store always enables them; otherwise only compose
+// with at least one declared sidecar (sidecar-gRPC inspection needs no
+// store). Aspire apps are never sidecar-sourced, so aspire keeps the store
+// gate. anyGRPC is only meaningful for compose.
+func workflowsEnabled(mode Mode, storeSet, anyGRPC bool) bool {
+	return storeSet || (mode == ModeCompose && anyGRPC)
+}
+
+// anyGRPCAddr reports whether the contract declared at least one app with a
+// resolvable sidecar gRPC endpoint. Because the address is derived from the
+// required _DAPR_HTTP value, this is true whenever any app is declared — the
+// zero-app case (a store-only dashboard) is the one that returns false.
+func anyGRPCAddr(scan discovery.Scanner) bool {
+	results, err := scan()
+	if err != nil {
+		return false
+	}
+	for _, r := range results {
+		if r.DaprGRPCAddr != "" {
+			return true
+		}
+	}
+	return false
 }
