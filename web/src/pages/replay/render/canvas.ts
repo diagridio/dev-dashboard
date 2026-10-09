@@ -172,9 +172,9 @@ function drawCrash(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette
     }
     ctx.restore()
   }
-  banner(ctx, 'game suddenly crashed, not your fault!', VIEW_H / 2, pal.fail, BIG_FONT)
+  banner(ctx, 'GAME SUDDENLY CRASHED, NOT YOUR FAULT!', VIEW_H / 2, pal.fail, BIG_FONT)
   // Level 0 has no durable workflow: the crash loses progress instead of replaying.
-  if (view.state.level >= 1) banner(ctx, 'Dapr Workflow will now replay.', VIEW_H / 2 + 18, pal.text, FONT)
+  if (view.state.level >= 1) banner(ctx, 'DAPR WORKFLOW WILL NOW REPLAY.', VIEW_H / 2 + 18, pal.text, FONT)
 }
 
 function drawRewind(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette, attempt: number, of: number): void {
