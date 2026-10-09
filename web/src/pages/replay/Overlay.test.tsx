@@ -115,6 +115,28 @@ describe('Overlay', () => {
     expect(screen.queryByText(/run code/i)).toBeNull()
   })
 
+  it('separates the game instructions from the replay form with a divider', () => {
+    render(<Overlay phase={{ kind: 'title' }} {...common} onWatch={vi.fn()} />)
+    const divider = screen.getByRole('separator')
+    const form = screen.getByRole('button', { name: 'Replay run' }).closest('form')!
+    expect(divider.nextElementSibling).toBe(form)
+  })
+
+  it('has no divider on the title card without the replay form', () => {
+    render(<Overlay phase={{ kind: 'title' }} {...common} />)
+    expect(screen.queryByRole('separator')).toBeNull()
+  })
+
+  it('explains that the execution ID can be shared so others can replay the game', () => {
+    const text = 'Share this execution ID with a friend or colleague so they can replay your game.'
+    const { rerender } = render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionId="RPL1.abc" />)
+    expect(screen.getByText(text)).toBeInTheDocument()
+    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} />)
+    expect(screen.queryByText(text)).toBeNull()
+    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionId="RPL1.abc" playback />)
+    expect(screen.queryByText(text)).toBeNull()
+  })
+
   it('sets the daily run, the instructions and the best scores larger on the start card', () => {
     render(<Overlay phase={{ kind: 'title' }} {...common} dailyBest={7} />)
     for (const text of ['Daily run · 2026-09-30 (UTC)', 'Space / ↑ jump (hold for higher) · ↓ slide · Esc pause', "Today's best: 7 · Best: 40"]) {

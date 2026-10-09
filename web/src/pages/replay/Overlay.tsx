@@ -92,7 +92,12 @@ export function Overlay({
           <p className="replay-keys replay-start-meta">Daily run · {date} (UTC)</p>
           <p className="replay-keys replay-start-meta">Space / ↑ jump (hold for higher) · ↓ slide · Esc pause</p>
           {(best > 0 || dailyBest > 0) && <p className="replay-keys replay-start-meta">Today's best: {dailyBest} · Best: {best}</p>}
-          {onWatch && <WatchForm onWatch={onWatch} error={watchError ?? null} />}
+          {onWatch && (
+            <>
+              <hr className="replay-divider" />
+              <WatchForm onWatch={onWatch} error={watchError ?? null} />
+            </>
+          )}
         </Card>
       )
     case 'resume':
@@ -150,7 +155,10 @@ export function Overlay({
             <Stat label="Boosts lost" value={stats.boostsLost} />
           </div>
           {executionId ? (
-            <ExecutionId id={executionId} copied={idCopied ?? false} onCopy={onCopyExecutionId} />
+            <>
+              <ExecutionId id={executionId} copied={idCopied ?? false} onCopy={onCopyExecutionId} />
+              {!playback && <p>Share this execution ID with a friend or colleague so they can replay your game.</p>}
+            </>
           ) : executionIdError ? (
             <p className="replay-error">{executionIdError}</p>
           ) : (
