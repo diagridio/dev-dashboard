@@ -4,6 +4,7 @@ import (
 	"context"
 	"io/fs"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -120,6 +121,7 @@ func NewRouter(opts Options) http.Handler {
 // Server owns the http.Server lifecycle.
 type Server struct {
 	http *http.Server
+	ln   net.Listener
 }
 
 // New builds a Server listening on addr.
@@ -131,9 +133,34 @@ func New(addr string, opts Options) *Server {
 	}}
 }
 
-// Start blocks serving until the server is shut down.
+// Listen binds the address without serving yet, so a port that is already
+// in use is reported before anything announces the server as started.
+func (s *Server) Listen() error {
+	ln, err := net.Listen("tcp", s.http.Addr)
+	if err != nil {
+		return err
+	}
+	s.ln = ln
+	return nil
+}
+
+// Addr is the bound address once Listen has succeeded, else the configured one.
+func (s *Server) Addr() string {
+	if s.ln != nil {
+		return s.ln.Addr().String()
+	}
+	return s.http.Addr
+}
+
+// Start blocks serving until the server is shut down. It binds first when
+// Listen has not been called.
 func (s *Server) Start() error {
-	if err := s.http.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if s.ln == nil {
+		if err := s.Listen(); err != nil {
+			return err
+		}
+	}
+	if err := s.http.Serve(s.ln); err != nil && err != http.ErrServerClosed {
 		return err
 	}
 	return nil
