@@ -132,6 +132,17 @@ describe('ResourcesSidebar static links', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
+  it('renders Dapr Ops Dashboard link between Diagrid Catalyst and Dapr Support', () => {
+    renderSidebar()
+    const link = screen.getByRole('link', { name: /Dapr Ops Dashboard/ })
+    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-ops-dashboard')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    const section = link.closest('.sbsection') as HTMLElement
+    const labels = Array.from(section.querySelectorAll('.sblink .txt')).map((el) => el.textContent)
+    expect(labels).toEqual(['Diagrid Catalyst', 'Dapr Ops Dashboard', 'Dapr Support'])
+  })
+
   it('renders Dapr Support link under Run & Operate', () => {
     renderSidebar()
     const link = screen.getByRole('link', { name: /Dapr Support/ })
