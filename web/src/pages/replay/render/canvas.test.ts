@@ -124,8 +124,17 @@ describe('render', () => {
   it('shows the crash banner and shakes the screen while crashing', () => {
     const { ctx, calls } = mockCtx()
     render(ctx, view({ kind: 'crashing', framesLeft: 10 }), pal)
-    expect(texts(calls)).toContain('daprd: signal: killed')
+    expect(texts(calls)).toContain('game suddenly crashed, not your fault!')
+    expect(texts(calls)).toContain('Dapr Workflow will now replay.')
     expect(calls.some((c) => c.name === 'translate')).toBe(true)
+  })
+
+  it('leaves out the replay line on level 0, where nothing replays', () => {
+    const { ctx, calls } = mockCtx()
+    const state = initialState({ level: 0, seed: 1, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 })
+    render(ctx, view({ kind: 'crashing', framesLeft: 10 }, state), pal)
+    expect(texts(calls)).toContain('game suddenly crashed, not your fault!')
+    expect(texts(calls)).not.toContain('Dapr Workflow will now replay.')
   })
 
   it('sets the device-pixel base transform first, and still shakes on top of it', () => {
@@ -145,7 +154,7 @@ describe('render', () => {
   it('keeps the crash banner but drops the shake with reduced motion', () => {
     const { ctx, calls } = mockCtx()
     render(ctx, view({ kind: 'crashing', framesLeft: 10 }, undefined, { reducedMotion: true }), pal)
-    expect(texts(calls)).toContain('daprd: signal: killed')
+    expect(texts(calls)).toContain('game suddenly crashed, not your fault!')
     expect(calls.some((c) => c.name === 'translate')).toBe(false)
   })
 

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { makeLevels } from '../testing'
 import { hashState } from './hash'
 import { LEVELS, chaosMeanTicks, speedAt } from './levels'
-import { BOOST_TICKS, BOSS_TICKS, COYOTE_TICKS, FALL_LEAD_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT_VY, HAZARDS, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, GRACE_BARGE, GRACE_BOOST, GRACE_RESUME, GRACE_RETRY, SHIELD_FULL, FAN_CLEAR_PX, FAN_LANES, LANE_SCALE, LANE_SPAWN_X, MERGE_LANE, continueAsNew, initialState, overPit, step } from './step'
+import { BOOST_TICKS, BOSS_TICKS, COYOTE_TICKS, FALL_LEAD_TICKS, JUMP_BUFFER_TICKS, JUMP_CUT_VY, HAZARDS, HAZARD_INSET_X, PIT_HIT_DEPTH, PLAYER_H, PLAYER_W, RACKS, SLIDE_H, GRACE_BARGE, GRACE_BOOST, GRACE_RESUME, GRACE_RETRY, SHIELD_FULL, FAN_CLEAR_PX, FAN_LANES, LANE_SCALE, LANE_SPAWN_X, MERGE_LANE, continueAsNew, initialState, overPit, step } from './step'
 import { GROUND_Y, PLAYER_X, VIEW_W, type Entity, type GameState, type InputKind, type OutcomeEvent, type Ports, type StartInput } from './types'
 
 const start: StartInput = { level: 1, seed: 7, score: 0, elapsed: 0, distance: 0, boss: false, retries: 0, shield: 0 }
@@ -87,6 +87,19 @@ describe('step', () => {
 
   it('has a hat-shaped hitbox', () => {
     expect([PLAYER_W, PLAYER_H, SLIDE_H]).toEqual([30, 16, 9])
+  })
+
+  it('forgives racks that only graze the sides of the hat, but not pickups', () => {
+    // Entities scroll 4 px this tick before collisions run.
+    const at = (kind: Entity['kind'], x: number, y: number, w: number, h: number): GameState =>
+      ({ ...initialState(start), entities: [{ id: 99, kind, x: x + 4, y, w, h, taken: false }] })
+    const grazeLeft = PLAYER_X - 14 + HAZARD_INSET_X
+    const grazeRight = PLAYER_X + PLAYER_W - HAZARD_INSET_X
+    expect(step(at('low', grazeLeft, GROUND_Y - 20, 14, 20), [], ports(), levels).state.status).toBe('running')
+    expect(step(at('low', grazeRight, GROUND_Y - 20, 14, 20), [], ports(), levels).state.status).toBe('running')
+    expect(step(at('low', grazeLeft + 1, GROUND_Y - 20, 14, 20), [], ports(), levels).state.status).toBe('failed')
+    expect(step(at('low', grazeRight - 1, GROUND_Y - 20, 14, 20), [], ports(), levels).state.status).toBe('failed')
+    expect(step(at('coin', PLAYER_X + PLAYER_W - 1, GROUND_Y - 24, 10, 10), [], ports(), levels).state.score).toBe(1)
   })
 
   it('collects a low coin while standing but not while sliding', () => {

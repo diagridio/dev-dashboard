@@ -669,6 +669,7 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .replay-card .replay-keys.replay-start-meta { font-size: 13px; color: var(--muted); }
 .replay-stats { margin: 4px 0 0; grid-template-columns: repeat(3, 1fr); }
 .replay-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.replay-divider { width: 100%; height: 0; margin: 2px 0; border: 0; border-top: 1px solid var(--line); }
 .replay-watch { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .replay-watch .inp { flex: 1 1 180px; min-width: 0; width: auto; }
 .replay-card .replay-error { width: 100%; color: var(--fail-fg); }
