@@ -171,6 +171,9 @@ body {
 .tbtn { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; cursor: pointer; display: flex; align-items: center; gap: 7px; }
 .tbtn:hover { color: var(--text); border-color: var(--faint); }
 .tbtn:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+/* Topbar buttons share one fixed height (sized for the two-line Ops link) and never wrap or shrink. */
+.topright .tbtn { height: 36px; padding-top: 0; padding-bottom: 0; white-space: nowrap; flex: none; }
+.opsbtn { text-decoration: none; line-height: 1.15; }
 
 /* ---- Page frame ---- */
 .page { max-width: 1240px; margin: 0 auto; padding: clamp(16px, 3vw, 30px); }

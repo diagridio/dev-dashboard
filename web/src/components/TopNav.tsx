@@ -92,8 +92,19 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
           aria-label="Share the dashboard"
           onClick={openShare}
         >
-          ↗ Share
+          Share ↗
         </button>
+        <a
+          className="tbtn opsbtn"
+          href="https://diagrid.ws/dev-dashboard-ops-dashboard"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Dapr Ops Dashboard (opens in a new tab)"
+          onClick={() => trackAction('ops_dashboard_click')}
+        >
+          <span>Dapr Ops<br />Dashboard</span>
+          <span aria-hidden="true">↗</span>
+        </a>
       </div>
 
       <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} />
