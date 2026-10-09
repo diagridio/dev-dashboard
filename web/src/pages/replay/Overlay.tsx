@@ -166,7 +166,7 @@ export function Overlay({
             {/* Same class and label as the TopNav Share button. */}
             {onShare && (
               <button type="button" className="tbtn" onClick={onShare}>
-                ↗ Share
+                Share ↗
               </button>
             )}
           </div>

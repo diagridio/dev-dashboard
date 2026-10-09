@@ -112,6 +112,19 @@ describe('TopNav', () => {
     expect(trackAction).toHaveBeenCalledWith('share_open')
   })
 
+  it('links to the Dapr Ops Dashboard in a new tab and tracks the click', () => {
+    renderNav()
+    const link = screen.getByRole('link', { name: /dapr ops dashboard/i })
+    expect(link.getAttribute('href')).toBe(
+      'https://diagrid.ws/dev-dashboard-ops-dashboard',
+    )
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(link.querySelector('br')).not.toBeNull()
+    fireEvent.click(link)
+    expect(trackAction).toHaveBeenCalledWith('ops_dashboard_click')
+  })
+
   it('does not render DensityToggle', () => {
     renderNav()
     expect(screen.queryByRole('button', { name: /toggle density/i })).not.toBeInTheDocument()

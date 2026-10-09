@@ -116,7 +116,7 @@ describe('Replay page', () => {
   it('opens the Share dialog from the game-over card, and Enter there does not restart the run', async () => {
     await playToGameOver()
 
-    fireEvent.click(screen.getByRole('button', { name: '↗ Share' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Share ↗' }))
     expect(trackAction).toHaveBeenCalledWith('share_open', { source: 'replay' })
     const dialog = await screen.findByRole('dialog', { name: 'Share the dashboard' })
     fireEvent.keyDown(dialog.querySelector('button') as HTMLButtonElement, { key: 'Enter' })
