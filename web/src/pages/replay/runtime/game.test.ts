@@ -802,8 +802,8 @@ describe('run tape', () => {
     live.suspend()
     const resumed = new Game(deps({ store, levels: tapeLevels(), impure: lcg(3), chaosRand: lcg(4) }))
     resumed.command('confirm')
-    for (let f = 0; f < 5000 && resumed.phase.kind !== 'over'; f++) {
-      drive(resumed, f % 600 > 200 && f % 600 < 350)
+    for (let f = 0; f < 8000 && resumed.phase.kind !== 'over'; f++) {
+      drive(resumed, resumed.liveTicks % 600 > 200 && resumed.liveTicks % 600 < 350)
       resumed.frame(1)
     }
     for (let f = 0; f < 600 && resumed.phase.kind !== 'playing' && resumed.phase.kind !== 'over'; f++) resumed.frame(1)

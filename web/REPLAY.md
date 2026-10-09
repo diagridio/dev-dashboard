@@ -64,7 +64,7 @@ ticks. Every other phase is frame-driven and consumes no ticks.
 | `tip` | Level tip card | Enter → `playing` |
 | `playing` | Ticks run; input recorded | crash, hit, level end, pause |
 | `paused` | Esc/p, tab hidden or window blur | Esc/Enter/p |
-| `crashing` | "game suddenly crashed, not your fault!" glitch, plus "Dapr Workflow will now replay." from level 1 on, `CRASH_FRAMES` (36) | → `replaying` |
+| `crashing` | "game suddenly crashed, not your fault!" glitch, plus "Dapr Workflow will now replay." from level 1 on, `CRASH_FRAMES` (150, 2.5 s, long enough to read both lines) | → `replaying` |
 | `replaying` | History fast-forwarded (≥ 8 ticks/frame, done within ~120 frames) | → `playing`, or boss on divergence |
 | `rewinding` | ◀◀ RetryPolicy rewind effect, `REWIND_FRAMES` (30) | → `playing` |
 | `montage` | Level-end replay of the level's history (~4 s) | Enter skips → `tip` |

@@ -12,7 +12,7 @@ import { TapePlayer, TapeRecorder, emptyTape, isTape, type Source, type Tape } f
 import type { Command, Phase, RunStats, Save, SaveBody } from './types'
 
 /** Frames the crash glitch shows before the replay starts. */
-export const CRASH_FRAMES = 36
+export const CRASH_FRAMES = 150
 /** Replay runs at least this many ticks per frame (8×)… */
 export const REPLAY_MIN_TICKS_PER_FRAME = 8
 /** …and fast enough to finish within this many frames (~2 s). */
