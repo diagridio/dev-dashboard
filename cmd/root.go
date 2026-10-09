@@ -86,6 +86,7 @@ func Execute() error {
 }
 
 func runServe(ctx context.Context, mode Mode, containerPosture bool, settings serveSettings, basePath string, noOpen, verbose bool) error {
+	writeStartupLogo(os.Stdout)
 	logger := logging.New(verbose)
 	slog.SetDefault(logger)
 	statestore.SetVerbose(verbose)
@@ -257,6 +258,21 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		}
 		return nil
 	}
+}
+
+// startupLogo is printed before any other output when the server starts.
+const startupLogo = `██████╗ ██╗ █████╗  ██████╗ ██████╗ ██╗██████╗
+██╔══██╗██║██╔══██╗██╔════╝ ██╔══██╗██║██╔══██╗
+██║  ██║██║███████║██║  ███╗██████╔╝██║██║  ██║
+██║  ██║██║██╔══██║██║   ██║██╔══██╗██║██║  ██║
+██████╔╝██║██║  ██║╚██████╔╝██║  ██║██║██████╔╝
+╚═════╝ ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝
+────────────────────────────────────────────────
+`
+
+// writeStartupLogo prints the DIAGRID logo; it is the first thing serve outputs.
+func writeStartupLogo(w io.Writer) {
+	fmt.Fprint(w, startupLogo)
 }
 
 // writeStartupBanner prints the lines shown when the server starts: the URL,
