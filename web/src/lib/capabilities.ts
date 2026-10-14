@@ -9,6 +9,12 @@ export interface Capabilities {
   secretReveal?: boolean
   /** CLI --mode value ('' = complete scan); lets the UI adapt static fallbacks. */
   mode?: string
+  /**
+   * True when the dashboard runs as a container inside the orchestrator it
+   * inspects. `mode` cannot express this: it is 'compose' both for a host-run
+   * compose scan and for a dashboard running as a compose service.
+   */
+  containerPosture?: boolean
 }
 
 declare global {
