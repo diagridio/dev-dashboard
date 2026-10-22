@@ -1,7 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router-dom'
-import '@fontsource-variable/public-sans'
+import '@fontsource-variable/public-sans/index.css'
 import './styles/theme.css'
 import { applyPrefs } from './lib/prefs'
 import { router } from './router'
