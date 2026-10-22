@@ -2,21 +2,11 @@ name: ci
 on:
   push:
     branches: [main]
-    paths: &source-paths
-      - 'cmd/**'
-      - 'internal/**'
-      - 'pkg/**'
-      - 'test/**'
-      - 'main.go'
-      - 'go.mod'
-      - 'go.sum'
-      - 'web/**'
-      - 'Dockerfile'
-      - '.dockerignore'
-      - 'Makefile'
-      - '.github/workflows/ci.yaml'
+  # No path filters: go/web/docker are required checks on main, and a
+  # filtered-out run would leave docs-only PRs waiting on them forever.
   pull_request:
-    paths: *source-paths
+permissions:
+  contents: read
 jobs:
   go:
     runs-on: ubuntu-latest
