@@ -9,6 +9,9 @@ on:
         default: all
         options: [all, compose, testcontainers, aspire]
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     runs-on: ubuntu-latest
