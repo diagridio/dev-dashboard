@@ -10,6 +10,11 @@ updates:
     groups:
       go-minor-patch:
         update-types: [minor, patch]
+    ignore:
+      # 0.x "minor" bumps are breaking and must track the dapr/dapr release
+      # line (v0.15 needs dapr/dapr v1.19); move it with a Dapr upgrade.
+      - dependency-name: github.com/dapr/durabletask-go
+        update-types: [version-update:semver-minor, version-update:semver-major]
 
   - package-ecosystem: npm
     directory: /web
