@@ -10,7 +10,7 @@ acts as a passive, read-only observer for local Dapr development. There is **no 
 runtime** — the frontend is compiled to `web/dist` and baked into the binary at build time.
 
 - **Module:** `github.com/diagridio/dev-dashboard`
-- **Toolchain:** Go ≥ 1.26 (`go.mod` pins 1.26.7), Node.js 20 + `npm` (build/test only).
+- **Toolchain:** Go ≥ 1.26 (`go.mod` pins 1.26.10), Node.js 20 + `npm` (build/test only).
 - **Entry point:** `main.go` → `cmd/` (cobra root, default subcommand is `serve`).
 
 ## Repository layout
