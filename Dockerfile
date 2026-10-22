@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
-FROM node:25-alpine AS web
+FROM node:25-alpine@sha256:bdf2cca6fe3dabd014ea60163eca3f0f7015fbd5c7ee1b0e9ccb4ced6eb02ef4 AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build
 
-FROM golang:1.26-alpine AS build
+FROM golang:1.26-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
@@ -23,7 +23,7 @@ RUN CGO_ENABLED=0 go build \
     -X github.com/diagridio/dev-dashboard/pkg/version.Date=${DATE}" \
     -o /out/diagrid-dev-dashboard .
 
-FROM gcr.io/distroless/static:nonroot
+FROM gcr.io/distroless/static:nonroot@sha256:d62067879de890a1def9da0e7766b7d20810a5e5555cef8506b752437d7a3e88
 COPY --from=build /out/diagrid-dev-dashboard /diagrid-dev-dashboard
 ENV DEVDASHBOARD_MODE=aspire
 EXPOSE 8080
