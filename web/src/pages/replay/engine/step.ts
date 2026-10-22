@@ -11,6 +11,8 @@ export const JUMP_VY = -9
 export const PLAYER_W = 30
 export const PLAYER_H = 16
 export const SLIDE_H = 9
+/** Racks only hit inside the hat's box minus this many px on the left and right, so a graze is forgiven. */
+export const HAZARD_INSET_X = 3
 export const BOOST_TICKS = 10 * TICK_HZ
 export const BOSS_TICKS = 15 * TICK_HZ
 export const SHIELD_FULL = 10
@@ -386,14 +388,17 @@ function collide(s: GameState, cfg: LevelConfig, ports: Ports, events: OutcomeEv
     const p = t.player
     const height = p.sliding && p.y >= GROUND_Y ? SLIDE_H : PLAYER_H
     const box: Box = { x: PLAYER_X, y: p.y - height, w: PLAYER_W, h: height }
+    const hazardBox: Box = { ...box, x: box.x + HAZARD_INSET_X, w: box.w - 2 * HAZARD_INSET_X }
     if (!hitDone && p.y >= GROUND_Y + PIT_HIT_DEPTH) {
       resolveHit(s, cfg, p, undefined, true, events)
       hitDone = true
     }
     for (const e of t.entities) {
       if (s.status !== 'running') return
-      if (e.taken || e.kind === 'pit' || e.kind === 'fanout' || !overlaps(box, e)) continue
-      if (RACKS.has(e.kind)) {
+      if (e.taken || e.kind === 'pit' || e.kind === 'fanout') continue
+      const rack = RACKS.has(e.kind)
+      if (!overlaps(rack ? hazardBox : box, e)) continue
+      if (rack) {
         if (!hitDone) resolveHit(s, cfg, p, e, false, events)
         hitDone = true
         continue

@@ -2,29 +2,21 @@ name: ci
 on:
   push:
     branches: [main]
-    paths: &source-paths
-      - 'cmd/**'
-      - 'internal/**'
-      - 'pkg/**'
-      - 'test/**'
-      - 'main.go'
-      - 'go.mod'
-      - 'go.sum'
-      - 'web/**'
-      - 'Dockerfile'
-      - '.dockerignore'
-      - 'Makefile'
-      - '.github/workflows/ci.yaml'
+  # No path filters: go/web/docker are required checks on main, and a
+  # filtered-out run would leave docs-only PRs waiting on them forever.
   pull_request:
-    paths: *source-paths
+permissions:
+  contents: read
 jobs:
   go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with: { go-version: '1.26.7' }
-      - run: go install gotest.tools/gotestsum@latest
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with: { go-version: '1.26.10' }
+      - run: go install gotest.tools/gotestsum@v1.13.0
       - run: test -z "$(gofmt -l .)"
       - run: go vet -tags unit ./...
       - run: gotestsum --format testname -- -tags unit -race ./...
@@ -32,13 +24,17 @@ jobs:
   web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with: { node-version: '24' }
-      - run: cd web && npm install && npm run lint && npm run build && npm test
+      - run: cd web && npm ci && npm run lint && npm run build && npm test
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Build container image (no push)
         run: docker build -t dev-dashboard:ci .

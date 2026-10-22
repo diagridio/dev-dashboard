@@ -285,7 +285,7 @@ component fails the suite until the doc is updated.
 | Multi-step builder shell | `components/wizard/` (`Wizard`, `Stepper`, `StepNav`) — see §6. |
 | YAML output step | `components/YamlPreview.tsx` — highlighted preview + Copy/Download — see §6. |
 | Connection manager | `components/StateStoreConnectionDialog.tsx` (a `Modal` of `.field` rows driven by `MetadataFieldInput`) + `components/StateStoreConnectionsPanel.tsx`. |
-| Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh, whose dot is also the backend-offline indicator — never mount a per-page one), `components/ThemeToggle.tsx`, and the `↗ Share` button (opens `ShareDialog`). `components/CliDrawer.tsx` is mounted once in the `App.tsx` shell as a fixed right-edge overlay (outside `.body`) — like `RefreshControl` it's global; don't mount a per-page one. |
+| Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh, whose dot is also the backend-offline indicator — never mount a per-page one), `components/ThemeToggle.tsx`, and the `Share ↗` button (opens `ShareDialog`). `components/CliDrawer.tsx` is mounted once in the `App.tsx` shell as a fixed right-edge overlay (outside `.body`) — like `RefreshControl` it's global; don't mount a per-page one. |
 | Share dialog | `components/ShareDialog.tsx` — a `narrow` `Modal` with an intro line, a read-only message-preview `<textarea>`, and a `.modal-actions` row of channel buttons: Copy (`.btn.primary` + `copyText`/toast, initial focus) and Email / X / LinkedIn / BlueSky (`.btn.ghost` links built by `lib/share.ts`). |
 | CLI command drawer | `components/CliDrawer.tsx` — right-edge overlay panel with a vertical `CLI` edge tab; open state persists via `lib/safeStorage.ts`. Its rows are `components/CliCommand.tsx` — a titled command with an optional docs `↗` link and a `⧉ Copy` `.copybtn`. Context-sensitive command sets and placeholder substitution come from `lib/cli.ts` (`getCliContent` / `resolvePlaceholders`). |
 | Busy indicator | `components/Spinner.tsx` — inline braille-dots spinner for in-progress text. Decorative only (`aria-hidden`): always pair it with a text label, inside a `role="status"` element (e.g. the remove dialog's busy state, the Workflows pager's "Updating…"). Renders nothing under `prefers-reduced-motion`, so the label alone carries the state. |
@@ -507,6 +507,12 @@ copy/download buttons per builder.
   ```tsx
   <Link className="celllink" to={`/apps/${id}`} onClick={(e) => e.stopPropagation()}>{id}</Link>
   ```
+- **`↗` goes after the text:** the `↗` glyph marking an external link or a share
+  action always sits to the **right** of its label (`Share ↗`, `Update ↗`,
+  `Dapr Ops Dashboard ↗`), never before it. Other leading glyphs (`◐ Theme`,
+  `⧉ Copy`) are icons, not link affordances, and stay on the left. On a button,
+  keep the label and the arrow on one line (the topbar's `.topright .tbtn` sets
+  `white-space: nowrap`).
 - **Internal-link chips:** a chip that navigates *within* the app is a plain
   `.chip` wrapped in a `<Link>` — never add an external-link `↗`. Reserve the `↗`
   affordance for links that genuinely leave the app. Example (the workflow store's

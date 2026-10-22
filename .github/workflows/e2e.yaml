@@ -9,6 +9,9 @@ on:
         default: all
         options: [all, compose, testcontainers, aspire]
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     runs-on: ubuntu-latest
@@ -17,37 +20,41 @@ jobs:
       matrix:
         mode: [compose, testcontainers, aspire]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Skip unselected modes
         id: gate
+        env:
+          WANT: ${{ github.event.inputs.mode }}
+          MODE: ${{ matrix.mode }}
         run: |
-          want='${{ github.event.inputs.mode }}'
-          if [ "$want" = "all" ] || [ "$want" = "${{ matrix.mode }}" ]; then
+          if [ "$WANT" = "all" ] || [ "$WANT" = "$MODE" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: steps.gate.outputs.run == 'true'
         with:
           go-version-file: go.mod
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.gate.outputs.run == 'true'
         with:
           node-version: 20
 
       - name: Setup .NET
         if: steps.gate.outputs.run == 'true' && matrix.mode == 'aspire'
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: 10.0.x
 
       - name: Install Dapr CLI
         if: steps.gate.outputs.run == 'true' && matrix.mode == 'aspire'
-        run: wget -q https://raw.githubusercontent.com/dapr/cli/master/install/install.sh -O - | /bin/bash
+        run: wget -q https://raw.githubusercontent.com/dapr/cli/v1.19.0/install/install.sh -O - | /bin/bash -s 1.19.0
 
       - name: dapr init (full)
         if: steps.gate.outputs.run == 'true' && matrix.mode == 'aspire'

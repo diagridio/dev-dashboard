@@ -59,17 +59,17 @@ ticks. Every other phase is frame-driven and consumes no ticks.
 
 | Phase | What happens | Leaves on |
 |---|---|---|
-| `title` | Title card; an Execution ID field replays a run someone shared or you copied | Enter → new run |
+| `title` | Title card; below a divider, an Execution ID field replays a run someone shared or you copied | Enter → new run |
 | `resume` | A saved run was found | Enter → replay it · Esc → discard |
 | `tip` | Level tip card | Enter → `playing` |
 | `playing` | Ticks run; input recorded | crash, hit, level end, pause |
 | `paused` | Esc/p, tab hidden or window blur | Esc/Enter/p |
-| `crashing` | "daprd: signal: killed" glitch, `CRASH_FRAMES` (36) | → `replaying` |
+| `crashing` | "GAME SUDDENLY CRASHED, NOT YOUR FAULT!" glitch, plus "DAPR WORKFLOW WILL NOW REPLAY." from level 1 on, `CRASH_FRAMES` (90, 1.5 s, long enough to read both lines) | → `replaying` |
 | `replaying` | History fast-forwarded (≥ 8 ticks/frame, done within ~120 frames) | → `playing`, or boss on divergence |
 | `rewinding` | ◀◀ RetryPolicy rewind effect, `REWIND_FRAMES` (30) | → `playing` |
 | `montage` | Level-end replay of the level's history (~4 s) | Enter skips → `tip` |
 | `lost` | Level 0 crash: progress lost | Enter → level 1 |
-| `over` | Workflow FAILED (or Playback finished) card: stats, the run's execution ID with a `⧉ Copy` button, Replay entire run, Share | Enter → new run |
+| `over` | Workflow FAILED (or Playback finished) card: stats, the run's execution ID with a `⧉ Copy` button and a line saying it can be shared (live runs only), Replay entire run, Share | Enter → new run |
 
 ## History events
 
@@ -131,7 +131,9 @@ RNG in state. Spacing scales with speed, so reaction time stays constant.
 | `fanout` | gate | Starts fan-out when it reaches the hat (never randomly spawned) |
 
 `RACKS` and `HAZARDS` in `step.ts` group the kinds for collisions and for the
-rewind's safe-spot check.
+rewind's safe-spot check. Racks collide with the hat's box shrunk by
+`HAZARD_INSET_X` (3 px) on the left and right, so a graze is forgiven; pickups
+use the full box.
 
 ## The hit chain
 

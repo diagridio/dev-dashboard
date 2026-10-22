@@ -86,6 +86,7 @@ func Execute() error {
 }
 
 func runServe(ctx context.Context, mode Mode, containerPosture bool, settings serveSettings, basePath string, noOpen, verbose bool) error {
+	writeStartupLogo(os.Stdout)
 	logger := logging.New(verbose)
 	slog.SetDefault(logger)
 	statestore.SetVerbose(verbose)
@@ -237,6 +238,13 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		interactive := isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
 		maybeOfferUpdate(ctx, check, os.Stdin, os.Stdout, interactive, selfUpdateAndRestart)
 	}
+	// Bind before announcing the server or opening the browser, so a taken port
+	// fails with advice instead of a "starting" banner. This comes after the
+	// update offer: on Windows a self-update starts the new process before this
+	// one exits, and it needs the port.
+	if err := srv.Listen(); err != nil {
+		return listenError(err, addr, settings.Port, url)
+	}
 	writeStartupBanner(os.Stdout, url, telemetry)
 	if !noOpen && !containerPosture {
 		go func() { time.Sleep(400 * time.Millisecond); _ = openBrowser(url) }()
@@ -262,6 +270,21 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		}
 		return nil
 	}
+}
+
+// startupLogo is printed before any other output when the server starts.
+const startupLogo = `██████╗ ██╗ █████╗  ██████╗ ██████╗ ██╗██████╗
+██╔══██╗██║██╔══██╗██╔════╝ ██╔══██╗██║██╔══██╗
+██║  ██║██║███████║██║  ███╗██████╔╝██║██║  ██║
+██║  ██║██║██╔══██║██║   ██║██╔══██╗██║██║  ██║
+██████╔╝██║██║  ██║╚██████╔╝██║  ██║██║██████╔╝
+╚═════╝ ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝
+────────────────────────────────────────────────
+`
+
+// writeStartupLogo prints the DIAGRID logo; it is the first thing serve outputs.
+func writeStartupLogo(w io.Writer) {
+	fmt.Fprint(w, startupLogo)
 }
 
 // writeStartupBanner prints the lines shown when the server starts: the URL,

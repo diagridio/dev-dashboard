@@ -16,7 +16,7 @@ describe('Overlay', () => {
     render(
       <Overlay phase={{ kind: 'over', reason: 'hit an obstacle' }} stats={stats} best={40} score={12} level={3} date="2026-09-30" dailyBest={0} onShare={onShare} />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '↗ Share' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Share ↗' }))
     expect(onShare).toHaveBeenCalledTimes(1)
   })
 
@@ -24,7 +24,7 @@ describe('Overlay', () => {
     render(
       <Overlay phase={{ kind: 'over', reason: 'hit an obstacle' }} stats={stats} best={40} score={12} level={3} date="2026-09-30" dailyBest={0} onShare={vi.fn()} />,
     )
-    const share = screen.getByRole('button', { name: '↗ Share' })
+    const share = screen.getByRole('button', { name: 'Share ↗' })
     expect(share).toHaveClass('tbtn')
     const hint = screen.getByText('Enter to play again')
     expect(share.parentElement).toBe(hint.parentElement)
@@ -35,7 +35,7 @@ describe('Overlay', () => {
 
   it('shows no Share button outside the end-of-run card', () => {
     render(<Overlay phase={{ kind: 'title' }} stats={stats} best={40} score={12} level={0} date="2026-09-30" dailyBest={0} onShare={vi.fn()} />)
-    expect(screen.queryByRole('button', { name: '↗ Share' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Share ↗' })).toBeNull()
   })
 
   it('shows the safety stats on the end-of-run card', () => {
@@ -113,6 +113,28 @@ describe('Overlay', () => {
     expect(onWatch).toHaveBeenCalledWith(' RPL1.xyz ')
     expect(screen.getByText("That execution ID isn't valid.")).toBeInTheDocument()
     expect(screen.queryByText(/run code/i)).toBeNull()
+  })
+
+  it('separates the game instructions from the replay form with a divider', () => {
+    render(<Overlay phase={{ kind: 'title' }} {...common} onWatch={vi.fn()} />)
+    const divider = screen.getByRole('separator')
+    const form = screen.getByRole('button', { name: 'Replay run' }).closest('form')!
+    expect(divider.nextElementSibling).toBe(form)
+  })
+
+  it('has no divider on the title card without the replay form', () => {
+    render(<Overlay phase={{ kind: 'title' }} {...common} />)
+    expect(screen.queryByRole('separator')).toBeNull()
+  })
+
+  it('explains that the execution ID can be shared so others can replay the game', () => {
+    const text = 'Share this execution ID with a friend or colleague so they can replay your game.'
+    const { rerender } = render(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionId="RPL1.abc" />)
+    expect(screen.getByText(text)).toBeInTheDocument()
+    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} />)
+    expect(screen.queryByText(text)).toBeNull()
+    rerender(<Overlay phase={{ kind: 'over', reason: 'x' }} {...common} executionId="RPL1.abc" playback />)
+    expect(screen.queryByText(text)).toBeNull()
   })
 
   it('sets the daily run, the instructions and the best scores larger on the start card', () => {

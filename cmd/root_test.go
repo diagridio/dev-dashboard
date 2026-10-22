@@ -12,6 +12,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestWriteStartupLogo(t *testing.T) {
+	var buf bytes.Buffer
+	writeStartupLogo(&buf)
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 7)
+	require.Equal(t, "██████╗ ██╗ █████╗  ██████╗ ██████╗ ██╗██████╗", lines[0])
+	require.Equal(t, "╚═════╝ ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝╚═╝╚═════╝", lines[5])
+	require.Equal(t, strings.Repeat("─", 48), lines[6], "a rule closes the logo")
+}
+
 func TestWriteStartupBanner(t *testing.T) {
 	const konami = "Make sure to try the Konami code and have some fun! ;)"
 	for _, tc := range []struct {
