@@ -7,7 +7,7 @@ require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/dapr/cli v1.18.3
 	github.com/dapr/components-contrib v1.18.6
-	github.com/dapr/durabletask-go v0.15.1
+	github.com/dapr/durabletask-go v0.12.1
 	github.com/dapr/kit v0.18.2
 	github.com/go-chi/chi/v5 v5.5.0
 	github.com/mattn/go-isatty v0.0.24
