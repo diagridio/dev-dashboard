@@ -40,7 +40,7 @@ func TestAspireModeEndToEnd(t *testing.T) {
 	t.Setenv("DEVDASHBOARD_APP_0_ID", "orders")
 	t.Setenv("DEVDASHBOARD_APP_0_DAPR_HTTP", daprd.URL)
 
-	scan, err := discovery.NewAspireScanner(os.Getenv)
+	scan, err := discovery.NewContractScanner(os.Getenv, discovery.SourceAspire)
 	require.NoError(t, err)
 	appsSvc := discovery.New(scan, daprd.Client())
 	caps := &server.Capabilities{Workflows: false}

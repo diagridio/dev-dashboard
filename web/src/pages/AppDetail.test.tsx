@@ -233,6 +233,35 @@ describe('AppDetail', () => {
     expect(await screen.findByText(/publish the daprd HTTP port/i)).toBeInTheDocument()
   })
 
+  it('shows the shared-network hint, not the publish-port hint, in container posture', async () => {
+    window.__DASH_CAPABILITIES__ = {
+      lifecycle: false,
+      controlPlane: false,
+      logs: false,
+      workflows: true,
+      state: false,
+      secretReveal: false,
+      mode: 'compose',
+      containerPosture: true,
+    }
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({
+          appId: 'order',
+          health: 'unhealthy',
+          runtime: 'go',
+          httpPort: 3500,
+          metadataOk: false,
+          source: 'compose',
+          sidecarReachable: false,
+        }),
+      ),
+    )
+    renderDetail()
+    expect(await screen.findByText(/same Docker network/i)).toBeInTheDocument()
+    expect(screen.queryByText(/publish the daprd HTTP port/i)).not.toBeInTheDocument()
+  })
+
   it('renders metadata section with component chips and enabled features', async () => {
     server.use(
       http.get('/api/apps/order', () =>

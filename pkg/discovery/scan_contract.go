@@ -3,6 +3,7 @@ package discovery
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -12,19 +13,20 @@ import (
 // or hostile value forcing a huge allocation/scan loop.
 const maxAspireAppCount = 1024
 
-// AspireContractPresent reports whether the DEVDASHBOARD_APP_* env contract
+// ContractPresent reports whether the DEVDASHBOARD_APP_* env contract
 // is set at all (anchor variable: DEVDASHBOARD_APP_COUNT). Used with mode
-// unset to decide whether the aspire source joins the merge.
-func AspireContractPresent(getenv func(string) string) bool {
+// unset to decide whether the contract source joins the merge.
+func ContractPresent(getenv func(string) string) bool {
 	return strings.TrimSpace(getenv("DEVDASHBOARD_APP_COUNT")) != ""
 }
 
-// NewAspireScanner parses the DEVDASHBOARD_APP_* env contract eagerly and
-// returns a static Scanner over the parsed apps. Malformed contracts fail
+// NewContractScanner parses the DEVDASHBOARD_APP_* env contract eagerly and
+// returns a static Scanner over the parsed apps, each tagged with source
+// (SourceAspire or SourceCompose). Malformed contracts fail
 // here — at startup — with an error naming the exact variable, never at scan
 // time. The returned scanner is static: env is read once; liveness comes
 // from the discovery service's per-poll health/metadata probes.
-func NewAspireScanner(getenv func(string) string) (Scanner, error) {
+func NewContractScanner(getenv func(string) string, source string) (Scanner, error) {
 	countRaw := strings.TrimSpace(getenv("DEVDASHBOARD_APP_COUNT"))
 	count, err := strconv.Atoi(countRaw)
 	if err != nil || count < 0 {
@@ -72,13 +74,22 @@ func NewAspireScanner(getenv func(string) string) (Scanner, error) {
 		if label == "" {
 			label = id
 		}
+		grpcKey := fmt.Sprintf("DEVDASHBOARD_APP_%d_DAPR_GRPC", i)
+		grpcAddr := strings.TrimSpace(getenv(grpcKey))
+		if grpcAddr == "" {
+			grpcAddr = deriveGRPCAddr(u)
+		} else if err := validateHostPort(grpcAddr); err != nil {
+			errs = append(errs, fmt.Errorf("%s: %w", grpcKey, err))
+			continue
+		}
 		seenID[id] = idKey
 		results = append(results, ScanResult{
 			AppID:            id,
 			DaprHTTPBaseURL:  strings.TrimRight(raw, "/"),
+			DaprGRPCAddr:     grpcAddr,
 			Namespace:        ns,
 			Label:            label,
-			Source:           SourceAspire,
+			Source:           source,
 			SidecarReachable: true,
 		})
 	}
@@ -90,4 +101,36 @@ func NewAspireScanner(getenv func(string) string) (Scanner, error) {
 		copy(out, results)
 		return out, nil
 	}, nil
+}
+
+// defaultDaprGRPCPort is daprd's default gRPC port, used when the contract
+// declares only an HTTP base URL.
+const defaultDaprGRPCPort = "50001"
+
+// deriveGRPCAddr builds the sidecar gRPC endpoint from the validated HTTP
+// base URL: the same host, with daprd's default gRPC port. Correct in every
+// compose network shape because it inherits whichever host already reaches
+// the sidecar.
+func deriveGRPCAddr(u *url.URL) string {
+	return net.JoinHostPort(u.Hostname(), defaultDaprGRPCPort)
+}
+
+// validateHostPort rejects anything that is not a bare host:port with a
+// numeric in-range port (a URL, a bare host, an empty host).
+func validateHostPort(addr string) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("expected a host:port address, got %q", addr)
+	}
+	if host == "" {
+		return fmt.Errorf("expected a host:port address with a non-empty host, got %q", addr)
+	}
+	if strings.Contains(host, "/") {
+		return fmt.Errorf("expected a host:port address, not a URL, got %q", addr)
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil || p < 1 || p > 65535 {
+		return fmt.Errorf("expected a port number in 1-65535, got %q", addr)
+	}
+	return nil
 }

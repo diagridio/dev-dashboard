@@ -495,12 +495,14 @@ func (rc *reconciler) DeleteStore(id string) error {
 	return nil
 }
 
-// sidecarEndpoints returns the workflow sidecar endpoints eligible under the
+// sidecarEndpoints returns the sidecar-sourced app endpoints under the current
 // selection rule. Testcontainers apps are always eligible (their store lives
-// inside the container and is never host-readable). When includeAll is true
-// (no openable active store), every reachable non-aspire sidecar with a
-// published gRPC port becomes eligible. The list is computed per query from
-// live discovery so re-published random ports apply immediately.
+// inside the container and is never host-readable), as are contract-declared
+// apps (they carry an explicit in-network gRPC address and may have no
+// readable store). When includeAll is true (no openable active store), every
+// reachable non-aspire sidecar with a gRPC endpoint becomes eligible. The list
+// is computed per query from live discovery so re-published random ports apply
+// immediately.
 func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
 	return func(ctx context.Context) []workflow.SidecarEndpoint {
 		if rc.apps == nil {
@@ -513,19 +515,28 @@ func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
 		var eps []workflow.SidecarEndpoint
 		seen := map[string]bool{}
 		for _, in := range apps {
-			if in.GRPCPort == 0 || seen[in.AppID] {
+			addr := in.GRPCAddr()
+			if addr == "" || seen[in.AppID] {
 				continue
 			}
+			// Aspire apps are never sidecar-sourced. This is checked first and
+			// unconditionally: the contract scanner sets DaprGRPCAddr for aspire
+			// posture too, so folding it into the includeAll clause below would
+			// silently admit them.
+			if in.Source == discovery.SourceAspire {
+				continue
+			}
+			// A contract-declared app carries its own gRPC address and is
+			// always sidecar-sourced: there may be no readable store at all,
+			// exactly as for Testcontainers apps.
 			include := in.Source == discovery.SourceTestcontainers ||
-				(includeAll && in.SidecarReachable && in.Source != discovery.SourceAspire)
+				in.DaprGRPCAddr != "" ||
+				(includeAll && in.SidecarReachable)
 			if !include {
 				continue
 			}
 			seen[in.AppID] = true
-			eps = append(eps, workflow.SidecarEndpoint{
-				AppID: in.AppID,
-				Addr:  "127.0.0.1:" + strconv.Itoa(in.GRPCPort),
-			})
+			eps = append(eps, workflow.SidecarEndpoint{AppID: in.AppID, Addr: addr})
 		}
 		return eps
 	}
