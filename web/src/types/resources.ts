@@ -1,3 +1,5 @@
+import type { Policies, Targets } from './resiliency'
+
 export interface Actor {
   appId: string
   /** routing identity: container name for compose apps, appId otherwise */
@@ -24,7 +26,7 @@ export interface Subscription {
   reachable?: boolean
 }
 
-export type ResourceKind = 'component' | 'configuration'
+export type ResourceKind = 'component' | 'configuration' | 'resiliency'
 
 export type SecretStatus =
   | 'resolved'
@@ -70,10 +72,19 @@ export interface ResourceSummary {
   version?: string
   path: string
   loadedBy?: string[]
+  scopes?: string[]
   secretRefs?: SecretRefStatus[]
+  /** Parsed spec, only on resiliency resources. */
+  resiliency?: ResiliencySpec
 }
 
 export interface ResourceDetail extends ResourceSummary {
   raw?: string
   secretStore?: SecretStoreInfo
+}
+
+/** Spec of a discovered Resiliency file; maps are omitted when empty. */
+export interface ResiliencySpec {
+  policies: Partial<Policies>
+  targets: Targets
 }

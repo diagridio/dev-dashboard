@@ -57,7 +57,7 @@ func TestResourcesListWithLoadedBy(t *testing.T) {
 
 	r5, body5 := get(t, h, "/badkind/foo")
 	require.Equal(t, http.StatusBadRequest, r5.StatusCode)
-	require.Contains(t, body5, `"error":"kind must be component or configuration"`)
+	require.Contains(t, body5, `"error":"kind must be component, configuration or resiliency"`)
 }
 
 func TestLoadedByUsesInstanceKeys(t *testing.T) {
@@ -75,4 +75,31 @@ func TestLoadedByUsesInstanceKeys(t *testing.T) {
 	r2, body2 := get(t, h, "/?kind=component")
 	require.Equal(t, http.StatusOK, r2.StatusCode)
 	require.Contains(t, body2, `"loadedBy":["daprmq-host-1","daprmq-host-2"]`)
+}
+
+func TestResourcesListResiliency(t *testing.T) {
+	res := fakeResources{items: []resources.Resource{{
+		Name:   "party-api-resiliency",
+		Kind:   resources.KindResiliency,
+		Path:   "/proj/resources/common/resiliency.yaml",
+		Scopes: []string{"party-api"},
+		Resiliency: &resources.ResiliencySpec{
+			Policies: resources.ResiliencyPolicies{Timeouts: map[string]string{"downstream": "2s"}},
+			Targets: resources.ResiliencyTargets{Apps: map[string]resources.ResiliencyPolicyRefs{
+				"party-registry": {Timeout: "downstream"},
+			}},
+		},
+	}}}
+	h := resourcesRouter(res, &fakeApps{}, false)
+
+	r1, body := get(t, h, "/?kind=resiliency")
+	require.Equal(t, http.StatusOK, r1.StatusCode)
+	require.Contains(t, body, `"name":"party-api-resiliency"`)
+	require.Contains(t, body, `"scopes":["party-api"]`)
+	require.Contains(t, body, `"timeouts":{"downstream":"2s"}`)
+	require.Contains(t, body, `"apps":{"party-registry":{"timeout":"downstream"}}`)
+
+	r2, body2 := get(t, h, "/resiliency/party-api-resiliency")
+	require.Equal(t, http.StatusOK, r2.StatusCode)
+	require.Contains(t, body2, `"kind":"resiliency"`)
 }

@@ -17,8 +17,8 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 	r := chi.NewRouter()
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
 		kind := resources.Kind(req.URL.Query().Get("kind"))
-		if kind != resources.KindComponent && kind != resources.KindConfiguration {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component or configuration"})
+		if !validKind(kind) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component, configuration or resiliency"})
 			return
 		}
 		list, err := res.List(req.Context(), kind)
@@ -39,8 +39,8 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 	})
 	r.Get("/{kind}/{name}", func(w http.ResponseWriter, req *http.Request) {
 		kind := resources.Kind(chi.URLParam(req, "kind"))
-		if kind != resources.KindComponent && kind != resources.KindConfiguration {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component or configuration"})
+		if !validKind(kind) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component, configuration or resiliency"})
 			return
 		}
 		idOrName := chi.URLParam(req, "name")
@@ -86,6 +86,15 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 		writeJSON(w, http.StatusOK, map[string]string{"value": val})
 	})
 	return r
+}
+
+// validKind reports whether kind is served by the resources API.
+func validKind(kind resources.Kind) bool {
+	switch kind {
+	case resources.KindComponent, resources.KindConfiguration, resources.KindResiliency:
+		return true
+	}
+	return false
 }
 
 // loadedByFor returns the sorted instance keys whose instance contains component name.
