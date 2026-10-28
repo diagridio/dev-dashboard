@@ -17,6 +17,7 @@
       "type": "PROGRAMMATIC"
     }
   ],
+  "resiliencies": [{ "name": "order-resiliency" }],
   "actorRuntime": { "placement": "placement: connected" },
   "extended": {
     "appPID": "12345",

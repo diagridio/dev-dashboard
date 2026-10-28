@@ -33,6 +33,12 @@ type Component struct {
 	Version string `json:"version,omitempty"`
 }
 
+// Resiliency is a resiliency policy a sidecar has loaded. daprd reports
+// only the name.
+type Resiliency struct {
+	Name string `json:"name"`
+}
+
 type Metadata struct {
 	ID              string
 	RuntimeVersion  string
@@ -46,6 +52,7 @@ type Metadata struct {
 	Actors          []ActorType
 	Subscriptions   []Subscription
 	Components      []Component
+	Resiliencies    []Resiliency
 	EnabledFeatures []string
 	Placement       string
 }
@@ -66,6 +73,7 @@ type rawMetadata struct {
 	Actors          []ActorType       `json:"actors"`
 	Components      []Component       `json:"components"`
 	Subscriptions   []rawSubscription `json:"subscriptions"`
+	Resiliencies    []Resiliency      `json:"resiliencies"`
 	ActorRuntime    struct {
 		Placement string `json:"placement"`
 	} `json:"actorRuntime"`
@@ -133,6 +141,7 @@ func FetchMetadata(ctx context.Context, client *http.Client, baseURL string) (Me
 		Actors:          raw.Actors,
 		Components:      raw.Components,
 		Subscriptions:   subs,
+		Resiliencies:    raw.Resiliencies,
 		EnabledFeatures: raw.EnabledFeatures,
 		Placement:       raw.ActorRuntime.Placement,
 	}, nil

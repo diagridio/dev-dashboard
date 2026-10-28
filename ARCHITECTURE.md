@@ -488,7 +488,7 @@ stdout+stderr onto one channel for the SSE handler. **To add an action:** extend
 
 ### Resources (`pkg/resources`)
 
-Loads `Component` and `Configuration` YAML (multi-doc) from the reconciler's scan paths,
+Loads `Component`, `Configuration` and `Resiliency` YAML (multi-doc) from the reconciler's scan paths,
 deduped by absolute path, merged with an **extras provider** — entries that exist outside
 the host filesystem, today the YAML extracted from Testcontainers daprd containers. Extras
 carry their raw YAML inline and a container-prefixed display path
@@ -498,8 +498,10 @@ never `statestore.Detect`, the reconciler's paths, or store election. An extract
 `state.in-memory` component with `actorStateStore: true` would otherwise win the election
 and break other apps' workflow views; a guard test
 (`TestVirtualPathsDoNotFeedStoreDetection`) pins this. The HTTP layer enriches each
-component with `LoadedBy` — which running apps loaded it — by cross-referencing discovery.
-`Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
+component and resiliency policy with `LoadedBy` — which running apps loaded it — by
+cross-referencing the names each sidecar reports in `/v1.0/metadata`.
+Resiliency entries also carry `scopes` and the parsed spec (policies + targets) for the
+Resiliency page. `Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
 `Kind` type + `kindFromString` and the API validation in `pkg/server/resources.go`.
 
 ### Logs (`pkg/logs`)
@@ -564,7 +566,7 @@ Client-side History-API routing; the router `basename` and all API URLs derive f
 `index.html` for unknown paths. Pages: **Applications** (`/`), **AppDetail**
 (`/apps/:id`), **Workflows** + **WorkflowDetail**, **Actors**, **Subscriptions**,
 **ResourceList/Detail** (`/components`, `/configurations`), **ComponentBuilder**
-(`/components/new`), **Resiliency** + **ResiliencyBuilder** (`/resiliency/new`),
+(`/components/new`), **Resiliency** (`/resiliency`, discovered policies) + **ResiliencyBuilder** (`/resiliency/new`),
 **ControlPlane**, and **Logs**. Feature-gated pages (Logs, ControlPlane, lifecycle
 surfaces) mount only when their server-injected capability flag is on — see
 *Capabilities* in §5.
