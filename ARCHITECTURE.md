@@ -498,7 +498,8 @@ never `statestore.Detect`, the reconciler's paths, or store election. An extract
 `state.in-memory` component with `actorStateStore: true` would otherwise win the election
 and break other apps' workflow views; a guard test
 (`TestVirtualPathsDoNotFeedStoreDetection`) pins this. The HTTP layer enriches each
-component with `LoadedBy` — which running apps loaded it — by cross-referencing discovery.
+component and resiliency policy with `LoadedBy` — which running apps loaded it — by
+cross-referencing the names each sidecar reports in `/v1.0/metadata`.
 Resiliency entries also carry `scopes` and the parsed spec (policies + targets) for the
 Resiliency page. `Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
 `Kind` type + `kindFromString` and the API validation in `pkg/server/resources.go`.

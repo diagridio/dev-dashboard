@@ -90,7 +90,11 @@ func TestResourcesListResiliency(t *testing.T) {
 			}},
 		},
 	}}}
-	h := resourcesRouter(res, &fakeApps{}, false)
+	apps := &fakeApps{instances: []discovery.Instance{
+		{AppID: "party-api", Resiliencies: []discovery.Resiliency{{Name: "party-api-resiliency"}}},
+		{AppID: "party-registry", Components: []discovery.Component{{Name: "party-api-resiliency"}}},
+	}}
+	h := resourcesRouter(res, apps, false)
 
 	r1, body := get(t, h, "/?kind=resiliency")
 	require.Equal(t, http.StatusOK, r1.StatusCode)
@@ -98,8 +102,12 @@ func TestResourcesListResiliency(t *testing.T) {
 	require.Contains(t, body, `"scopes":["party-api"]`)
 	require.Contains(t, body, `"timeouts":{"downstream":"2s"}`)
 	require.Contains(t, body, `"apps":{"party-registry":{"timeout":"downstream"}}`)
+	// Only sidecars reporting the policy under resiliencies count, not a
+	// same-named component.
+	require.Contains(t, body, `"loadedBy":["party-api"]`)
 
 	r2, body2 := get(t, h, "/resiliency/party-api-resiliency")
 	require.Equal(t, http.StatusOK, r2.StatusCode)
 	require.Contains(t, body2, `"kind":"resiliency"`)
+	require.Contains(t, body2, `"loadedBy":["party-api"]`)
 }

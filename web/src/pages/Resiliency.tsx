@@ -180,6 +180,16 @@ function ResiliencyDetail({ summary }: { summary: ResourceSummary }) {
               <span className="muted">all apps</span>
             )}
           </div>
+          <div className="kk">Loaded by</div>
+          <div className="vv" style={{ flexWrap: 'wrap', gap: 4 }}>
+            {summary.loadedBy && summary.loadedBy.length > 0 ? (
+              summary.loadedBy.map((key) => (
+                <Link key={key} className="appref link" to={`/apps/${key}`}>{key}</Link>
+              ))
+            ) : (
+              <span className="muted" style={{ fontStyle: 'italic' }}>not currently loaded</span>
+            )}
+          </div>
         </div>
       </div>
 

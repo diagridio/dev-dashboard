@@ -14,6 +14,7 @@ const PARTY = {
   kind: 'resiliency',
   path: '/proj/resources/common/resiliency.yaml',
   scopes: ['party-api'],
+  loadedBy: ['party-api'],
   resiliency: {
     policies: {
       timeouts: { downstream: '2s' },
@@ -101,6 +102,7 @@ describe('Resiliency page', () => {
     expect(within(appRow).getByText('registryCB')).toBeInTheDocument()
     expect(within(targets).getByText('component · outbound')).toBeInTheDocument()
 
+    expect(screen.getByRole('link', { name: 'party-api' })).toHaveAttribute('href', '/apps/party-api')
     expect(screen.getAllByText('/proj/resources/common/resiliency.yaml').length).toBeGreaterThan(0)
     await waitFor(() => expect(document.querySelector('pre.code')?.textContent).toContain('kind: Resiliency'))
   })
@@ -111,6 +113,7 @@ describe('Resiliency page', () => {
     await screen.findByText('global-resiliency', { selector: '.cn' })
     // First item is selected by default; it has no policies or targets.
     expect(screen.getByText('No policies defined.')).toBeInTheDocument()
+    expect(screen.getByText('not currently loaded')).toBeInTheDocument()
     fireEvent.click(screen.getByText('party-api-resiliency', { selector: '.cn' }))
     await waitFor(() => expect(router.state.location.pathname).toBe('/resiliency/res111res111'))
     expect(await screen.findByText('party-registry')).toBeInTheDocument()

@@ -20,6 +20,7 @@ func TestFetchMetadataRichFields(t *testing.T) {
 			"actors":[{"type":"OrderActor","count":3}],
 			"components":[{"name":"statestore","type":"state.redis","version":"v1"}],
 			"subscriptions":[{"pubsubname":"pubsub","topic":"orders","deadLetterTopic":"orders-dlq","type":"PROGRAMMATIC","rules":[{"match":"","path":"/orders"}]}],
+			"resiliencies":[{"name":"order-resiliency"}],
 			"actorRuntime":{"runtimeStatus":"RUNNING","placement":"placement: connected","hostReady":true},
 			"extended":{"appCommand":"go run ./cmd/order"}
 		}`))
@@ -40,6 +41,7 @@ func TestFetchMetadataRichFields(t *testing.T) {
 	require.Equal(t, "orders", md.Subscriptions[0].Topic)
 	require.Equal(t, "orders-dlq", md.Subscriptions[0].DeadLetterTopic)
 	require.Equal(t, "/orders", md.Subscriptions[0].Rules[0].Path)
+	require.Equal(t, []Resiliency{{Name: "order-resiliency"}}, md.Resiliencies)
 	require.Equal(t, "placement: connected", md.Placement)
 }
 

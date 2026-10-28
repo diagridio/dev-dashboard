@@ -33,6 +33,11 @@
       "version": "v1"
     }
   ],
+  "Resiliencies": [
+    {
+      "name": "order-resiliency"
+    }
+  ],
   "EnabledFeatures": [
     "ServiceInvocation",
     "StateManagement"
