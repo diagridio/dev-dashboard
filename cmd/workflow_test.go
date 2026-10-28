@@ -115,7 +115,7 @@ func TestContractNamespaces(t *testing.T) {
 		"DEVDASHBOARD_APP_1_ID":        "billing",
 		"DEVDASHBOARD_APP_1_DAPR_HTTP": "http://billing-dapr:3500",
 	}
-	scan, err := discovery.NewAspireScanner(func(k string) string { return env[k] })
+	scan, err := discovery.NewContractScanner(func(k string) string { return env[k] }, discovery.SourceAspire)
 	require.NoError(t, err)
 
 	m := contractNamespaces(scan)

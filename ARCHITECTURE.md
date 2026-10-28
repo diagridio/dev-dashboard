@@ -133,9 +133,9 @@ threads through everything.
 
 | Flag | Default | Controls |
 |------|---------|----------|
-| `--port` | `9090` | HTTP listen port (`8080` default in aspire container posture) |
-| `--bind` | `127.0.0.1` | Listen address (`0.0.0.0` default in aspire container posture) |
-| `--mode` | unset | Exclusive discovery filter: `dapr-run`, `compose`, `test-containers`, `aspire`; unset = complete scan (env: `DEVDASHBOARD_MODE`, flag wins) |
+| `--port` | `9090` | HTTP listen port (`8080` default in container posture) |
+| `--bind` | `127.0.0.1` | Listen address (`0.0.0.0` default in container posture) |
+| `--mode` | unset | Exclusive discovery filter: `dapr-run`, `compose`, `test-containers`, `aspire`; unset = complete scan; `compose` (like `aspire`) selects container posture when the `DEVDASHBOARD_APP_*` contract is present (env: `DEVDASHBOARD_MODE`, flag wins) |
 | `--base-path` | `""` | Sub-path mount, e.g. `/dashboard` (must match the SPA's `DASH_BASE_PATH` build var) |
 | `--no-open` | `false` | Skip auto-opening the browser |
 | `--statestore` | `""` | Explicit state-store component YAML; disables auto-detection |
@@ -149,15 +149,19 @@ reconciler.)
 ### `serve` boot sequence (`cmd/root.go` `runServe` → `cmd/serve.go` `assembleOptions`)
 
 1. Resolve the mode and posture (`cmd/mode.go`): `resolveMode` validates
-   `--mode`/`DEVDASHBOARD_MODE`; **container posture** = aspire mode *with* the
+   `--mode`/`DEVDASHBOARD_MODE`; **container posture** = aspire **or compose** mode *with* the
    `DEVDASHBOARD_APP_*` env contract present, and drives the port/bind defaults
    (`resolveServeSettings`, flag > env > posture default), Host-guard relaxation,
    registry persistence, and browser auto-open. Aspire *without* the contract is a
-   host-posture run filtered to Aspire-managed apps.
+   host-posture run filtered to Aspire-managed apps, and compose *without* the contract is
+   today's host docker-scan.
 2. `logging.New(verbose)` → set as the default `slog.Logger`.
 3. Load the embedded SPA (`web.DistFS()`) and the component catalog (`metadata.Init()`).
 4. Resolve the bind address and the browser URL (base-path aware).
-5. Select discovery sources by mode (`cmd/sources.go` `sourcesFor`): mode-unset runs
+5. Select discovery sources. Container posture branches first to the env-contract scanner
+   (`NewContractScanner`, Source `aspire` or `compose` from the mode), so `sourcesFor` is
+   never consulted and no container runtime is needed. Otherwise, by mode
+   (`cmd/sources.go` `sourcesFor`): mode-unset runs
    every scanner; a filter mode runs exactly one (aspire host mode additionally wraps
    the service in `discovery.FilterAspire`). `compose` and `test-containers` **fail
    startup here** when no container runtime is found. The control-plane manager gets
@@ -305,15 +309,18 @@ invalid action → 400, runtime unavailable → 503, exec failure → 502.
 
 Not every route in the table above always exists. One binary serves two very different
 postures, and a `Capabilities` struct (`Lifecycle`, `ControlPlane`, `Logs`, `Workflows`, `State`,
-`SecretReveal`, plus a `Mode` echo of the `--mode` value) decides which feature surfaces are on. The
+`SecretReveal`, `ContainerPosture`, plus a `Mode` echo of the `--mode` value) decides which feature surfaces are on. The
 layer has three tiers:
 
 1. **Decided at boot** (`cmd/root.go` `runServe`): host modes get `FullCapabilities()`
-   with `Mode` set to the CLI value; aspire **container posture** gets only `Workflows`
-   (and that only when a state store is configured) — inside the AppHost container there
-   is no host process table for lifecycle, no docker socket for the control plane, and
-   no `~/.dapr` log files to tail. A nil `Options.Capabilities` defaults to full host
-   capabilities.
+   with `Mode` set to the CLI value; **container posture** (aspire or compose) sets
+   `ContainerPosture` and gets only `Workflows` and `State`, each only when a state store is
+   configured, and `SecretReveal` is always off — inside the container there is no host
+   process table for lifecycle, no docker socket for the control plane, and no `~/.dapr`
+   log files to tail. Compose container posture additionally gets `Workflows` from the
+   sidecar-gRPC source whenever an app is declared, with no store (Dapr 1.17+); `State`
+   has no sidecar fallback and still needs `DEVDASHBOARD_STATESTORE_FILE`. A nil
+   `Options.Capabilities` defaults to full host capabilities.
 2. **Enforced server-side** (`pkg/server/api.go`): route *registration* is conditional —
    `caps.Workflows` gates the workflow routes, `caps.ControlPlane` gates
    `/api/controlplane`. This is the design rule to keep: **the JSON flags are advisory
@@ -380,7 +387,7 @@ A second scanner, `ComposeSource` (`scan_compose.go`), discovers Dapr apps runni
 
 A third scanner, `TestcontainersSource` (`scan_testcontainers.go`), discovers **Dapr Testcontainers** sessions (e.g. Spring Boot apps run with `mvn spring-boot:test-run` and `dapr-spring-boot-starter-test`): it lists `org.testcontainers=true`-labelled containers and keeps those whose argv invokes `daprd` (which naturally excludes ryuk/placement/scheduler helpers). The daprd container publishes its HTTP/gRPC ports to **random host ports on every run**, so port mappings are re-read each poll. Unlike compose, the paired app is a **host process** (reached via `host.testcontainers.internal`): enrichment probes the app port for liveness and resolves the listener's command and PID (`appproc.go`) for runtime inference, App PID, and uptime. The scanner also extracts the container's `--resources-path` YAML as a tar stream (`cp <id>:<dir> -`, `tar_extract.go` — no shell needed, distroless-safe; cached per container ID, evicted on departure, transient failures retried) and exposes it via `Files()` for the resources extras provider (see Resources below). Lifecycle actions are refused for these apps — ryuk owns the containers, the test process owns the app. All scanners are combined with `Merge` (one failing source never hides the others).
 
-Which scanners run is decided by `--mode` (`cmd/sources.go` `sourcesFor`): unset merges all of the above (plus the Aspire env-contract scanner when `DEVDASHBOARD_APP_COUNT` is set); `dapr-run`, `compose`, and `test-containers` run exactly one scanner each. `--mode aspire` without the env contract runs the standalone scan and wraps the **outermost** service (after the lifecycle overlay) in `FilterAspire` (`filter.go`), which keeps only instances flagged `IsAspire` by enrichment — the flag comes from the DCP-proxy heuristic (`appproc.go`), so it cannot be filtered at scan time.
+Which scanners run is decided by `--mode` (`cmd/sources.go` `sourcesFor`): unset merges all of the above (plus the env-contract scanner, `NewContractScanner` in `scan_contract.go`, when `DEVDASHBOARD_APP_COUNT` is set; it takes the `Source` label to stamp on results, `aspire` or `compose`, and also carries each app's sidecar gRPC address); `dapr-run`, `compose`, and `test-containers` run exactly one scanner each. `--mode aspire` without the env contract runs the standalone scan and wraps the **outermost** service (after the lifecycle overlay) in `FilterAspire` (`filter.go`), which keeps only instances flagged `IsAspire` by enrichment — the flag comes from the DCP-proxy heuristic (`appproc.go`), so it cannot be filtered at scan time.
 
 Derived fields include a human-friendly `Age` and an inferred runtime language.
 **To add a per-app field:** add it to `Instance` (`types.go`), populate it in `enrich`

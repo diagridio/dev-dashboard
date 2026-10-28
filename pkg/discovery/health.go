@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +21,19 @@ func sidecarBaseURL(base string, httpPort int) string {
 // else the loopback-port form).
 func (in Instance) BaseURL() string {
 	return sidecarBaseURL(in.DaprHTTPBaseURL, in.HTTPPort)
+}
+
+// GRPCAddr resolves this instance's daprd gRPC endpoint as host:port (a
+// contract-supplied address wins, else the loopback-port form). Empty means
+// no gRPC endpoint is known.
+func (in Instance) GRPCAddr() string {
+	if in.DaprGRPCAddr != "" {
+		return in.DaprGRPCAddr
+	}
+	if in.GRPCPort == 0 {
+		return ""
+	}
+	return "127.0.0.1:" + strconv.Itoa(in.GRPCPort)
 }
 
 // CheckHealth probes a sidecar's /v1.0/healthz endpoint at baseURL.
