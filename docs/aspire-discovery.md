@@ -3,7 +3,7 @@
 Reference documentation for how the Diagrid Dev Dashboard currently discovers
 and reads **every resource** when integrating with .NET Aspire. This describes
 the implemented behavior as of 2026-07-13; for the original rationale see
-[the aspire-container-mode design](superpowers/specs/2026-07-11-aspire-container-mode-design.md),
+[the aspire-container-mode design](specs/2026-07-11-aspire-container-mode-design.md),
 and for the wider architecture see [ARCHITECTURE.md](../ARCHITECTURE.md).
 
 > **One-line summary:** In Aspire, the dashboard does not scan anything. A .NET
@@ -41,7 +41,7 @@ defaults and filters the standalone process scan to instances flagged
 `IsAspire` (DCP-proxy heuristic); the env-contract container flow described
 above is unchanged. Heuristic limitations (apps without an app port are
 missed; stopped apps drop out) are listed in
-[2026-07-13-mode-filter-design.md](superpowers/specs/2026-07-13-mode-filter-design.md).
+[2026-07-13-mode-filter-design.md](specs/2026-07-13-mode-filter-design.md).
 
 ---
 
@@ -294,7 +294,7 @@ Aspire inputs it does much less:
 
 Alternatives that reduce the per-app env contract (e.g. querying the Aspire
 resource service) are analyzed in
-[2026-07-13-aspire-discovery-alternatives.md](superpowers/specs/2026-07-13-aspire-discovery-alternatives.md).
+[2026-07-13-aspire-discovery-alternatives.md](specs/2026-07-13-aspire-discovery-alternatives.md).
 
 ---
 

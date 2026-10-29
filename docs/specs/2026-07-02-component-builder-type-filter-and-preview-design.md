@@ -3,7 +3,7 @@
 **Date:** 2026-07-02
 **Status:** Approved design. Implementation plan not yet started.
 **Branch:** `feat/component-resiliency-builders`
-**Builds on:** the Component Builder shipped in `docs/superpowers/plans/2026-07-01-builders-02-component.md`.
+**Builds on:** the shipped Component Builder (design: `docs/specs/2026-06-28-component-resiliency-builders-design.md`).
 
 Three changes to the existing Component Builder wizard:
 
@@ -81,7 +81,7 @@ New props/behavior:
 
 ### Plan 3 doc update
 
-Edit `docs/superpowers/plans/2026-07-01-builders-03-resiliency.md`: its Task 5 uses `YamlPreview` with `onEditedChange`/preview-edited gating. Update it to the read-only `YamlPreview({ yaml, filename })` API (drop `previewEdited` in `ResiliencyBuilder`, Finish always enabled on the preview step). No Plan 3 code exists yet, so this is a plan-text change only.
+Edit the Resiliency Builder implementation plan (Plan 3): its Task 5 uses `YamlPreview` with `onEditedChange`/preview-edited gating. Update it to the read-only `YamlPreview({ yaml, filename })` API (drop `previewEdited` in `ResiliencyBuilder`, Finish always enabled on the preview step). No Plan 3 code exists yet, so this is a plan-text change only.
 
 ## Testing
 
