@@ -11,13 +11,13 @@ runtime** — the frontend is compiled to `web/dist` and baked into the binary a
 
 - **Module:** `github.com/diagridio/dev-dashboard`
 - **Toolchain:** Go ≥ 1.26 (`go.mod` pins 1.26.10), Node.js 20 + `npm` (build/test only).
-- **Entry point:** `main.go` → `cmd/` (cobra root, default subcommand is `serve`).
+- **Entry point:** `main.go` → `cmd/` (cobra root serves the dashboard; `update` is the only subcommand).
 
 ## Repository layout
 
 ```
 main.go            thin entry point
-cmd/               cobra root + subcommands (serve, update, workflow); no domain logic.
+cmd/               cobra root (serves) + `update` subcommand; no domain logic.
                    Also hosts the connection registry / store-election layer (registry.go,
                    reconciler.go, derive.go, connpool.go): the connections.yaml-backed store
                    list, lazy per-store connection pool, and secretKeyRef resolution.
@@ -158,4 +158,4 @@ via ldflags (`diagrid-dev-dashboard --version`).
 
 For how the system fits together and where each extension point lives, see
 [ARCHITECTURE.md](ARCHITECTURE.md). For the original design rationale, see
-[`docs/superpowers/specs/2026-06-25-dev-dashboard-design.md`](docs/superpowers/specs/2026-06-25-dev-dashboard-design.md).
+[`docs/specs/2026-06-25-dev-dashboard-design.md`](docs/specs/2026-06-25-dev-dashboard-design.md).
