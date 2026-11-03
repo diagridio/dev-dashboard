@@ -407,7 +407,10 @@ each and returning when the request context is cancelled.
 `Service.List(ctx)` returns `[]Instance`, one per running app/sidecar. The source of truth
 is `StandaloneScanner`, wrapping `github.com/dapr/cli/pkg/standalone.List()` (the same
 process-table scan as `dapr list`) — that supplies app id, ports (app/HTTP/gRPC), daprd &
-CLI PIDs, created time, run-template, resource paths, and command. Each result is then
+CLI PIDs, created time, run-template, resource paths, and command. `standalone.List()` does
+not report `--config`, so the scanner reads it from the daprd process's own command line
+(gopsutil), resolving a relative path against daprd's cwd; the CLI has already resolved a run
+template's `configFilePath` to an absolute path. Each result is then
 **enriched in parallel** (bounded worker pool) by:
 
 - `GET /v1.0/metadata` (2s timeout) → runtime version, components, actors, subscriptions,
@@ -557,7 +560,9 @@ never `statestore.Detect`, the reconciler's paths, or store election. An extract
 and break other apps' workflow views; a guard test
 (`TestVirtualPathsDoNotFeedStoreDetection`) pins this. The HTTP layer enriches each
 component and resiliency policy with `LoadedBy` — which running apps loaded it — by
-cross-referencing the names each sidecar reports in `/v1.0/metadata`.
+cross-referencing the names each sidecar reports in `/v1.0/metadata`. Metadata does not name
+the Configuration, so a configuration's `LoadedBy` matches its file path against each app's
+`ConfigPath` instead.
 Resiliency entries also carry `scopes` and the parsed spec (policies + targets) for the
 Resiliency page. `Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
 `Kind` type + `kindFromString` and the API validation in `pkg/server/resources.go`.

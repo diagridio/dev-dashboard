@@ -30,7 +30,7 @@ func StandaloneScanner() Scanner {
 				Created:          created,
 				RunTemplate:      o.RunTemplateName,
 				ResourcePaths:    o.ResourcePaths,
-				ConfigPath:       "",
+				ConfigPath:       gopsutilDaprdConfig(o.DaprdPID),
 				Command:          o.Command,
 				Source:           SourceStandalone,
 				SidecarReachable: true,
