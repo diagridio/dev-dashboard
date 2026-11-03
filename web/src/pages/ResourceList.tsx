@@ -5,7 +5,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { ResourceDetail } from './ResourceDetail'
 import { StateStoreConnectionsPanel } from '../components/StateStoreConnectionsPanel'
 
-type ListKind = Exclude<ResourceKind, 'resiliency'>
+type ListKind = Exclude<ResourceKind, 'resiliency' | 'httpendpoint'>
 
 interface ResourceListProps {
   kind: ListKind

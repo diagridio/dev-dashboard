@@ -26,7 +26,7 @@ export interface Subscription {
   reachable?: boolean
 }
 
-export type ResourceKind = 'component' | 'configuration' | 'resiliency'
+export type ResourceKind = 'component' | 'configuration' | 'resiliency' | 'httpendpoint'
 
 export type SecretStatus =
   | 'resolved'
@@ -76,6 +76,8 @@ export interface ResourceSummary {
   secretRefs?: SecretRefStatus[]
   /** Parsed spec, only on resiliency resources. */
   resiliency?: ResiliencySpec
+  /** Parsed spec, only on HTTPEndpoint resources. */
+  httpEndpoint?: HTTPEndpointSpec
 }
 
 export interface ResourceDetail extends ResourceSummary {
@@ -87,4 +89,19 @@ export interface ResourceDetail extends ResourceSummary {
 export interface ResiliencySpec {
   policies: Partial<Policies>
   targets: Targets
+}
+
+/** Spec of a discovered HTTPEndpoint file. Secret and env headers carry the
+ * reference only, never the value. */
+export interface HTTPEndpointSpec {
+  baseUrl: string
+  headers?: HTTPEndpointHeader[]
+  clientTLS?: boolean
+}
+
+export interface HTTPEndpointHeader {
+  name: string
+  value?: string
+  secretKeyRef?: { name: string; key?: string }
+  envRef?: string
 }

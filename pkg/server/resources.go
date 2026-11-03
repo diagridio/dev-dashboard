@@ -19,7 +19,7 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
 		kind := resources.Kind(req.URL.Query().Get("kind"))
 		if !validKind(kind) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component, configuration or resiliency"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component, configuration, resiliency or httpendpoint"})
 			return
 		}
 		list, err := res.List(req.Context(), kind)
@@ -27,7 +27,7 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		if kind == resources.KindComponent || kind == resources.KindResiliency {
+		if kind != resources.KindConfiguration {
 			loaded := loadedByIndex(req.Context(), apps, kind)
 			for i := range list {
 				list[i].LoadedBy = loaded[list[i].Name]
@@ -41,7 +41,7 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 	r.Get("/{kind}/{name}", func(w http.ResponseWriter, req *http.Request) {
 		kind := resources.Kind(chi.URLParam(req, "kind"))
 		if !validKind(kind) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component, configuration or resiliency"})
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component, configuration, resiliency or httpendpoint"})
 			return
 		}
 		idOrName := chi.URLParam(req, "name")
@@ -54,7 +54,7 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		if kind == resources.KindComponent || kind == resources.KindResiliency {
+		if kind != resources.KindConfiguration {
 			got.LoadedBy = loadedByFor(req.Context(), apps, kind, got.Name)
 		}
 		writeJSON(w, http.StatusOK, got)
@@ -92,7 +92,7 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 // validKind reports whether kind is served by the resources API.
 func validKind(kind resources.Kind) bool {
 	switch kind {
-	case resources.KindComponent, resources.KindConfiguration, resources.KindResiliency:
+	case resources.KindComponent, resources.KindConfiguration, resources.KindResiliency, resources.KindHTTPEndpoint:
 		return true
 	}
 	return false
@@ -110,6 +110,10 @@ func loadedNames(in discovery.Instance, kind resources.Kind) []string {
 	case resources.KindResiliency:
 		for _, r := range in.Resiliencies {
 			names = append(names, r.Name)
+		}
+	case resources.KindHTTPEndpoint:
+		for _, e := range in.HTTPEndpoints {
+			names = append(names, e.Name)
 		}
 	}
 	return names

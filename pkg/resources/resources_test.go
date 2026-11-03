@@ -247,3 +247,78 @@ func TestExtras_ResiliencyDoc(t *testing.T) {
 	require.Equal(t, []string{"party-api"}, list[0].Scopes)
 	require.NotNil(t, list[0].Resiliency)
 }
+
+const endpointYAML = `apiVersion: dapr.io/v1alpha1
+kind: HTTPEndpoint
+metadata:
+  name: identity-api
+spec:
+  baseUrl: http://localhost:8091
+  headers:
+    - name: Accept-Language
+      value: en-US
+    - name: Authorization
+      secretKeyRef:
+        name: iam-token
+        key: token
+    - name: X-Tenant
+      envRef: TENANT_ID
+  clientTLS:
+    certificate:
+      value: some-pem
+auth:
+  secretStore: localsecrets
+scopes:
+  - party-api
+`
+
+func TestHTTPEndpointListAndGet(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "statestore.yaml"), []byte(compYAML), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "identity-endpoint.yaml"), []byte(endpointYAML), 0o600))
+	svc := New(func() []string { return []string{dir} }, nil)
+
+	list, err := svc.List(context.Background(), KindHTTPEndpoint)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	r := list[0]
+	require.Equal(t, "identity-api", r.Name)
+	require.Equal(t, KindHTTPEndpoint, r.Kind)
+	require.Equal(t, filepath.Join(dir, "identity-endpoint.yaml"), r.Path)
+	require.Equal(t, []string{"party-api"}, r.Scopes)
+	require.Empty(t, r.Raw)
+
+	require.Equal(t, &HTTPEndpointSpec{
+		BaseURL: "http://localhost:8091",
+		Headers: []HTTPEndpointHeader{
+			{Name: "Accept-Language", Value: "en-US"},
+			{Name: "Authorization", SecretKeyRef: &SecretKeyRef{Name: "iam-token", Key: "token"}},
+			{Name: "X-Tenant", EnvRef: "TENANT_ID"},
+		},
+		ClientTLS: true,
+	}, r.HTTPEndpoint)
+
+	// HTTPEndpoint docs do not leak into the other kinds.
+	comps, err := svc.List(context.Background(), KindComponent)
+	require.NoError(t, err)
+	require.Len(t, comps, 1)
+	require.Nil(t, comps[0].HTTPEndpoint)
+
+	got, err := svc.Get(context.Background(), KindHTTPEndpoint, r.ID)
+	require.NoError(t, err)
+	require.Contains(t, got.Raw, "baseUrl: http://localhost:8091")
+	require.NotNil(t, got.HTTPEndpoint)
+}
+
+func TestHTTPEndpointMalformedSpecStillListed(t *testing.T) {
+	dir := t.TempDir()
+	bad := "apiVersion: dapr.io/v1alpha1\nkind: HTTPEndpoint\nmetadata:\n  name: odd\nspec:\n  headers: not-a-list\n"
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "odd.yaml"), []byte(bad), 0o600))
+	svc := New(func() []string { return []string{dir} }, nil)
+
+	list, err := svc.List(context.Background(), KindHTTPEndpoint)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, "odd", list[0].Name)
+	require.Nil(t, list[0].HTTPEndpoint)
+}

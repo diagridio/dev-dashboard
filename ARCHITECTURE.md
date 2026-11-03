@@ -546,7 +546,7 @@ stdout+stderr onto one channel for the SSE handler. **To add an action:** extend
 
 ### Resources (`pkg/resources`)
 
-Loads `Component`, `Configuration` and `Resiliency` YAML (multi-doc) from the reconciler's scan paths,
+Loads `Component`, `Configuration`, `Resiliency` and `HTTPEndpoint` YAML (multi-doc) from the reconciler's scan paths,
 deduped by absolute path, merged with an **extras provider** — entries that exist outside
 the host filesystem, today the YAML extracted from Testcontainers daprd containers. Extras
 carry their raw YAML inline and a container-prefixed display path
@@ -556,10 +556,11 @@ never `statestore.Detect`, the reconciler's paths, or store election. An extract
 `state.in-memory` component with `actorStateStore: true` would otherwise win the election
 and break other apps' workflow views; a guard test
 (`TestVirtualPathsDoNotFeedStoreDetection`) pins this. The HTTP layer enriches each
-component and resiliency policy with `LoadedBy` — which running apps loaded it — by
+component, resiliency policy and HTTP endpoint with `LoadedBy` — which running apps loaded it — by
 cross-referencing the names each sidecar reports in `/v1.0/metadata`.
 Resiliency entries also carry `scopes` and the parsed spec (policies + targets) for the
-Resiliency page. `Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
+Resiliency page; HTTPEndpoint entries carry `scopes`, `baseUrl` and headers (secretKeyRef/envRef
+headers keep the reference only, never the value). `Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
 `Kind` type + `kindFromString` and the API validation in `pkg/server/resources.go`.
 
 ### Logs (`pkg/logs`)
@@ -625,7 +626,7 @@ Client-side History-API routing; the router `basename` and all API URLs derive f
 (`/apps/:appId`), **Workflows** + **WorkflowDetail**, **State** (`/state`), **Actors**,
 **Subscriptions**, **ResourceList/Detail** (`/components`, `/configurations`),
 **ComponentBuilder** (`/components/new`), **Resiliency** (`/resiliency`, discovered
-policies) + **ResiliencyBuilder** (`/resiliency/new`), **ControlPlane** (`/control-plane`),
+policies) + **ResiliencyBuilder** (`/resiliency/new`), **HttpEndpoints** (`/http-endpoints`), **ControlPlane** (`/control-plane`),
 and **Logs**. Feature-gated pages (Workflows, State, Logs, ControlPlane, lifecycle
 surfaces) mount only when their server-injected capability flag is on — see
 *Capabilities* in §5. The shell also hosts the **CLI drawer** (`CliDrawer`), a right-side
