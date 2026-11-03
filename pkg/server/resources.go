@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sort"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -17,8 +18,8 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 	r := chi.NewRouter()
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
 		kind := resources.Kind(req.URL.Query().Get("kind"))
-		if kind != resources.KindComponent && kind != resources.KindConfiguration {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component or configuration"})
+		if !validKind(kind) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component, configuration or resiliency"})
 			return
 		}
 		list, err := res.List(req.Context(), kind)
@@ -26,8 +27,8 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		if kind == resources.KindComponent {
-			loaded := loadedByIndex(req.Context(), apps)
+		if kind == resources.KindComponent || kind == resources.KindResiliency {
+			loaded := loadedByIndex(req.Context(), apps, kind)
 			for i := range list {
 				list[i].LoadedBy = loaded[list[i].Name]
 			}
@@ -39,8 +40,8 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 	})
 	r.Get("/{kind}/{name}", func(w http.ResponseWriter, req *http.Request) {
 		kind := resources.Kind(chi.URLParam(req, "kind"))
-		if kind != resources.KindComponent && kind != resources.KindConfiguration {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component or configuration"})
+		if !validKind(kind) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "kind must be component, configuration or resiliency"})
 			return
 		}
 		idOrName := chi.URLParam(req, "name")
@@ -53,8 +54,8 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		if kind == resources.KindComponent {
-			got.LoadedBy = loadedByFor(req.Context(), apps, got.Name)
+		if kind == resources.KindComponent || kind == resources.KindResiliency {
+			got.LoadedBy = loadedByFor(req.Context(), apps, kind, got.Name)
 		}
 		writeJSON(w, http.StatusOK, got)
 	})
@@ -88,36 +89,60 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 	return r
 }
 
-// loadedByFor returns the sorted instance keys whose instance contains component name.
-// It lists apps once and scans only for the requested name, avoiding a full index build.
-func loadedByFor(ctx context.Context, apps discovery.Service, name string) []string {
+// validKind reports whether kind is served by the resources API.
+func validKind(kind resources.Kind) bool {
+	switch kind {
+	case resources.KindComponent, resources.KindConfiguration, resources.KindResiliency:
+		return true
+	}
+	return false
+}
+
+// loadedNames returns the names of the resources of kind an instance's
+// sidecar reports as loaded.
+func loadedNames(in discovery.Instance, kind resources.Kind) []string {
+	var names []string
+	switch kind {
+	case resources.KindComponent:
+		for _, c := range in.Components {
+			names = append(names, c.Name)
+		}
+	case resources.KindResiliency:
+		for _, r := range in.Resiliencies {
+			names = append(names, r.Name)
+		}
+	}
+	return names
+}
+
+// loadedByFor returns the sorted instance keys whose sidecar loaded the named
+// resource of kind. It lists apps once and scans only for the requested name,
+// avoiding a full index build.
+func loadedByFor(ctx context.Context, apps discovery.Service, kind resources.Kind, name string) []string {
 	list, err := apps.List(ctx)
 	if err != nil {
 		return nil
 	}
 	var ids []string
 	for _, in := range list {
-		for _, c := range in.Components {
-			if c.Name == name {
-				ids = append(ids, instanceKey(in))
-				break
-			}
+		if slices.Contains(loadedNames(in, kind), name) {
+			ids = append(ids, instanceKey(in))
 		}
 	}
 	sort.Strings(ids)
 	return ids
 }
 
-// loadedByIndex maps component name -> sorted instance keys that loaded it.
-func loadedByIndex(ctx context.Context, apps discovery.Service) map[string][]string {
+// loadedByIndex maps resource name -> sorted instance keys that loaded it.
+func loadedByIndex(ctx context.Context, apps discovery.Service, kind resources.Kind) map[string][]string {
 	idx := map[string][]string{}
 	list, err := apps.List(ctx)
 	if err != nil {
 		return idx
 	}
 	for _, in := range list {
-		for _, c := range in.Components {
-			idx[c.Name] = append(idx[c.Name], instanceKey(in))
+		for _, n := range loadedNames(in, kind) {
+			idx[n] = append(idx[n], instanceKey(in))
 		}
 	}
 	for k := range idx {

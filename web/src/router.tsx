@@ -37,6 +37,7 @@ const gatedChildren: RouteObject[] = [
   { path: 'configurations/:name', element: <ResourceList kind="configuration" />, handle: { rumView: 'Configurations' } },
   { path: 'resiliency', element: <Resiliency />, handle: { rumView: 'Resiliency' } },
   { path: 'resiliency/new', element: <ResiliencyBuilder />, handle: { rumView: 'ResiliencyBuilder' } },
+  { path: 'resiliency/:name', element: <Resiliency />, handle: { rumView: 'Resiliency' } },
   ...(caps.controlPlane
     ? [{ path: 'control-plane', element: <ControlPlane />, handle: { rumView: 'ControlPlane' } }]
     : []),

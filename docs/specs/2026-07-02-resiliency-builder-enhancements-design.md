@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-02
 **Branch:** `feat/component-resiliency-builders`
-**Builds on:** `docs/superpowers/specs/2026-06-28-component-resiliency-builders-design.md` and the shipped Resiliency Builder (`web/src/pages/resiliency-builder/*`).
+**Builds on:** `docs/specs/2026-06-28-component-resiliency-builders-design.md` and the shipped Resiliency Builder (`web/src/pages/resiliency-builder/*`).
 
 ## Goal
 

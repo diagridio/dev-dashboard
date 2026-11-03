@@ -37,6 +37,7 @@ type Kind string
 const (
 	KindComponent     Kind = "component"
 	KindConfiguration Kind = "configuration"
+	KindResiliency    Kind = "resiliency"
 )
 
 // ErrNotFound is returned by Get when no matching resource exists.
@@ -46,7 +47,8 @@ var ErrNotFound = errors.New("resource not found")
 // reference, or the reference does not resolve to a value.
 var ErrNoSecretValue = errors.New("no resolved secret value for field")
 
-// Resource describes a single Dapr component or configuration YAML file.
+// Resource describes a single Dapr component, configuration or resiliency
+// resource parsed from a YAML file.
 type Resource struct {
 	ID       string   `json:"id"`
 	Name     string   `json:"name"`
@@ -56,6 +58,10 @@ type Resource struct {
 	Path     string   `json:"path"`
 	Raw      string   `json:"raw,omitempty"`
 	LoadedBy []string `json:"loadedBy,omitempty"`
+	Scopes   []string `json:"scopes,omitempty"`
+
+	// Resiliency is the parsed spec of a Resiliency resource; nil for other kinds.
+	Resiliency *ResiliencySpec `json:"resiliency,omitempty"`
 
 	SecretRefs  []SecretRefStatus `json:"secretRefs,omitempty"`
 	SecretStore *SecretStoreInfo  `json:"secretStore,omitempty"`
@@ -86,13 +92,52 @@ type Service interface {
 	RevealSecret(ctx context.Context, idOrName, field string) (string, error)
 }
 
+// ResiliencySpec is the policies and targets of a Dapr Resiliency resource.
+// Retry and circuit-breaker policies are passed through as-is so new Dapr
+// fields reach the UI without a change here.
+type ResiliencySpec struct {
+	Policies ResiliencyPolicies `json:"policies"`
+	Targets  ResiliencyTargets  `json:"targets"`
+}
+
+// ResiliencyPolicies maps policy names to their definitions.
+type ResiliencyPolicies struct {
+	Timeouts        map[string]string         `json:"timeouts,omitempty"`
+	Retries         map[string]map[string]any `json:"retries,omitempty"`
+	CircuitBreakers map[string]map[string]any `json:"circuitBreakers,omitempty"`
+}
+
+// ResiliencyTargets maps app ids, actor types and component names to the
+// policies applied to them.
+type ResiliencyTargets struct {
+	Apps       map[string]ResiliencyPolicyRefs      `json:"apps,omitempty"`
+	Actors     map[string]ResiliencyPolicyRefs      `json:"actors,omitempty"`
+	Components map[string]ResiliencyComponentTarget `json:"components,omitempty"`
+}
+
+// ResiliencyPolicyRefs names the policies applied to one target.
+type ResiliencyPolicyRefs struct {
+	Timeout                 string `json:"timeout,omitempty"`
+	Retry                   string `json:"retry,omitempty"`
+	CircuitBreaker          string `json:"circuitBreaker,omitempty"`
+	CircuitBreakerScope     string `json:"circuitBreakerScope,omitempty"`
+	CircuitBreakerCacheSize int    `json:"circuitBreakerCacheSize,omitempty"`
+}
+
+// ResiliencyComponentTarget holds a component's per-direction policies.
+type ResiliencyComponentTarget struct {
+	Outbound *ResiliencyPolicyRefs `json:"outbound,omitempty"`
+	Inbound  *ResiliencyPolicyRefs `json:"inbound,omitempty"`
+}
+
 // rawResource is a minimal struct for parsing YAML resource files.
 type rawResource struct {
 	Kind     string `json:"kind"`
 	Metadata struct {
 		Name string `json:"name"`
 	} `json:"metadata"`
-	Spec struct {
+	Scopes []string `json:"scopes"`
+	Spec   struct {
 		Type    string `json:"type"`
 		Version string `json:"version"`
 	} `json:"spec"`
@@ -136,6 +181,8 @@ func kindFromString(s string) (Kind, bool) {
 		return KindComponent, true
 	case "Configuration":
 		return KindConfiguration, true
+	case "Resiliency":
+		return KindResiliency, true
 	default:
 		return "", false
 	}
@@ -157,18 +204,41 @@ func FromRaw(displayPath string, content []byte) []Resource {
 		if !ok {
 			continue
 		}
-		out = append(out, Resource{
-			ID:      resourceID(rr.Metadata.Name, rr.Spec.Type, displayPath),
-			Name:    rr.Metadata.Name,
-			Kind:    k,
-			Type:    rr.Spec.Type,
-			Version: rr.Spec.Version,
-			Path:    displayPath,
-			Raw:     string(content),
-			doc:     doc,
-		})
+		r := newResource(rr, k, displayPath, doc)
+		r.Raw = string(content)
+		out = append(out, r)
 	}
 	return out
+}
+
+// newResource builds the Resource for one parsed YAML document.
+func newResource(rr rawResource, k Kind, path string, doc []byte) Resource {
+	r := Resource{
+		ID:      resourceID(rr.Metadata.Name, rr.Spec.Type, path),
+		Name:    rr.Metadata.Name,
+		Kind:    k,
+		Type:    rr.Spec.Type,
+		Version: rr.Spec.Version,
+		Path:    path,
+		Scopes:  rr.Scopes,
+		doc:     doc,
+	}
+	if k == KindResiliency {
+		r.Resiliency = parseResiliencySpec(doc)
+	}
+	return r
+}
+
+// parseResiliencySpec decodes a Resiliency document's spec. A spec that does
+// not match the expected shape yields nil, so the resource is still listed.
+func parseResiliencySpec(doc []byte) *ResiliencySpec {
+	var rr struct {
+		Spec ResiliencySpec `json:"spec"`
+	}
+	if err := yaml.Unmarshal(doc, &rr); err != nil {
+		return nil
+	}
+	return &rr.Spec
 }
 
 // scan walks all configured paths and returns resources matching the requested kind.
@@ -207,15 +277,7 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 				if !ok || k != kind {
 					continue
 				}
-				out = append(out, Resource{
-					ID:      resourceID(rr.Metadata.Name, rr.Spec.Type, absPath),
-					Name:    rr.Metadata.Name,
-					Kind:    k,
-					Type:    rr.Spec.Type,
-					Version: rr.Spec.Version,
-					Path:    absPath,
-					doc:     doc,
-				})
+				out = append(out, newResource(rr, k, absPath, doc))
 			}
 			return nil
 		})

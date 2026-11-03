@@ -5,12 +5,14 @@ import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { ResourceDetail } from './ResourceDetail'
 import { StateStoreConnectionsPanel } from '../components/StateStoreConnectionsPanel'
 
+type ListKind = Exclude<ResourceKind, 'resiliency'>
+
 interface ResourceListProps {
-  kind: ResourceKind
+  kind: ListKind
 }
 
 const LABELS: Record<
-  ResourceKind,
+  ListKind,
   {
     title: string
     sub: React.ReactNode
