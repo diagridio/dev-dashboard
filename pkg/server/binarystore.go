@@ -69,6 +69,8 @@ func binaryErrStatus(e *binarystore.Error) int {
 		return http.StatusBadRequest
 	case binarystore.KindTooLarge:
 		return http.StatusRequestEntityTooLarge
+	case binarystore.KindTimeout:
+		return http.StatusGatewayTimeout
 	case binarystore.KindUpstream:
 		if e.Unavailable {
 			return http.StatusServiceUnavailable

@@ -42,7 +42,7 @@ export function useBinaryFile(
   enabled: boolean,
 ): UseQueryResult<LoadedPayload, BinaryFileError> {
   return useQuery<LoadedPayload, BinaryFileError>({
-    queryKey: ['binaryFile', appKey, ref.store, ref.key],
+    queryKey: ['binaryFile', appKey, ref.store, ref.key, ref.sha256],
     queryFn: () => fetchBinaryFile(appKey as string, ref),
     enabled: enabled && appKey !== null,
     retry: false,

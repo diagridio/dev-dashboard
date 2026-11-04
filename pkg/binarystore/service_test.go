@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	commonv1pb "github.com/dapr/dapr/pkg/proto/common/v1"
 	runtimev1pb "github.com/dapr/dapr/pkg/proto/runtime/v1"
@@ -298,6 +299,27 @@ func TestRead_MidStreamErrorIsNotSuccess(t *testing.T) {
 	}
 	if e.Unavailable {
 		t.Fatal("Internal must not be Unavailable")
+	}
+}
+
+// fakeDaprSlow blocks until the client gives up.
+type fakeDaprSlow struct {
+	runtimev1pb.UnimplementedDaprServer
+}
+
+func (fakeDaprSlow) GetBinaryFileAlpha1(_ *runtimev1pb.GetBinaryFileRequestAlpha1, stream runtimev1pb.Dapr_GetBinaryFileAlpha1Server) error {
+	<-stream.Context().Done()
+	return stream.Context().Err()
+}
+
+func TestRead_DeadlineExceeded(t *testing.T) {
+	port, _ := startServer(t, fakeDaprSlow{})
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err := newSvc(t, inst(port)).Read(ctx, "orders", "payloads", "k", 0)
+	e := wantKind(t, err, KindTimeout)
+	if !strings.Contains(e.Msg, "payloads") {
+		t.Fatalf("msg %q should name the store", e.Msg)
 	}
 }
 

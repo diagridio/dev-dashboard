@@ -12,6 +12,7 @@ const (
 	KindUnsupported                        // 400 (gRPC Unimplemented)
 	KindTooLarge                           // 413
 	KindUpstream                           // 503 if Unavailable, else 502
+	KindTimeout                            // 504 (gRPC DeadlineExceeded / read timeout)
 )
 
 // Error is the typed failure returned by Service.Read.

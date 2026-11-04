@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useApps } from '../hooks/useApps'
 import { useBinaryFile } from '../hooks/useBinaryFile'
 import { appKey } from '../lib/appKey'
@@ -28,6 +28,7 @@ export function PayloadView({ value, appId }: { value: string; appId: string }) 
 
 function RefCard({ dref, appId }: { dref: DaprRef; appId: string }) {
   const [show, setShow] = useState(false)
+  const reasonId = useId()
   const apps = useApps()
   // A stopped instance stays listed (lifecycle overlay); only a live one can serve the file.
   const app = apps.data?.find((a) => a.appId === appId && a.sidecarReachable !== false && a.daprdStatus !== 'stopped')
@@ -83,10 +84,16 @@ function RefCard({ dref, appId }: { dref: DaprRef; appId: string }) {
         <div className="vv"><span title={`${dref.size} bytes`}>{formatBytes(dref.size)}</span></div>
       </div>
       <div className="refcard-bar wrap">
-        <button type="button" className="btn ghost" disabled={blocked !== null || loading} onClick={() => setShow(true)}>
+        <button
+          type="button"
+          className="btn ghost"
+          disabled={blocked !== null || loading}
+          aria-describedby={blocked ? reasonId : undefined}
+          onClick={() => setShow(true)}
+        >
           Load payload
         </button>
-        {!!blocked && <span className="muted">{blocked}</span>}
+        {!!blocked && <span id={reasonId} className="muted">{blocked}</span>}
         {loading && (
           <span role="status" className="muted"><Spinner /> Loading…</span>
         )}

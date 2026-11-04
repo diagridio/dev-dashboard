@@ -127,6 +127,7 @@ func TestBinaryStoreHandler_ErrorMapping(t *testing.T) {
 		{"toolarge", &binarystore.Error{Kind: binarystore.KindTooLarge, Msg: "m", Size: 2000000}, 413},
 		{"upstream-unavail", &binarystore.Error{Kind: binarystore.KindUpstream, Msg: "m", Unavailable: true}, 503},
 		{"upstream", &binarystore.Error{Kind: binarystore.KindUpstream, Msg: "m"}, 502},
+		{"timeout", &binarystore.Error{Kind: binarystore.KindTimeout, Msg: "m"}, 504},
 		{"plain", io.ErrUnexpectedEOF, 500},
 	}
 	for _, c := range cases {

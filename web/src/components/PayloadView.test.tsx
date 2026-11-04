@@ -75,7 +75,9 @@ describe('PayloadView', () => {
     mockFile('x')
     renderView(envelope())
     expect(await screen.findByText('Start orders to load this payload')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Load payload' })).toBeDisabled()
+    const btn = screen.getByRole('button', { name: 'Load payload' })
+    expect(btn).toBeDisabled()
+    expect(btn).toHaveAccessibleDescription('Start orders to load this payload')
     expect(fileCalls).toBe(0)
   })
 

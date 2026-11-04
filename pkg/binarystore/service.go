@@ -104,9 +104,19 @@ func (s *Service) Read(ctx context.Context, appKey, store, key string, declaredS
 	}
 }
 
+func timeoutErr(store string) *Error {
+	return &Error{Kind: KindTimeout,
+		Msg: fmt.Sprintf("sidecar didn't return the file from %s within %s", store, readTimeout)}
+}
+
 func mapErr(err error, store string) *Error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return timeoutErr(store)
+	}
 	st, _ := status.FromError(err)
 	switch st.Code() {
+	case codes.DeadlineExceeded:
+		return timeoutErr(store)
 	case codes.NotFound:
 		return &Error{Kind: KindFileNotFound, Msg: "file not found in " + store}
 	case codes.InvalidArgument:
