@@ -26,6 +26,7 @@ pkg/               domain packages — each is isolated, none import cmd/
   workflow/        list / stats / history / terminate / purge (reads the state store)
   statestore/      redis / postgres / sqlite / mongodb client + Detect + secret resolution
   state/           State page: browse / add / delete state-store records
+  binarystore/     read-only binary store file reads through the sidecar gRPC API (workflow data references)
   lifecycle/       start / stop / restart of discovered apps and sidecars
   controlplane/    docker/podman detection, inspect, lifecycle actions, log stream
   metadata/        embedded component-metadata catalog (drives the add/edit connection forms)
