@@ -51,6 +51,29 @@ describe('useBinaryFile', () => {
     expect(result.current.data).toEqual({ content: { kind: 'text', text: 'hello' }, integrity: 'verified' })
   })
 
+  it('refetches when only the sha256 differs (hash is part of the cache key)', async () => {
+    let calls = 0
+    server.use(
+      http.get('/api/apps/:app/binarystore/:store/file', () => {
+        calls++
+        return new HttpResponse('hello', { headers: { 'Content-Type': 'application/octet-stream' } })
+      }),
+    )
+    const wrapper = makeWrapper()
+    const other: DaprRef = { ...ref, sha256: 'f'.repeat(64) }
+    const { result, rerender } = renderHook(({ r }) => useBinaryFile('app1', r, true), {
+      wrapper,
+      initialProps: { r: ref },
+    })
+    await waitFor(() => expect(result.current.data?.integrity).toBe('verified'))
+    rerender({ r: other })
+    await waitFor(() => expect(result.current.data?.integrity).toBe('mismatch'))
+    expect(calls).toBe(2)
+    rerender({ r: ref })
+    await waitFor(() => expect(result.current.data?.integrity).toBe('verified'))
+    expect(calls).toBe(2)
+  })
+
   it('maps a 413 to BinaryFileError with status and size', async () => {
     server.use(
       http.get('/api/apps/:app/binarystore/:store/file', () =>
