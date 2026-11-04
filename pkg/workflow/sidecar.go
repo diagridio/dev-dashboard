@@ -63,7 +63,9 @@ func NewSidecarPool() *SidecarPool {
 	return &SidecarPool{conns: map[string]*grpc.ClientConn{}}
 }
 
-func (p *SidecarPool) client(addr string) (*dtwf.Client, error) {
+// Conn returns the cached lazy gRPC connection for addr, creating it on first
+// use. Other packages (e.g. binarystore) share these connections.
+func (p *SidecarPool) Conn(addr string) (*grpc.ClientConn, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
@@ -77,6 +79,14 @@ func (p *SidecarPool) client(addr string) (*dtwf.Client, error) {
 		}
 		p.conns[addr] = c
 		conn = c
+	}
+	return conn, nil
+}
+
+func (p *SidecarPool) client(addr string) (*dtwf.Client, error) {
+	conn, err := p.Conn(addr)
+	if err != nil {
+		return nil, err
 	}
 	return dtwf.NewClient(conn), nil
 }
