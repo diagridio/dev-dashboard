@@ -46,9 +46,11 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Resolve the latest stable runtime + Dapr.Workflow (.NET SDK) patch for
-      # this minor line. The fixtures read DAPR_RUNTIME_VERSION (compose images,
-      # testcontainers images) and DAPR_DOTNET_SDK_VERSION (Aspire OrderService);
+      # Resolve the latest stable runtime, Dapr.Workflow (.NET SDK) and go-sdk
+      # release for this minor line. The fixtures read DAPR_RUNTIME_VERSION
+      # (compose images, testcontainers images), DAPR_DOTNET_SDK_VERSION (Aspire
+      # OrderService) and GO_SDK_VERSION (wfapp image build arg); on 1.19+ the
+      # compose test also enables the workflow data-reference scenario;
       # `dapr init` below uses the runtime version too, so the Aspire sidecar,
       # placement and scheduler match the SDK the fixture is built against.
       - name: Resolve latest Dapr ${{ matrix.dapr }}.x
@@ -61,7 +63,8 @@ jobs:
           versions=$(scripts/latest-dapr-versions.sh "$DAPR")
           echo "$versions" | tee -a "$GITHUB_OUTPUT"
           echo "$versions" |
-            sed -e 's/^runtime=/DAPR_RUNTIME_VERSION=/' -e 's/^dotnet_sdk=/DAPR_DOTNET_SDK_VERSION=/' >> "$GITHUB_ENV"
+            sed -e 's/^runtime=/DAPR_RUNTIME_VERSION=/' -e 's/^dotnet_sdk=/DAPR_DOTNET_SDK_VERSION=/' \
+                -e 's/^go_sdk=/GO_SDK_VERSION=/' >> "$GITHUB_ENV"
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: steps.gate.outputs.run == 'true'

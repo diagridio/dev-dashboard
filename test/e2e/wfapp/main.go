@@ -1,7 +1,10 @@
-// Command wfapp is a minimal Dapr workflow app used only by the e2e test.
-// Run under `dapr run`, it schedules one workflow instance, waits for it to
-// complete, then prints a marker line so the test can read the resulting
-// state back from the actor state store.
+// Command wfapp is a minimal Dapr workflow app used only by the e2e tests.
+// It schedules one workflow instance, waits for it to complete, then prints
+// a marker line so the test can read the resulting state back from the
+// actor state store.
+//
+// The go-sdk version is chosen at image build time (GO_SDK_VERSION build
+// arg) so CI pairs each Dapr runtime line with its matching SDK release.
 package main
 
 import (
@@ -11,7 +14,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/dapr/go-sdk/workflow"
+	"github.com/dapr/durabletask-go/workflow"
+	"github.com/dapr/go-sdk/client"
 )
 
 const instanceID = "e2e-order-1"
@@ -19,7 +23,7 @@ const instanceID = "e2e-order-1"
 // OrderWorkflow calls one activity and returns its result.
 func OrderWorkflow(ctx *workflow.WorkflowContext) (any, error) {
 	var out string
-	if err := ctx.CallActivity(Notify, workflow.ActivityInput("order")).Await(&out); err != nil {
+	if err := ctx.CallActivity(Notify, workflow.WithActivityInput("order")).Await(&out); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -35,32 +39,29 @@ func Notify(ctx workflow.ActivityContext) (any, error) {
 }
 
 func main() {
-	w, err := workflow.NewWorker()
-	if err != nil {
-		log.Fatalf("new worker: %v", err)
-	}
-	if err := w.RegisterWorkflow(OrderWorkflow); err != nil {
+	r := workflow.NewRegistry()
+	if err := r.AddWorkflow(OrderWorkflow); err != nil {
 		log.Fatalf("register workflow: %v", err)
 	}
-	if err := w.RegisterActivity(Notify); err != nil {
+	if err := r.AddActivity(Notify); err != nil {
 		log.Fatalf("register activity: %v", err)
 	}
-	if err := w.Start(); err != nil {
+
+	wc, err := client.NewWorkflowClient()
+	if err != nil {
+		log.Fatalf("new workflow client: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := wc.StartWorker(ctx, r); err != nil {
 		log.Fatalf("start worker: %v", err)
 	}
-	defer func() { _ = w.Shutdown() }()
 
-	client, err := workflow.NewClient()
-	if err != nil {
-		log.Fatalf("new client: %v", err)
-	}
-	ctx := context.Background()
-
-	id, err := client.ScheduleNewWorkflow(ctx, "OrderWorkflow", workflow.WithInstanceID(instanceID))
+	id, err := wc.ScheduleWorkflow(ctx, "OrderWorkflow", workflow.WithInstanceID(instanceID))
 	if err != nil {
 		log.Fatalf("schedule: %v", err)
 	}
-	if _, err := client.WaitForWorkflowCompletion(ctx, id, workflow.WithFetchPayloads(true)); err != nil {
+	if _, err := wc.WaitForWorkflowCompletion(ctx, id); err != nil {
 		log.Fatalf("wait: %v", err)
 	}
 

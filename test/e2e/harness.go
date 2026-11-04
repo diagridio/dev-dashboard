@@ -123,3 +123,18 @@ func requireDotnet(t *testing.T) {
 		t.Skip("dotnet not on PATH; skipping e2e")
 	}
 }
+
+// daprRuntimeAtLeast reports whether DAPR_RUNTIME_VERSION (the version the
+// compose/testcontainers fixtures run; default 1.18.1, matching the fixture
+// defaults) is at least major.minor.
+func daprRuntimeAtLeast(t *testing.T, major, minor int) bool {
+	t.Helper()
+	v := os.Getenv("DAPR_RUNTIME_VERSION")
+	if v == "" {
+		v = "1.18.1"
+	}
+	var maj, min int
+	_, err := fmt.Sscanf(v, "%d.%d", &maj, &min)
+	require.NoErrorf(t, err, "parse DAPR_RUNTIME_VERSION %q", v)
+	return maj > major || (maj == major && min >= minor)
+}

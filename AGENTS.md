@@ -99,9 +99,12 @@ cd web && npx vitest run src/path/to/file.test.tsx
 - **e2e** (`//go:build e2e`) — drives a real `daprd`; skips when Dapr isn't installed. Runs in CI
   only via the manual `e2e` workflow, once against the latest Dapr 1.18.x and once against the
   latest 1.19.x (resolved by `scripts/latest-dapr-versions.sh`). The fixtures default to 1.18.1;
-  set `DAPR_RUNTIME_VERSION` (compose/testcontainers images) and `DAPR_DOTNET_SDK_VERSION`
-  (Aspire `Dapr.Workflow`) to run another version locally. For Aspire, the runtime comes from
-  your `dapr init`.
+  set `DAPR_RUNTIME_VERSION` (compose/testcontainers images), `GO_SDK_VERSION` (wfapp's
+  go-sdk, e.g. `v1.16.0` for 1.19) and `DAPR_DOTNET_SDK_VERSION` (Aspire `Dapr.Workflow`) to
+  run another version locally. For Aspire, the runtime comes from your `dapr init`. With
+  `DAPR_RUNTIME_VERSION` ≥ 1.19 the compose test also runs the workflow data-reference
+  scenario (`datarefapp` + a `binarystore.in-memory` component, compose profile `dataref`);
+  below 1.19 that subtest skips.
 - **Golden files** (`testdata/golden/*`): regenerate after an intentional shape change with
   `-update`, e.g. `go test -tags integration ./pkg/workflow -run Golden -update`.
 
