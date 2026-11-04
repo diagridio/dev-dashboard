@@ -31,6 +31,9 @@ func TestTestcontainersDiscovery(t *testing.T) {
 		".")
 	out, err := build.CombinedOutput()
 	require.NoErrorf(t, err, "docker build wfapp: %s", out)
+	sdk, err := exec.Command("docker", "run", "--rm", "tcfixture-wfapp", "-sdk-version").Output()
+	require.NoError(t, err, "wfapp -sdk-version")
+	requireWfappSDK(t, string(sdk))
 
 	// Build the fixture into a real binary and run it directly, rather than
 	// via `go run .`: `go run` spawns the compiled binary as a *child*

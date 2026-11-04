@@ -65,11 +65,19 @@ func TestComposeDiscovery(t *testing.T) {
 	require.NoErrorf(t, err, "compose up: %s", out)
 
 	// Wait for wfapp to schedule and complete its workflow (marker line).
+	var wfLogs string
 	waitFor(t, 90*time.Second, func() bool {
-		logs := compose("logs", "wfapp")
-		b, _ := logs.CombinedOutput()
-		return strings.Contains(string(b), "WORKFLOW_DONE")
+		b, _ := compose("logs", "--no-log-prefix", "wfapp").CombinedOutput()
+		wfLogs = string(b)
+		return strings.Contains(wfLogs, "WORKFLOW_DONE")
 	})
+	var sdk string
+	for _, line := range strings.Split(wfLogs, "\n") {
+		if v, ok := strings.CutPrefix(strings.TrimSpace(line), "WFAPP_GO_SDK "); ok {
+			sdk = v
+		}
+	}
+	requireWfappSDK(t, sdk)
 
 	base := bootDashboard(t, "compose", nil)
 

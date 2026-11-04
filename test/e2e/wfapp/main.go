@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/dapr/durabletask-go/workflow"
@@ -38,7 +39,30 @@ func Notify(ctx workflow.ActivityContext) (any, error) {
 	return "notified:" + in, nil
 }
 
+// goSDKVersion is the github.com/dapr/go-sdk version compiled into this binary.
+func goSDKVersion() string {
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		for _, d := range bi.Deps {
+			if d.Path == "github.com/dapr/go-sdk" {
+				if d.Replace != nil {
+					return d.Replace.Version
+				}
+				return d.Version
+			}
+		}
+	}
+	return "unknown"
+}
+
 func main() {
+	// -sdk-version lets the e2e tests check the GO_SDK_VERSION build arg took
+	// effect without starting a workflow; the marker line does the same in logs.
+	if len(os.Args) > 1 && os.Args[1] == "-sdk-version" {
+		fmt.Println(goSDKVersion())
+		return
+	}
+	fmt.Printf("WFAPP_GO_SDK %s\n", goSDKVersion())
+
 	r := workflow.NewRegistry()
 	if err := r.AddWorkflow(OrderWorkflow); err != nil {
 		log.Fatalf("register workflow: %v", err)

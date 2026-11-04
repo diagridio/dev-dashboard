@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -137,4 +138,16 @@ func daprRuntimeAtLeast(t *testing.T, major, minor int) bool {
 	_, err := fmt.Sscanf(v, "%d.%d", &maj, &min)
 	require.NoErrorf(t, err, "parse DAPR_RUNTIME_VERSION %q", v)
 	return maj > major || (maj == major && min >= minor)
+}
+
+// requireWfappSDK logs the go-sdk version compiled into wfapp and, when
+// GO_SDK_VERSION is set (CI pairs it with the Dapr runtime line), requires
+// that the build arg actually took effect.
+func requireWfappSDK(t *testing.T, got string) {
+	t.Helper()
+	got = strings.TrimSpace(got)
+	t.Logf("wfapp go-sdk: %s", got)
+	if want := os.Getenv("GO_SDK_VERSION"); want != "" {
+		require.Equal(t, want, got, "wfapp was not built with GO_SDK_VERSION")
+	}
 }
