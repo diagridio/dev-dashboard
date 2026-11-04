@@ -55,6 +55,10 @@ func (s *Service) Read(ctx context.Context, appKey, store, key string, declaredS
 	if !in.SidecarReachable || in.GRPCPort == 0 {
 		return nil, &Error{Kind: KindSidecarUnreachable, Msg: "sidecar unreachable"}
 	}
+	if !in.MetadataOK {
+		return nil, &Error{Kind: KindUpstream,
+			Msg: fmt.Sprintf("sidecar metadata unavailable; can't confirm %s is loaded", store)}
+	}
 	loaded := false
 	for _, c := range in.Components {
 		if c.Name == store && strings.HasPrefix(c.Type, "binarystore.") {

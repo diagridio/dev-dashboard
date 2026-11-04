@@ -64,7 +64,8 @@ func NewSidecarPool() *SidecarPool {
 }
 
 // Conn returns the cached lazy gRPC connection for addr, creating it on first
-// use. Other packages (e.g. binarystore) share these connections.
+// use. Other packages (e.g. binarystore) share these connections, so the
+// connection is shared: callers must not Close it (the pool owns it).
 func (p *SidecarPool) Conn(addr string) (*grpc.ClientConn, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()

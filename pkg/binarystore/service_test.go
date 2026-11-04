@@ -117,7 +117,7 @@ func newSvc(t *testing.T, inst discovery.Instance) *Service {
 
 func inst(port int) discovery.Instance {
 	return discovery.Instance{
-		AppID: "orders", SidecarReachable: true, GRPCPort: port,
+		AppID: "orders", SidecarReachable: true, MetadataOK: true, GRPCPort: port,
 		Components: []discovery.Component{{Name: "payloads", Type: "binarystore.in-memory"}},
 	}
 }
@@ -194,6 +194,21 @@ func TestRead_StoreNotLoaded(t *testing.T) {
 	}
 	// Same name but wrong component type.
 	wantKind(t, readErr(svc, "cache"), KindStoreNotLoaded)
+	if n := len(f.recorded()); n != 0 {
+		t.Fatalf("sidecar called %d times", n)
+	}
+}
+
+func TestRead_MetadataUnavailable(t *testing.T) {
+	f := &fakeDaprFull{}
+	port, _ := startServer(t, f)
+	i := inst(port)
+	i.Components = nil
+	i.MetadataOK = false
+	e := wantKind(t, readErr(newSvc(t, i), "payloads"), KindUpstream)
+	if e.Msg != "sidecar metadata unavailable; can't confirm payloads is loaded" {
+		t.Fatalf("msg = %q", e.Msg)
+	}
 	if n := len(f.recorded()); n != 0 {
 		t.Fatalf("sidecar called %d times", n)
 	}
