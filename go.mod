@@ -7,6 +7,7 @@ require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/dapr/cli v1.19.1
 	github.com/dapr/components-contrib v1.19.0
+	github.com/dapr/dapr v1.19.0
 	github.com/dapr/durabletask-go v0.15.1
 	github.com/dapr/kit v0.19.0
 	github.com/go-chi/chi/v5 v5.5.0
@@ -77,7 +78,6 @@ require (
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.18.2 // indirect
 	github.com/cpuguy83/dockercfg v0.3.2 // indirect
-	github.com/dapr/dapr v1.19.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
