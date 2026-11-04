@@ -5,13 +5,13 @@ services:
       - "6379"
 
   placement:
-    image: "daprio/placement:1.18.1"
+    image: "daprio/placement:${DAPR_RUNTIME_VERSION:-1.18.1}"
     command: ["./placement", "-port", "50005"]
     ports:
       - "50005"
 
   scheduler:
-    image: "daprio/scheduler:1.18.1"
+    image: "daprio/scheduler:${DAPR_RUNTIME_VERSION:-1.18.1}"
     command: ["./scheduler", "--port", "50006", "--etcd-data-dir", "/tmp/scheduler-data"]
     ports:
       - "50006"
@@ -22,7 +22,7 @@ services:
   # container joined via network_mode: service:X), so the published ports
   # must live here rather than on wfapp.
   daprd:
-    image: "daprio/daprd:1.18.1"
+    image: "daprio/daprd:${DAPR_RUNTIME_VERSION:-1.18.1}"
     command:
       - "./daprd"
       - "-app-id"
