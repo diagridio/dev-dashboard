@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
@@ -27,6 +27,9 @@ function mockApps(running: boolean) {
       HttpResponse.json(running ? [{ appId: 'orders', instanceKey: 'orders-key', health: 'healthy', runtime: 'x' }] : []),
     ),
   )
+}
+function mockAppList(list: unknown[]) {
+  server.use(http.get('/api/apps', () => HttpResponse.json(list)))
 }
 function mockFile(body: string | (() => Response)) {
   fileCalls = 0
@@ -146,5 +149,94 @@ describe('PayloadView', () => {
     const { container } = renderView(raw)
     expect(screen.getByText(/Invalid data reference:/)).toBeInTheDocument()
     expect(container.querySelector('pre.json')).not.toBeNull()
+  })
+
+  it('disables Load for a listed but stopped app', async () => {
+    mockAppList([{ appId: 'orders', instanceKey: 'orders-key', health: 'unknown', runtime: 'x', sidecarReachable: false, daprdStatus: 'stopped' }])
+    mockFile('x')
+    renderView(envelope())
+    expect(await screen.findByText('Start orders to load this payload')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Load payload' })).toBeDisabled()
+    expect(fileCalls).toBe(0)
+  })
+
+  it('uses the running instance when another instance of the app is stopped', async () => {
+    mockAppList([
+      { appId: 'orders', instanceKey: 'orders-old', health: 'unknown', runtime: 'x', sidecarReachable: false, daprdStatus: 'stopped' },
+      { appId: 'orders', instanceKey: 'orders-live', health: 'healthy', runtime: 'x', sidecarReachable: true, daprdStatus: 'running' },
+    ])
+    const urls: string[] = []
+    server.use(
+      http.get('/api/apps/:app/binarystore/:store/file', ({ params }) => {
+        urls.push(String(params.app))
+        return new HttpResponse('x')
+      }),
+    )
+    renderView(envelope())
+    const user = userEvent.setup()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Load payload' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Load payload' }))
+    await waitFor(() => expect(urls).toEqual(['orders-live']))
+  })
+
+  it("says the app list failed instead of 'Start X' when the apps query errors", async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json({ error: 'boom' }, { status: 500 })))
+    renderView(envelope())
+    expect(await screen.findByText("Couldn't load the app list")).toBeInTheDocument()
+    expect(screen.queryByText(/Start orders/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Load payload' })).toBeDisabled()
+  })
+
+  it('shows an unverified badge when SubtleCrypto is unavailable', async () => {
+    mockApps(true)
+    mockFile('{"a":1}')
+    renderView(envelope())
+    const user = userEvent.setup()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Load payload' })).toBeEnabled())
+    vi.stubGlobal('crypto', {})
+    try {
+      await user.click(screen.getByRole('button', { name: 'Load payload' }))
+      const badge = await screen.findByText('unverified')
+      expect(badge).toHaveAttribute('title', 'SHA-256 check needs HTTPS or localhost')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('renders text payloads in pre.json', async () => {
+    mockApps(true)
+    mockFile('hello world')
+    const { container } = renderView(envelope({ size: 11, sha256: await sha('hello world') }))
+    const user = userEvent.setup()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Load payload' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Load payload' }))
+    expect(await screen.findByText('hello world')).toBeInTheDocument()
+    expect(container.querySelector('pre.json')?.textContent).toBe('hello world')
+  })
+
+  it('hides the old error while Retry is refetching', async () => {
+    mockApps(true)
+    let n = 0
+    let release: () => void = () => {}
+    const gate = new Promise<void>((r) => { release = r })
+    server.use(
+      http.get('/api/apps/:app/binarystore/:store/file', async () => {
+        n++
+        if (n === 1) return HttpResponse.json({ error: 'first failure' }, { status: 404 })
+        await gate
+        return HttpResponse.json({ error: 'second failure' }, { status: 404 })
+      }),
+    )
+    renderView(envelope())
+    const user = userEvent.setup()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Load payload' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Load payload' }))
+    expect(await screen.findByText('first failure')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    await screen.findByRole('status')
+    expect(screen.queryByText('first failure')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
+    release()
+    expect(await screen.findByText('second failure')).toBeInTheDocument()
   })
 })

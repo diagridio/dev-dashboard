@@ -29,43 +29,51 @@ export function PayloadView({ value, appId }: { value: string; appId: string }) 
 function RefCard({ dref, appId }: { dref: DaprRef; appId: string }) {
   const [show, setShow] = useState(false)
   const apps = useApps()
-  const app = apps.data?.find((a) => a.appId === appId)
+  // A stopped instance stays listed (lifecycle overlay); only a live one can serve the file.
+  const app = apps.data?.find((a) => a.appId === appId && a.sidecarReachable !== false && a.daprdStatus !== 'stopped')
   const key = app ? appKey(app) : null
 
   const stages = dref.stages ?? []
   let blocked: string | null = null
   if (stages.length > 0) blocked = `staged payloads (${stages.map((s) => s.n).join(', ')}) are not supported`
   else if (dref.size > MAX_BYTES) blocked = tooLarge(dref.size)
-  else if (!key) blocked = apps.isLoading ? '' : `Start ${appId} to load this payload`
+  else if (!key) {
+    if (apps.isLoading) blocked = ''
+    else if (apps.isError) blocked = "Couldn't load the app list"
+    else blocked = `Start ${appId} to load this payload`
+  }
 
   const q = useBinaryFile(key, dref, show && blocked === null)
 
   if (show && q.data) {
     const { content, integrity } = q.data
     return (
-      <div className="card">
-        <div style={{ padding: '9px 14px', display: 'flex', gap: 10, alignItems: 'center' }}>
-          <span className={`pill ${integrity === 'verified' ? 'secref-ok' : 'secref-warn'}`}>
-            {integrity === 'verified' ? 'verified' : 'hash mismatch'}
+      <div className="refcard">
+        <div className="refcard-bar">
+          <span
+            className={`pill integ-${integrity === 'verified' ? 'ok' : integrity === 'mismatch' ? 'warn' : 'unknown'}`}
+            title={integrity === 'unverified' ? 'SHA-256 check needs HTTPS or localhost' : undefined}
+          >
+            {integrity === 'verified' ? 'verified' : integrity === 'mismatch' ? 'hash mismatch' : 'unverified'}
           </span>
           <button type="button" className="btn ghost" onClick={() => setShow(false)}>Hide</button>
         </div>
         {content.kind === 'json' && <pre className="json">{highlightJson(content.text)}</pre>}
-        {content.kind === 'text' && <pre>{content.text}</pre>}
+        {content.kind === 'text' && <pre className="json">{content.text}</pre>}
         {content.kind === 'binary' && (
-          <p className="muted" style={{ padding: '0 14px' }}>Binary payload ({content.size} bytes) — not shown</p>
+          <p className="muted refcard-note">Binary payload ({content.size} bytes) — not shown</p>
         )}
       </div>
     )
   }
 
   const loading = show && q.isFetching
-  const err = show && q.isError ? q.error : null
+  const err = show && q.isError && !q.isFetching ? q.error : null
   const errText = err ? (err.status === 413 ? tooLarge(err.size ?? dref.size) : err.message) : null
 
   return (
-    <div className="card">
-      <div style={{ padding: '9px 14px' }} className="b">Stored in binary store</div>
+    <div className="refcard">
+      <div className="refcard-bar b">Stored in binary store</div>
       <div className="kv">
         <div className="kk">store</div>
         <div className="vv mono">{dref.store}</div>
@@ -74,7 +82,7 @@ function RefCard({ dref, appId }: { dref: DaprRef; appId: string }) {
         <div className="kk">size</div>
         <div className="vv"><span title={`${dref.size} bytes`}>{formatBytes(dref.size)}</span></div>
       </div>
-      <div style={{ padding: '9px 14px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="refcard-bar wrap">
         <button type="button" className="btn ghost" disabled={blocked !== null || loading} onClick={() => setShow(true)}>
           Load payload
         </button>

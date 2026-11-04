@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { analyzePayload } from './payloadContent'
 
 async function sha(bytes: Uint8Array): Promise<string> {
@@ -30,5 +30,14 @@ describe('analyzePayload', () => {
     const r = await analyzePayload(enc('hello'), 'a'.repeat(64))
     expect(r.integrity).toBe('mismatch')
     expect(r.content).toEqual({ kind: 'text', text: 'hello' })
+  })
+
+  describe('without SubtleCrypto', () => {
+    afterEach(() => vi.unstubAllGlobals())
+    it('returns content as unverified instead of throwing', async () => {
+      vi.stubGlobal('crypto', {})
+      const r = await analyzePayload(enc('{"a":1}'), 'a'.repeat(64))
+      expect(r).toEqual({ content: { kind: 'json', text: '{"a":1}' }, integrity: 'unverified' })
+    })
   })
 })
