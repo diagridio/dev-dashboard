@@ -221,6 +221,15 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .secref-ok { background: var(--done-bg); color: var(--done-fg); }
 .secref-warn { background: var(--pend-bg); color: var(--pend-fg); }
 .secref-err { background: var(--fail-bg); color: var(--fail-fg); }
+.integ-ok { background: var(--done-bg); color: var(--done-fg); }
+.integ-warn { background: var(--pend-bg); color: var(--pend-fg); }
+.integ-unknown { background: var(--surface-2); color: var(--muted); }
+/* Binary-store reference card: inset within a panel body (10px nested tier, no shadow) */
+.refcard { margin: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.refcard-bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; }
+.refcard-bar.wrap { flex-wrap: wrap; }
+.refcard-note { padding: 0 14px; }
+.refcard > pre.json { border-top: 1px solid var(--line); }
 .cn-secretwarn { color: var(--fail-fg); font-size: 11px; }
 .health { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; }
 .health .led { width: 8px; height: 8px; border-radius: 50%; }

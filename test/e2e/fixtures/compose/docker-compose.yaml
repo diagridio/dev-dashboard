@@ -56,9 +56,58 @@ services:
     build:
       context: ../..
       dockerfile: fixtures/compose/Dockerfile.wfapp
+      args:
+        GO_SDK_VERSION: "${GO_SDK_VERSION:-}"
     depends_on:
       - daprd
     environment:
       DAPR_GRPC_ENDPOINT: "127.0.0.1:50001"
       DAPR_HTTP_ENDPOINT: "http://127.0.0.1:3500"
     network_mode: "service:daprd"
+
+  # --- Dapr 1.19+ only: workflow data references ---------------------------
+  # Enabled with COMPOSE_PROFILES=dataref (the e2e test sets it when
+  # DAPR_RUNTIME_VERSION >= 1.19). A separate sidecar with its own app id, so
+  # the data-reference workflow never shares a worker with wfapp and the 1.18
+  # run starts exactly the services above.
+  daprd-dataref:
+    profiles: ["dataref"]
+    image: "daprio/daprd:${DAPR_RUNTIME_VERSION:-1.18.1}"
+    command:
+      - "./daprd"
+      - "-app-id"
+      - "datarefapp"
+      - "-dapr-http-port"
+      - "3500"
+      - "-dapr-grpc-port"
+      - "50001"
+      - "-resources-path"
+      - "/components"
+      - "-resources-path"
+      - "/components-dataref"
+      - "-placement-host-address"
+      - "placement:50005"
+      - "-scheduler-host-address"
+      - "scheduler:50006"
+    depends_on:
+      - redis
+      - placement
+      - scheduler
+    ports:
+      - "3500"
+      - "50001"
+    volumes:
+      - "./components:/components"
+      - "./components-dataref:/components-dataref"
+
+  datarefapp:
+    profiles: ["dataref"]
+    build:
+      context: ../..
+      dockerfile: fixtures/compose/Dockerfile.datarefapp
+    depends_on:
+      - daprd-dataref
+    environment:
+      DAPR_GRPC_ENDPOINT: "127.0.0.1:50001"
+      DAPR_HTTP_ENDPOINT: "http://127.0.0.1:3500"
+    network_mode: "service:daprd-dataref"

@@ -1,5 +1,41 @@
 [
   {
+    "type": "binarystore",
+    "name": "in-memory",
+    "version": "v1",
+    "status": "stable"
+  },
+  {
+    "type": "binarystore",
+    "name": "aws.s3",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "binarystore",
+    "name": "azure.blobstorage",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "binarystore",
+    "name": "azure.datalake",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "binarystore",
+    "name": "gcp.bucket",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "binarystore",
+    "name": "oci.objectstorage",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
     "type": "bindings",
     "name": "aws.dynamodb",
     "version": "v1",
@@ -278,6 +314,12 @@
   {
     "type": "bindings",
     "name": "smtp",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "bindings",
+    "name": "sqlserver",
     "version": "v1",
     "status": "alpha"
   },
@@ -565,6 +607,12 @@
   },
   {
     "type": "pubsub",
+    "name": "amqp",
+    "version": "v1",
+    "status": "beta"
+  },
+  {
+    "type": "pubsub",
     "name": "jetstream",
     "version": "v1",
     "status": "beta"
@@ -577,13 +625,19 @@
   },
   {
     "type": "pubsub",
-    "name": "solace.amqp",
+    "name": "rocketmq",
     "version": "v1",
-    "status": "beta"
+    "status": "alpha"
   },
   {
-    "type": "pubsub",
-    "name": "rocketmq",
+    "type": "search",
+    "name": "in-memory",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "search",
+    "name": "meilisearch",
     "version": "v1",
     "status": "alpha"
   },
@@ -668,13 +722,13 @@
   {
     "type": "state",
     "name": "azure.blobstorage",
-    "version": "v2",
+    "version": "v1",
     "status": "stable"
   },
   {
     "type": "state",
     "name": "azure.blobstorage",
-    "version": "v1",
+    "version": "v2",
     "status": "stable"
   },
   {
@@ -842,6 +896,18 @@
   {
     "type": "state",
     "name": "etcd",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "vector",
+    "name": "in-memory",
+    "version": "v1",
+    "status": "alpha"
+  },
+  {
+    "type": "vector",
+    "name": "meilisearch",
     "version": "v1",
     "status": "alpha"
   }

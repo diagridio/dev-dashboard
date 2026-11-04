@@ -324,6 +324,10 @@ component fails the suite until the doc is updated.
 **Inline elements / badges**
 - `.pill .s-*` — status pill (use `StatusPill`).
 - `.pill .secref-*` — secret reference status pill (use `SecretStatusPill`).
+- `.pill .integ-{ok,warn,unknown}` — payload integrity badge (verified / hash mismatch /
+  unverified) on a binary-store reference card.
+- `.refcard` (+ `.refcard-bar`, `.refcard-note`) — binary-store data-reference card nested
+  inside a panel: `--line` border, 10px radius, no shadow (`PayloadView`).
 - `.health` + `.led.{ok,warn,bad}` — colored LED + label.
 - `.chip`, `.typechip`, `.appref`, `.dprchip`, `.rulebadge`, `.tag-int` — small
   mono badges for types, app refs, Dapr tags. **Link chip vs. info chip is a hard

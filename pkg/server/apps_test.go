@@ -46,7 +46,7 @@ func newFakeApps() *fakeApps {
 }
 
 func TestAppsListReturnsAllInstances(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
+	h := appsRouter(newFakeApps(), nil, nil, nil, FullCapabilities())
 	res, body := get(t, h, "/")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 	require.Equal(t, "application/json", res.Header.Get("Content-Type"))
@@ -59,7 +59,7 @@ func TestAppsListReturnsAllInstances(t *testing.T) {
 }
 
 func TestAppsDetailReturnsInstance(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
+	h := appsRouter(newFakeApps(), nil, nil, nil, FullCapabilities())
 	res, body := get(t, h, "/checkout")
 	require.Equal(t, http.StatusOK, res.StatusCode)
 
@@ -70,13 +70,13 @@ func TestAppsDetailReturnsInstance(t *testing.T) {
 }
 
 func TestAppsDetailReturns404ForUnknownApp(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
+	h := appsRouter(newFakeApps(), nil, nil, nil, FullCapabilities())
 	res, _ := get(t, h, "/does-not-exist")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
 
 func TestAppsLogsReturns404WhenNoLogPath(t *testing.T) {
-	h := appsRouter(&fakeApps{instances: []discovery.Instance{{AppID: "order"}}}, nil, nil, FullCapabilities())
+	h := appsRouter(&fakeApps{instances: []discovery.Instance{{AppID: "order"}}}, nil, nil, nil, FullCapabilities())
 	res, _ := get(t, h, "/order/logs")
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
 }
@@ -123,7 +123,7 @@ func TestAppsLifecycleRoute(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			life := &fakeLifecycle{err: tc.err}
-			h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
+			h := appsRouter(newFakeApps(), nil, life, nil, FullCapabilities())
 			req := httptest.NewRequest(http.MethodPost, "/orders/app/stop", nil)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
@@ -138,7 +138,7 @@ func TestAppsLifecycleRoute(t *testing.T) {
 }
 
 func TestAppsLifecycleRouteNilManager(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
+	h := appsRouter(newFakeApps(), nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/orders/app/stop", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -157,7 +157,7 @@ func TestAppsDismissRoute(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			life := &fakeLifecycle{dismissErr: tc.err}
-			h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
+			h := appsRouter(newFakeApps(), nil, life, nil, FullCapabilities())
 			req := httptest.NewRequest(http.MethodDelete, "/orders", nil)
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
@@ -171,7 +171,7 @@ func TestAppsDismissRoute(t *testing.T) {
 
 func TestAppsClearInactiveRoute(t *testing.T) {
 	life := &fakeLifecycle{cleared: 3}
-	h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
+	h := appsRouter(newFakeApps(), nil, life, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/clear-inactive", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -186,7 +186,7 @@ func TestAppsClearInactiveRoute(t *testing.T) {
 
 func TestAppsClearInactiveRouteError(t *testing.T) {
 	life := &fakeLifecycle{clearErr: errors.New("boom")}
-	h := appsRouter(newFakeApps(), nil, life, FullCapabilities())
+	h := appsRouter(newFakeApps(), nil, life, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/clear-inactive", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -194,7 +194,7 @@ func TestAppsClearInactiveRouteError(t *testing.T) {
 }
 
 func TestAppsClearInactiveRouteNilManager(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
+	h := appsRouter(newFakeApps(), nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/clear-inactive", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -202,7 +202,7 @@ func TestAppsClearInactiveRouteNilManager(t *testing.T) {
 }
 
 func TestAppsDismissRouteNilManager(t *testing.T) {
-	h := appsRouter(newFakeApps(), nil, nil, FullCapabilities())
+	h := appsRouter(newFakeApps(), nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodDelete, "/orders", nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
@@ -227,7 +227,7 @@ func TestPublishProxiesToSidecar(t *testing.T) {
 		DaprHTTPBaseURL:  sidecar.URL,
 		Components:       []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
 	}}}
-	h := appsRouter(apps, nil, nil, FullCapabilities())
+	h := appsRouter(apps, nil, nil, nil, FullCapabilities())
 
 	body := `{"pubsubName":"pubsub","topic":"orders","data":"{\"id\":1}","contentType":"application/json","metadata":{"ttlInSeconds":"60"}}`
 	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(body))
@@ -246,7 +246,7 @@ func TestPublishRejectsUnknownPubsub(t *testing.T) {
 		AppID: "order", SidecarReachable: true,
 		Components: []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
 	}}}
-	h := appsRouter(apps, nil, nil, FullCapabilities())
+	h := appsRouter(apps, nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"nope","topic":"orders"}`))
 	res, body := doReq(t, h, req)
 	require.Equal(t, http.StatusBadRequest, res.StatusCode)
@@ -258,7 +258,7 @@ func TestPublishRejectsEmptyTopic(t *testing.T) {
 		AppID: "order", SidecarReachable: true,
 		Components: []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
 	}}}
-	h := appsRouter(apps, nil, nil, FullCapabilities())
+	h := appsRouter(apps, nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":""}`))
 	res, _ := doReq(t, h, req)
 	require.Equal(t, http.StatusBadRequest, res.StatusCode)
@@ -266,14 +266,14 @@ func TestPublishRejectsEmptyTopic(t *testing.T) {
 
 func TestPublishUnreachableSidecar(t *testing.T) {
 	apps := &fakeApps{instances: []discovery.Instance{{AppID: "order", SidecarReachable: false}}}
-	h := appsRouter(apps, nil, nil, FullCapabilities())
+	h := appsRouter(apps, nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
 	res, _ := doReq(t, h, req)
 	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
 }
 
 func TestPublishUnknownApp(t *testing.T) {
-	h := appsRouter(&fakeApps{}, nil, nil, FullCapabilities())
+	h := appsRouter(&fakeApps{}, nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/ghost/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
 	res, body := doReq(t, h, req)
 	require.Equal(t, http.StatusNotFound, res.StatusCode)
@@ -290,7 +290,7 @@ func TestPublishPassesThroughDaprdError(t *testing.T) {
 		AppID: "order", SidecarReachable: true, DaprHTTPBaseURL: sidecar.URL,
 		Components: []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
 	}}}
-	h := appsRouter(apps, nil, nil, FullCapabilities())
+	h := appsRouter(apps, nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
 	res, body := doReq(t, h, req)
 	require.Equal(t, http.StatusForbidden, res.StatusCode)
@@ -311,7 +311,7 @@ func TestPublishNetworkFailure(t *testing.T) {
 		AppID: "order", SidecarReachable: true, DaprHTTPBaseURL: unreachableURL,
 		Components: []discovery.Component{{Name: "pubsub", Type: "pubsub.redis"}},
 	}}}
-	h := appsRouter(apps, nil, nil, FullCapabilities())
+	h := appsRouter(apps, nil, nil, nil, FullCapabilities())
 	req := httptest.NewRequest(http.MethodPost, "/order/publish", strings.NewReader(`{"pubsubName":"pubsub","topic":"orders"}`))
 	res, _ := doReq(t, h, req)
 	require.Equal(t, http.StatusBadGateway, res.StatusCode)

@@ -3,6 +3,14 @@ WORKDIR /src
 COPY wfapp/go.mod wfapp/go.sum ./
 RUN go mod download
 COPY wfapp/ ./
+# Optional SDK pairing: CI passes the go-sdk release that matches the Dapr
+# runtime under test (v1.15.x for 1.18, v1.16.x for 1.19). Empty keeps the
+# version pinned in wfapp/go.mod.
+ARG GO_SDK_VERSION=""
+RUN if [ -n "$GO_SDK_VERSION" ]; then \
+      go get "github.com/dapr/go-sdk@$GO_SDK_VERSION" && go mod tidy; \
+    fi && \
+    echo "wfapp go-sdk: $(go list -m -f '{{.Version}}' github.com/dapr/go-sdk)"
 RUN CGO_ENABLED=0 go build -o /wfapp .
 
 FROM gcr.io/distroless/static-debian12@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2

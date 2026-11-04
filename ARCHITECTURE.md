@@ -108,6 +108,8 @@ pkg/                    domain packages — each isolated, none import cmd/
                         Aspire env contract (scan_aspire.go); Merge + FilterAspire
   statestore/           Store client (redis/postgres/sqlite/mongodb), Detect, secret resolution
   state/                State page: browse / add / delete state-store records
+  binarystore/          read-only binary store file reads via the sidecar's gRPC
+                        `GetBinaryFileAlpha1` (1 MiB cap); backs workflow data references
   workflow/             list / stats / history / terminate / purge; store-backed reads
                         (service.go) + sidecar-gRPC reads (sidecar.go) routed per app
                         (composite.go)
@@ -307,6 +309,7 @@ All domain services are passed in via `server.Options` (`BasePath`, `DistFS`, `V
 | DELETE | `/api/apps/{appId}` | lifecycle (clear one inactive app) | apps.go |
 | POST | `/api/apps/clear-inactive` | lifecycle | apps.go |
 | POST | `/api/apps/{appId}/publish` | discovery (pub/sub test message) | apps.go |
+| GET | `/api/apps/{appKey}/binarystore/{store}/file` | binarystore (read-only; `?key=&size=`) | binarystore.go |
 | GET | `/api/actors` | discovery | actors.go |
 | GET | `/api/subscriptions` | discovery | subscriptions.go |
 | GET | `/api/workflows` | reconciler (WorkflowBackend) | workflows.go |
@@ -486,6 +489,17 @@ cached per address in a `SidecarPool` closed on shutdown.
 **To add a workflow field:** add it to the types (`types.go`) and extract it in
 `decode.go`. **To add a store backend:** add a case in `statestore.New` and satisfy the
 components-contrib `state.Store` (+ `KeysLiker`) interface.
+
+### Workflow data references (`pkg/binarystore`)
+
+Dapr 1.19 SDKs can replace large workflow payloads in history with a `{"$daprRef": {...}}`
+envelope (store, key, size, sha256) pointing at a binary store component. The SPA detects the
+envelope (`web/src/lib/daprRef.ts`) and `PayloadView` renders a card instead of the JSON; on
+**Load** it calls `GET /api/apps/{appKey}/binarystore/{store}/file?key=&size=`. `pkg/binarystore`
+opens the running app's sidecar gRPC port (cached per address) and streams
+`GetBinaryFileAlpha1`, refusing anything over 1 MiB; the browser verifies the sha256. The path
+is read-only (no `SetBinaryFile`/delete is exposed) and needs a running sidecar, so a stopped
+app yields a "start the app" hint rather than an error.
 
 ### State records (`pkg/state`)
 

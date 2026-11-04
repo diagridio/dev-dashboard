@@ -23,12 +23,17 @@ func TestTestcontainersDiscovery(t *testing.T) {
 	requireDocker(t)
 
 	// Build the wfapp image the fixture references (context = test/e2e).
+	// GO_SDK_VERSION (set by CI) pairs wfapp's go-sdk with the Dapr runtime.
 	build := exec.Command("docker", "build",
 		"-t", "tcfixture-wfapp",
 		"-f", "fixtures/compose/Dockerfile.wfapp",
+		"--build-arg", "GO_SDK_VERSION="+os.Getenv("GO_SDK_VERSION"),
 		".")
 	out, err := build.CombinedOutput()
 	require.NoErrorf(t, err, "docker build wfapp: %s", out)
+	sdk, err := exec.Command("docker", "run", "--rm", "tcfixture-wfapp", "-sdk-version").Output()
+	require.NoError(t, err, "wfapp -sdk-version")
+	requireWfappSDK(t, string(sdk))
 
 	// Build the fixture into a real binary and run it directly, rather than
 	// via `go run .`: `go run` spawns the compiled binary as a *child*

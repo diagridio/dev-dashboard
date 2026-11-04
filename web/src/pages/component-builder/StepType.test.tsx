@@ -13,6 +13,9 @@ const bundle = {
     { type: 'state', name: 'redis', version: 'v1', title: 'Redis', status: 'stable', metadata: [] },
     { type: 'state', name: 'postgresql', version: 'v1', title: 'PostgreSQL', status: 'stable', metadata: [] },
     { type: 'pubsub', name: 'kafka', version: 'v1', title: 'Apache Kafka', status: 'stable', metadata: [] },
+    { type: 'binarystore', name: 'aws.s3', version: 'v1', title: 'AWS S3', status: 'alpha', metadata: [] },
+    { type: 'search', name: 'elasticsearch', version: 'v1', title: 'Elasticsearch', status: 'alpha', metadata: [] },
+    { type: 'vector', name: 'qdrant', version: 'v1', title: 'Qdrant', status: 'alpha', metadata: [] },
   ],
 }
 
@@ -32,6 +35,13 @@ describe('StepType category filter', () => {
     expect(screen.getByRole('button', { name: 'pubsub' })).toBeInTheDocument()
     expect(screen.getByText(/choose a category/i)).toBeInTheDocument()
     expect(screen.queryByText('Redis')).not.toBeInTheDocument()
+  })
+
+  it('renders binarystore, search and vector category chips', async () => {
+    renderStep(initialState())
+    expect(await screen.findByRole('button', { name: 'binarystore' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'search' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'vector' })).toBeInTheDocument()
   })
 
   it('clicking a category chip dispatches SELECT_CATEGORY', async () => {

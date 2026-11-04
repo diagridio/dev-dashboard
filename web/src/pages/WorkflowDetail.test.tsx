@@ -36,6 +36,32 @@ describe('WorkflowDetail', () => {
     )
   })
 
+  it('renders data-reference card for envelope input and event output', async () => {
+    const env = (k: string) =>
+      JSON.stringify({ $daprRef: { v: 1, store: 'blobs', key: k, size: 2048, sha256: 'a'.repeat(64) } })
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'OrderWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-26T10:00:00Z',
+          replayCount: 0,
+          input: env('in/1'),
+          history: [
+            { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'ExecutionStarted', name: 'OrderWorkflow' },
+            { sequenceId: 1, timestamp: '2026-06-26T10:00:01Z', type: 'TaskCompleted', name: 'Charge', output: env('out/1') },
+            { sequenceId: 2, timestamp: '2026-06-26T10:00:02Z', type: 'TaskCompleted', name: 'Ship', output: '{"plain":true}' },
+          ],
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getAllByText('Stored in binary store')).toHaveLength(2))
+    expect(screen.getByText(/"plain"/)).toBeInTheDocument()
+  })
+
   // -------------------------------------------------------------------------
   // Basic rendering
   // -------------------------------------------------------------------------
