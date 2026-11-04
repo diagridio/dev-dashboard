@@ -159,6 +159,10 @@ func deduplicateMetadataFields(comp *ComponentMetadata) {
 	comp.Metadata = comp.Metadata[:idx]
 }
 
+// sortComponents orders by type, status (stable first), then title, and
+// breaks remaining ties (e.g. v1/v2 of one component, or two components
+// sharing a title) by name and version, so the order is total and doesn't
+// depend on the bundle's input order.
 func sortComponents(b *Bundle) {
 	sort.Slice(b.Components, func(i, j int) bool {
 		ci, cj := b.Components[i], b.Components[j]
@@ -169,7 +173,13 @@ func sortComponents(b *Bundle) {
 		if si != sj {
 			return si < sj
 		}
-		return ci.Title < cj.Title
+		if ci.Title != cj.Title {
+			return ci.Title < cj.Title
+		}
+		if ci.Name != cj.Name {
+			return ci.Name < cj.Name
+		}
+		return ci.Version < cj.Version
 	})
 }
 

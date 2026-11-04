@@ -782,13 +782,13 @@
   {
     "type": "state",
     "name": "postgresql",
-    "version": "v2",
+    "version": "v1",
     "status": "stable"
   },
   {
     "type": "state",
     "name": "postgresql",
-    "version": "v1",
+    "version": "v2",
     "status": "stable"
   },
   {
@@ -800,13 +800,13 @@
   {
     "type": "state",
     "name": "sqlserver",
-    "version": "v2",
+    "version": "v1",
     "status": "stable"
   },
   {
     "type": "state",
     "name": "sqlserver",
-    "version": "v1",
+    "version": "v2",
     "status": "stable"
   },
   {
