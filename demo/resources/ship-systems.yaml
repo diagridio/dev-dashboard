@@ -1,0 +1,30 @@
+apiVersion: dapr.io/v1alpha1
+kind: Resiliency
+metadata:
+  name: ship-systems
+spec:
+  policies:
+    retries:
+      retryDiagnostics:
+        policy: constant
+        duration: 2s
+        maxRetries: 3
+    timeouts:
+      general: 10s
+    circuitBreakers:
+      subspaceBreaker:
+        maxRequests: 1
+        interval: 30s
+        timeout: 60s
+        trip: consecutiveFailures > 5
+  targets:
+    apps:
+      bridge:
+        timeout: general
+        retry: retryDiagnostics
+        circuitBreaker: subspaceBreaker
+    components:
+      statestore:
+        outbound:
+          retry: retryDiagnostics
+          timeout: general

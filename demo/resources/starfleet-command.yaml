@@ -1,0 +1,15 @@
+apiVersion: dapr.io/v1alpha1
+kind: HTTPEndpoint
+metadata:
+  name: starfleet-command
+spec:
+  baseUrl: https://httpbin.org
+  headers:
+    - name: X-Starfleet-Api-Key
+      secretKeyRef:
+        name: command-codes
+        key: starfleet-api-key
+    - name: X-Ship
+      value: Enterprise
+auth:
+  secretStore: command-codes
