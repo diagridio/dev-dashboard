@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -144,4 +146,27 @@ func TestResourcesListConfigurationUsedBy(t *testing.T) {
 	r2, body2 := get(t, h, "/configuration/default")
 	require.Equal(t, http.StatusOK, r2.StatusCode)
 	require.Contains(t, body2, `"loadedBy":["notification","party-registry"]`)
+}
+
+// An app whose --config path runs through a symlink still "uses" the
+// configuration the loader found under the real path, on list and detail.
+func TestConfigurationUsedByThroughSymlink(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	link := filepath.Join(base, "link")
+	require.NoError(t, os.MkdirAll(real, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(real, "config.yaml"), []byte("kind: Configuration\n"), 0o600))
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	res := fakeResources{items: []resources.Resource{
+		{Name: "appcfg", Kind: resources.KindConfiguration, Path: filepath.Join(real, "config.yaml")},
+	}}
+	apps := &fakeApps{instances: []discovery.Instance{{AppID: "a", ConfigPath: filepath.Join(link, "config.yaml")}}}
+	h := resourcesRouter(res, apps, false)
+
+	_, body := get(t, h, "/?kind=configuration")
+	require.Contains(t, body, `"loadedBy":["a"]`)
+	_, body2 := get(t, h, "/configuration/appcfg")
+	require.Contains(t, body2, `"loadedBy":["a"]`)
 }

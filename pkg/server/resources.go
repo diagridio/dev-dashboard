@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"path/filepath"
 	"slices"
 	"sort"
 
@@ -97,10 +96,11 @@ func validKind(kind resources.Kind) bool {
 
 // loadedKey is what loadedNames reports for r: its file path for a
 // Configuration (daprd's metadata does not name its configuration, so the
-// link is the app's --config file), its name for everything else.
+// link is the app's --config file, compared canonically), its name for
+// everything else.
 func loadedKey(r resources.Resource) string {
 	if r.Kind == resources.KindConfiguration {
-		return filepath.Clean(r.Path)
+		return resources.CanonicalPath(r.Path)
 	}
 	return r.Name
 }
@@ -112,7 +112,7 @@ func loadedNames(in discovery.Instance, kind resources.Kind) []string {
 	switch kind {
 	case resources.KindConfiguration:
 		if in.ConfigPath != "" {
-			names = append(names, filepath.Clean(in.ConfigPath))
+			names = append(names, resources.CanonicalPath(in.ConfigPath))
 		}
 	case resources.KindComponent:
 		for _, c := range in.Components {
@@ -126,17 +126,17 @@ func loadedNames(in discovery.Instance, kind resources.Kind) []string {
 	return names
 }
 
-// loadedByFor returns the sorted instance keys whose sidecar loaded the
-// resource of kind with the given loadedKey. It lists apps once and scans only for the requested name,
+// loadedByFor returns the sorted instance keys that loaded the resource of
+// kind whose loadedKey is key. It lists apps once and checks only that key,
 // avoiding a full index build.
-func loadedByFor(ctx context.Context, apps discovery.Service, kind resources.Kind, name string) []string {
+func loadedByFor(ctx context.Context, apps discovery.Service, kind resources.Kind, key string) []string {
 	list, err := apps.List(ctx)
 	if err != nil {
 		return nil
 	}
 	var ids []string
 	for _, in := range list {
-		if slices.Contains(loadedNames(in, kind), name) {
+		if slices.Contains(loadedNames(in, kind), key) {
 			ids = append(ids, instanceKey(in))
 		}
 	}

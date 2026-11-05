@@ -286,3 +286,15 @@ func TestScanConfigFilePathOnly(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, countNamed(list, "appcfg"))
 }
+
+// A config reached once through a resources dir and once through a symlinked
+// path (daprd's cwd comes back symlink-resolved) is still one resource.
+func TestScanDedupsThroughSymlink(t *testing.T) {
+	real, link := symlinkedDir(t)
+	require.NoError(t, os.WriteFile(filepath.Join(real, "config.yaml"), cfgNamed("appcfg"), 0o600))
+
+	svc := New(func() []string { return []string{real, filepath.Join(link, "config.yaml")} }, nil)
+	list, err := svc.List(context.Background(), KindConfiguration)
+	require.NoError(t, err)
+	require.Equal(t, 1, countNamed(list, "appcfg"))
+}
