@@ -16,7 +16,7 @@ rows every time. `make demo-reset` puts that scenario back.
 | Go | 1.26.10 or later (`engineering`, and building the dashboard) |
 | .NET SDK | 10.0 (`bridge` targets `net10.0`) |
 | Python + uv | Python 3.11 or later, [`uv`](https://docs.astral.sh/uv/) (`sickbay`) |
-| Node.js | 20, only to build the dashboard (`make build`) |
+| Node.js | 20, to build the dashboard (`make build`) and for `make screenshots` (the first run downloads Chromium) |
 
 ## 1. Clean up first
 
@@ -41,8 +41,8 @@ Terminal 1, from the repo root, starts all three apps with `dapr run -f`:
 make demo
 ```
 
-Wait until each app logs that it's seeded (`demo seeded`, `Bridge demo seeded`, and sickbay's
-`starfleet-command fleet-status` line). Ctrl-C stops all three apps. If the terminal is gone,
+Wait until each app logs that it's seeded: `engineering` logs `demo seeded`, `bridge` logs
+`Bridge demo seeded`, and `sickbay` logs a `starfleet-command fleet-status: ...` line. Ctrl-C stops all three apps. If the terminal is gone,
 run `cd demo && dapr stop -f .` instead.
 
 Terminal 2, from the repo root, builds and starts the dashboard:
@@ -58,10 +58,10 @@ The dashboard opens at <http://localhost:9090>.
 
 | App | Language | Dapr features | Dashboard pages |
 |---|---|---|---|
-| `engineering` | Go (go-sdk 1.16) | Workflows: `DiagnosticSweep` parents with `SubsystemCheck` children, activities, an external event, a 1.19 data reference (large payload in `binarystore.in-memory`); service-invocation target; cron input binding | Workflows, Workflow detail, Apps, App detail, Logs |
-| `bridge` | .NET (`Dapr.*` 1.19.0) | Actors `SubsystemActor` and `DeckActor` with reminders; pub/sub publish; service invocation to `engineering` and `sickbay`; secret store read | Actors, Apps, App detail, Logs |
+| `engineering` | Go (go-sdk 1.16) | Workflows: `DiagnosticSweep` parents with `SubsystemCheck` children, activities, a durable timer, an external event, a 1.19 data reference (large payload in `binarystore.in-memory`); service-invocation target; cron input binding | Workflows, Workflow detail, Apps, App detail, Logs |
+| `bridge` | .NET (`Dapr.*` 1.19.0) | Actors `SubsystemActor` and `DeckActor` with reminders and a `status-poll` actor timer; pub/sub publish; service invocation to `engineering` and `sickbay`; secret store read | Actors, Apps, App detail, Logs |
 | `sickbay` | Python (`dapr[workflow,fastapi]` 1.19.0) | Declarative (`red-alert-sub`) and programmatic (`diagnostics.results`) subscriptions; state store writes; a small `CrewHealthScan` workflow; a call through the `starfleet-command` HTTPEndpoint | Subscriptions, State, HTTP Endpoints, Workflows, Apps, Logs |
-| shared (`resources/`) | — | Redis state store (actor store) and pub/sub, cron binding, local-file secret store, `binarystore.in-memory`, Configuration `diagnostics`, Resiliency `ship-systems`, HTTPEndpoint `starfleet-command` with a secret-backed header | Components, Configurations, Resiliency, HTTP Endpoints, Control Plane |
+| shared (`resources/`) | — | Redis state store (actor store) and pub/sub, cron binding, local-file secret store, `binarystore.in-memory`, Configuration `diagnostics` (tracing, a feature flag), Resiliency `ship-systems`, HTTPEndpoint `starfleet-command` with a secret-backed header | Components, Configurations, Resiliency, HTTP Endpoints, Control Plane |
 
 The seeded scenario:
 
@@ -92,6 +92,9 @@ This asks each app to delete its demo data and seed it again, then waits (up to 
 all three report seeded. It exits non-zero and names the app if one doesn't finish in time.
 It only touches the demo's own workflow instances, actors and state keys.
 
+If resets keep failing or hang, stop the demo and run `dapr uninstall && dapr init` (this
+resets the scheduler's state), then flush Redis as in step 1 and start the demo again.
+
 Each app has the same control endpoints on its app port, if you want to drive them directly:
 
 - `GET /demo/status` returns `{"seeded": true|false}`, plus `"error"` while a seed is failing.
@@ -117,3 +120,18 @@ The script collapses the resources sidebar (it holds the News feed) and pauses p
 pages still show your machine's paths and hostname (App detail, HTTP Endpoints, Logs), and
 any other workflow data in the `dapr init` Redis, so clean up first (step 1) and check the
 images before publishing them.
+
+## 6. Running the demo apps' tests
+
+Each app has its own unit tests, with the Dapr calls faked out (no sidecar needed). From the
+repo root:
+
+```sh
+(cd demo/engineering && go test ./...)
+dotnet test demo/bridge/Bridge.Tests
+(cd demo/sickbay && uv run pytest)
+(cd demo/screenshots && node --test)
+```
+
+The demo's resource files are checked by `go test -tags unit ./demo/...`, which `make test`
+also runs.
