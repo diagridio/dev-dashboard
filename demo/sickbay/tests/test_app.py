@@ -83,3 +83,26 @@ def test_sickbay_loggers_emit_info(capsys):
     configure_logging()
     logging.getLogger("sickbay.seed").info("crew log seeded")
     assert "crew log seeded" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("route", ["/alerts", "/results"])
+@pytest.mark.parametrize("data", [{}, "text", None, {"alertId": 7, "id": 7}], ids=["empty", "text", "none", "non-str-id"])
+def test_malformed_message_is_dropped_without_state_write(client, state, route, data):
+    # The dashboard's Publish dialog sends {} by default; a 500 here would make
+    # Dapr redeliver the message forever.
+    ev = cloudevent()
+    ev["data"] = data
+    r = client.post(route, json=ev)
+    assert r.status_code == 200
+    assert r.json() == {"status": "DROP"}
+    assert state.data == {}
+
+
+@pytest.mark.parametrize("route", ["/alerts", "/results"])
+def test_event_without_data_is_dropped(client, state, route):
+    ev = cloudevent()
+    del ev["data"]
+    r = client.post(route, json=ev)
+    assert r.status_code == 200
+    assert r.json() == {"status": "DROP"}
+    assert state.data == {}

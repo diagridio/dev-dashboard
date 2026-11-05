@@ -5,7 +5,7 @@ import logging
 import sys
 import threading
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Any, Optional
 
 from dapr.ext.fastapi import DaprApp
 from fastapi import Body, FastAPI, Response
@@ -27,6 +27,7 @@ def configure_logging() -> None:
     log.setLevel(logging.INFO)
 
 SUCCESS = {"status": "SUCCESS"}
+DROP = {"status": "DROP"}
 
 
 def create_app(
@@ -61,23 +62,30 @@ def create_app(
         if workflows is not None:
             workflows.shutdown()
 
+    def _store(event, id_field: str, prefix: str, topic: str) -> dict:
+        # A malformed message (e.g. the Publish dialog's default "{}") is
+        # dropped, not failed: a 500 would make Dapr redeliver it forever.
+        data = event.get("data") if isinstance(event, dict) else None
+        key = data.get(id_field) if isinstance(data, dict) else None
+        if not isinstance(key, str) or not key:
+            log.warning("dropping %s message without data.%s: %r", topic, id_field, data)
+            return DROP
+        state.save(f"{prefix}-{key}", json.dumps(data, sort_keys=True))
+        return SUCCESS
+
     app = FastAPI(title="sickbay", lifespan=lifespan)
     app.state.controller = controller
     dapr_app = DaprApp(app)
 
     # Declarative subscription red-alert-sub delivers red-alert here.
     @app.post("/alerts")
-    def alerts(event: dict = Body(...)):
-        data = event.get("data") or {}
-        state.save(f"alert-{data['alertId']}", json.dumps(data, sort_keys=True))
-        return SUCCESS
+    def alerts(event: Any = Body(None)):
+        return _store(event, "alertId", "alert", "red-alert")
 
     # Programmatic subscription.
     @dapr_app.subscribe(pubsub="pubsub", topic="diagnostics.results", route="/results")
-    def results(event: dict = Body(...)):
-        data = event.get("data") or {}
-        state.save(f"result-{data['id']}", json.dumps(data, sort_keys=True))
-        return SUCCESS
+    def results(event: Any = Body(None)):
+        return _store(event, "id", "result", "diagnostics.results")
 
     @app.get("/demo/status")
     def demo_status():
