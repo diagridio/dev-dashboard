@@ -1,4 +1,4 @@
-.PHONY: web build lint lint-go lint-web hooks test test-go test-web test-integration test-e2e tidy release-snapshot release-check demo demo-reset
+.PHONY: web build lint lint-go lint-web hooks test test-go test-web test-integration test-e2e tidy release-snapshot release-check demo demo-reset screenshots
 
 web:
 	cd web && npm install && npm run build
@@ -48,3 +48,8 @@ demo:
 
 demo-reset:
 	demo/scripts/reset.sh
+
+# Resets the demo, then captures every page in both themes into docs/images.
+# Needs `make demo` and the dashboard running (DASH_URL, default http://localhost:9090).
+screenshots:
+	demo/scripts/reset.sh && cd demo/screenshots && npm install && npx playwright install chromium && node capture.mjs

@@ -97,3 +97,23 @@ Each app has the same control endpoints on its app port, if you want to drive th
 - `GET /demo/status` returns `{"seeded": true|false}`, plus `"error"` while a seed is failing.
 - `POST /demo/reset` returns `202` and resets in the background. A reset sent while another one
   is running is ignored.
+
+## 5. Screenshots
+
+With the demo and the dashboard running, from the repo root:
+
+```sh
+make screenshots
+```
+
+This runs `make demo-reset`, then a Playwright script (`demo/screenshots/`, its own npm
+package) that checks every app reports seeded, opens each dashboard page in light and dark
+mode at 1440×900 (scale 2), and writes `docs/images/<page>-<light|dark>.png`. It exits
+non-zero before writing anything if an app is down or unseeded, and lists any page that
+didn't load. Set `DASH_URL` if the dashboard isn't on `http://localhost:9090`, and
+`ONLY=state,logs` to capture a subset. The page list is in `demo/screenshots/targets.mjs`.
+
+The script collapses the resources sidebar (it holds the News feed) and pauses polling. The
+pages still show your machine's paths and hostname (App detail, HTTP Endpoints, Logs), and
+any other workflow data in the `dapr init` Redis, so clean up first (step 1) and check the
+images before publishing them.
