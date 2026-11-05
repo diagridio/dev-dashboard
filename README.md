@@ -13,7 +13,8 @@ The Diagrid Dapr Dev Dashboard is a companion for local Dapr development. It ins
 apps you start with `dapr run` / `dapr run -f`, Aspire, Docker Compose, or Dapr
 Testcontainers (e.g. Spring Boot apps run with `mvn spring-boot:test-run` and
 `dapr-spring-boot-starter-test`), and surfaces everything about them — sidecars, workflows,
-actors, subscriptions, components, resiliency policies, configurations, and logs.
+actors, subscriptions, components, resiliency policies, HTTP endpoints, configurations, and
+logs.
 
 It also helps you author Dapr resources. The **Component Builder** walks you through
 picking a component type from the full Dapr catalog, filling in its metadata fields, and
@@ -230,11 +231,14 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   **Clear inactive**. This only hides them from the dashboard; no containers or files are
   deleted, and an app that starts running again reappears.
 - **Inspect an application** — drill into a single app for its ports, PIDs, command,
-  resource/config paths, runtime metadata, enabled features, and loaded components. Stop
+  resource/config paths, runtime metadata, enabled features, and loaded components and HTTP
+  endpoints. Stop
   works for every discovery mode; Start and Restart are offered for Docker Compose apps only.
 - **Debug workflows** — browse workflow executions across all apps with status filters and
   search, then open a run to watch its **live event history**, input/output, custom status,
-  and a continuously-ticking wall-clock while it runs.
+  and a continuously-ticking wall-clock while it runs. Payloads that a Dapr 1.19 SDK moved to a
+  binary store (a `$daprRef` data reference) show as a card; **Load payload** fetches the value
+  through the app's sidecar (up to 1 MiB) and checks its sha256.
 - **Clean up workflows** — terminate and/or purge individual or bulk workflows, with an
   explicit "force delete" fallback for stuck/orphaned state.
 - **Browse, add & clean state records** — the **State** page lists the records in any connected
@@ -266,7 +270,14 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   are extracted and shown too, with a container-prefixed path. A component's `secretKeyRef`
   and `envRef` values are resolved against your local secret stores (`local.file`,
   `local.env`), and each reference shows whether it resolved, and if not, which env var or
-  file path was tried.
+  file path was tried. Each configuration shows which apps use it, matched on the file the
+  app's sidecar was started with (`--config`, or a run template's `configFilePath`).
+- **Review resiliency policies & HTTP endpoints** — the **Resiliency** page lists discovered
+  `Resiliency` files with their scopes, policies, targets, and the apps that loaded them. The
+  **HTTP Endpoints** page does the same for `HTTPEndpoint` resources (non-Dapr services called
+  through `/v1.0/invoke`): base URL, scopes, headers, and loaded-by apps. Headers that use
+  `secretKeyRef` or `envRef` show whether the reference resolves, never the value, and plain
+  values that look like credentials are masked until you click **Show**.
 - **Build component YAML** — a guided wizard over the full Dapr component catalog: pick a
   type, fill in its metadata fields (with per-field docs and defaults), choose an
   authentication profile, then copy or download the generated YAML.

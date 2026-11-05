@@ -30,7 +30,7 @@ pkg/               domain packages — each is isolated, none import cmd/
   lifecycle/       start / stop / restart of discovered apps and sidecars
   controlplane/    docker/podman detection, inspect, lifecycle actions, log stream
   metadata/        embedded component-metadata catalog (drives the add/edit connection forms)
-  resources/       component + configuration YAML loader
+  resources/       Component / Configuration / Resiliency / HTTPEndpoint YAML loader
   secrets/         local secret-store detection + secretKeyRef/envRef resolution, using
                    the dashboard's own environment/cwd, not daprd's
   logs/            file tail → SSE
