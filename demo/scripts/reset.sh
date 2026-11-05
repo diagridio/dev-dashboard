@@ -17,7 +17,7 @@ APPS=("sickbay:6003" "engineering:6001" "bridge:6002")
 
 for entry in "${APPS[@]}"; do
   name="${entry%%:*}"; port="${entry##*:}"
-  code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "http://localhost:${port}/demo/reset")
+  code=$(curl -s --max-time 5 -o /dev/null -w '%{http_code}' -X POST "http://localhost:${port}/demo/reset")
   if [[ "$code" != "202" ]]; then
     echo "reset: ${name} (localhost:${port}) did not accept the reset (HTTP ${code}). Is 'make demo' running?" >&2
     exit 1
