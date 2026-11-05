@@ -3,9 +3,15 @@
 A local dashboard for Dapr developers that offers a live view of everything Dapr running on
 your machine, plus guided builders for authoring Dapr component and resiliency YAML.
 
-![Dev Dashboard - Applications](docs/images/applications-light.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/applications-dark.png">
+  <img alt="Dev Dashboard - Applications" src="docs/images/applications-light.png">
+</picture>
 
-![Dev Dashboard - Workflows](docs/images/workflow-overview-light.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-overview-dark.png">
+  <img alt="Dev Dashboard - Workflows" src="docs/images/workflow-overview-light.png">
+</picture>
 
 ## Goal
 
@@ -309,7 +315,10 @@ The drawer shows on the Applications, Application detail, Workflows, Workflow de
 and Subscriptions pages. Only self-hosted commands are listed; Kubernetes-only (`-k`) commands
 are left out.
 
-![Dev Dashboard - CLI drawer](docs/images/cli-drawer.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/cli-drawer-dark.png">
+  <img alt="Dev Dashboard - CLI drawer" src="docs/images/cli-drawer-light.png">
+</picture>
 
 ### State records
 
@@ -318,7 +327,10 @@ prefix, search by key, and expand a row to see the full value with its size, ver
 encoding. Workflow and actor state is hidden unless you tick *Show internal keys*.
 **+ New record** adds a record, and records can be deleted one at a time or by multi-select.
 
-![Dev Dashboard - State records](docs/images/state-records.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/state-records-dark.png">
+  <img alt="Dev Dashboard - State records" src="docs/images/state-records-light.png">
+</picture>
 
 ### Publish a message
 
@@ -328,7 +340,109 @@ optionally set `ttlInSeconds` or `rawPayload` under *Show advanced*. The message
 the app's sidecar to the real broker, so the subscriber receives it like any other message.
 The button is disabled when the sidecar is unreachable, and errors from daprd are shown as-is.
 
-![Dev Dashboard - Publish a message](docs/images/publish-message.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/publish-message-dark.png">
+  <img alt="Dev Dashboard - Publish a message" src="docs/images/publish-message-light.png">
+</picture>
+
+### Application detail
+
+Open an app to see its ports, PIDs, command, resource and config paths, runtime metadata,
+enabled features, and the components and HTTP endpoints its sidecar loaded. Stop works in every
+discovery mode; Start and Restart are offered for Docker Compose apps only.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/application-detail-dark.png">
+  <img alt="Dev Dashboard - Application detail" src="docs/images/application-detail-light.png">
+</picture>
+
+### Workflow detail
+
+A workflow run shows its live event history, input, output and custom status. When a run fails,
+a banner at the top shows the error, and the event that failed shows its error details inline.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-detail-dark.png">
+  <img alt="Dev Dashboard - Workflow detail" src="docs/images/workflow-detail-light.png">
+</picture>
+
+A payload that a Dapr 1.19 SDK moved to a binary store shows as a `$daprRef` card with its store,
+key and size. **Load payload** fetches the value through the app's sidecar and checks its sha256.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-dataref-dark.png">
+  <img alt="Dev Dashboard - Workflow data reference" src="docs/images/workflow-dataref-light.png">
+</picture>
+
+### Actors
+
+The **Actors** page lists the actor types across all apps: the host app, the number of active
+actors, the idle timeout, reminders and placement status.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/actors-dark.png">
+  <img alt="Dev Dashboard - Actors" src="docs/images/actors-light.png">
+</picture>
+
+### Components and secret references
+
+Each component shows its YAML and the apps that loaded it. `secretKeyRef` and `envRef` values
+are resolved against your local secret stores, and each reference shows whether it resolved.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/component-detail-dark.png">
+  <img alt="Dev Dashboard - Component detail" src="docs/images/component-detail-light.png">
+</picture>
+
+### HTTP endpoints
+
+The **HTTP Endpoints** page lists `HTTPEndpoint` resources with their base URL, scopes, headers
+and the apps that loaded them. Secret-backed headers show whether they resolve, never the value.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/http-endpoints-dark.png">
+  <img alt="Dev Dashboard - HTTP endpoints" src="docs/images/http-endpoints-light.png">
+</picture>
+
+### Component Builder
+
+Pick a component type from the full Dapr catalog, fill in its metadata fields and choose an
+authentication profile. The wizard ends in a YAML preview you can copy or download.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/component-builder-dark.png">
+  <img alt="Dev Dashboard - Component Builder" src="docs/images/component-builder-light.png">
+</picture>
+
+### Resiliency Builder
+
+Compose named timeouts, retries and circuit breakers, apply them to apps, actors and components,
+and export the resiliency spec as YAML.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/resiliency-builder-dark.png">
+  <img alt="Dev Dashboard - Resiliency Builder" src="docs/images/resiliency-builder-light.png">
+</picture>
+
+### Logs
+
+Stream an app's daprd or application logs live, with level coloring, keyword highlighting and a
+follow toggle.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logs-dark.png">
+  <img alt="Dev Dashboard - Logs" src="docs/images/logs-light.png">
+</picture>
+
+### Control plane
+
+The **Control Plane** page shows the `dapr init` containers (placement, scheduler and the rest)
+with their status, and lets you start, restart or stop them.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/control-plane-dark.png">
+  <img alt="Dev Dashboard - Control plane" src="docs/images/control-plane-light.png">
+</picture>
 
 ## Non-Goals
 
