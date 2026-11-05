@@ -1,4 +1,4 @@
-.PHONY: web build lint lint-go lint-web hooks test test-go test-web test-integration test-e2e tidy release-snapshot release-check
+.PHONY: web build lint lint-go lint-web hooks test test-go test-web test-integration test-e2e tidy release-snapshot release-check demo demo-reset
 
 web:
 	cd web && npm install && npm run build
@@ -41,3 +41,10 @@ release-snapshot:
 
 release-check:
 	goreleaser check
+
+# Enterprise diagnostics demo (see demo/README.md). Start the dashboard separately.
+demo:
+	cd demo && dapr run -f .
+
+demo-reset:
+	demo/scripts/reset.sh
