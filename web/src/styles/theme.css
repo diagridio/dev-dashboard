@@ -58,7 +58,7 @@ body {
      only switch. Without it those popups stay light in the dark theme. */
   color-scheme: dark;
   --dapr-hat-outline: rgba(255, 255, 255, 0.35);
-  /* Catalyst-aligned green-tinted dark surfaces */
+  /* Diagrid-aligned green-tinted dark surfaces */
   --bg: #161918; --surface: #1C1F1E; --surface-2: #232625; --raise: #2B2E2D;
   --line: #373A39; --line-soft: #262928;
   --text: #F8F8F8; --muted: #A6A6A6; --faint: #6A6A6A;
