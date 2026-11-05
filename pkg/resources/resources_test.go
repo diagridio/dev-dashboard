@@ -247,3 +247,42 @@ func TestExtras_ResiliencyDoc(t *testing.T) {
 	require.Equal(t, []string{"party-api"}, list[0].Scopes)
 	require.NotNil(t, list[0].Resiliency)
 }
+
+func cfgNamed(name string) []byte {
+	return []byte("apiVersion: dapr.io/v1alpha1\nkind: Configuration\nmetadata:\n  name: " + name + "\n")
+}
+
+func countNamed(list []Resource, name string) int {
+	n := 0
+	for _, r := range list {
+		if r.Name == name {
+			n++
+		}
+	}
+	return n
+}
+
+// An app's --config file is passed to the loader as a file path: only that
+// file is read, never its siblings or subdirectories, and a missing or
+// virtual (testcontainers) path is a silent no-op.
+func TestScanConfigFilePathOnly(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yaml"), cfgNamed("appcfg"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "other.yaml"), cfgNamed("sibling"), 0o600))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "sub"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "sub", "nested.yaml"), cfgNamed("nested"), 0o600))
+
+	svc := New(func() []string {
+		return []string{filepath.Join(dir, "config.yaml"), filepath.Join(dir, "missing.yaml"), "crazy_lamport:/dapr/config.yaml"}
+	}, nil)
+	list, err := svc.List(context.Background(), KindConfiguration)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, "appcfg", list[0].Name)
+
+	// The config file also inside a scanned resources dir is listed once.
+	svc = New(func() []string { return []string{dir, filepath.Join(dir, "config.yaml")} }, nil)
+	list, err = svc.List(context.Background(), KindConfiguration)
+	require.NoError(t, err)
+	require.Equal(t, 1, countNamed(list, "appcfg"))
+}

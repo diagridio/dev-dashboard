@@ -12,7 +12,10 @@ import (
 
 // derivePaths computes, from the current running apps, the inputs that were
 // previously frozen at boot:
-//   - resPaths:  directories the resources loader scans
+//   - resPaths:  directories (and individual Configuration files) the
+//     resources loader scans. An app's --config is added as the file itself,
+//     never its directory: the loader walks recursively, and a config in a
+//     project root would otherwise pull in the whole tree.
 //   - scanPaths: paths statestore.Detect walks for state-store components
 //   - loaded:    set of state-store component names at least one app loaded
 //
@@ -66,7 +69,7 @@ func derivePaths(apps []discovery.Instance, homeDir, stateStorePath string, extr
 	for _, a := range apps {
 		resPaths = append(resPaths, a.ResourcePaths...)
 		if a.ConfigPath != "" {
-			resPaths = append(resPaths, filepath.Dir(a.ConfigPath))
+			resPaths = append(resPaths, a.ConfigPath)
 		}
 	}
 	resPaths = append(resPaths, extraResPaths...)
@@ -83,7 +86,7 @@ func appRunning(a discovery.Instance) bool {
 
 // appsFingerprint hashes the apps-derived inputs that the reconciler depends on:
 // the set of app IDs, the list (multiset, no dedup) of resource paths +
-// config-file dirs, the set of loaded state-store component names, and the set
+// config files, the set of loaded state-store component names, and the set
 // of currently-running app IDs. The running set is included so a running->
 // stopped flip re-triggers reconcile (and thus re-election), even when ids,
 // paths, and stores are otherwise unchanged.
@@ -96,7 +99,7 @@ func appsFingerprint(apps []discovery.Instance) string {
 		ids = append(ids, a.AppID)
 		paths = append(paths, a.ResourcePaths...)
 		if a.ConfigPath != "" {
-			paths = append(paths, filepath.Dir(a.ConfigPath))
+			paths = append(paths, a.ConfigPath)
 		}
 		for _, c := range a.Components {
 			if strings.HasPrefix(c.Type, "state.") {

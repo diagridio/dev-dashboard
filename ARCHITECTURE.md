@@ -231,7 +231,7 @@ catch up. Identical fingerprint → no work.
 ### What a reconcile does (`reconcile`)
 
 1. `derivePaths()` computes: **resource scan paths** (`~/.dapr/components`, `~/.dapr`, each
-   app's resource paths, config-file dirs), **state-store scan paths** (the explicit
+   app's resource paths, Configuration files), **state-store scan paths** (the explicit
    `--statestore` if set, else `~/.dapr/components` + app paths), the set of store-component
    **names loaded** by running apps, and the running apps' resource paths.
 2. `statestore.Detect` + `DetectSecretStores` scan those paths for `Component` YAML of
