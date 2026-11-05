@@ -41,9 +41,18 @@ class DaprWorkflows:
             return
         runtime = WorkflowRuntime()
         workflow.register(runtime)
-        runtime.start()  # raises while the sidecar is not ready; caller retries
+        try:
+            runtime.start()  # raises while the sidecar is not ready; caller retries
+            client = DaprWorkflowClient()
+        except Exception:
+            try:
+                runtime.shutdown()
+            except Exception as e:  # best effort; report the start failure
+                log.debug("workflow runtime shutdown after failed start: %s", e)
+            raise
+        # Only a fully started runtime + client counts as started.
+        self._client = client
         self._runtime = runtime
-        self._client = DaprWorkflowClient()
 
     def status(self, instance_id: str) -> Optional[str]:
         state = self._client.get_workflow_state(instance_id, fetch_payloads=False)
@@ -53,7 +62,10 @@ class DaprWorkflows:
         self._client.schedule_new_workflow(
             workflow.crew_health_scan, input="all-decks", instance_id=instance_id
         )
-        self._client.wait_for_workflow_completion(instance_id, timeout_in_seconds=60)
+        state = self._client.wait_for_workflow_completion(instance_id, timeout_in_seconds=60)
+        status = state.runtime_status.name if state else None
+        if status != "COMPLETED":
+            raise RuntimeError(f"{instance_id} finished as {status or 'unknown'}, want COMPLETED")
 
     def purge(self, instance_id: str) -> None:
         if self._client.get_workflow_state(instance_id, fetch_payloads=False) is not None:
