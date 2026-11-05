@@ -328,10 +328,13 @@ func (s *service) scan(kind Kind) ([]Resource, error) {
 			if err != nil {
 				absPath = path
 			}
-			if seen[absPath] {
+			// Dedup on the canonical path so one file reached via two path
+			// strings (a symlink, or Windows case) is listed once.
+			key := CanonicalPath(absPath)
+			if seen[key] {
 				return nil
 			}
-			seen[absPath] = true
+			seen[key] = true
 			for _, doc := range splitYAMLDocs(data) {
 				var rr rawResource
 				if err := yaml.Unmarshal(doc, &rr); err != nil {

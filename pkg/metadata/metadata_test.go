@@ -104,3 +104,22 @@ func TestProcessingInvariants(t *testing.T) {
 	}
 	require.True(t, foundRedisHost, "state.redis should expose redisHost")
 }
+
+func TestCatalogIncludesDapr119BuildingBlocks(t *testing.T) {
+	require.NoError(t, Init())
+	var b Bundle
+	require.NoError(t, parseProcessed(&b))
+
+	got := map[string]int{}
+	hasS3 := false
+	for _, c := range b.Components {
+		got[c.Type]++
+		if c.Type == "binarystore" && c.Name == "aws.s3" {
+			hasS3 = true
+		}
+	}
+	require.Equal(t, 6, got["binarystore"])
+	require.Equal(t, 2, got["search"])
+	require.Equal(t, 2, got["vector"])
+	require.True(t, hasS3, "binarystore aws.s3 missing")
+}

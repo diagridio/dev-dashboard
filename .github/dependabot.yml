@@ -4,6 +4,7 @@ updates:
     directories:
       - /
       - /test/e2e/wfapp
+      - /test/e2e/datarefapp
       - /test/e2e/fixtures/testcontainers
     schedule:
       interval: weekly

@@ -1,0 +1,10 @@
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  # Binary store for the Dapr 1.19+ workflow data-reference e2e scenario.
+  # Mounted only into daprd-dataref (compose profile "dataref"), so the
+  # 1.18 run never sees a component type its sidecar doesn't know.
+  name: payloads
+spec:
+  type: binarystore.in-memory
+  version: v1

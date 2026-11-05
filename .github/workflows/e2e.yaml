@@ -8,33 +8,63 @@ on:
         type: choice
         default: all
         options: [all, compose, testcontainers, aspire]
+      dapr:
+        description: "Which Dapr minor line(s) to run (each resolves to its latest patch release)"
+        type: choice
+        default: all
+        options: [all, "1.18", "1.19"]
 
 permissions:
   contents: read
 
 jobs:
   e2e:
+    name: e2e (${{ matrix.mode }}, Dapr ${{ matrix.dapr }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         mode: [compose, testcontainers, aspire]
+        dapr: ["1.18", "1.19"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Skip unselected modes
+      - name: Skip unselected modes and Dapr lines
         id: gate
         env:
-          WANT: ${{ github.event.inputs.mode }}
+          WANT_MODE: ${{ github.event.inputs.mode }}
           MODE: ${{ matrix.mode }}
+          WANT_DAPR: ${{ github.event.inputs.dapr }}
+          DAPR: ${{ matrix.dapr }}
         run: |
-          if [ "$WANT" = "all" ] || [ "$WANT" = "$MODE" ]; then
+          if { [ "$WANT_MODE" = "all" ] || [ "$WANT_MODE" = "$MODE" ]; } &&
+             { [ "$WANT_DAPR" = "all" ] || [ "$WANT_DAPR" = "$DAPR" ]; }; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
+
+      # Resolve the latest stable runtime, Dapr.Workflow (.NET SDK) and go-sdk
+      # release for this minor line. The fixtures read DAPR_RUNTIME_VERSION
+      # (compose images, testcontainers images), DAPR_DOTNET_SDK_VERSION (Aspire
+      # OrderService) and GO_SDK_VERSION (wfapp image build arg); on 1.19+ the
+      # compose test also enables the workflow data-reference scenario;
+      # `dapr init` below uses the runtime version too, so the Aspire sidecar,
+      # placement and scheduler match the SDK the fixture is built against.
+      - name: Resolve latest Dapr ${{ matrix.dapr }}.x
+        if: steps.gate.outputs.run == 'true'
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DAPR: ${{ matrix.dapr }}
+        run: |
+          versions=$(scripts/latest-dapr-versions.sh "$DAPR")
+          echo "$versions" | tee -a "$GITHUB_OUTPUT"
+          echo "$versions" |
+            sed -e 's/^runtime=/DAPR_RUNTIME_VERSION=/' -e 's/^dotnet_sdk=/DAPR_DOTNET_SDK_VERSION=/' \
+                -e 's/^go_sdk=/GO_SDK_VERSION=/' >> "$GITHUB_ENV"
 
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: steps.gate.outputs.run == 'true'
@@ -59,20 +89,25 @@ jobs:
       - name: dapr init (full)
         if: steps.gate.outputs.run == 'true' && matrix.mode == 'aspire'
         # Pin the runtime so the placement/scheduler containers and the daprd
-        # the Aspire sidecar launches match the Dapr.Workflow 1.18.4 SDK the
-        # fixture is built against. An unpinned `dapr init` installs whatever is
-        # latest, which can skew against the SDK and break workflow scheduling
-        # (the sidecar never brings up its actor/workflow runtime).
-        run: dapr init --runtime-version 1.18.1
+        # the Aspire sidecar launches match the Dapr.Workflow SDK version the
+        # fixture is built against (both resolved above). An unpinned `dapr init`
+        # installs whatever is latest, which can skew against the SDK and break
+        # workflow scheduling (the sidecar never brings up its actor/workflow
+        # runtime).
+        env:
+          RUNTIME: ${{ steps.versions.outputs.runtime }}
+        run: dapr init --runtime-version "$RUNTIME"
 
       - name: Build dashboard
         if: steps.gate.outputs.run == 'true'
         run: make build
 
-      - name: Run e2e (${{ matrix.mode }})
+      - name: Run e2e (${{ matrix.mode }}, Dapr ${{ steps.versions.outputs.runtime }})
         if: steps.gate.outputs.run == 'true'
+        env:
+          MODE: ${{ matrix.mode }}
         run: |
-          case "${{ matrix.mode }}" in
+          case "$MODE" in
             compose)        run=TestComposeDiscovery ;;
             testcontainers) run=TestTestcontainersDiscovery ;;
             aspire)         run=TestAspireDiscovery ;;

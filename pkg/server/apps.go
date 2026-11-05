@@ -19,7 +19,7 @@ import (
 // appsRouter builds the /apps sub-router backed by the given discovery
 // service and lifecycle manager (nil disables lifecycle actions). caps gates
 // the logs and lifecycle-action routes (list/detail stay unconditional).
-func appsRouter(svc discovery.Service, containerLogs func(context.Context, string) (<-chan string, error), life lifecycle.Manager, caps Capabilities) http.Handler {
+func appsRouter(svc discovery.Service, containerLogs func(context.Context, string) (<-chan string, error), life lifecycle.Manager, bin BinaryFileReader, caps Capabilities) http.Handler {
 	r := chi.NewRouter()
 
 	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
@@ -45,6 +45,10 @@ func appsRouter(svc discovery.Service, containerLogs func(context.Context, strin
 	})
 
 	r.Post("/{appId}/publish", publishHandler(svc))
+
+	if bin != nil {
+		r.Get("/{appId}/binarystore/{store}/file", binaryFileHandler(bin))
+	}
 
 	if caps.Logs {
 		r.Get("/{appId}/logs", logsHandler(svc, containerLogs))

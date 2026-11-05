@@ -27,11 +27,9 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		if kind != resources.KindConfiguration {
-			loaded := loadedByIndex(req.Context(), apps, kind)
-			for i := range list {
-				list[i].LoadedBy = loaded[list[i].Name]
-			}
+		loaded := loadedByIndex(req.Context(), apps, kind)
+		for i := range list {
+			list[i].LoadedBy = loaded[loadedKey(list[i])]
 		}
 		if list == nil {
 			list = []resources.Resource{}
@@ -54,9 +52,7 @@ func resourcesRouter(res resources.Service, apps discovery.Service, revealEnable
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			return
 		}
-		if kind != resources.KindConfiguration {
-			got.LoadedBy = loadedByFor(req.Context(), apps, kind, got.Name)
-		}
+		got.LoadedBy = loadedByFor(req.Context(), apps, kind, loadedKey(got))
 		writeJSON(w, http.StatusOK, got)
 	})
 	r.Post("/component/{id}/secret-value", func(w http.ResponseWriter, req *http.Request) {
@@ -98,11 +94,26 @@ func validKind(kind resources.Kind) bool {
 	return false
 }
 
-// loadedNames returns the names of the resources of kind an instance's
-// sidecar reports as loaded.
+// loadedKey is what loadedNames reports for r: its file path for a
+// Configuration (daprd's metadata does not name its configuration, so the
+// link is the app's --config file, compared canonically), its name for
+// everything else.
+func loadedKey(r resources.Resource) string {
+	if r.Kind == resources.KindConfiguration {
+		return resources.CanonicalPath(r.Path)
+	}
+	return r.Name
+}
+
+// loadedNames returns the keys (see loadedKey) of the resources of kind an
+// instance's sidecar has loaded.
 func loadedNames(in discovery.Instance, kind resources.Kind) []string {
 	var names []string
 	switch kind {
+	case resources.KindConfiguration:
+		if in.ConfigPath != "" {
+			names = append(names, resources.CanonicalPath(in.ConfigPath))
+		}
 	case resources.KindComponent:
 		for _, c := range in.Components {
 			names = append(names, c.Name)
@@ -119,17 +130,17 @@ func loadedNames(in discovery.Instance, kind resources.Kind) []string {
 	return names
 }
 
-// loadedByFor returns the sorted instance keys whose sidecar loaded the named
-// resource of kind. It lists apps once and scans only for the requested name,
+// loadedByFor returns the sorted instance keys that loaded the resource of
+// kind whose loadedKey is key. It lists apps once and checks only that key,
 // avoiding a full index build.
-func loadedByFor(ctx context.Context, apps discovery.Service, kind resources.Kind, name string) []string {
+func loadedByFor(ctx context.Context, apps discovery.Service, kind resources.Kind, key string) []string {
 	list, err := apps.List(ctx)
 	if err != nil {
 		return nil
 	}
 	var ids []string
 	for _, in := range list {
-		if slices.Contains(loadedNames(in, kind), name) {
+		if slices.Contains(loadedNames(in, kind), key) {
 			ids = append(ids, instanceKey(in))
 		}
 	}
@@ -137,7 +148,7 @@ func loadedByFor(ctx context.Context, apps discovery.Service, kind resources.Kin
 	return ids
 }
 
-// loadedByIndex maps resource name -> sorted instance keys that loaded it.
+// loadedByIndex maps loadedKey -> sorted instance keys that loaded it.
 func loadedByIndex(ctx context.Context, apps discovery.Service, kind resources.Kind) map[string][]string {
 	idx := map[string][]string{}
 	list, err := apps.List(ctx)

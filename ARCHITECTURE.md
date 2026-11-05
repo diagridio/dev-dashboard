@@ -108,6 +108,8 @@ pkg/                    domain packages — each isolated, none import cmd/
                         Aspire env contract (scan_aspire.go); Merge + FilterAspire
   statestore/           Store client (redis/postgres/sqlite/mongodb), Detect, secret resolution
   state/                State page: browse / add / delete state-store records
+  binarystore/          read-only binary store file reads via the sidecar's gRPC
+                        `GetBinaryFileAlpha1` (1 MiB cap); backs workflow data references
   workflow/             list / stats / history / terminate / purge; store-backed reads
                         (service.go) + sidecar-gRPC reads (sidecar.go) routed per app
                         (composite.go)
@@ -229,7 +231,7 @@ catch up. Identical fingerprint → no work.
 ### What a reconcile does (`reconcile`)
 
 1. `derivePaths()` computes: **resource scan paths** (`~/.dapr/components`, `~/.dapr`, each
-   app's resource paths, config-file dirs), **state-store scan paths** (the explicit
+   app's resource paths, Configuration files), **state-store scan paths** (the explicit
    `--statestore` if set, else `~/.dapr/components` + app paths), the set of store-component
    **names loaded** by running apps, and the running apps' resource paths.
 2. `statestore.Detect` + `DetectSecretStores` scan those paths for `Component` YAML of
@@ -307,6 +309,7 @@ All domain services are passed in via `server.Options` (`BasePath`, `DistFS`, `V
 | DELETE | `/api/apps/{appId}` | lifecycle (clear one inactive app) | apps.go |
 | POST | `/api/apps/clear-inactive` | lifecycle | apps.go |
 | POST | `/api/apps/{appId}/publish` | discovery (pub/sub test message) | apps.go |
+| GET | `/api/apps/{appKey}/binarystore/{store}/file` | binarystore (read-only; `?key=&size=`) | binarystore.go |
 | GET | `/api/actors` | discovery | actors.go |
 | GET | `/api/subscriptions` | discovery | subscriptions.go |
 | GET | `/api/workflows` | reconciler (WorkflowBackend) | workflows.go |
@@ -407,7 +410,10 @@ each and returning when the request context is cancelled.
 `Service.List(ctx)` returns `[]Instance`, one per running app/sidecar. The source of truth
 is `StandaloneScanner`, wrapping `github.com/dapr/cli/pkg/standalone.List()` (the same
 process-table scan as `dapr list`) — that supplies app id, ports (app/HTTP/gRPC), daprd &
-CLI PIDs, created time, run-template, resource paths, and command. Each result is then
+CLI PIDs, created time, run-template, resource paths, and command. `standalone.List()` does
+not report `--config`, so the scanner reads it from the daprd process's own command line
+(gopsutil), resolving a relative path against daprd's cwd; the CLI has already resolved a run
+template's `configFilePath` to an absolute path. Each result is then
 **enriched in parallel** (bounded worker pool) by:
 
 - `GET /v1.0/metadata` (2s timeout) → runtime version, components, actors, subscriptions,
@@ -487,6 +493,17 @@ cached per address in a `SidecarPool` closed on shutdown.
 `decode.go`. **To add a store backend:** add a case in `statestore.New` and satisfy the
 components-contrib `state.Store` (+ `KeysLiker`) interface.
 
+### Workflow data references (`pkg/binarystore`)
+
+Dapr 1.19 SDKs can replace large workflow payloads in history with a `{"$daprRef": {...}}`
+envelope (store, key, size, sha256) pointing at a binary store component. The SPA detects the
+envelope (`web/src/lib/daprRef.ts`) and `PayloadView` renders a card instead of the JSON; on
+**Load** it calls `GET /api/apps/{appKey}/binarystore/{store}/file?key=&size=`. `pkg/binarystore`
+opens the running app's sidecar gRPC port (cached per address) and streams
+`GetBinaryFileAlpha1`, refusing anything over 1 MiB; the browser verifies the sha256. The path
+is read-only (no `SetBinaryFile`/delete is exposed) and needs a running sidecar, so a stopped
+app yields a "start the app" hint rather than an error.
+
 ### State records (`pkg/state`)
 
 `pkg/state` reads, writes and deletes state-store records for the State page. It pages keys through
@@ -557,7 +574,9 @@ never `statestore.Detect`, the reconciler's paths, or store election. An extract
 and break other apps' workflow views; a guard test
 (`TestVirtualPathsDoNotFeedStoreDetection`) pins this. The HTTP layer enriches each
 component, resiliency policy and HTTP endpoint with `LoadedBy` — which running apps loaded it — by
-cross-referencing the names each sidecar reports in `/v1.0/metadata`.
+cross-referencing the names each sidecar reports in `/v1.0/metadata`. Metadata does not name
+the Configuration, so a configuration's `LoadedBy` matches its file path against each app's
+`ConfigPath` instead.
 Resiliency entries also carry `scopes` and the parsed spec (policies + targets) for the
 Resiliency page; HTTPEndpoint entries carry `scopes`, `baseUrl` and headers (secretKeyRef/envRef
 headers keep the reference only, never the value). `Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
