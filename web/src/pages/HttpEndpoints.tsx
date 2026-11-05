@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useResource, useResources } from '../hooks/useResources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
@@ -44,10 +45,41 @@ function hasUnresolvedRef(r: ResourceSummary): boolean {
   return r.secretRefs?.some(isUnresolved) ?? false
 }
 
-/** Value cell of a header: plain values as-is; references stay masked and
- *  carry their resolution status, like component secret references. */
+/** Header names whose plain value is likely a credential. */
+const SENSITIVE_HEADER = /auth|token|secret|passw|api[-_]?key|cookie|credential/i
+
+/** Hides the password of a `scheme://user:password@host` URL for display. */
+function maskUrlPassword(url: string): string {
+  return url.replace(/^([a-z][a-z0-9+.-]*:\/\/[^:@/]*):[^@/]*@/i, '$1:••••@')
+}
+
+/** A plain value that looks like a credential: masked until asked for. The
+ *  raw YAML panel below still shows the file as written. */
+function MaskedValue({ name, value }: { name: string; value: string }) {
+  const [shown, setShown] = useState(false)
+  return (
+    <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+      {shown ? value : <span className="muted">••••••••</span>}
+      <button
+        className="btn"
+        aria-label={`${shown ? 'hide' : 'show'} ${name}`}
+        aria-pressed={shown}
+        onClick={() => setShown((s) => !s)}
+      >
+        {shown ? 'Hide' : 'Show'}
+      </button>
+    </span>
+  )
+}
+
+/** Value cell of a header: plain values as-is (credential-like ones masked);
+ *  references stay masked and carry their resolution status, like component
+ *  secret references. */
 function HeaderValue({ header, refs }: { header: HTTPEndpointHeader; refs?: SecretRefStatus[] }) {
-  if (!header.secretKeyRef && !header.envRef) return <>{header.value ?? ''}</>
+  if (!header.secretKeyRef && !header.envRef) {
+    const value = header.value ?? ''
+    return value && SENSITIVE_HEADER.test(header.name) ? <MaskedValue name={header.name} value={value} /> : <>{value}</>
+  }
   const ref = refs?.find((r) => r.field === header.name)
   return (
     <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
@@ -128,7 +160,7 @@ export function HttpEndpoints() {
                     ⚠
                   </span>
                 )}
-                <span className="ct">{r.httpEndpoint?.baseUrl ?? '—'}</span>
+                <span className="ct">{r.httpEndpoint?.baseUrl ? maskUrlPassword(r.httpEndpoint.baseUrl) : '—'}</span>
                 <span className="ct">{scopeLabel(r.scopes)}</span>
               </div>
             )
@@ -153,7 +185,7 @@ function HttpEndpointDetail({ summary }: { summary: ResourceSummary }) {
         <div className="ph">{summary.name}</div>
         <div className="kv">
           <div className="kk">Base URL</div>
-          <div className="vv mono">{spec?.baseUrl || '—'}</div>
+          <div className="vv mono">{spec?.baseUrl ? maskUrlPassword(spec.baseUrl) : '—'}</div>
           {spec?.clientTLS && (
             <>
               <div className="kk">Client TLS</div>

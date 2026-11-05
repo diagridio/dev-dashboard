@@ -145,6 +145,40 @@ describe('HttpEndpoints page', () => {
     expect(within(env).getByText('••••••••')).toBeInTheDocument()
   })
 
+  it('masks credential-like plain header values until shown, and the baseUrl password', async () => {
+    const plainCreds = {
+      id: 'ep333ep333ep',
+      name: 'legacy',
+      kind: 'httpendpoint',
+      path: '/proj/legacy.yaml',
+      httpEndpoint: {
+        baseUrl: 'http://svc:hunter2@legacy.local:8080/api',
+        headers: [
+          { name: 'Authorization', value: 'Bearer abc123' },
+          { name: 'X-Api-Key', value: 'k-999' },
+          { name: 'Accept', value: 'application/json' },
+        ],
+      },
+    }
+    serve([plainCreds])
+    renderPage()
+
+    await screen.findByText('legacy', { selector: '.cn' })
+    expect(document.body.textContent).not.toContain('hunter2')
+    expect(screen.getAllByText('http://svc:••••@legacy.local:8080/api').length).toBeGreaterThan(0)
+
+    const headers = screen.getByText('Headers').closest('.panel') as HTMLElement
+    expect(within(headers).queryByText('Bearer abc123')).not.toBeInTheDocument()
+    expect(within(headers).queryByText('k-999')).not.toBeInTheDocument()
+    expect(within(headers).getByText('application/json')).toBeInTheDocument()
+
+    const auth = within(headers).getByText('Authorization').closest('tr') as HTMLElement
+    fireEvent.click(within(auth).getByRole('button', { name: /show authorization/i }))
+    expect(within(auth).getByText('Bearer abc123')).toBeInTheDocument()
+    fireEvent.click(within(auth).getByRole('button', { name: /hide authorization/i }))
+    expect(within(auth).queryByText('Bearer abc123')).not.toBeInTheDocument()
+  })
+
   it('navigates to the selected endpoint on click', async () => {
     serve([BILLING, IDENTITY])
     const router = renderPage()
