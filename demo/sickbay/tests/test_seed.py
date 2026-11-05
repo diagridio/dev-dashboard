@@ -117,3 +117,46 @@ def test_reset_retries_on_failure(state, workflows):
             break
         time.sleep(0.01)
     assert c.seeded is True
+
+
+def test_racy_seed_store_is_cleared_when_reset_worker_starts(state, workflows):
+    # Simulate a startup seed that stored seeded=True after the reset was
+    # accepted: the reset worker must re-clear it before doing its work.
+    c = make(state, workflows)
+    gate = threading.Event()
+    orig = workflows.purge
+
+    def slow_purge(i):
+        gate.wait(2)
+        orig(i)
+
+    workflows.purge = slow_purge
+    with c._mu:  # the startup seed still holds the lock
+        assert c.request_reset() is True
+        c._seeded = True  # the racy store
+    for _ in range(200):
+        if not c.seeded:
+            break
+        time.sleep(0.005)
+    assert c.seeded is False  # worker re-cleared it while it works
+    gate.set()
+    for _ in range(200):
+        if c.seeded:
+            break
+        time.sleep(0.01)
+    assert c.seeded is True
+
+
+def test_seed_check_and_store_share_the_reset_guard(state, workflows):
+    c = make(state, workflows)
+    # While request_reset's guard is held, seed_once cannot store the flag.
+    done = threading.Event()
+    with c._guard:
+        t = threading.Thread(target=lambda: (c.seed_once(), done.set()))
+        t.start()
+        assert not done.wait(0.1)
+        assert c.seeded is False
+        c._resetting.set()  # the reset that held the guard was accepted
+    t.join(2)
+    assert done.is_set()
+    assert c.seeded is False

@@ -1,3 +1,4 @@
+using System.Reflection;
 using Bridge.Seed;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -81,5 +82,50 @@ public class DemoControllerTests
         var (seeded, error) = demo.Status();
         Assert.False(seeded);
         Assert.Equal("boom", error);
+    }
+
+    [Fact]
+    public async Task ResetWorker_ClearsRacySeededStore_BeforeItsWork()
+    {
+        var pollGate = new TaskCompletionSource();
+        var resetGate = new TaskCompletionSource();
+        var resetEntered = new TaskCompletionSource();
+        var port = new FakePort
+        {
+            NotReadyPolls = 0,
+            PollHook = () => pollGate.Task,
+            ResetHook = _ => { resetEntered.TrySetResult(); return resetGate.Task; },
+        };
+        var demo = Make(port);
+        var seed = demo.SeedOnceAsync(CancellationToken.None); // holds the lock, blocked in poll
+        var running = demo.StartReset();
+        Assert.NotNull(running);
+        // Simulate a startup seed that stored seeded=true after the reset was accepted.
+        typeof(DemoController).GetField("_seeded", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(demo, true);
+        pollGate.SetResult();
+        await seed;
+        await resetEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(demo.Status().Seeded); // the worker re-cleared it while it works
+        resetGate.SetResult();
+        await running!;
+        Assert.True(demo.Status().Seeded);
+    }
+
+    [Fact]
+    public async Task SeedFinishingDuringPendingReset_DoesNotMarkSeeded()
+    {
+        var pollGate = new TaskCompletionSource();
+        var resetGate = new TaskCompletionSource();
+        var port = new FakePort { NotReadyPolls = 0, PollHook = () => pollGate.Task, ResetHook = _ => resetGate.Task };
+        var demo = Make(port);
+        var seed = demo.SeedOnceAsync(CancellationToken.None);
+        var running = demo.StartReset();
+        pollGate.SetResult();
+        await seed;
+        Assert.False(demo.Status().Seeded);
+        resetGate.SetResult();
+        await running!;
+        Assert.True(demo.Status().Seeded);
     }
 }

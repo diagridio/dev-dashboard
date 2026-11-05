@@ -12,6 +12,9 @@ public sealed class DemoController
     private readonly ILogger _log;
     private readonly TimeSpan _poll;
     private readonly SemaphoreSlim _mu = new(1, 1);
+    // Makes "accept a reset and clear seeded" and "seed done, set seeded unless a reset is
+    // pending" mutually exclusive.
+    private readonly object _flag = new();
     private volatile bool _seeded;
     private volatile string? _lastError;
     private int _resetting;
@@ -46,9 +49,12 @@ public sealed class DemoController
                 throw;
             }
             // While a reset is pending its own reseed flips the flag.
-            if (Volatile.Read(ref _resetting) == 0)
+            lock (_flag)
             {
-                _seeded = true;
+                if (Volatile.Read(ref _resetting) == 0)
+                {
+                    _seeded = true;
+                }
             }
         }
         finally
@@ -83,11 +89,14 @@ public sealed class DemoController
     /// </summary>
     public Task? StartReset()
     {
-        if (Interlocked.CompareExchange(ref _resetting, 1, 0) != 0)
+        lock (_flag)
         {
-            return null;
+            if (Interlocked.CompareExchange(ref _resetting, 1, 0) != 0)
+            {
+                return null;
+            }
+            _seeded = false;
         }
-        _seeded = false;
         return Task.Run(ResetWithRetryAsync);
     }
 
@@ -102,6 +111,9 @@ public sealed class DemoController
                 await _mu.WaitAsync(ct);
                 try
                 {
+                    // A startup seed that raced the accepted reset may have stored seeded=true
+                    // after StartReset cleared it; clear it again.
+                    _seeded = false;
                     await _port.ResetAsync(ct);
                     await Seeder.RunAsync(_port, SeedDeadline, _log, _poll, ct);
                     _lastError = null;

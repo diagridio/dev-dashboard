@@ -11,6 +11,7 @@ internal sealed class FakePort : ISeedPort
     public int SickbayPolls;
     public int NotReadyPolls = 2; // number of seeded:false answers before true (-1 = never)
     public Func<CancellationToken, Task>? ResetHook;
+    public Func<Task>? PollHook;
     public string? SecretReturned;
 
     public Task<string> GetSecretAsync(string store, string key, CancellationToken ct)
@@ -45,7 +46,8 @@ internal sealed class FakePort : ISeedPort
     {
         SickbayPolls++;
         Calls.Add("poll");
-        return Task.FromResult(NotReadyPolls >= 0 && SickbayPolls > NotReadyPolls);
+        var ready = NotReadyPolls >= 0 && SickbayPolls > NotReadyPolls;
+        return PollHook is null ? Task.FromResult(ready) : PollHook().ContinueWith(_ => ready, ct);
     }
 
     public Task<string> GetEngineeringStatusReportAsync(CancellationToken ct)

@@ -87,8 +87,11 @@ class Controller:
                 self._last_error = str(e)
                 raise
             self._last_error = None
-            if not self._resetting.is_set():
-                self._seeded = True
+            # Same guard as request_reset's flag flip, so a reset accepted
+            # right now can never be overwritten with seeded=True.
+            with self._guard:
+                if not self._resetting.is_set():
+                    self._seeded = True
 
     def seed_with_retry(self, deadline: float = 120.0) -> None:
         end = time.monotonic() + deadline
@@ -104,6 +107,9 @@ class Controller:
 
     def reset_once(self) -> None:
         with self._mu:
+            # A startup seed that raced the accepted reset may have stored
+            # seeded=True after request_reset cleared it; clear it again.
+            self._seeded = False
             try:
                 self._workflows.ensure_started()
                 self._workflows.purge(SCAN_INSTANCE)
