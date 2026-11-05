@@ -4,27 +4,64 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 )
 
 type fakeWC struct {
-	existing  map[string]bool
-	scheduled []string
-	calls     []string
-	termErr   error
+	mu           sync.Mutex
+	existing     map[string]bool
+	scheduled    []string
+	calls        []string
+	termErr      error
+	termFailures int           // first N Terminate calls fail with "boom"
+	gate         chan struct{} // if set, Terminate blocks until closed
 }
 
-func (f *fakeWC) Exists(_ context.Context, id string) (bool, error) { return f.existing[id], nil }
+func (f *fakeWC) callLog() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.calls...)
+}
+
+func (f *fakeWC) count(prefix string) int {
+	n := 0
+	for _, c := range f.callLog() {
+		if strings.HasPrefix(c, prefix) {
+			n++
+		}
+	}
+	return n
+}
+
+func (f *fakeWC) Exists(_ context.Context, id string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.existing[id], nil
+}
 func (f *fakeWC) Schedule(_ context.Context, name, id string, _ any) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.scheduled = append(f.scheduled, id)
 	f.calls = append(f.calls, "schedule:"+id)
 	return nil
 }
 func (f *fakeWC) Terminate(_ context.Context, id string) error {
+	if f.gate != nil {
+		<-f.gate
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls = append(f.calls, "terminate:"+id)
+	if f.termFailures > 0 {
+		f.termFailures--
+		return errors.New("boom")
+	}
 	return f.termErr
 }
 func (f *fakeWC) PurgeRecursive(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.calls = append(f.calls, "purge:"+id)
 	return nil
 }
