@@ -374,7 +374,7 @@ GET  /*                                           SPA: serve index.html (History
   - **Learn**: Dapr University (<https://www.diagrid.io/university>) ·
     Diagrid Webinars (<https://www.diagrid.io/webinars>)
   - **Read**: Dapr Docs (<https://docs.dapr.io>) · Diagrid Docs (<https://docs.diagrid.io>)
-  - **Run & Operate**: Diagrid (<https://www.diagrid.io/catalyst>)
+  - **Run & Operate**: Diagrid Cloud (<https://www.diagrid.io/catalyst>)
 - **Collapsed state & new-item indicator:** when collapsed, the rail shows the word
   "Resources" rotated -90° (vertical), and clicking it (or the toggle) re-expands. A **bell
   icon** appears — in both the expanded header and the collapsed rail — whenever the feed has
