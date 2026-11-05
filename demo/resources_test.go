@@ -65,6 +65,28 @@ func TestDemoResourcesLoad(t *testing.T) {
 		t.Errorf("statestore actorStateStore = %q, want \"true\"", actor)
 	}
 
+	craw, err := os.ReadFile(filepath.Join("resources", "sweep-schedule.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cron struct {
+		Spec struct {
+			Metadata []struct{ Name, Value string } `json:"metadata"`
+		} `json:"spec"`
+	}
+	if err := yaml.Unmarshal(craw, &cron); err != nil {
+		t.Fatal(err)
+	}
+	sched := ""
+	for _, m := range cron.Spec.Metadata {
+		if m.Name == "schedule" {
+			sched = m.Value
+		}
+	}
+	if sched != "@every 24h" {
+		t.Errorf("cron schedule = %q, want @every 24h", sched)
+	}
+
 	for _, c := range comps {
 		if c.Name == "payloads" || c.Name == "sweep-schedule" {
 			if !reflect.DeepEqual(c.Scopes, []string{"engineering"}) {
@@ -91,6 +113,9 @@ func TestDemoResourcesLoad(t *testing.T) {
 	eps := list(t, resources.KindHTTPEndpoint)
 	if len(eps) != 1 || eps[0].Name != "starfleet-command" || eps[0].HTTPEndpoint == nil {
 		t.Fatalf("httpendpoints = %+v", eps)
+	}
+	if got := eps[0].HTTPEndpoint.BaseURL; got != "http://localhost:6003/starfleet" {
+		t.Errorf("baseUrl = %q", got)
 	}
 	var sawRef, sawShip bool
 	for _, h := range eps[0].HTTPEndpoint.Headers {

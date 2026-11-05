@@ -7,6 +7,6 @@ spec:
   version: v1
   metadata:
     - name: schedule
-      value: "@every 60s"
+      value: "@every 24h"
 scopes:
   - engineering

@@ -19,12 +19,20 @@ spec:
         trip: consecutiveFailures > 5
   targets:
     apps:
-      bridge:
+      engineering:
+        timeout: general
+        retry: retryDiagnostics
+        circuitBreaker: subspaceBreaker
+      sickbay:
         timeout: general
         retry: retryDiagnostics
         circuitBreaker: subspaceBreaker
     components:
       statestore:
+        outbound:
+          retry: retryDiagnostics
+          timeout: general
+      pubsub:
         outbound:
           retry: retryDiagnostics
           timeout: general

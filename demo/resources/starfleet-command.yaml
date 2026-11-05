@@ -3,7 +3,7 @@ kind: HTTPEndpoint
 metadata:
   name: starfleet-command
 spec:
-  baseUrl: https://httpbin.org
+  baseUrl: http://localhost:6003/starfleet
   headers:
     - name: X-Starfleet-Api-Key
       secretKeyRef:
