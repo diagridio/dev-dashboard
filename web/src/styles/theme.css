@@ -167,6 +167,13 @@ body {
 .nav a { font-size: 13px; color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 7px; font-weight: 500; cursor: pointer; }
 .nav a:hover { color: var(--text); }
 .nav a.active { color: var(--text); background: color-mix(in srgb, var(--accent-bright) 10%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-bright) 35%, transparent); }
+/* Narrow screens: between the brand and the right-hand controls the nav gets
+   only a sliver and wraps into a tall column. Give it its own full-width row
+   instead (TopNav publishes the resulting height as --topbar-h). */
+@media (max-width: 1100px) {
+  .topbar { flex-wrap: wrap; row-gap: 6px; }
+  .nav { order: 3; flex-basis: 100%; margin-left: 0; }
+}
 .topright { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .tbtn { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; cursor: pointer; display: flex; align-items: center; gap: 7px; }
 .tbtn:hover { color: var(--text); border-color: var(--faint); }

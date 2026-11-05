@@ -60,7 +60,7 @@ func TestResourcesListWithLoadedBy(t *testing.T) {
 
 	r5, body5 := get(t, h, "/badkind/foo")
 	require.Equal(t, http.StatusBadRequest, r5.StatusCode)
-	require.Contains(t, body5, `"error":"kind must be component, configuration or resiliency"`)
+	require.Contains(t, body5, `"error":"kind must be component, configuration, resiliency or httpendpoint"`)
 }
 
 func TestLoadedByUsesInstanceKeys(t *testing.T) {
@@ -112,6 +112,39 @@ func TestResourcesListResiliency(t *testing.T) {
 	r2, body2 := get(t, h, "/resiliency/party-api-resiliency")
 	require.Equal(t, http.StatusOK, r2.StatusCode)
 	require.Contains(t, body2, `"kind":"resiliency"`)
+	require.Contains(t, body2, `"loadedBy":["party-api"]`)
+}
+
+func TestResourcesListHTTPEndpoint(t *testing.T) {
+	res := fakeResources{items: []resources.Resource{{
+		Name:   "identity-api",
+		Kind:   resources.KindHTTPEndpoint,
+		Path:   "/proj/resources/common/identity-endpoint.yaml",
+		Scopes: []string{"party-api"},
+		HTTPEndpoint: &resources.HTTPEndpointSpec{
+			BaseURL: "http://localhost:8091",
+			Headers: []resources.HTTPEndpointHeader{
+				{Name: "Authorization", SecretKeyRef: &resources.SecretKeyRef{Name: "iam-token", Key: "token"}},
+			},
+		},
+	}}}
+	apps := &fakeApps{instances: []discovery.Instance{
+		{AppID: "party-api", HTTPEndpoints: []discovery.HTTPEndpoint{{Name: "identity-api"}}},
+		{AppID: "party-registry", Components: []discovery.Component{{Name: "identity-api"}}},
+	}}
+	h := resourcesRouter(res, apps, false)
+
+	r1, body := get(t, h, "/?kind=httpendpoint")
+	require.Equal(t, http.StatusOK, r1.StatusCode)
+	require.Contains(t, body, `"baseUrl":"http://localhost:8091"`)
+	require.Contains(t, body, `"secretKeyRef":{"name":"iam-token","key":"token"}`)
+	// Only sidecars reporting the endpoint under httpEndpoints count, not a
+	// same-named component.
+	require.Contains(t, body, `"loadedBy":["party-api"]`)
+
+	r2, body2 := get(t, h, "/httpendpoint/identity-api")
+	require.Equal(t, http.StatusOK, r2.StatusCode)
+	require.Contains(t, body2, `"kind":"httpendpoint"`)
 	require.Contains(t, body2, `"loadedBy":["party-api"]`)
 }
 

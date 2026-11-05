@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -38,6 +39,7 @@ const (
 	KindComponent     Kind = "component"
 	KindConfiguration Kind = "configuration"
 	KindResiliency    Kind = "resiliency"
+	KindHTTPEndpoint  Kind = "httpendpoint"
 )
 
 // ErrNotFound is returned by Get when no matching resource exists.
@@ -47,8 +49,8 @@ var ErrNotFound = errors.New("resource not found")
 // reference, or the reference does not resolve to a value.
 var ErrNoSecretValue = errors.New("no resolved secret value for field")
 
-// Resource describes a single Dapr component, configuration or resiliency
-// resource parsed from a YAML file.
+// Resource describes a single Dapr component, configuration, resiliency or
+// HTTPEndpoint resource parsed from a YAML file.
 type Resource struct {
 	ID       string   `json:"id"`
 	Name     string   `json:"name"`
@@ -62,6 +64,8 @@ type Resource struct {
 
 	// Resiliency is the parsed spec of a Resiliency resource; nil for other kinds.
 	Resiliency *ResiliencySpec `json:"resiliency,omitempty"`
+	// HTTPEndpoint is the parsed spec of an HTTPEndpoint resource; nil for other kinds.
+	HTTPEndpoint *HTTPEndpointSpec `json:"httpEndpoint,omitempty"`
 
 	SecretRefs  []SecretRefStatus `json:"secretRefs,omitempty"`
 	SecretStore *SecretStoreInfo  `json:"secretStore,omitempty"`
@@ -130,6 +134,31 @@ type ResiliencyComponentTarget struct {
 	Inbound  *ResiliencyPolicyRefs `json:"inbound,omitempty"`
 }
 
+// HTTPEndpointSpec is the target and headers of a Dapr HTTPEndpoint resource.
+type HTTPEndpointSpec struct {
+	BaseURL string               `json:"baseUrl"`
+	Headers []HTTPEndpointHeader `json:"headers,omitempty"`
+	// ClientTLS reports whether spec.clientTLS is set; its contents are not
+	// exposed.
+	ClientTLS bool `json:"clientTLS,omitempty"`
+}
+
+// HTTPEndpointHeader is one header the sidecar adds to calls to the
+// endpoint. Value is set only for plain values; a secretKeyRef or envRef
+// header carries the reference, never the value.
+type HTTPEndpointHeader struct {
+	Name         string        `json:"name"`
+	Value        string        `json:"value,omitempty"`
+	SecretKeyRef *SecretKeyRef `json:"secretKeyRef,omitempty"`
+	EnvRef       string        `json:"envRef,omitempty"`
+}
+
+// SecretKeyRef names a secret and key in the resource's secret store.
+type SecretKeyRef struct {
+	Name string `json:"name"`
+	Key  string `json:"key,omitempty"`
+}
+
 // rawResource is a minimal struct for parsing YAML resource files.
 type rawResource struct {
 	Kind     string `json:"kind"`
@@ -183,6 +212,8 @@ func kindFromString(s string) (Kind, bool) {
 		return KindConfiguration, true
 	case "Resiliency":
 		return KindResiliency, true
+	case "HTTPEndpoint":
+		return KindHTTPEndpoint, true
 	default:
 		return "", false
 	}
@@ -223,10 +254,43 @@ func newResource(rr rawResource, k Kind, path string, doc []byte) Resource {
 		Scopes:  rr.Scopes,
 		doc:     doc,
 	}
-	if k == KindResiliency {
+	switch k {
+	case KindResiliency:
 		r.Resiliency = parseResiliencySpec(doc)
+	case KindHTTPEndpoint:
+		r.HTTPEndpoint = parseHTTPEndpointSpec(doc)
 	}
 	return r
+}
+
+// parseHTTPEndpointSpec decodes an HTTPEndpoint document's spec. A spec that
+// does not match the expected shape yields nil, so the resource is still
+// listed.
+func parseHTTPEndpointSpec(doc []byte) *HTTPEndpointSpec {
+	var rr struct {
+		Spec struct {
+			BaseURL string `json:"baseUrl"`
+			Headers []struct {
+				Name         string        `json:"name"`
+				Value        any           `json:"value"`
+				SecretKeyRef *SecretKeyRef `json:"secretKeyRef"`
+				EnvRef       string        `json:"envRef"`
+			} `json:"headers"`
+			ClientTLS map[string]any `json:"clientTLS"`
+		} `json:"spec"`
+	}
+	if err := yaml.Unmarshal(doc, &rr); err != nil {
+		return nil
+	}
+	spec := &HTTPEndpointSpec{BaseURL: rr.Spec.BaseURL, ClientTLS: len(rr.Spec.ClientTLS) > 0}
+	for _, h := range rr.Spec.Headers {
+		hdr := HTTPEndpointHeader{Name: h.Name, SecretKeyRef: h.SecretKeyRef, EnvRef: h.EnvRef}
+		if h.SecretKeyRef == nil && h.EnvRef == "" && h.Value != nil {
+			hdr.Value = fmt.Sprint(h.Value)
+		}
+		spec.Headers = append(spec.Headers, hdr)
+	}
+	return spec
 }
 
 // parseResiliencySpec decodes a Resiliency document's spec. A spec that does
@@ -326,7 +390,7 @@ func (s *service) List(ctx context.Context, kind Kind) ([]Resource, error) {
 		return out[i].Path < out[j].Path
 	})
 	for i := range out {
-		if out[i].Kind == KindComponent {
+		if hasSecretRefs(out[i].Kind) {
 			out[i].SecretRefs = s.secretRefsFor(ctx, out[i].doc)
 		}
 	}
@@ -335,11 +399,20 @@ func (s *service) List(ctx context.Context, kind Kind) ([]Resource, error) {
 
 // enrich attaches secret-reference status and, for secret-store components,
 // the store detail payload.
+// hasSecretRefs reports whether resources of kind can reference secrets:
+// component metadata and HTTPEndpoint headers.
+func hasSecretRefs(kind Kind) bool {
+	return kind == KindComponent || kind == KindHTTPEndpoint
+}
+
 func (s *service) enrich(ctx context.Context, r Resource) Resource {
-	if r.Kind != KindComponent {
+	if !hasSecretRefs(r.Kind) {
 		return r
 	}
 	r.SecretRefs = s.secretRefsFor(ctx, r.doc)
+	if r.Kind != KindComponent {
+		return r
+	}
 	r.SecretStore = s.secretStoreInfoFor(ctx, r)
 	return r
 }
