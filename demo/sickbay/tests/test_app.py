@@ -71,3 +71,15 @@ def test_starfleet_stub(client):
     body = r.json()
     assert body["ship"] == "Enterprise"
     assert "status" in body
+
+
+def test_sickbay_loggers_emit_info(capsys):
+    # Uvicorn only configures its own loggers; without this the seed and
+    # starfleet-command lines never reach the Logs page.
+    import logging
+
+    from app.main import configure_logging
+
+    configure_logging()
+    logging.getLogger("sickbay.seed").info("crew log seeded")
+    assert "crew log seeded" in capsys.readouterr().err

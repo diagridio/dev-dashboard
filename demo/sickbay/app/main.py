@@ -2,6 +2,7 @@
 
 import json
 import logging
+import sys
 import threading
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -12,6 +13,18 @@ from fastapi import Body, FastAPI, Response
 from app.seed import Controller, StatePort
 
 log = logging.getLogger("sickbay")
+
+
+def configure_logging() -> None:
+    """Send the app's own INFO logs to stderr (uvicorn only configures its loggers)."""
+    for h in list(log.handlers):
+        if getattr(h, "_sickbay", False):
+            log.removeHandler(h)
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(levelname)s:     %(name)s: %(message)s"))
+    handler._sickbay = True  # type: ignore[attr-defined]
+    log.addHandler(handler)
+    log.setLevel(logging.INFO)
 
 SUCCESS = {"status": "SUCCESS"}
 
@@ -92,4 +105,5 @@ def _log_fleet_status():
         log.warning("starfleet-command call failed: %s", e)
 
 
+configure_logging()
 app = create_app(on_seeded=_log_fleet_status)
