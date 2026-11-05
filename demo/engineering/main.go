@@ -156,8 +156,9 @@ func main() {
 	if port == "" {
 		port = "6001"
 	}
-	log.Printf("engineering listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, ctrl.Handler()); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	addr := "127.0.0.1:" + port
+	log.Printf("engineering listening on %s", addr)
+	if err := http.ListenAndServe(addr, ctrl.Handler()); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
 }
