@@ -390,7 +390,7 @@ func (s *service) List(ctx context.Context, kind Kind) ([]Resource, error) {
 		return out[i].Path < out[j].Path
 	})
 	for i := range out {
-		if out[i].Kind == KindComponent {
+		if hasSecretRefs(out[i].Kind) {
 			out[i].SecretRefs = s.secretRefsFor(ctx, out[i].doc)
 		}
 	}
@@ -399,11 +399,20 @@ func (s *service) List(ctx context.Context, kind Kind) ([]Resource, error) {
 
 // enrich attaches secret-reference status and, for secret-store components,
 // the store detail payload.
+// hasSecretRefs reports whether resources of kind can reference secrets:
+// component metadata and HTTPEndpoint headers.
+func hasSecretRefs(kind Kind) bool {
+	return kind == KindComponent || kind == KindHTTPEndpoint
+}
+
 func (s *service) enrich(ctx context.Context, r Resource) Resource {
-	if r.Kind != KindComponent {
+	if !hasSecretRefs(r.Kind) {
 		return r
 	}
 	r.SecretRefs = s.secretRefsFor(ctx, r.doc)
+	if r.Kind != KindComponent {
+		return r
+	}
 	r.SecretStore = s.secretStoreInfoFor(ctx, r)
 	return r
 }

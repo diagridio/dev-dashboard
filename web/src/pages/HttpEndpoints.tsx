@@ -4,7 +4,8 @@ import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { highlightYaml } from '../lib/yaml-highlight'
 import { copyText } from '../lib/clipboard'
 import { useToast } from '../lib/toast'
-import type { HTTPEndpointHeader, ResourceSummary } from '../types/resources'
+import { SecretStatusPill } from '../components/SecretStatusPill'
+import type { HTTPEndpointHeader, ResourceSummary, SecretRefStatus } from '../types/resources'
 
 function PageHead() {
   return (
@@ -32,6 +33,32 @@ function headerSource(h: HTTPEndpointHeader): string {
   }
   if (h.envRef) return `envRef ${h.envRef}`
   return 'value'
+}
+
+/** A secret reference that was checked and does not resolve. */
+function isUnresolved(ref: SecretRefStatus): boolean {
+  return ref.status !== 'resolved' && ref.status !== 'not-checked'
+}
+
+function hasUnresolvedRef(r: ResourceSummary): boolean {
+  return r.secretRefs?.some(isUnresolved) ?? false
+}
+
+/** Value cell of a header: plain values as-is; references stay masked and
+ *  carry their resolution status, like component secret references. */
+function HeaderValue({ header, refs }: { header: HTTPEndpointHeader; refs?: SecretRefStatus[] }) {
+  if (!header.secretKeyRef && !header.envRef) return <>{header.value ?? ''}</>
+  const ref = refs?.find((r) => r.field === header.name)
+  return (
+    <span style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+      {ref && <SecretStatusPill status={ref.status} />}
+      {ref && isUnresolved(ref) && ref.detail ? (
+        <span style={{ fontSize: 12, color: 'var(--muted)' }}>{ref.detail}</span>
+      ) : (
+        <span className="muted">••••••••</span>
+      )}
+    </span>
+  )
 }
 
 export function HttpEndpoints() {
@@ -92,6 +119,15 @@ export function HttpEndpoints() {
                 }}
               >
                 <span className="cn">{r.name}</span>
+                {hasUnresolvedRef(r) && (
+                  <span
+                    className="cn-secretwarn"
+                    aria-label={`${r.name} has an unresolved secret reference`}
+                    title="Unresolved secret reference"
+                  >
+                    ⚠
+                  </span>
+                )}
                 <span className="ct">{r.httpEndpoint?.baseUrl ?? '—'}</span>
                 <span className="ct">{scopeLabel(r.scopes)}</span>
               </div>
@@ -162,7 +198,7 @@ function HttpEndpointDetail({ summary }: { summary: ResourceSummary }) {
                   <td className="mono">{h.name}</td>
                   <td className="mono">{headerSource(h)}</td>
                   <td className="mono">
-                    {h.secretKeyRef || h.envRef ? <span className="muted">••••••••</span> : (h.value ?? '')}
+                    <HeaderValue header={h} refs={summary.secretRefs} />
                   </td>
                 </tr>
               ))}

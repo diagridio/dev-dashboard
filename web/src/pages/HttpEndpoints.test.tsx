@@ -116,6 +116,35 @@ describe('HttpEndpoints page', () => {
     await waitFor(() => expect(document.querySelector('pre.code')?.textContent).toContain('kind: HTTPEndpoint'))
   })
 
+  it('shows whether each referenced header resolves, and marks unresolved endpoints', async () => {
+    const withRefs = {
+      ...IDENTITY,
+      secretRefs: [
+        { field: 'Authorization', kind: 'secretKeyRef', store: 'localsecrets', name: 'iam-token', key: 'token', status: 'key-not-found', detail: 'key "token" not in secrets.json' },
+        { field: 'X-Tenant', kind: 'envRef', name: 'TENANT_ID', status: 'not-checked' },
+      ],
+    }
+    const resolved = {
+      ...BILLING,
+      httpEndpoint: { baseUrl: 'https://billing.example.com', headers: [{ name: 'Authorization', secretKeyRef: { name: 'b' } }] },
+      secretRefs: [{ field: 'Authorization', kind: 'secretKeyRef', store: 'localsecrets', name: 'b', status: 'resolved' }],
+    }
+    serve([resolved, withRefs])
+    renderPage('/http-endpoints/ep111ep111ep')
+
+    expect(await screen.findByLabelText(/identity-api has an unresolved secret reference/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/billing has an unresolved secret reference/i)).not.toBeInTheDocument()
+
+    const headers = screen.getByText('Headers').closest('.panel') as HTMLElement
+    const secret = within(headers).getByText('Authorization').closest('tr') as HTMLElement
+    expect(within(secret).getByText('KEY NOT FOUND')).toBeInTheDocument()
+    expect(within(secret).getByText('key "token" not in secrets.json')).toBeInTheDocument()
+    // envRef values are the dashboard's env, not daprd's: no pill, still masked.
+    const env = within(headers).getByText('X-Tenant').closest('tr') as HTMLElement
+    expect(within(env).queryByTestId('secret-status-pill')).not.toBeInTheDocument()
+    expect(within(env).getByText('••••••••')).toBeInTheDocument()
+  })
+
   it('navigates to the selected endpoint on click', async () => {
     serve([BILLING, IDENTITY])
     const router = renderPage()
