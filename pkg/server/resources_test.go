@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -110,4 +111,37 @@ func TestResourcesListResiliency(t *testing.T) {
 	require.Equal(t, http.StatusOK, r2.StatusCode)
 	require.Contains(t, body2, `"kind":"resiliency"`)
 	require.Contains(t, body2, `"loadedBy":["party-api"]`)
+}
+
+func TestResourcesListConfigurationUsedBy(t *testing.T) {
+	res := fakeResources{items: []resources.Resource{
+		{Name: "party-api", Kind: resources.KindConfiguration, Path: "/proj/config/party-api.yaml"},
+		{Name: "default", Kind: resources.KindConfiguration, Path: "/proj/config/default.yaml"},
+		{Name: "daprConfig", Kind: resources.KindConfiguration, Path: "/home/me/.dapr/config.yaml"},
+	}}
+	apps := &fakeApps{instances: []discovery.Instance{
+		{AppID: "party-api", ConfigPath: "/proj/config/party-api.yaml"},
+		// Not normalized on the instance side; still matches.
+		{AppID: "party-registry", ConfigPath: "/proj/party-registry/../config/default.yaml"},
+		{AppID: "notification", ConfigPath: "/proj/config/default.yaml"},
+		// Same name as a configuration, different file: not a match.
+		{AppID: "other", ConfigPath: "/elsewhere/party-api.yaml"},
+	}}
+	h := resourcesRouter(res, apps, false)
+
+	r1, body := get(t, h, "/?kind=configuration")
+	require.Equal(t, http.StatusOK, r1.StatusCode)
+	var list []resources.Resource
+	require.NoError(t, json.Unmarshal([]byte(body), &list))
+	byName := map[string][]string{}
+	for _, r := range list {
+		byName[r.Name] = r.LoadedBy
+	}
+	require.Equal(t, []string{"party-api"}, byName["party-api"])
+	require.Equal(t, []string{"notification", "party-registry"}, byName["default"])
+	require.Empty(t, byName["daprConfig"])
+
+	r2, body2 := get(t, h, "/configuration/default")
+	require.Equal(t, http.StatusOK, r2.StatusCode)
+	require.Contains(t, body2, `"loadedBy":["notification","party-registry"]`)
 }
