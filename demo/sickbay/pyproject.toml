@@ -1,0 +1,22 @@
+[project]
+name = "sickbay"
+version = "0.1.0"
+description = "Enterprise diagnostics demo: sickbay (subscriptions, crew log, medical scan workflow)"
+requires-python = ">=3.11"
+dependencies = [
+  "dapr[workflow,fastapi]==1.19.0",
+  "fastapi",
+  "uvicorn",
+]
+
+[dependency-groups]
+dev = ["pytest", "httpx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+  "error",
+  # starlette suggests the unreleased-to-us httpx2 for TestClient; the brief mandates httpx.
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]

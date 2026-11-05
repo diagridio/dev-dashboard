@@ -124,6 +124,30 @@ marked `actorStateStore: "true"` (falling back to the first detected). Check:
 none of the store setup above: workflows, components, and app details all come from the
 Testcontainers-managed sidecar itself.
 
+### Running the Enterprise demo
+
+`demo/` holds three small Dapr apps (Go, .NET and Python), themed as the Enterprise's diagnostics
+system, that put fixed data on every dashboard page. Use it to test the UI by hand and to
+regenerate the screenshots in the README. It needs Dapr 1.19, Go, .NET 10, Python with `uv`, and
+Node.js. [`demo/README.md`](demo/README.md) lists the exact versions and has the full steps.
+
+Start from a clean environment: stop every other Dapr app, and flush the `dapr init` Redis
+(`docker exec dapr_redis redis-cli FLUSHALL`, which deletes **all** data in it). Otherwise other
+apps' workflows and records show up on the pages and in the screenshots.
+
+```sh
+make demo          # terminal 1: runs the three apps with dapr run -f
+make build         # terminal 2: build and start the dashboard
+DEVDASHBOARD_TELEMETRY_OPTOUT=true ./bin/diagrid-dev-dashboard --mode dapr-run
+
+make demo-reset    # put every app back to the same fixed scenario
+make screenshots   # reset, then capture every page in light and dark mode into docs/images
+```
+
+`make screenshots` writes nothing if an app is down or hasn't finished seeding. Add a page to
+the capture in `demo/screenshots/targets.mjs`. Check the images before you commit them, because
+App detail, HTTP Endpoints and Logs show your local paths and hostname.
+
 ## Testing
 
 There are four suites: Go **unit** tests, Go **integration** tests, the **web**
