@@ -13,7 +13,7 @@ function PageHead() {
         <h1>HTTP Endpoints</h1>
         <div className="sub">
           Dapr <span className="mono">HTTPEndpoint</span> resources (non-Dapr services called through{' '}
-          <span className="mono">/v1.0/invoke</span>) from <span className="mono">~/.dapr/resources</span> and live{' '}
+          <span className="mono">/v1.0/invoke</span>) from <span className="mono">~/.dapr/components</span> and live{' '}
           <span className="mono">--resources-path</span> args
         </div>
       </div>

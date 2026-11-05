@@ -76,6 +76,22 @@ describe('HttpEndpoints page', () => {
     expect(await screen.findByText(/no httpendpoint resources found/i)).toBeInTheDocument()
   })
 
+  it('names the folders the dashboard actually scans', async () => {
+    serve([])
+    renderPage()
+    await screen.findByText(/no httpendpoint resources found/i)
+    const sub = document.querySelector('.phead .sub')?.textContent ?? ''
+    expect(sub).toContain('~/.dapr/components')
+    expect(sub).not.toContain('~/.dapr/resources')
+  })
+
+  it('shows an error when the endpoints cannot be loaded', async () => {
+    server.use(http.get('/api/resources', () => HttpResponse.json({ error: 'boom' }, { status: 500 })))
+    renderPage()
+    expect(await screen.findByText('Failed to load HTTP endpoints.')).toBeInTheDocument()
+    expect(screen.queryByText(/no httpendpoint resources found/i)).not.toBeInTheDocument()
+  })
+
   it('shows base URL, scopes, loaded-by and masks referenced header values', async () => {
     serve([BILLING, IDENTITY])
     renderPage('/http-endpoints/ep111ep111ep')
