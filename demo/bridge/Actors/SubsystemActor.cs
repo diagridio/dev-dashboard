@@ -7,6 +7,24 @@ public sealed class SubsystemActor(ActorHost host) : Actor(host), ISubsystemActo
 {
     private const string StateKey = "state";
 
+    /// <summary>Actor timer name; due 24 h, period 24 h so it never fires during a session.</summary>
+    public const string StatusPollTimer = "status-poll";
+    public static readonly TimeSpan StatusPollInterval = TimeSpan.FromHours(24);
+
+    protected override async Task OnActivateAsync()
+    {
+        // Registering a timer under the same name replaces it, so this is idempotent.
+        await RegisterTimerAsync(StatusPollTimer, nameof(PollStatusAsync), null,
+            StatusPollInterval, StatusPollInterval);
+    }
+
+    /// <summary>Timer callback: just logs; the heartbeat reminder owns the state.</summary>
+    public Task PollStatusAsync()
+    {
+        Logger.LogInformation("Subsystem {Id} status poll", Id);
+        return Task.CompletedTask;
+    }
+
     public async Task InitializeAsync()
     {
         // Keep existing state so reseeding never clobbers a heartbeat result.
