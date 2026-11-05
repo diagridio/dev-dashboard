@@ -25,6 +25,17 @@ func list(t *testing.T, kind resources.Kind) []resources.Resource {
 	return out
 }
 
+func decode(t *testing.T, name string, v any) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("resources", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := yaml.Unmarshal(raw, v); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDemoResourcesLoad(t *testing.T) {
 	comps := list(t, resources.KindComponent)
 	got := map[string]string{}
@@ -108,6 +119,40 @@ func TestDemoResourcesLoad(t *testing.T) {
 	}
 	if n := names(resources.KindResiliency); !reflect.DeepEqual(n, []string{"ship-systems"}) {
 		t.Errorf("resiliencies = %v", n)
+	}
+
+	// Configuration features and resiliency targets are not exposed by the
+	// loader; decode the files directly.
+	var cfg struct {
+		Spec struct {
+			Features []struct {
+				Name    string `json:"name"`
+				Enabled bool   `json:"enabled"`
+			} `json:"features"`
+		} `json:"spec"`
+	}
+	decode(t, "diagnostics-config.yaml", &cfg)
+	if len(cfg.Spec.Features) != 1 || cfg.Spec.Features[0].Name != "HotReload" || !cfg.Spec.Features[0].Enabled {
+		t.Errorf("diagnostics features = %+v, want [HotReload enabled]", cfg.Spec.Features)
+	}
+	var res struct {
+		Spec struct {
+			Targets struct {
+				Apps map[string]struct {
+					CircuitBreaker string `json:"circuitBreaker"`
+				} `json:"apps"`
+			} `json:"targets"`
+		} `json:"spec"`
+	}
+	decode(t, "resiliency.yaml", &res)
+	if cb := res.Spec.Targets.Apps["engineering"].CircuitBreaker; cb != "subspaceBreaker" {
+		t.Errorf("engineering circuitBreaker = %q, want subspaceBreaker", cb)
+	}
+	if _, ok := res.Spec.Targets.Apps["sickbay"]; !ok {
+		t.Error("resiliency has no sickbay app target")
+	}
+	if cb := res.Spec.Targets.Apps["sickbay"].CircuitBreaker; cb != "" {
+		t.Errorf("sickbay circuitBreaker = %q, want none (cold start trips it)", cb)
 	}
 
 	eps := list(t, resources.KindHTTPEndpoint)

@@ -23,10 +23,11 @@ spec:
         timeout: general
         retry: retryDiagnostics
         circuitBreaker: subspaceBreaker
+      # No circuit breaker: bridge polls sickbay every second during a cold
+      # start and would trip it before sickbay is up.
       sickbay:
         timeout: general
         retry: retryDiagnostics
-        circuitBreaker: subspaceBreaker
     components:
       statestore:
         outbound:
