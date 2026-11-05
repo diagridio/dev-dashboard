@@ -12,8 +12,15 @@ const createdLayout = "2006-01-02 15:04.05"
 // StandaloneScanner returns a Scanner that reads running Dapr sidecars from
 // the local process table via the Dapr CLI standalone.List function.
 func StandaloneScanner() Scanner {
+	return newStandaloneScanner(standalone.List, gopsutilDaprdConfig)
+}
+
+// newStandaloneScanner builds the standalone Scanner from its two process
+// readers: list (the Dapr CLI's process-table scan) and daprdConfig (the
+// --config file of a daprd PID, "" when unknown). Injectable for tests.
+func newStandaloneScanner(list func() ([]standalone.ListOutput, error), daprdConfig func(pid int) string) Scanner {
 	return func() ([]ScanResult, error) {
-		outputs, err := standalone.List()
+		outputs, err := list()
 		if err != nil {
 			return nil, err
 		}
@@ -30,7 +37,7 @@ func StandaloneScanner() Scanner {
 				Created:          created,
 				RunTemplate:      o.RunTemplateName,
 				ResourcePaths:    o.ResourcePaths,
-				ConfigPath:       gopsutilDaprdConfig(o.DaprdPID),
+				ConfigPath:       daprdConfig(o.DaprdPID),
 				Command:          o.Command,
 				Source:           SourceStandalone,
 				SidecarReachable: true,
