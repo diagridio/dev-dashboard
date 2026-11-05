@@ -46,7 +46,9 @@ async function preflight() {
 }
 
 async function settle(page, target) {
-  await page.getByText(target.waitFor).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  for (const text of [target.waitFor].flat()) {
+    await page.getByText(text).filter({ visible: true }).first().waitFor({ state: 'visible', timeout: TIMEOUT_MS })
+  }
   // Loading placeholders ("Loading…") and spinners must be gone.
   await page.waitForFunction(
     () =>

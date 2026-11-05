@@ -2,7 +2,8 @@
 //
 //   name     -> docs/images/<name>-<light|dark>.png
 //   path     -> router path, appended to DASH_URL
-//   waitFor  -> text that only shows once the seeded data has loaded
+//   waitFor  -> text (or list of texts, all required) that only shows once
+//               the seeded data has loaded
 //   prepare  -> optional async (page) => {} interaction before the screenshot
 //
 // State is filtered to sickbay: an unfiltered first page can be all internal
@@ -10,7 +11,8 @@
 
 export const TARGETS = [
   { name: 'applications', path: '/', waitFor: 'sickbay' },
-  { name: 'application-detail', path: '/apps/engineering', waitFor: 'engineering' },
+  // 'App protocol' is a detail-only label; the app list also says 'engineering'.
+  { name: 'application-detail', path: '/apps/engineering', waitFor: ['engineering', 'App protocol'] },
   { name: 'workflow-overview', path: '/workflows', waitFor: 'sweep-002' },
   { name: 'workflow-detail', path: '/workflows/engineering/sweep-002', waitFor: 'plasma conduit rupture' },
   {
@@ -30,7 +32,8 @@ export const TARGETS = [
     },
   },
   { name: 'actors', path: '/actors', waitFor: 'SubsystemActor' },
-  { name: 'state', path: '/state?app=sickbay', waitFor: 'crewlog-0001' },
+  // Bridge publishes the alerts/results after sickbay seeds the crew log.
+  { name: 'state', path: '/state?app=sickbay', waitFor: ['crewlog-0001', 'alert-RA-0004', 'result-DR-0001'] },
   {
     name: 'state-records',
     path: '/state?app=sickbay',

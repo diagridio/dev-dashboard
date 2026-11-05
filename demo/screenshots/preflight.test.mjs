@@ -42,3 +42,15 @@ test('target names are unique and every README image ref has a target', () => {
     assert.ok(names.includes(base), `README image ref "${base}" has no target`)
   }
 })
+
+test('detail and state targets wait for data only those pages show', () => {
+  const waits = (name) => [TARGETS.find((t) => t.name === name).waitFor].flat()
+  assert.ok(waits('application-detail').includes('App protocol'))
+  for (const key of ['crewlog-0001', 'alert-RA-0004', 'result-DR-0001']) {
+    assert.ok(waits('state').includes(key), `state target does not wait for ${key}`)
+  }
+  for (const t of TARGETS) {
+    const w = [t.waitFor].flat()
+    assert.ok(w.length > 0 && w.every((x) => typeof x === 'string' && x), `${t.name} waitFor`)
+  }
+})
