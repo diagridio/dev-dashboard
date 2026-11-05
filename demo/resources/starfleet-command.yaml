@@ -6,8 +6,9 @@ spec:
   baseUrl: http://localhost:6003/starfleet
   headers:
     - name: X-Starfleet-Api-Key
+      # The secret name is the key in secrets.json; the store is auth.secretStore.
       secretKeyRef:
-        name: command-codes
+        name: starfleet-api-key
         key: starfleet-api-key
     - name: X-Ship
       value: Enterprise

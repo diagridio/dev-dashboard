@@ -120,7 +120,10 @@ func TestDemoResourcesLoad(t *testing.T) {
 	var sawRef, sawShip bool
 	for _, h := range eps[0].HTTPEndpoint.Headers {
 		if h.Name == "X-Starfleet-Api-Key" && h.SecretKeyRef != nil &&
-			h.SecretKeyRef.Name == "command-codes" && h.SecretKeyRef.Key == "starfleet-api-key" {
+			// local.file secret stores expose each top-level key as its own secret,
+			// so the secret name (not the store name) is the key in secrets.json;
+			// the store comes from auth.secretStore.
+			h.SecretKeyRef.Name == "starfleet-api-key" && h.SecretKeyRef.Key == "starfleet-api-key" {
 			sawRef = true
 		}
 		if h.Name == "X-Ship" && h.Value == "Enterprise" {
