@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"path/filepath"
-	"strings"
 
 	gproc "github.com/shirou/gopsutil/v4/process"
 )
@@ -12,27 +11,18 @@ import (
 // (relative to the template dir or the app's appDirPath) to an absolute path
 // before launching daprd, but a plain `dapr run --config ./x.yaml` passes the
 // path through, so a relative value is resolved against daprd's cwd.
-// Returns "" when the flag is absent.
+// Returns "" when the flag is absent, and also when the path is relative and
+// daprd's cwd is unknown: resolving it against the dashboard's own cwd would
+// point at the wrong file.
 func configFromArgs(args []string, cwd string) string {
-	var path string
-	for i, a := range args {
-		name, value, hasValue := strings.Cut(strings.TrimLeft(a, "-"), "=")
-		if !strings.HasPrefix(a, "-") || name != "config" {
-			continue
-		}
-		if !hasValue {
-			if i+1 >= len(args) {
-				break
-			}
-			value = args[i+1]
-		}
-		path = value
-		break
-	}
+	path := parseFlags(args)["config"]
 	if path == "" {
 		return ""
 	}
-	if !filepath.IsAbs(path) && cwd != "" {
+	if !filepath.IsAbs(path) {
+		if cwd == "" {
+			return ""
+		}
 		path = filepath.Join(cwd, path)
 	}
 	return filepath.Clean(path)
