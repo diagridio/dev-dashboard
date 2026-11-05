@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/dapr/durabletask-go/workflow"
 )
@@ -56,6 +57,10 @@ func DiagnosticSweep(ctx *workflow.WorkflowContext) (any, error) {
 func SubsystemCheck(ctx *workflow.WorkflowContext) (any, error) {
 	var in CheckInput
 	if err := ctx.GetInput(&in); err != nil {
+		return nil, err
+	}
+	// A short durable timer so the history shows TimerCreated/TimerFired.
+	if err := ctx.CreateTimer(2 * time.Second).Await(nil); err != nil {
 		return nil, err
 	}
 	var res string
