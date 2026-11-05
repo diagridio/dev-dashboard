@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -25,15 +26,20 @@ type Controller struct {
 	// resetting is true from the accepted POST /demo/reset until its reseed
 	// finishes. A reset requested meanwhile is a no-op (still 202).
 	resetting atomic.Bool
-	lastErr   atomic.Pointer[string]
+	// flagMu makes "accept a reset and clear seeded" and "seed finished, set
+	// seeded unless a reset is pending" mutually exclusive.
+	flagMu  sync.Mutex
+	lastErr atomic.Pointer[string]
 
 	retryDelay    time.Duration // pause between failed attempts
 	resetDeadline time.Duration // total budget for one reset (with retries)
+	pollInterval  time.Duration // pause between target-state checks
 }
 
 // NewController builds a Controller. status may be nil (reports "UNKNOWN").
 func NewController(wc workflowClient, ps payloadStore, status statusFunc) *Controller {
-	return &Controller{wc: wc, ps: ps, status: status, retryDelay: time.Second, resetDeadline: 2 * time.Minute}
+	return &Controller{wc: wc, ps: ps, status: status, retryDelay: time.Second,
+		resetDeadline: 2 * time.Minute, pollInterval: 500 * time.Millisecond}
 }
 
 func (c *Controller) setErr(err error) {
@@ -45,20 +51,56 @@ func (c *Controller) setErr(err error) {
 	c.lastErr.Store(&m)
 }
 
-// SeedOnce seeds and marks the demo as seeded on success. It is serialized
-// with resets; while a reset is pending it never flips seeded to true (the
-// reset's own reseed does that).
+// awaitTargets polls until every sweep reports its scenario's target status
+// (see TargetStatus), so seeded means "reached", not just "scheduled". With
+// no status func (tests) it returns immediately.
+func (c *Controller) awaitTargets(ctx context.Context) error {
+	if c.status == nil {
+		return nil
+	}
+	for {
+		pending := ""
+		for _, s := range Scenario() {
+			want := TargetStatus(s)
+			got, err := c.status(ctx, s.ID)
+			if err != nil {
+				got = err.Error()
+			}
+			if got != want {
+				pending = fmt.Sprintf("%s is %s, want %s", s.ID, got, want)
+				break
+			}
+		}
+		if pending == "" {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("sweeps did not reach their target state: %s", pending)
+		case <-time.After(c.pollInterval):
+		}
+	}
+}
+
+// SeedOnce seeds, waits for the target states and marks the demo as seeded
+// on success. It is serialized with resets; while a reset is pending it
+// never flips seeded to true (the reset's own reseed does that).
 func (c *Controller) SeedOnce(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	err := Seed(ctx, c.wc, c.ps)
+	if err == nil {
+		err = c.awaitTargets(ctx)
+	}
 	c.setErr(err)
 	if err != nil {
 		return err
 	}
+	c.flagMu.Lock()
 	if !c.resetting.Load() {
 		c.seeded.Store(true)
 	}
+	c.flagMu.Unlock()
 	return nil
 }
 
@@ -68,7 +110,13 @@ func (c *Controller) resetWithRetry(ctx context.Context) error {
 	defer cancel()
 	for {
 		c.mu.Lock()
+		// A startup seed that raced the accepted reset may have stored
+		// seeded=true after the handler cleared it; clear it again.
+		c.seeded.Store(false)
 		err := Reset(ctx, c.wc, c.ps)
+		if err == nil {
+			err = c.awaitTargets(ctx)
+		}
 		c.mu.Unlock()
 		c.setErr(err)
 		if err == nil {
@@ -117,8 +165,13 @@ func (c *Controller) Handler() http.Handler {
 	// A reset requested while another is in flight is a no-op: the running
 	// one already removes and reseeds everything. Both get 202.
 	mux.HandleFunc("POST /demo/reset", func(w http.ResponseWriter, _ *http.Request) {
-		if c.resetting.CompareAndSwap(false, true) {
+		c.flagMu.Lock()
+		start := c.resetting.CompareAndSwap(false, true)
+		if start {
 			c.seeded.Store(false)
+		}
+		c.flagMu.Unlock()
+		if start {
 			go func() {
 				defer c.resetting.Store(false)
 				if err := c.resetWithRetry(context.Background()); err != nil {

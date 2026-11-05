@@ -45,3 +45,15 @@ func Scenario() []Sweep {
 func ChildID(sweepID, subsystem string) string {
 	return fmt.Sprintf("%s-%s", sweepID, subsystem)
 }
+
+// TargetStatus is the runtime status a seeded sweep settles in.
+func TargetStatus(s Sweep) string {
+	switch s.Outcome {
+	case Fail:
+		return "FAILED"
+	case AwaitSignOff:
+		return "RUNNING"
+	default:
+		return "COMPLETED"
+	}
+}
