@@ -248,6 +248,26 @@ func TestExtras_ResiliencyDoc(t *testing.T) {
 	require.NotNil(t, list[0].Resiliency)
 }
 
+// An HTTPEndpoint extracted from a Testcontainers daprd container is listed
+// with its parsed spec, and its raw YAML is served from the extra itself.
+func TestExtras_HTTPEndpointDoc(t *testing.T) {
+	extras := func() []Resource { return FromRaw("c1:/res/identity-endpoint.yaml", []byte(endpointYAML)) }
+	svc := New(func() []string { return nil }, extras)
+
+	list, err := svc.List(context.Background(), KindHTTPEndpoint)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	require.Equal(t, "identity-api", list[0].Name)
+	require.Equal(t, "c1:/res/identity-endpoint.yaml", list[0].Path)
+	require.Equal(t, []string{"party-api"}, list[0].Scopes)
+	require.NotNil(t, list[0].HTTPEndpoint)
+	require.Equal(t, "http://localhost:8091", list[0].HTTPEndpoint.BaseURL)
+
+	got, err := svc.Get(context.Background(), KindHTTPEndpoint, list[0].ID)
+	require.NoError(t, err)
+	require.Contains(t, got.Raw, "baseUrl: http://localhost:8091")
+}
+
 const endpointYAML = `apiVersion: dapr.io/v1alpha1
 kind: HTTPEndpoint
 metadata:
