@@ -36,7 +36,7 @@ lifted into the Diagrid CLI (Go).
 | Routing | Client-side **History API** routing; Go server **falls back to `index.html`** for unknown paths. **Base-path-aware** so it can mount under `diagrid dashboard` later. |
 | Code viewer | **Lightweight read-only syntax highlighter** (small bundle). Not Monaco. |
 | UI primitives | **Headless accessible component library** (e.g. Radix/Ark) styled in-house — for dialogs, menus, tabs, tooltips. No heavy design system. |
-| Icons | **MUI Icons Material** (`@mui/icons-material`) for standard UI glyphs, plus a **copy of Catalyst's in-house SVG icon system** for Dapr/Diagrid-specific marks. Matches the Catalyst UI; relies on per-icon tree-shaking to keep the bundle lean. |
+| Icons | **MUI Icons Material** (`@mui/icons-material`) for standard UI glyphs, plus a **copy of Diagrid's in-house SVG icon system** for Dapr/Diagrid-specific marks. Matches the Diagrid UI; relies on per-icon tree-shaking to keep the bundle lean. |
 | Actors / Subscriptions | **Global top-level pages** (aggregated across apps), not per-app detail tabs. |
 | Workflow purge | **Hybrid**: official Dapr purge API when possible, direct state-store deletion as an explicit "force" fallback. |
 | State store discovery | **Auto-detect** from running sidecars' metadata + resource paths; user picks if multiple; `--statestore <path>` override. |
@@ -332,13 +332,13 @@ GET  /*                                           SPA: serve index.html (History
   highlighter** (not Monaco). Clipboard uses the async Clipboard API (localhost is a secure
   context, so it works) with an `execCommand` fallback. Target a **lean embedded bundle**
   (soft budget ≈ 300 KB gzipped) — another reason to avoid Monaco and heavy design systems.
-- **Icons:** matches the Catalyst UI's icon stack.
+- **Icons:** matches the Diagrid UI's icon stack.
   - **`@mui/icons-material`** for standard UI glyphs (chevrons, close, info/warning, copy,
     settings, the News bell, etc.). Always import named icons individually
     (`import { KeyboardArrowDown } from '@mui/icons-material'`) so Vite/Rollup tree-shakes to
     only the icons actually used — never the whole package — keeping the embedded bundle
     within budget.
-  - **A copy of Catalyst's in-house SVG icon system** — vendored into the dashboard
+  - **A copy of Diagrid's in-house SVG icon system** — vendored into the dashboard
     (e.g. `web/src/components/icons/`, re-exported from a single `index.ts`). These wrap MUI's
     `SvgIcon` and follow the same `(props: SvgIconProps) => <SvgIcon …/>` pattern, so icons
     inherit `currentColor` and size from context and stay theme-aware.
@@ -346,12 +346,12 @@ GET  /*                                           SPA: serve index.html (History
     building-block glyphs map directly onto the nav and views (`WorkflowIcon`, `ActorsIcon`,
     `PubSubIcon`/subscriptions, `StateManagementIcon`, `BindingsIcon`,
     `ServiceInvocationIcon`, `ObservabilityIcon`, …) plus brand marks (`CatalystMarkIcon`,
-    `DaprHatIcon`, etc.). Copy only the icons the dashboard actually uses; leave Catalyst-only
+    `DaprHatIcon`, etc.). Copy only the icons the dashboard actually uses; leave Diagrid-only
     partner marks behind.
   - **Dependency footprint to weigh against the lean-bundle budget:** both `@mui/icons-material`
     and the in-house icons' `SvgIcon` wrapper require `@mui/material`, which in turn requires
     the **Emotion** runtime (`@emotion/react` + `@emotion/styled`) as peer dependencies — a
-    CSS-in-JS layer the dashboard doesn't otherwise use. Catalyst pins all four at
+    CSS-in-JS layer the dashboard doesn't otherwise use. Diagrid pins all four at
     `@mui/icons-material`/`@mui/material` `7.3.6`, `@emotion/react` `11.14.0`,
     `@emotion/styled` `11.14.1`. Tree-shaking trims unused *icon* components but not the
     Emotion/`@mui/material` runtime, so this is a real (~tens of KB gzipped) addition to the
@@ -374,7 +374,7 @@ GET  /*                                           SPA: serve index.html (History
   - **Learn**: Dapr University (<https://www.diagrid.io/university>) ·
     Diagrid Webinars (<https://www.diagrid.io/webinars>)
   - **Read**: Dapr Docs (<https://docs.dapr.io>) · Diagrid Docs (<https://docs.diagrid.io>)
-  - **Run & Operate**: Diagrid Catalyst (<https://www.diagrid.io/catalyst>)
+  - **Run & Operate**: Diagrid Cloud (<https://www.diagrid.io/catalyst>)
 - **Collapsed state & new-item indicator:** when collapsed, the rail shows the word
   "Resources" rotated -90° (vertical), and clicking it (or the toggle) re-expands. A **bell
   icon** appears — in both the expanded header and the collapsed rail — whenever the feed has
@@ -539,7 +539,7 @@ docker-compose modes. Local standalone (self-hosted) mode only. The UI is **Engl
 - Diagrid Dev Dashboard prototype (internal)
   (Go + chi + React; workflow list/history via state store `KeysLike`, SSE logs,
   sidecar discovery, resource loading; read-only, no purge, no workflow autorefresh).
-- Catalyst UI icon system (source to copy from)
+- Diagrid UI icon system (source to copy from)
   (in-house SVG icons wrapping MUI `SvgIcon`; `@mui/icons-material` v7.3.6 is the
   standard-glyph library).
 - Diagrid's established test conventions

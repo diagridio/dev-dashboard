@@ -281,3 +281,52 @@ func TestEnvBackedRefsAreNotChecked(t *testing.T) {
 	_, err = svc.RevealSecret(ctx, "pg", "connectionString")
 	require.ErrorIs(t, err, ErrNoSecretValue, "the dashboard's value is not daprd's; do not reveal it")
 }
+
+const refEndpointYAML = `apiVersion: dapr.io/v1alpha1
+kind: HTTPEndpoint
+metadata:
+  name: identity-api
+spec:
+  baseUrl: http://localhost:8091
+  headers:
+  - name: Accept-Language
+    value: en-US
+  - name: Authorization
+    secretKeyRef:
+      name: redis:password
+  - name: X-Missing
+    secretKeyRef:
+      name: nope
+auth:
+  secretStore: localsecretstore
+`
+
+// HTTPEndpoint headers that reference secrets get the same resolution status
+// as component metadata, on List and Get, and no value crosses the API.
+func TestHTTPEndpointCarriesSecretRefStatus(t *testing.T) {
+	svc, dir := newSecretsFixture(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "endpoint.yaml"), []byte(refEndpointYAML), 0o600))
+	ctx := context.Background()
+
+	list, err := svc.List(ctx, KindHTTPEndpoint)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	byField := map[string]SecretRefStatus{}
+	for _, s := range list[0].SecretRefs {
+		byField[s.Field] = s
+	}
+	require.Len(t, byField, 2, "plain headers are not references")
+	require.Equal(t, string(secrets.StatusResolved), byField["Authorization"].Status)
+	require.Equal(t, "localsecretstore", byField["Authorization"].Store)
+	require.Equal(t, string(secrets.StatusKeyNotFound), byField["X-Missing"].Status)
+	require.NotEmpty(t, byField["X-Missing"].Detail)
+
+	got, err := svc.Get(ctx, KindHTTPEndpoint, "identity-api")
+	require.NoError(t, err)
+	require.Len(t, got.SecretRefs, 2)
+	require.Nil(t, got.SecretStore, "an endpoint is not a secret store")
+
+	b, err := json.Marshal(list)
+	require.NoError(t, err)
+	require.NotContains(t, string(b), "s3cr3t")
+}

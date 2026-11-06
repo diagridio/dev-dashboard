@@ -1,0 +1,13 @@
+{
+  "name": "devdash-demo-screenshots",
+  "private": true,
+  "type": "module",
+  "description": "Captures dev-dashboard screenshots from the Enterprise diagnostics demo",
+  "scripts": {
+    "test": "node --test",
+    "capture": "node capture.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

@@ -5,7 +5,7 @@ import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { ResourceDetail } from './ResourceDetail'
 import { StateStoreConnectionsPanel } from '../components/StateStoreConnectionsPanel'
 
-type ListKind = Exclude<ResourceKind, 'resiliency'>
+type ListKind = Exclude<ResourceKind, 'resiliency' | 'httpendpoint'>
 
 interface ResourceListProps {
   kind: ListKind
@@ -22,7 +22,7 @@ const LABELS: Record<
     title: 'Components',
     sub: (
       <>
-        Resource files from <span className="mono">~/.dapr/resources</span> and live{' '}
+        Resource files from <span className="mono">~/.dapr/components</span> and live{' '}
         <span className="mono">--resources-path</span> args
       </>
     ),

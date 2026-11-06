@@ -78,26 +78,24 @@ describe('ResourcesSidebar static links', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
-  it('renders Diagrid Catalyst link with correct href and target', () => {
+  it('renders Diagrid Cloud link with correct href and target', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: /Diagrid Catalyst/ })
+    const link = screen.getByRole('link', { name: /Diagrid Cloud/ })
     expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-try-catalyst')
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
-  it('renders Dapr Workflow Skills link', () => {
+  it('renders Dapr Skills link', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: /Dapr Workflow Skills/ })
+    const link = screen.getByRole('link', { name: /Dapr Skills/ })
     expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-workflow-skill')
     expect(link).toHaveAttribute('target', '_blank')
   })
 
-  it('renders Workflow Composer link', () => {
+  it('does not render the decommissioned Workflow Composer link', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: /Workflow Composer/ })
-    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-workflow-composer')
-    expect(link).toHaveAttribute('target', '_blank')
+    expect(screen.queryByRole('link', { name: /Workflow Composer/ })).toBeNull()
   })
 
   it('renders Dapr University link', () => {
@@ -132,7 +130,7 @@ describe('ResourcesSidebar static links', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
 
-  it('renders Dapr Ops Dashboard link between Diagrid Catalyst and Dapr Support', () => {
+  it('renders Dapr Ops Dashboard link between Diagrid Cloud and Dapr Support', () => {
     renderSidebar()
     const link = screen.getByRole('link', { name: /Dapr Ops Dashboard/ })
     expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-ops-dashboard')
@@ -140,7 +138,7 @@ describe('ResourcesSidebar static links', () => {
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
     const section = link.closest('.sbsection') as HTMLElement
     const labels = Array.from(section.querySelectorAll('.sblink .txt')).map((el) => el.textContent)
-    expect(labels).toEqual(['Diagrid Catalyst', 'Dapr Ops Dashboard', 'Dapr Support'])
+    expect(labels).toEqual(['Diagrid Cloud', 'Dapr Ops Dashboard', 'Dapr Support'])
   })
 
   it('renders Dapr Support link under Run & Operate', () => {

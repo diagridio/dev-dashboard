@@ -22,6 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Actors', to: '/actors' },
   { label: 'Subscriptions', to: '/subscriptions' },
   { label: 'Resiliency', to: '/resiliency' },
+  { label: 'HTTP Endpoints', to: '/http-endpoints' },
   { label: 'Configurations', to: '/configurations' },
   { label: 'Control Plane', to: '/control-plane', cap: 'controlPlane' },
   { label: 'Logs', to: '/logs', cap: 'logs' },
