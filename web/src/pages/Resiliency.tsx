@@ -13,7 +13,7 @@ function PageHead() {
         <h1>Resiliency</h1>
         <div className="sub">
           Dapr <span className="mono">Resiliency</span> resources from{' '}
-          <span className="mono">~/.dapr/resources</span> and live{' '}
+          <span className="mono">~/.dapr/components</span> and live{' '}
           <span className="mono">--resources-path</span> args
         </div>
       </div>

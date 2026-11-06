@@ -29,8 +29,9 @@ The dashboard is a **single Go binary** that:
    store is openable. That is what makes `state.in-memory` workflows inspectable.
 5. **Degrades gracefully** — a down sidecar, an unreachable store, or a missing runtime
    turns into a partial result or a clear error, never a crash.
-6. **Resolves component secret references** (`secretKeyRef` / `envRef` metadata) both for
-   display on the Components page and to open state-store connections that need them —
+6. **Resolves secret references** (`secretKeyRef` / `envRef` in component metadata and
+   HTTPEndpoint headers) both for display on the Components and HTTP Endpoints pages and to
+   open state-store connections that need them —
    using the **dashboard's own environment and working directory, not daprd's**. The
    dashboard is a separate process: a `secretstores.local.env` reference reads the
    dashboard's environment, not the app's or daprd's, and a relative `secretsFile` for
@@ -117,7 +118,7 @@ pkg/                    domain packages — each isolated, none import cmd/
   lifecycle/            start / stop / restart of discovered apps and sidecars, plus the
                         overlay that keeps stopped apps listed (and hides cleared ones)
   containerruntime/     docker/podman resolution + exec runner (shared by controlplane & discovery)
-  resources/            component + configuration YAML loader
+  resources/            Component / Configuration / Resiliency / HTTPEndpoint YAML loader
   secrets/              local secret-store detection + secretKeyRef/envRef resolution,
                         delegating to components-contrib's own local.file / local.env
                         stores; feeds pkg/resources and cmd/reconciler
@@ -222,8 +223,9 @@ depends on: `server.StoreRegistry` (list/add/edit/delete connections) and
 There is **no polling timer**. Every call to `apps.List()` — which the SPA drives by
 polling `/api/apps`, `/api/actors`, `/api/subscriptions`, `/api/resources` — passes
 through the `reconcilingApps` decorator (`cmd/reconciler.go`), which computes an
-`appsFingerprint` (`cmd/derive.go`: an order-independent hash of app ids, resource paths,
-and loaded state-store names, with sentinel bytes so group boundaries can't collide). If
+`appsFingerprint` (`cmd/derive.go`: an order-independent hash of app ids, resource paths and
+config files, loaded state-store names, and running app ids, with sentinel bytes so group
+boundaries can't collide). If
 the fingerprint changed since the last reconcile, a background reconcile is spawned under a
 CAS single-flight guard (`maybeReconcile`); concurrent polls skip and let the next one
 catch up. Identical fingerprint → no work.
@@ -231,7 +233,8 @@ catch up. Identical fingerprint → no work.
 ### What a reconcile does (`reconcile`)
 
 1. `derivePaths()` computes: **resource scan paths** (`~/.dapr/components`, `~/.dapr`, each
-   app's resource paths, config-file dirs), **state-store scan paths** (the explicit
+   app's resource paths, and each app's Configuration **file** — never its directory, since
+   the resources loader walks paths recursively), **state-store scan paths** (the explicit
    `--statestore` if set, else `~/.dapr/components` + app paths), the set of store-component
    **names loaded** by running apps, and the running apps' resource paths.
 2. `statestore.Detect` + `DetectSecretStores` scan those paths for `Component` YAML of
@@ -410,11 +413,16 @@ each and returning when the request context is cancelled.
 `Service.List(ctx)` returns `[]Instance`, one per running app/sidecar. The source of truth
 is `StandaloneScanner`, wrapping `github.com/dapr/cli/pkg/standalone.List()` (the same
 process-table scan as `dapr list`) — that supplies app id, ports (app/HTTP/gRPC), daprd &
-CLI PIDs, created time, run-template, resource paths, and command. Each result is then
+CLI PIDs, created time, run-template, resource paths, and command. `standalone.List()` does
+not report `--config`, so the scanner reads it from the daprd process's own command line
+(gopsutil), resolving a relative path against daprd's cwd (and ignoring it when that cwd
+can't be read); the CLI has already resolved a run template's `configFilePath` to an
+absolute path. Each result is then
 **enriched in parallel** (bounded worker pool) by:
 
-- `GET /v1.0/metadata` (2s timeout) → runtime version, components, actors, subscriptions,
-  enabled features, placement address, and `Extended` fields (app PID, command, log paths,
+- `GET /v1.0/metadata` (2s timeout) → runtime version, components, resiliency policies,
+  HTTP endpoints, actors, subscriptions, enabled features, placement address, and
+  `Extended` fields (app PID, command, log paths,
   run-template). Failure sets `MetadataOK=false` and degrades to scan-only data.
 - `GET /v1.0/healthz` via `CheckHealth` → the health badge. **Computed on demand during
   each `List`, not by a background poller** — the badge's refresh cadence is whatever the
@@ -560,8 +568,10 @@ stdout+stderr onto one channel for the SSE handler. **To add an action:** extend
 
 ### Resources (`pkg/resources`)
 
-Loads `Component`, `Configuration` and `Resiliency` YAML (multi-doc) from the reconciler's scan paths,
-deduped by absolute path, merged with an **extras provider** — entries that exist outside
+Loads `Component`, `Configuration`, `Resiliency` and `HTTPEndpoint` YAML (multi-doc) from
+the reconciler's scan paths (directories and single files), deduped by **canonical path**
+(`CanonicalPath`: symlinks resolved, case-folded on Windows — daprd's cwd comes back
+symlink-resolved while CLI-reported paths don't), merged with an **extras provider** — entries that exist outside
 the host filesystem, today the YAML extracted from Testcontainers daprd containers. Extras
 carry their raw YAML inline and a container-prefixed display path
 (`crazy_lamport:/dapr-resources/kvstore.yaml`), so `Get` never reads a display path from
@@ -570,11 +580,18 @@ never `statestore.Detect`, the reconciler's paths, or store election. An extract
 `state.in-memory` component with `actorStateStore: true` would otherwise win the election
 and break other apps' workflow views; a guard test
 (`TestVirtualPathsDoNotFeedStoreDetection`) pins this. The HTTP layer enriches each
-component and resiliency policy with `LoadedBy` — which running apps loaded it — by
-cross-referencing the names each sidecar reports in `/v1.0/metadata`.
+component, resiliency policy and HTTP endpoint with `LoadedBy` — which running apps loaded it — by
+cross-referencing the names each sidecar reports in `/v1.0/metadata`. Metadata does not name
+the Configuration, so a configuration's `LoadedBy` matches its canonical file path against
+each app's `ConfigPath` instead (`loadedKey` / `loadedNames` in `pkg/server/resources.go`).
 Resiliency entries also carry `scopes` and the parsed spec (policies + targets) for the
-Resiliency page. `Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
-`Kind` type + `kindFromString` and the API validation in `pkg/server/resources.go`.
+Resiliency page; HTTPEndpoint entries carry `scopes`, `baseUrl` and headers (secretKeyRef/envRef
+headers keep the reference only, never the value). Components and HTTPEndpoints both carry
+`SecretRefs` — each reference's resolution status from `pkg/secrets` (`ParseRefs` reads
+component `spec.metadata` and HTTPEndpoint `spec.headers`) — but only components can reveal a
+value or carry `SecretStoreInfo`. `Get` returns the raw YAML for the detail view. **To add a
+resource kind:** extend the `Kind` type + `kindFromString`, the API validation in
+`pkg/server/resources.go`, and `loadedNames` there if sidecar metadata reports the kind.
 
 ### Logs (`pkg/logs`)
 
@@ -639,7 +656,7 @@ Client-side History-API routing; the router `basename` and all API URLs derive f
 (`/apps/:appId`), **Workflows** + **WorkflowDetail**, **State** (`/state`), **Actors**,
 **Subscriptions**, **ResourceList/Detail** (`/components`, `/configurations`),
 **ComponentBuilder** (`/components/new`), **Resiliency** (`/resiliency`, discovered
-policies) + **ResiliencyBuilder** (`/resiliency/new`), **ControlPlane** (`/control-plane`),
+policies) + **ResiliencyBuilder** (`/resiliency/new`), **HttpEndpoints** (`/http-endpoints`), **ControlPlane** (`/control-plane`),
 and **Logs**. Feature-gated pages (Workflows, State, Logs, ControlPlane, lifecycle
 surfaces) mount only when their server-injected capability flag is on — see
 *Capabilities* in §5. The shell also hosts the **CLI drawer** (`CliDrawer`), a right-side
@@ -728,7 +745,7 @@ styleguide.
 | New state-store backend | case in `statestore.New` + satisfy components-contrib `state.Store`/`KeysLiker` |
 | New workflow field | `pkg/workflow/types.go` + extract in `decode.go` |
 | New control-plane action | extend `ValidAction` (+ `LiveServiceNames` for a new container) |
-| New resource kind | `Kind` + `kindFromString` in `pkg/resources`, validation in `pkg/server/resources.go` |
+| New resource kind | `Kind` + `kindFromString` in `pkg/resources`, validation + `loadedNames` in `pkg/server/resources.go` |
 | New CLI flag | declare + register in `cmd/root.go`, thread through `runServe` → `assembleOptions` |
 | New CLI subcommand | add `cmd/<name>.go`, register in `NewRootCmd` |
 | New SPA page | page + hook + type + route + nav entry (see §7) |

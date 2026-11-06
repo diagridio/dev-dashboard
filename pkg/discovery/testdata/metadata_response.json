@@ -18,6 +18,7 @@
     }
   ],
   "resiliencies": [{ "name": "order-resiliency" }],
+  "httpEndpoints": [{ "name": "identity-api" }],
   "actorRuntime": { "placement": "placement: connected" },
   "extended": {
     "appPID": "12345",

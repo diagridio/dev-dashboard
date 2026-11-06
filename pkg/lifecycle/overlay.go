@@ -128,6 +128,7 @@ func (o *overlay) synthesize(e Entry) discovery.Instance {
 	in.Subscriptions = nil
 	in.Components = nil
 	in.Resiliencies = nil
+	in.HTTPEndpoints = nil
 	in.EnabledFeatures = nil
 	in.RuntimeVersion = ""
 	in.Placement = ""

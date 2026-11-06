@@ -3,10 +3,10 @@
 **Date:** 2026-06-28 (reconciled 2026-07-01)
 **Status:** Approved design. Backend catalog endpoint already shipped (see "Backend"). Frontend wizards not yet started; implementation plan in progress.
 
-Port Catalyst's **Component Builder** and **Resiliency Builder** into `dev-dashboard` as two
+Port Diagrid's **Component Builder** and **Resiliency Builder** into `dev-dashboard` as two
 multi-step wizards that generate Dapr YAML you can copy or download.
 
-- **Source:** Catalyst's component-configurator and resiliency-builder UI (React 19 + MUI + react-hook-form + Yup + js-yaml + Ace).
+- **Source:** Diagrid's component-configurator and resiliency-builder UI (React 19 + MUI + react-hook-form + Yup + js-yaml + Ace).
 - **Target:** `dev-dashboard` (Go backend + **React 19** frontend in `web/`; upgraded from React 18 on 2026-06-30).
 
 ## Reconciliation notes (2026-07-01)

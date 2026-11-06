@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Bridge</RootNamespace>
+    <AssemblyName>Bridge</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Dapr.AspNetCore" Version="1.19.0" />
+    <PackageReference Include="Dapr.Actors.AspNetCore" Version="1.19.0" />
+  </ItemGroup>
+
+  <!-- The test project lives inside this folder; keep its sources and build output out of the app. -->
+  <ItemGroup>
+    <Compile Remove="Bridge.Tests/**" />
+    <Content Remove="Bridge.Tests/**" />
+    <EmbeddedResource Remove="Bridge.Tests/**" />
+    <None Remove="Bridge.Tests/**" />
+  </ItemGroup>
+
+</Project>

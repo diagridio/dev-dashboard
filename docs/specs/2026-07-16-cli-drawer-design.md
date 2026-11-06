@@ -12,7 +12,7 @@ commands relevant to the current view with per-command copy buttons. Command
 text is populated from editable YAML content files (one per page context), with
 placeholders resolved from the current route (app IDs, workflow instance IDs).
 
-The content model is designed so a second CLI tool (Diagrid Catalyst) can be
+The content model is designed so a second CLI tool (Diagrid) can be
 added later via tabs, but no tab bar is rendered while only Dapr content exists.
 
 ## Goals
@@ -26,11 +26,11 @@ added later via tabs, but no tab bar is rendered while only Dapr content exists.
 - Every individual command has its own copy button.
 - Command content lives in YAML files — one file per page/context — so wording
   and commands can be edited without code changes.
-- The design accommodates a future second tool (Diagrid Catalyst) via tabs.
+- The design accommodates a future second tool (Diagrid) via tabs.
 
 ## Non-Goals (YAGNI)
 
-- Diagrid Catalyst commands or content (schema supports it; no content shipped).
+- Diagrid commands or content (schema supports it; no content shipped).
 - A visible tab bar (rendered automatically only once a second tool exists).
 - A non-URL value provider for context values not present in the URL (added only
   when a future command needs data that isn't a path/search param).
@@ -82,7 +82,7 @@ is keyed by tool id so additional tools slot in later:
 # web/src/content/cli/app-detail.yaml
 context: AppDetail
 tools:
-  dapr:                      # tool id; add `catalyst:` later -> tab bar appears
+  dapr:                      # tool id; add `diagrid:` later -> tab bar appears
     label: Dapr
     commands:
       - title: Stop this app
@@ -260,7 +260,7 @@ tab uses `writing-mode: vertical-rl` for the "CLI" label. Panel is scrollable
 
 ## Out-of-scope notes for the future
 
-- Adding Diagrid Catalyst: add a `catalyst:` key to the relevant YAML files with
+- Adding Diagrid: add a `diagrid:` key to the relevant YAML files with
   a `label` and `commands`. The drawer automatically renders a tab bar once any
   context has more than one tool. No component changes expected.
 - Context values not in the URL: introduce a small React context/provider that

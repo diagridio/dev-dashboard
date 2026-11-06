@@ -47,6 +47,39 @@ func TestParseRefs(t *testing.T) {
 	require.Equal(t, Ref{Kind: "envRef", Name: "MY_TOKEN"}, refs["apiToken"])
 }
 
+// An HTTPEndpoint keeps its references in spec.headers, resolved from the same
+// auth.secretStore; a header's name is its field. A non-string plain value
+// must not stop the references from being read.
+func TestParseRefsHTTPEndpointHeaders(t *testing.T) {
+	const endpoint = `apiVersion: dapr.io/v1alpha1
+kind: HTTPEndpoint
+metadata:
+  name: identity-api
+spec:
+  baseUrl: http://localhost:8091
+  headers:
+  - name: Accept-Language
+    value: en-US
+  - name: X-Retries
+    value: 3
+  - name: Authorization
+    secretKeyRef:
+      name: iam-token
+      key: token
+  - name: X-Tenant
+    envRef: TENANT_ID
+auth:
+  secretStore: localsecrets
+`
+	store, refs := ParseRefs([]byte(endpoint))
+
+	require.Equal(t, "localsecrets", store)
+	require.Equal(t, map[string]Ref{
+		"Authorization": {Kind: "secretKeyRef", Name: "iam-token", Key: "token"},
+		"X-Tenant":      {Kind: "envRef", Name: "TENANT_ID"},
+	}, refs)
+}
+
 func TestParseRefsNoRefs(t *testing.T) {
 	const plain = `kind: Component
 metadata:
