@@ -93,11 +93,9 @@ describe('ResourcesSidebar static links', () => {
     expect(link).toHaveAttribute('target', '_blank')
   })
 
-  it('renders Workflow Composer link', () => {
+  it('does not render the decommissioned Workflow Composer link', () => {
     renderSidebar()
-    const link = screen.getByRole('link', { name: /Workflow Composer/ })
-    expect(link).toHaveAttribute('href', 'https://diagrid.ws/dev-dashboard-workflow-composer')
-    expect(link).toHaveAttribute('target', '_blank')
+    expect(screen.queryByRole('link', { name: /Workflow Composer/ })).toBeNull()
   })
 
   it('renders Dapr University link', () => {
