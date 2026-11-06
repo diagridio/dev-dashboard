@@ -59,7 +59,7 @@ const SECTIONS: Section[] = [
   {
     heading: 'Build',
     links: [
-      { label: 'Dapr Workflow Skills', href: 'https://diagrid.ws/dev-dashboard-workflow-skill' },
+      { label: 'Dapr Skills', href: 'https://diagrid.ws/dev-dashboard-workflow-skill' },
     ],
   },
   {
