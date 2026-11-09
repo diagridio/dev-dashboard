@@ -665,15 +665,39 @@ describe('Workflows page — store-resolve loading gate', () => {
     window.localStorage.clear()
   })
 
-  it('shows no-store guidance (not "Loading…") when /api/statestores returns an empty array', async () => {
+  it('shows no-store guidance (not "Loading…") when there is no store and the store-less query fails', async () => {
     server.use(
       http.get('/api/statestores', () => HttpResponse.json([])),
-      http.get('/api/workflows', () => HttpResponse.json({ items: [] })),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({ error: 'no state store detected' }, { status: 503 }),
+      ),
     )
     renderAt()
     await waitFor(() => expect(screen.getByText(/no state store detected/i)).toBeInTheDocument())
     expect(screen.getByText(/--statestore/)).toBeInTheDocument()
     expect(screen.queryByText('Loading…')).toBeNull()
+  })
+
+  // Sidecar-only reads (compose container posture, Testcontainers with an
+  // in-memory store): no store is listed, yet the backend serves workflows
+  // from the sidecars. The page must render them instead of the guidance.
+  it('renders sidecar-served workflows when no store is listed', async () => {
+    const listRequests: string[] = []
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json([])),
+      http.get('/api/workflows', ({ request }) => {
+        listRequests.push(new URL(request.url).search)
+        return HttpResponse.json({
+          items: [{ appId: 'wfapp', instanceId: 'e2e-order-1', name: 'OrderWorkflow', status: 'Completed' }],
+        })
+      }),
+    )
+    renderAt()
+    const link = await screen.findByRole('link', { name: 'e2e-order-1' })
+    expect(link).toHaveAttribute('href', '/workflows/wfapp/e2e-order-1')
+    expect(screen.queryByText(/no state store detected/i)).toBeNull()
+    expect(screen.getByText(/read live from app sidecars/i)).toBeInTheDocument()
+    listRequests.forEach((qs) => expect(qs).not.toMatch(/store=/))
   })
 
   it('shows the loading state (not "No workflows found") while the store list is unresolved', async () => {

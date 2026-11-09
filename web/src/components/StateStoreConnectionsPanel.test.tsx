@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
 import { StateStoreConnectionsPanel } from './StateStoreConnectionsPanel'
@@ -18,6 +18,27 @@ const catalog = {
 }
 
 describe('StateStoreConnectionsPanel', () => {
+  afterEach(() => {
+    delete window.__DASH_CAPABILITIES__
+  })
+
+  // A container-posture dashboard has no connection registry: the configured
+  // store is listed read-only, and add/disconnect would only fail, so they are
+  // hidden in favour of a hint naming the env var that configures the store.
+  it('is read-only in container posture', async () => {
+    window.__DASH_CAPABILITIES__ = {
+      lifecycle: false, controlPlane: false, logs: false, workflows: true, state: true,
+      mode: 'compose', containerPosture: true,
+    }
+    server.use(http.get('/api/statestores', () => HttpResponse.json(stores)))
+    render(<QueryProvider><StateStoreConnectionsPanel /></QueryProvider>)
+
+    await waitFor(() => expect(screen.getByText('orders-pg')).toBeInTheDocument())
+    expect(screen.queryByRole('button', { name: /add connection/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /disconnect/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/DEVDASHBOARD_STATESTORE_FILE/)).toBeInTheDocument()
+  })
+
   it('shows auto rows read-only and manual rows with actions', async () => {
     server.use(http.get('/api/statestores', () => HttpResponse.json(stores)))
     render(<QueryProvider><StateStoreConnectionsPanel /></QueryProvider>)

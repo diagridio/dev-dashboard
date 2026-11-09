@@ -123,6 +123,10 @@ var (
 	ErrStoreValidation      = errors.New("invalid store request")
 	// ErrActiveStore rejects deleting the elected active store (mapped to 409).
 	ErrActiveStore = errors.New("cannot remove the active workflow state store")
+	// ErrRegistryReadOnly rejects connection edits when the dashboard runs
+	// without a connection registry (container posture, or no home
+	// directory), mapped to 409.
+	ErrRegistryReadOnly = errors.New("connections can't be saved here: the dashboard has no connection registry (it runs as a container, or has no home directory); point --statestore or DEVDASHBOARD_STATESTORE_FILE at a state-store component instead")
 )
 
 // storeErrStatus maps registry mutation failures to HTTP status codes by
@@ -134,6 +138,8 @@ var (
 func storeErrStatus(err error) int {
 	switch {
 	case errors.Is(err, ErrActiveStore):
+		return http.StatusConflict
+	case errors.Is(err, ErrRegistryReadOnly):
 		return http.StatusConflict
 	case errors.Is(err, os.ErrExist):
 		return http.StatusConflict

@@ -358,6 +358,11 @@ func underScanPath(compPath, scanPath string) bool {
 // use their inline metadata. ok=false means no registry entry with that id.
 func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 	if rc.registry == nil {
+		// No registry (container posture): the only addressable stores are
+		// the elected ones Stores() lists, under the same auto-entry ids.
+		if active := rc.activeComponent(); active != nil && entryID(SourceAuto, normPath(active.Path)) == id {
+			return *active, true
+		}
 		return statestore.Component{}, false
 	}
 	for _, e := range rc.registry.List() {
@@ -380,7 +385,14 @@ func ptr(c statestore.Component) *statestore.Component { return &c }
 // Connection (unreachable), not an error.
 func (rc *reconciler) Stores() []server.StoreInfo {
 	if rc.registry == nil {
-		return []server.StoreInfo{}
+		// No registry (container posture): list the elected store read-only so
+		// the Workflows and State pages can address it.
+		rc.mu.RLock()
+		defer rc.mu.RUnlock()
+		if rc.electedReg == nil {
+			return []server.StoreInfo{}
+		}
+		return rc.electedReg.Stores()
 	}
 	var activeID string
 	if active := rc.activeComponent(); active != nil {
@@ -444,7 +456,7 @@ func sortStores(out []server.StoreInfo) {
 // with a user-facing message (the API surfaces err.Error() in the 400 body).
 func (rc *reconciler) AddStore(name, typ string, metadata map[string]string) error {
 	if rc.registry == nil {
-		return nil
+		return server.ErrRegistryReadOnly
 	}
 	err := rc.registry.Add(ConnEntry{Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
 	if errors.Is(err, os.ErrExist) {
@@ -459,7 +471,7 @@ func (rc *reconciler) AddStore(name, typ string, metadata map[string]string) err
 // next select reconnects with new metadata, and returns the recomputed id.
 func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]string) (string, error) {
 	if rc.registry == nil {
-		return id, nil
+		return "", server.ErrRegistryReadOnly
 	}
 	oldComp, hadOld := rc.componentFor(id)
 	newID, err := rc.registry.Update(ConnEntry{ID: id, Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
@@ -478,7 +490,7 @@ func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]stri
 // apps are using it — which the API maps to 409.
 func (rc *reconciler) DeleteStore(id string) error {
 	if rc.registry == nil {
-		return nil
+		return server.ErrRegistryReadOnly
 	}
 	comp, ok := rc.componentFor(id)
 	if ok {

@@ -4,6 +4,7 @@ import { useStoreMutations } from '../hooks/useStoreMutations'
 import { StateStoreConnectionDialog } from './StateStoreConnectionDialog'
 import { ConfirmDialog } from './ConfirmDialog'
 import { storeTypeLabel } from '../lib/storeTypes'
+import { getCapabilities } from '../lib/capabilities'
 import { useToast } from '../lib/toast'
 import type { StateStore } from '../types/workflow'
 
@@ -13,6 +14,9 @@ export function StateStoreConnectionsPanel() {
   // The panel owns the toast: the add dialog unmounts on close, so any toast
   // rendered inside it would disappear before the user could see it.
   const { toast, toastNode } = useToast()
+  // Container posture has no connection registry: connections can't be saved
+  // or removed, so the panel is read-only (the server refuses with 409).
+  const readOnly = getCapabilities().containerPosture === true
 
   const [addOpen, setAddOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<StateStore | null>(null)
@@ -44,10 +48,16 @@ export function StateStoreConnectionsPanel() {
     <div className="card" style={{ padding: '14px 16px', marginTop: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <b style={{ fontSize: 13 }}>Recent workflow state store connections</b>
-        <button className="btn primary" onClick={() => setAddOpen(true)}>+ Add connection</button>
+        {!readOnly && <button className="btn primary" onClick={() => setAddOpen(true)}>+ Add connection</button>}
       </div>
 
-      {(stores ?? []).length === 0 && <p className="hint">No state store connections yet.</p>}
+      {readOnly && (
+        <p className="hint">
+          Running as a container: connections can&apos;t be saved here. Mount a state-store component and
+          point <span className="mono">DEVDASHBOARD_STATESTORE_FILE</span> at it.
+        </p>
+      )}
+      {(stores ?? []).length === 0 && !readOnly && <p className="hint">No state store connections yet.</p>}
 
       {(stores ?? []).map((s) => (
         <div key={s.id} style={{ padding: '6px 0', borderTop: '1px solid var(--line-soft)' }}>
@@ -59,7 +69,7 @@ export function StateStoreConnectionsPanel() {
               <span className="pill">{s.source}</span>
               {s.active && <span className="pill" style={{ color: 'var(--done-fg)' }}>ACTIVE</span>}
             </span>
-            {!s.active && (
+            {!s.active && !readOnly && (
               <span style={{ display: 'flex', gap: 6 }}>
                 <button className="btn danger" aria-label={`disconnect ${s.name}`} onClick={() => openDeleteConfirm(s)}>Disconnect</button>
               </span>
