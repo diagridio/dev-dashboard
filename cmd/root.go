@@ -146,16 +146,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		}
 		appNS = contractNamespaces(scan)
 		appsSvc = discovery.New(scan, client)
-		caps = &server.Capabilities{
-			// Sidecar-gRPC inspection needs no store, so in compose a declared
-			// app is enough to enable the workflow routes. Aspire apps are
-			// never sidecar-sourced (Task 5), so aspire keeps the store gate.
-			Workflows: workflowsEnabled(mode, settings.StateStore != "", mode == ModeCompose && anyGRPCAddr(scan)),
-			// The State page has no sidecar fallback, so it still needs a store.
-			State:            settings.StateStore != "",
-			Mode:             string(mode),
-			ContainerPosture: true,
-		}
+		caps = containerCapabilities(mode, settings.StateStore != "", scan)
 	default:
 		src := sourcesFor(mode, discovery.ContractPresent(os.Getenv))
 		_, crtRunner := containerruntime.Detect()
@@ -364,6 +355,25 @@ func openBrowser(url string) error {
 	}
 	go func() { _ = cmd.Wait() }()
 	return nil
+}
+
+// containerCapabilities is the full capability set for container posture
+// (aspire or compose with the env contract). Only Workflows and State can be
+// on: inside the container there is no host process table for lifecycle, no
+// docker socket for the control plane, and no log files to tail, and secret
+// reveal is off because the dashboard is served off-host. Every field not set
+// here is deliberately false; TestContainerCapabilities pins the whole struct.
+func containerCapabilities(mode Mode, storeSet bool, scan discovery.Scanner) *server.Capabilities {
+	return &server.Capabilities{
+		// Sidecar-gRPC inspection needs no store, so in compose a declared
+		// app is enough to enable the workflow routes. Aspire apps are never
+		// sidecar-sourced, so aspire keeps the store gate.
+		Workflows: workflowsEnabled(mode, storeSet, mode == ModeCompose && anyGRPCAddr(scan)),
+		// The State page has no sidecar fallback, so it still needs a store.
+		State:            storeSet,
+		Mode:             string(mode),
+		ContainerPosture: true,
+	}
 }
 
 // workflowsEnabled decides whether the workflow routes are on in container

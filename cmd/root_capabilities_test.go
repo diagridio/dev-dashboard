@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
+	"github.com/diagridio/dev-dashboard/pkg/server"
 )
 
 func TestContractSource(t *testing.T) {
@@ -78,6 +79,48 @@ func TestWorkflowsEnabled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := workflowsEnabled(tc.mode, tc.storeSet, tc.anyGRPC); got != tc.want {
 				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestContainerCapabilities pins the whole capability set per container
+// posture: only Workflows/State can ever be on, lifecycle, control plane,
+// logs and secret reveal are always off, and ContainerPosture is always set.
+func TestContainerCapabilities(t *testing.T) {
+	oneApp := map[string]string{
+		"DEVDASHBOARD_APP_COUNT":       "1",
+		"DEVDASHBOARD_APP_0_ID":        "order",
+		"DEVDASHBOARD_APP_0_DAPR_HTTP": "http://order-dapr:3500",
+	}
+	noApps := map[string]string{"DEVDASHBOARD_APP_COUNT": "0"}
+	tests := []struct {
+		name     string
+		mode     Mode
+		env      map[string]string
+		storeSet bool
+		want     server.Capabilities
+	}{
+		{"compose, app, no store", ModeCompose, oneApp, false,
+			server.Capabilities{Workflows: true, Mode: "compose", ContainerPosture: true}},
+		{"compose, no apps, no store", ModeCompose, noApps, false,
+			server.Capabilities{Mode: "compose", ContainerPosture: true}},
+		{"compose, app, store", ModeCompose, oneApp, true,
+			server.Capabilities{Workflows: true, State: true, Mode: "compose", ContainerPosture: true}},
+		{"aspire, app, no store", ModeAspire, oneApp, false,
+			server.Capabilities{Mode: "aspire", ContainerPosture: true}},
+		{"aspire, app, store", ModeAspire, oneApp, true,
+			server.Capabilities{Workflows: true, State: true, Mode: "aspire", ContainerPosture: true}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scan, err := discovery.NewContractScanner(func(k string) string { return tc.env[k] }, contractSource(tc.mode))
+			if err != nil {
+				t.Fatalf("scanner: %v", err)
+			}
+			got := containerCapabilities(tc.mode, tc.storeSet, scan)
+			if got == nil || *got != tc.want {
+				t.Fatalf("got %+v\nwant %+v", got, tc.want)
 			}
 		})
 	}
