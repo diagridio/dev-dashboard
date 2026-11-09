@@ -319,6 +319,12 @@ describe('AppDetail', () => {
       expect(screen.queryByText(/click any path to copy/i)).not.toBeInTheDocument()
     })
 
+    it('marks a TLS sidecar gRPC endpoint', async () => {
+      server.use(http.get('/api/apps/wfapp', () => HttpResponse.json({ ...contractApp, daprGrpcTls: true })))
+      renderDetail('wfapp')
+      expect(await screen.findByText('daprd:50001 · TLS')).toBeInTheDocument()
+    })
+
     it('says the app status is not observable when the sidecar gives no signal', async () => {
       server.use(http.get('/api/apps/wfapp', () => HttpResponse.json(contractApp)))
       renderDetail('wfapp')

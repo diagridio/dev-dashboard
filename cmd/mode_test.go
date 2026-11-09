@@ -58,13 +58,13 @@ func TestContainerPosture(t *testing.T) {
 		return ""
 	}
 	none := func(string) string { return "" }
-	if !containerPosture(ModeAspire, withContract) {
+	if !containerPosture(ModeAspire, withContract, true) {
 		t.Fatal("aspire + contract must be container posture")
 	}
-	if containerPosture(ModeAspire, none) {
+	if containerPosture(ModeAspire, none, true) {
 		t.Fatal("aspire without the contract must stay host posture")
 	}
-	if containerPosture(ModeDefault, withContract) {
+	if containerPosture(ModeDefault, withContract, true) {
 		t.Fatal("mode-unset is never container posture")
 	}
 }
@@ -72,23 +72,30 @@ func TestContainerPosture(t *testing.T) {
 func TestContainerPostureMatrix(t *testing.T) {
 	withContract := map[string]string{"DEVDASHBOARD_APP_COUNT": "1"}
 	tests := []struct {
-		name string
-		mode Mode
-		env  map[string]string
-		want bool
+		name        string
+		mode        Mode
+		env         map[string]string
+		inContainer bool
+		want        bool
 	}{
-		{name: "compose with contract is container posture", mode: ModeCompose, env: withContract, want: true},
-		{name: "compose without contract stays host posture", mode: ModeCompose, env: nil, want: false},
-		{name: "aspire with contract is container posture", mode: ModeAspire, env: withContract, want: true},
-		{name: "aspire without contract stays host posture", mode: ModeAspire, env: nil, want: false},
-		{name: "dapr-run with contract is never container posture", mode: ModeDaprRun, env: withContract, want: false},
-		{name: "test-containers with contract is never container posture", mode: ModeTestcontainers, env: withContract, want: false},
-		{name: "mode unset with contract is never container posture", mode: ModeDefault, env: withContract, want: false},
+		{name: "compose with contract in a container is container posture", mode: ModeCompose, env: withContract, inContainer: true, want: true},
+		// A DEVDASHBOARD_APP_COUNT left exported in a host shell must not turn
+		// a host `--mode compose` run into container posture.
+		{name: "compose with contract on the host stays host posture", mode: ModeCompose, env: withContract, inContainer: false, want: false},
+		{name: "compose without contract stays host posture", mode: ModeCompose, env: nil, inContainer: true, want: false},
+		// Aspire keeps its contract-only rule: the AppHost integration may run
+		// the dashboard outside a container.
+		{name: "aspire with contract is container posture", mode: ModeAspire, env: withContract, inContainer: true, want: true},
+		{name: "aspire with contract outside a container is still container posture", mode: ModeAspire, env: withContract, inContainer: false, want: true},
+		{name: "aspire without contract stays host posture", mode: ModeAspire, env: nil, inContainer: true, want: false},
+		{name: "dapr-run with contract is never container posture", mode: ModeDaprRun, env: withContract, inContainer: true, want: false},
+		{name: "test-containers with contract is never container posture", mode: ModeTestcontainers, env: withContract, inContainer: true, want: false},
+		{name: "mode unset with contract is never container posture", mode: ModeDefault, env: withContract, inContainer: true, want: false},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			getenv := func(k string) string { return tc.env[k] }
-			if got := containerPosture(tc.mode, getenv); got != tc.want {
+			if got := containerPosture(tc.mode, getenv, tc.inContainer); got != tc.want {
 				t.Fatalf("got %v want %v", got, tc.want)
 			}
 		})
@@ -240,4 +247,64 @@ func TestResolveServeSettings(t *testing.T) {
 			t.Fatalf("want error naming DEVDASHBOARD_PORT, got %v", err)
 		}
 	})
+}
+
+func TestInContainer(t *testing.T) {
+	tests := []struct {
+		name   string
+		env    map[string]string
+		exists map[string]bool
+		want   bool
+	}{
+		{name: "image marker", env: map[string]string{"DEVDASHBOARD_IN_CONTAINER": "true"}, want: true},
+		{name: "docker marker file", exists: map[string]bool{"/.dockerenv": true}, want: true},
+		{name: "podman marker file", exists: map[string]bool{"/run/.containerenv": true}, want: true},
+		{name: "plain host", want: false},
+		{name: "marker set to false", env: map[string]string{"DEVDASHBOARD_IN_CONTAINER": "false"}, want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := inContainer(func(k string) string { return tc.env[k] }, func(p string) bool { return tc.exists[p] })
+			if got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestPostureNotice(t *testing.T) {
+	contract := map[string]string{"DEVDASHBOARD_APP_COUNT": "2"}
+	tests := []struct {
+		name        string
+		mode        Mode
+		env         map[string]string
+		posture     bool
+		inContainer bool
+		want        []string // substrings; empty means no notice
+	}{
+		{name: "compose container posture", mode: ModeCompose, env: contract, posture: true, inContainer: true,
+			want: []string{"compose container posture", "2 apps declared via DEVDASHBOARD_APP_*"}},
+		{name: "aspire container posture hints at compose", mode: ModeAspire, env: contract, posture: true, inContainer: true,
+			want: []string{"aspire container posture", "2 apps declared", "set DEVDASHBOARD_MODE=compose"}},
+		{name: "contract ignored on the host", mode: ModeCompose, env: contract, posture: false, inContainer: false,
+			want: []string{"DEVDASHBOARD_APP_* is set", "not running in a container", "DEVDASHBOARD_IN_CONTAINER=true"}},
+		{name: "plain host compose", mode: ModeCompose, posture: false, inContainer: false},
+		{name: "plain host default", mode: ModeDefault, posture: false, inContainer: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := postureNotice(tc.mode, tc.posture, tc.inContainer, func(k string) string { return tc.env[k] })
+			if len(tc.want) == 0 {
+				if got != "" {
+					t.Fatalf("want no notice, got %q", got)
+				}
+				return
+			}
+			for _, w := range tc.want {
+				if !strings.Contains(got, w) {
+					t.Fatalf("notice %q missing %q", got, w)
+				}
+			}
+		})
+	}
 }

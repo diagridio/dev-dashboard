@@ -64,6 +64,13 @@ func TestSidecarEndpointsAddressResolution(t *testing.T) {
 			want: []workflowEndpoint{{AppID: "order", Addr: "order-dapr:50001", Unreachable: true}},
 		},
 		{
+			name: "contract app's gRPC TLS flag is carried to the endpoint",
+			instances: []discovery.Instance{
+				{AppID: "order", Source: discovery.SourceCompose, DaprGRPCAddr: "order-dapr:50001", DaprGRPCTLS: true, SidecarReachable: true},
+			},
+			want: []workflowEndpoint{{AppID: "order", Addr: "order-dapr:50001", TLS: true}},
+		},
+		{
 			name: "host compose app without a gRPC port is skipped",
 			instances: []discovery.Instance{
 				{AppID: "order", Source: discovery.SourceCompose, SidecarReachable: true},

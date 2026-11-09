@@ -181,7 +181,7 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
   // "healthy" imply the app itself is up.
   const appUnobserved =
     containerPosture && !!app.daprHttpBaseUrl && !app.appStatus && !unreachable && state.label === 'healthy'
-  const unobservedHint = "sidecar is healthy; the app's own status can't be observed from the compose network"
+  const unobservedHint = "sidecar is healthy; the app's own status can't be observed from the dashboard's container"
   const key = appKey(app)
   const hasContainerName = key !== app.appId
   const hasLabel = !hasContainerName && !!app.label && app.label !== app.appId

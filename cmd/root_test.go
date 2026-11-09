@@ -34,7 +34,7 @@ func TestWriteStartupBanner(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			writeStartupBanner(&buf, "http://localhost:9090/", tc.telemetry)
+			writeStartupBanner(&buf, "http://localhost:9090/", tc.telemetry, "")
 			lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
 			require.Len(t, lines, 3)
 			require.Equal(t, "Diagrid Dapr Dev Dashboard is starting → http://localhost:9090/", lines[0])
@@ -42,6 +42,15 @@ func TestWriteStartupBanner(t *testing.T) {
 			require.Equal(t, konami, lines[2], "the Konami hint follows the telemetry notice")
 		})
 	}
+}
+
+// The posture notice, when there is one, sits right under the URL line.
+func TestWriteStartupBannerPostureNotice(t *testing.T) {
+	var buf bytes.Buffer
+	writeStartupBanner(&buf, "http://localhost:8080/", true, "Running in compose container posture.")
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 4)
+	require.Equal(t, "Running in compose container posture.", lines[1])
 }
 
 func TestVersionFlag(t *testing.T) {

@@ -44,6 +44,22 @@ describe('useDiscoveryTelemetry — mode_filter + modes', () => {
     expect(setTelemetryContextMock).toHaveBeenCalledWith('mode_filter', 'all')
   })
 
+  // mode is 'compose' both for a host Docker scan and for the dashboard running
+  // as a compose service; posture is what tells them apart in RUM.
+  it.each([
+    [{ mode: 'compose', containerPosture: true }, 'container'],
+    [{ mode: 'compose', containerPosture: false }, 'host'],
+    [{ mode: '' }, 'host'],
+  ])('sets posture from capabilities (%o -> %s)', async (caps, want) => {
+    getCapabilitiesMock.mockReturnValue(caps)
+    useAppsMock.mockReturnValue({ data: undefined })
+    const { useDiscoveryTelemetry } = await import('./useDiscoveryTelemetry')
+
+    renderHook(() => useDiscoveryTelemetry())
+
+    expect(setTelemetryContextMock).toHaveBeenCalledWith('posture', want)
+  })
+
   it('does not set modes before apps have loaded', async () => {
     getCapabilitiesMock.mockReturnValue({ mode: 'compose' })
     useAppsMock.mockReturnValue({ data: undefined })

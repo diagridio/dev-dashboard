@@ -114,7 +114,7 @@ dashboard surface — applications, workflows, state stores, the Control Plane v
 targets — to a single source; filters are exclusive and never combined:
 
 - `--mode dapr-run` — host `dapr run` processes only (Control Plane shows the `dapr init` containers).
-- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler), or a service inside your compose project when the `DEVDASHBOARD_APP_*` contract is set.
+- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler), or a service inside your compose project when the `DEVDASHBOARD_APP_*` contract is set and the dashboard runs in a container.
 - `--mode test-containers` — Testcontainers discovery only (no control-plane detection yet).
 - `--mode aspire` — Aspire resources only. Inside an AppHost-managed container (the
   `DEVDASHBOARD_APP_*` contract is present) this is the container serving posture described
@@ -172,10 +172,12 @@ docker run --rm -p 8080:8080 \
 | `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Used for **app-scoped** workflow operations — fetching one instance's history, an app-filtered workflow list/stats, and force delete — so those honor the app's own namespace. The store-wide workflow list, stats, and app-id dropdown (all-apps scans) still use the global `DEVDASHBOARD_NAMESPACE` |
 | `DEVDASHBOARD_APP_<i>_LABEL` | no | display name; defaults to the app-id. Shown in the applications list and app detail header whenever it differs from the app-id |
 | `DEVDASHBOARD_APP_<i>_DAPR_GRPC` | no | daprd gRPC endpoint as `host:port`, reachable from the dashboard container. Only used by compose mode, to read workflows from the sidecar (Dapr 1.17+). Defaults to the host of `DAPR_HTTP` on port `50001` (e.g. `http://myapp-dapr:3500` becomes `myapp-dapr:50001`); set it when the sidecar runs with a non-default `-dapr-grpc-port` |
+| `DEVDASHBOARD_APP_<i>_DAPR_GRPC_TLS` | no | `true` dials the sidecar's gRPC endpoint with TLS, verified against the system root certificates (for a sidecar behind a TLS proxy). Defaults to `true` when `DAPR_HTTP` is `https`, else `false`; a value that isn't a boolean fails at startup naming the variable |
 
 Validation is fail-fast at startup: a missing or non-numeric `DEVDASHBOARD_APP_COUNT`, any
-missing required per-app var, an unparsable `DAPR_HTTP` URL, or a malformed `DAPR_GRPC`
-`host:port` exits with an error naming the exact variable.
+missing required per-app var, an unparsable `DAPR_HTTP` URL, a malformed `DAPR_GRPC`
+`host:port`, or a non-boolean `DAPR_GRPC_TLS` exits with an error naming the exact
+variable.
 
 **Security note:** in aspire mode the dashboard drops the loopback `Host` check (the container
 is addressed by its Docker-network name or a published port). Without `DEVDASHBOARD_ALLOWED_HOSTS`
@@ -196,6 +198,7 @@ development tool — never expose it publicly.
 | `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra resource directories for the Components, Configurations, Resiliency and HTTP Endpoints pages, `os.PathListSeparator`-separated |
 | `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, container posture only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
 | `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
+| `DEVDASHBOARD_IN_CONTAINER` | `true` (baked into the image) | marks the process as running in a container; compose container posture requires it (or Docker's `/.dockerenv` / Podman's `/run/.containerenv`). Set it yourself only for a runtime that leaves neither marker |
 
 Precedence everywhere is **flag > env > posture default**.
 
@@ -207,7 +210,11 @@ without the override the contract runs in aspire mode and the dashboard cannot r
 from the sidecars. With the contract present, `compose` selects the container posture above
 (port `8080`, bound to `0.0.0.0`, no container runtime or docker socket needed). Without the
 contract, `--mode compose` keeps its host behavior of scanning compose containers through
-docker.
+docker, and so does a host run where `DEVDASHBOARD_APP_*` happens to be set: compose
+container posture also requires running in a container, so a variable left exported in your
+shell can't switch it on. The startup banner says which posture was chosen and how many apps
+the contract declares; in aspire container posture it also reminds you to set
+`DEVDASHBOARD_MODE=compose` inside a compose project.
 
 ```yaml
 services:
@@ -287,7 +294,8 @@ tailing, self-update/update-check, automatic browser opening, and secret-value r
 - State-store connections can't be saved. There is no connection registry inside the
   container, so the store from `DEVDASHBOARD_STATESTORE_FILE` is listed read-only, "Add
   connection" is hidden, and the connections API answers `409`.
-- App status comes only from what the compose network can show. If daprd reports an app port,
+- App status comes only from what the dashboard's container can observe (the same applies in
+  aspire container posture). If daprd reports an app port,
   the dashboard probes it; otherwise the app counts as running while it has a workflow worker
   connected to its sidecar. With neither signal, App Detail shows the app status as "not
   observable" and the Applications list marks the row with ⓘ: the health shown there is the

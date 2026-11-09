@@ -279,7 +279,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               {isContract && !app.appStatus ? (
                 <span
                   className="faint"
-                  title="The app has no port the dashboard can probe and no connected workflow worker, so its process status can't be seen from the compose network"
+                  title="The app has no port the dashboard can probe and no connected workflow worker, so its process status can't be seen from the dashboard's container"
                 >
                   not observable
                 </span>
@@ -379,7 +379,13 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
                 <div className="vv mono">{app.daprHttpBaseUrl}</div>
 
                 <div className="kk">Sidecar gRPC</div>
-                <div className="vv mono">{app.daprGrpcAddr || <span className="faint">—</span>}</div>
+                <div className="vv mono">
+                  {app.daprGrpcAddr ? (
+                    app.daprGrpcTls ? `${app.daprGrpcAddr} · TLS` : app.daprGrpcAddr
+                  ) : (
+                    <span className="faint">—</span>
+                  )}
+                </div>
               </>
             ) : (
               <>

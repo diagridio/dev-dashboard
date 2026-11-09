@@ -48,13 +48,18 @@ function useDistinctSetContext(
 
 /**
  * Keeps RUM global context in sync with what the dashboard has discovered:
- * `mode_filter` (the CLI --mode, set once), `modes` (distinct discovery modes),
+ * `mode_filter` (the CLI --mode, set once), `posture` (`container` when the
+ * dashboard runs as a container inside the orchestrator it inspects, else
+ * `host`; set once — mode alone can't tell a host compose scan from a compose
+ * service), `modes` (distinct discovery modes),
  * and `runtimes` (distinct app languages). `modes`/`runtimes` refresh as the
  * apps list changes. Mount exactly once, near the app root.
  */
 export function useDiscoveryTelemetry(): void {
   useEffect(() => {
-    setTelemetryContext('mode_filter', normalizeModeFilter(getCapabilities().mode))
+    const caps = getCapabilities()
+    setTelemetryContext('mode_filter', normalizeModeFilter(caps.mode))
+    setTelemetryContext('posture', caps.containerPosture === true ? 'container' : 'host')
   }, [])
 
   const { data } = useApps()

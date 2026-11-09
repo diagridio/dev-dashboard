@@ -355,7 +355,7 @@ work).
 
 - **Malformed contract fails at startup**, naming the exact variable — existing
   `scan_contract.go` behavior, extended to `_DAPR_GRPC`. `DEVDASHBOARD_APP_COUNT` remains
-  bounded by `maxAspireAppCount` (1024).
+  bounded by `maxContractAppCount` (1024).
 - **Unreachable sidecar**: the app is listed with `sidecarReachable=false` and
   posture-appropriate hint copy (section 6). It recovers on the next poll with no restart.
 - **One bad sidecar never hides the others.** Per-app gRPC budgets already exist

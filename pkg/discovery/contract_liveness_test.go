@@ -48,8 +48,8 @@ func TestContractAppProbeAddr(t *testing.T) {
 	}
 }
 
-// Compose contract apps get an app status from what the sidecar network can
-// observe: a TCP probe of the app port, else a connected workflow worker,
+// Contract apps (compose and aspire container posture) get an app status from
+// what the sidecar network can observe: a TCP probe of the app port, else a connected workflow worker,
 // else unknown ("") rather than implying the app is up.
 func TestContractComposeAppStatus(t *testing.T) {
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -79,19 +79,21 @@ func TestContractComposeAppStatus(t *testing.T) {
 		{"worker connected, no port", `{"id":"order","workflows":{"connectedWorkers":1}}`, StatusRunning, 0},
 		{"no port, no worker", `{"id":"order","appConnectionProperties":{"protocol":"http","channelAddress":"127.0.0.1"}}`, "", 0},
 	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			sc := sidecarWithMetadata(t, tc.body)
-			in := contractInstanceFor(t, SourceCompose, sc.URL)
-			if in.AppStatus != tc.wantApp {
-				t.Fatalf("AppStatus = %q want %q", in.AppStatus, tc.wantApp)
-			}
-			if in.AppPort != tc.wantPort {
-				t.Fatalf("AppPort = %d want %d", in.AppPort, tc.wantPort)
-			}
-			if in.Health != HealthHealthy {
-				t.Fatalf("Health = %q", in.Health)
-			}
-		})
+	for _, source := range []string{SourceCompose, SourceAspire} {
+		for _, tc := range tests {
+			t.Run(source+"/"+tc.name, func(t *testing.T) {
+				sc := sidecarWithMetadata(t, tc.body)
+				in := contractInstanceFor(t, source, sc.URL)
+				if in.AppStatus != tc.wantApp {
+					t.Fatalf("AppStatus = %q want %q", in.AppStatus, tc.wantApp)
+				}
+				if in.AppPort != tc.wantPort {
+					t.Fatalf("AppPort = %d want %d", in.AppPort, tc.wantPort)
+				}
+				if in.Health != HealthHealthy {
+					t.Fatalf("Health = %q", in.Health)
+				}
+			})
+		}
 	}
 }

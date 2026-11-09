@@ -159,7 +159,7 @@ threads through everything.
 |------|---------|----------|
 | `--port` | `9090` | HTTP listen port (`8080` default in container posture) |
 | `--bind` | `127.0.0.1` | Listen address (`0.0.0.0` default in container posture) |
-| `--mode` | unset | Exclusive discovery filter: `dapr-run`, `compose`, `test-containers`, `aspire`; unset = complete scan; `compose` (like `aspire`) selects container posture when the `DEVDASHBOARD_APP_*` contract is present (env: `DEVDASHBOARD_MODE`, flag wins) |
+| `--mode` | unset | Exclusive discovery filter: `dapr-run`, `compose`, `test-containers`, `aspire`; unset = complete scan; `compose` (like `aspire`) selects container posture when the `DEVDASHBOARD_APP_*` contract is present (compose additionally requires running in a container) (env: `DEVDASHBOARD_MODE`, flag wins) |
 | `--base-path` | `""` | Sub-path mount, e.g. `/dashboard` (must match the SPA's `DASH_BASE_PATH` build var) |
 | `--no-open` | `false` | Skip auto-opening the browser |
 | `--statestore` | `""` | Explicit state-store component YAML; disables auto-detection |
@@ -178,12 +178,16 @@ container posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, and `DASH_CONTAINER_RUNTIME
 ### `serve` boot sequence (`cmd/root.go` `runServe` → `cmd/serve.go` `assembleOptions`)
 
 1. Resolve the mode and posture (`cmd/mode.go`): `resolveMode` validates
-   `--mode`/`DEVDASHBOARD_MODE`; **container posture** = aspire **or compose** mode *with* the
-   `DEVDASHBOARD_APP_*` env contract present, and drives the port/bind defaults
-   (`resolveServeSettings`, flag > env > posture default), Host-guard relaxation,
+   `--mode`/`DEVDASHBOARD_MODE`; **container posture** = aspire mode with the
+   `DEVDASHBOARD_APP_*` env contract present, **or** compose mode with the contract present
+   *and* the process running in a container (`inContainer`: the image's
+   `DEVDASHBOARD_IN_CONTAINER=true`, `/.dockerenv`, or `/run/.containerenv`), so a contract
+   variable left in a host shell can't flip a host compose run. Posture drives the port/bind
+   defaults (`resolveServeSettings`, flag > env > posture default), Host-guard relaxation,
    registry persistence, and browser auto-open. Aspire *without* the contract is a
-   host-posture run filtered to Aspire-managed apps, and compose *without* the contract is
-   the host docker-scan.
+   host-posture run filtered to Aspire-managed apps, and compose *without* container
+   posture is the host docker-scan. `postureNotice` adds a banner line naming the chosen
+   posture (and, in aspire container posture, the `DEVDASHBOARD_MODE=compose` hint).
 2. Print the startup logo; `logging.New(verbose)` → set as the default `slog.Logger`.
 3. Load the embedded SPA (`web.DistFS()`) and the component catalog (`metadata.Init()`).
 4. Resolve the bind address and the browser URL (base-path aware).
@@ -451,7 +455,7 @@ Which scanners run is decided by `--mode` (`cmd/sources.go` `sourcesFor`): unset
 Env-contract apps have no process or container to inspect, so enrichment works from the
 sidecar alone. A compose contract app whose sidecar answers neither `/v1.0/healthz` nor
 `/v1.0/metadata` is marked `SidecarReachable=false` (recovering on the next poll), which the
-workflow layer uses to skip it without dialing. Its app status (`contract_liveness.go`) comes
+workflow layer uses to skip it without dialing. A contract app's status, compose or aspire (`contract_liveness.go`), comes
 from a TCP probe of daprd's reported app port, reached at the sidecar's host when the channel
 address is loopback (shared network namespace) and at the channel address otherwise; without a
 port, a connected workflow worker (`workflows.connectedWorkers` in the metadata) means running.
@@ -520,7 +524,11 @@ pre-1.17) falls back to the store, and keeps the sidecar outcome only if the sto
 all-apps queries merge both (sidecar wins collisions, first page only), and the no-store /
 unreachable-store banners still fire when nothing is sidecar-eligible. The reconciler's
 `ServiceFor` builds this composite (`cmd/reconciler.go`); sidecar gRPC connections are
-cached per address in a `SidecarPool` closed on shutdown.
+cached per address in a `SidecarPool` closed on shutdown. Connections are plaintext unless
+the endpoint asks for TLS (`SidecarEndpoint.TLS`, from a contract app's
+`DEVDASHBOARD_APP_<i>_DAPR_GRPC_TLS` or an `https` `DAPR_HTTP`), verified against the
+system roots; TLS and plaintext connections to one address are cached separately
+(`ConnFor`), and binary-store reads use the same flag.
 
 **To add a workflow field:** add it to the types (`types.go`) and extract it in
 `decode.go`. **To add a store backend:** add a case in `statestore.New` and satisfy the
