@@ -54,7 +54,8 @@ language-brand swatch colors (one shared lookup keyed by runtime; external brand
 colors have no theme token), and the dark ink placed on mint/bright backgrounds
 (`#06231a`). If you reach for a hex, it should be that rare — a guard test
 (`src/test/styleguide.test.ts`) fails on any new hex literal outside those
-allowlisted spots.
+allowlisted spots. The Dapr logo (`components/DaprLogo.tsx`) takes its colour from
+the `--dapr-logo` token, so it needs no allowlist entry.
 
 ### ⚠️ Antipattern: never build a class name from raw data
 

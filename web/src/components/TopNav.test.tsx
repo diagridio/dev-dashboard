@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { act, render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { TopNav, NAV_ITEMS } from './TopNav'
@@ -70,6 +70,18 @@ describe('TopNav', () => {
   it('renders the Logo', () => {
     renderNav()
     expect(screen.getByRole('img', { name: /diagrid/i })).toBeInTheDocument()
+  })
+
+  it('swaps the Diagrid logo for the Dapr logo on b, and back on b again', () => {
+    renderNav()
+    const press = () => act(() => { fireEvent.keyDown(window, { key: 'b' }) })
+    expect(screen.getByRole('img', { name: 'Diagrid' })).toBeInTheDocument()
+    press()
+    expect(screen.getByRole('img', { name: 'Dapr' })).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Diagrid' })).toBeNull()
+    press()
+    expect(screen.getByRole('img', { name: 'Diagrid' })).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Dapr' })).toBeNull()
   })
 
   it('names the product Dapr Dev Dashboard', () => {

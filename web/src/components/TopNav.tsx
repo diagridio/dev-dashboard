@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
+import { DaprLogo } from './DaprLogo'
+import { useKeyToggle } from '../hooks/useKeyToggle'
 import { ThemeToggle } from './ThemeToggle'
 import { RefreshControl } from './RefreshControl'
 import { ShareDialog } from './ShareDialog'
@@ -62,10 +64,13 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
     }
   }, [])
 
+  // Easter egg: press B to swap the Diagrid logo for the Dapr logo (and back).
+  const daprLogo = useKeyToggle('b')
+
   return (
     <header className="topbar" ref={headerRef}>
       <span className="brand">
-        <Logo height={21} />
+        {daprLogo ? <DaprLogo height={21} /> : <Logo height={21} />}
         <span className="dot">/</span>
         <span className="app-name">Dapr Dev Dashboard</span>
       </span>
