@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { act, render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -122,6 +122,23 @@ describe('App shell', () => {
       window.requestAnimationFrame = origRaf
       window.cancelAnimationFrame = origCaf
     }
+  })
+
+  it('b swaps to the Dapr logo and hides the Resources sidebar; b again restores both', async () => {
+    const { container } = renderApp('/')
+    const press = () => act(() => { fireEvent.keyDown(window, { key: 'b' }) })
+    expect(await screen.findByRole('complementary', { name: 'Resources' })).toBeInTheDocument()
+    expect(container.querySelector('.app')).not.toHaveClass('dapr-mode')
+
+    press()
+    expect(screen.getByRole('img', { name: 'Dapr' })).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Resources' })).toBeNull()
+    expect(container.querySelector('.app')).toHaveClass('dapr-mode')
+
+    press()
+    expect(screen.getByRole('img', { name: 'Diagrid' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: 'Resources' })).toBeInTheDocument()
+    expect(container.querySelector('.app')).not.toHaveClass('dapr-mode')
   })
 
   it('opens the REPLAY easter egg on the Konami code', async () => {

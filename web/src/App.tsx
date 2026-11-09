@@ -9,6 +9,7 @@ import { safeGet } from './lib/safeStorage'
 import { trackAction, trackView } from './lib/telemetry'
 import { useDiscoveryTelemetry } from './hooks/useDiscoveryTelemetry'
 import { useKonami } from './hooks/useKonami'
+import { useKeyToggle } from './hooks/useKeyToggle'
 
 const SIDEBAR_COLLAPSED_KEY = 'devdash.sidebarCollapsed'
 
@@ -25,6 +26,9 @@ export function App() {
   const [collapsed, setCollapsed] = useState(getInitialCollapsed)
   const [hasNew, setHasNew] = useState(false)
   const [updateAvailable, setUpdateAvailable] = useState(false)
+  // Easter egg: B swaps the Diagrid logo for the Dapr logo and hides the
+  // Resources sidebar; B again restores both.
+  const daprMode = useKeyToggle('b')
   const matches = useMatches()
 
   const rumView = [...matches]
@@ -67,20 +71,22 @@ export function App() {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
-  const appClass = ['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : '', updateAvailable ? 'update-available' : '']
+  const appClass = ['app', collapsed ? 'collapsed' : '', hasNew ? 'has-new' : '', updateAvailable ? 'update-available' : '', daprMode ? 'dapr-mode' : '']
     .filter(Boolean)
     .join(' ')
 
   return (
     <SmallScreenGuard>
       <div className={appClass} data-theme={theme}>
-        <TopNav theme={theme} onThemeChange={setTheme} />
-        <ResourcesSidebar
-          collapsed={collapsed}
-          onCollapsedChange={setCollapsed}
-          onHasNewChange={setHasNew}
-          onUpdateAvailableChange={setUpdateAvailable}
-        />
+        <TopNav theme={theme} onThemeChange={setTheme} daprLogo={daprMode} />
+        {!daprMode && (
+          <ResourcesSidebar
+            collapsed={collapsed}
+            onCollapsedChange={setCollapsed}
+            onHasNewChange={setHasNew}
+            onUpdateAvailableChange={setUpdateAvailable}
+          />
+        )}
         <main className="body">
           <Outlet />
         </main>

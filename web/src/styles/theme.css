@@ -95,6 +95,8 @@ body {
 .app * { box-sizing: border-box; }
 .app { --sbw: 240px; }
 .app.collapsed { --sbw: 44px; }
+/* B-key easter egg: the Resources sidebar is not rendered, so the body takes its space. */
+.app.dapr-mode { --sbw: 0px; }
 
 /* ---- Logo ---- */
 .dglogo { height: 21px; width: auto; display: block; color: #fff; }

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
 import { DaprLogo } from './DaprLogo'
-import { useKeyToggle } from '../hooks/useKeyToggle'
 import { ThemeToggle } from './ThemeToggle'
 import { RefreshControl } from './RefreshControl'
 import { ShareDialog } from './ShareDialog'
@@ -33,9 +32,11 @@ export const NAV_ITEMS: NavItem[] = [
 interface TopNavProps {
   theme: Theme
   onThemeChange: (t: Theme) => void
+  /** Show the Dapr logo instead of the Diagrid one (the B-key easter egg, owned by App). */
+  daprLogo?: boolean
 }
 
-export function TopNav({ theme, onThemeChange }: TopNavProps) {
+export function TopNav({ theme, onThemeChange, daprLogo = false }: TopNavProps) {
   const headerRef = useRef<HTMLElement>(null)
   const caps = getCapabilities()
   const items = NAV_ITEMS.filter((item) => !item.cap || caps[item.cap])
@@ -63,9 +64,6 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
       document.documentElement.style.removeProperty('--topbar-h')
     }
   }, [])
-
-  // Easter egg: press B to swap the Diagrid logo for the Dapr logo (and back).
-  const daprLogo = useKeyToggle('b')
 
   return (
     <header className="topbar" ref={headerRef}>

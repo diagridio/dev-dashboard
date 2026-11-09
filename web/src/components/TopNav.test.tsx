@@ -1,4 +1,4 @@
-import { act, render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { TopNav, NAV_ITEMS } from './TopNav'
@@ -55,12 +55,12 @@ describe('TopNav', () => {
     delete window.__DASH_CAPABILITIES__
   })
 
-  function renderNav() {
+  function renderNav(props: { daprLogo?: boolean } = {}) {
     return render(
       <RefreshProvider>
         <ConnectionContext value={{ online: true }}>
           <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <TopNav theme="light" onThemeChange={noop} />
+            <TopNav theme="light" onThemeChange={noop} {...props} />
           </MemoryRouter>
         </ConnectionContext>
       </RefreshProvider>,
@@ -72,16 +72,10 @@ describe('TopNav', () => {
     expect(screen.getByRole('img', { name: /diagrid/i })).toBeInTheDocument()
   })
 
-  it('swaps the Diagrid logo for the Dapr logo on b, and back on b again', () => {
-    renderNav()
-    const press = () => act(() => { fireEvent.keyDown(window, { key: 'b' }) })
-    expect(screen.getByRole('img', { name: 'Diagrid' })).toBeInTheDocument()
-    press()
+  it('shows the Dapr logo instead of the Diagrid logo when daprLogo is set', () => {
+    renderNav({ daprLogo: true })
     expect(screen.getByRole('img', { name: 'Dapr' })).toBeInTheDocument()
     expect(screen.queryByRole('img', { name: 'Diagrid' })).toBeNull()
-    press()
-    expect(screen.getByRole('img', { name: 'Diagrid' })).toBeInTheDocument()
-    expect(screen.queryByRole('img', { name: 'Dapr' })).toBeNull()
   })
 
   it('names the product Dapr Dev Dashboard', () => {
