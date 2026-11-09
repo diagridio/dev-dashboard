@@ -9,9 +9,9 @@ import (
 	"strings"
 )
 
-// maxAspireAppCount bounds DEVDASHBOARD_APP_COUNT to guard against a runaway
+// maxContractAppCount bounds DEVDASHBOARD_APP_COUNT to guard against a runaway
 // or hostile value forcing a huge allocation/scan loop.
-const maxAspireAppCount = 1024
+const maxContractAppCount = 1024
 
 // ContractPresent reports whether the DEVDASHBOARD_APP_* env contract
 // is set at all (anchor variable: DEVDASHBOARD_APP_COUNT). Used with mode
@@ -32,8 +32,8 @@ func NewContractScanner(getenv func(string) string, source string) (Scanner, err
 	if err != nil || count < 0 {
 		return nil, fmt.Errorf("DEVDASHBOARD_APP_COUNT: expected a non-negative integer, got %q", countRaw)
 	}
-	if count > maxAspireAppCount {
-		return nil, fmt.Errorf("DEVDASHBOARD_APP_COUNT: %d exceeds the maximum of %d", count, maxAspireAppCount)
+	if count > maxContractAppCount {
+		return nil, fmt.Errorf("DEVDASHBOARD_APP_COUNT: %d exceeds the maximum of %d", count, maxContractAppCount)
 	}
 	defaultNS := strings.TrimSpace(getenv("DEVDASHBOARD_NAMESPACE"))
 	if defaultNS == "" {
