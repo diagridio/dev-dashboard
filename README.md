@@ -193,7 +193,7 @@ development tool — never expose it publicly.
 | `DEVDASHBOARD_BIND` / `--bind` | `0.0.0.0` | bind address |
 | `DEVDASHBOARD_STATESTORE_FILE` / `--statestore` | unset | path to a mounted Dapr state-store component YAML; enables the State page and store-backed workflows; in compose container posture Workflows also works without it via the sidecars |
 | `DEVDASHBOARD_NAMESPACE` / `--namespace` | `default` | default Dapr namespace for workflow actor keys |
-| `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra component directories for the Resources page, `os.PathListSeparator`-separated |
+| `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra resource directories for the Components, Configurations, Resiliency and HTTP Endpoints pages, `os.PathListSeparator`-separated |
 | `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, container posture only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
 | `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
 
@@ -283,7 +283,16 @@ tailing, self-update/update-check, automatic browser opening, and secret-value r
   unreachable or older than 1.17 is served from the store instead.
 - The State page appears only when `DEVDASHBOARD_STATESTORE_FILE` points at a mounted
   state-store component. Mounting components via `DEVDASHBOARD_RESOURCES_PATH` alone feeds the
-  Resources page but does not enable State.
+  Components, Configurations, Resiliency and HTTP Endpoints pages but does not enable State.
+- State-store connections can't be saved. There is no connection registry inside the
+  container, so the store from `DEVDASHBOARD_STATESTORE_FILE` is listed read-only, "Add
+  connection" is hidden, and the connections API answers `409`.
+- App status comes only from what the compose network can show. If daprd reports an app port,
+  the dashboard probes it; otherwise the app counts as running while it has a workflow worker
+  connected to its sidecar. With neither signal, App Detail shows the app status as "not
+  observable" and the Applications list marks the row with ⓘ: the health shown there is the
+  sidecar's. App Detail shows the sidecar's HTTP and gRPC addresses in place of ports, PIDs
+  and paths, which don't exist in this mode.
 
 **Troubleshooting.**
 
@@ -302,6 +311,10 @@ tailing, self-update/update-check, automatic browser opening, and secret-value r
 3. **Workflows page reports the sidecar does not support workflow inspection.** Sidecar
    workflow reads need Dapr 1.17+. Upgrade daprd, or mount the state store via
    `DEVDASHBOARD_STATESTORE_FILE` so that app's workflows are read from the store.
+4. **A workflow's detail says "the Dapr sidecar of app … is unreachable".** That app's sidecar
+   is stopped or can't be reached, and no store is mounted to read its history from instead.
+   The workflow list skips unreachable sidecars, so the other apps' workflows still load
+   promptly. Start the sidecar, or mount the store via `DEVDASHBOARD_STATESTORE_FILE`.
 
 ## Updating the dashboard
 
