@@ -1,0 +1,25 @@
+# Multi-app run file for the Enterprise diagnostics demo.
+# Start with `make demo` (or `cd demo && dapr run -f .`); Ctrl-C stops all three apps.
+version: 1
+common:
+  resourcesPath: ./resources
+  configFilePath: ./resources/diagnostics-config.yaml
+apps:
+  - appID: engineering
+    appDirPath: ./engineering
+    appPort: 6001
+    daprHTTPPort: 3501
+    daprGRPCPort: 50001
+    command: ["go", "run", "."]
+  - appID: bridge
+    appDirPath: ./bridge
+    appPort: 6002
+    daprHTTPPort: 3502
+    daprGRPCPort: 50002
+    command: ["dotnet", "run", "--project", "Bridge.csproj"]
+  - appID: sickbay
+    appDirPath: ./sickbay
+    appPort: 6003
+    daprHTTPPort: 3503
+    daprGRPCPort: 50003
+    command: ["uv", "run", "uvicorn", "app.main:app", "--port", "6003"]

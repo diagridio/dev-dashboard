@@ -55,12 +55,12 @@ describe('TopNav', () => {
     delete window.__DASH_CAPABILITIES__
   })
 
-  function renderNav() {
+  function renderNav(props: { daprLogo?: boolean } = {}) {
     return render(
       <RefreshProvider>
         <ConnectionContext value={{ online: true }}>
           <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-            <TopNav theme="light" onThemeChange={noop} />
+            <TopNav theme="light" onThemeChange={noop} {...props} />
           </MemoryRouter>
         </ConnectionContext>
       </RefreshProvider>,
@@ -70,6 +70,12 @@ describe('TopNav', () => {
   it('renders the Logo', () => {
     renderNav()
     expect(screen.getByRole('img', { name: /diagrid/i })).toBeInTheDocument()
+  })
+
+  it('shows the Dapr logo instead of the Diagrid logo when daprLogo is set', () => {
+    renderNav({ daprLogo: true })
+    expect(screen.getByRole('img', { name: 'Dapr' })).toBeInTheDocument()
+    expect(screen.queryByRole('img', { name: 'Diagrid' })).toBeNull()
   })
 
   it('names the product Dapr Dev Dashboard', () => {

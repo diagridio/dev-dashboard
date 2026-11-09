@@ -54,7 +54,8 @@ language-brand swatch colors (one shared lookup keyed by runtime; external brand
 colors have no theme token), and the dark ink placed on mint/bright backgrounds
 (`#06231a`). If you reach for a hex, it should be that rare — a guard test
 (`src/test/styleguide.test.ts`) fails on any new hex literal outside those
-allowlisted spots.
+allowlisted spots. The Dapr logo (`components/DaprLogo.tsx`) takes its colour from
+the `--dapr-logo` token, so it needs no allowlist entry.
 
 ### ⚠️ Antipattern: never build a class name from raw data
 
@@ -114,7 +115,7 @@ All tokens are CSS custom properties. Reference them with `var(--name)`.
 | `--primary` `#0BDDA3` | Brand mint (theme-independent) |
 | `--accent-bright` / `--ok-bright` | Brighter mint (theme-independent) — the single interactive accent: `.btn.primary`, focus rings, selection tints, active nav tab, LEDs, "beat" pulse, checkboxes |
 | `--dapr` | Dapr-specific blue (sidecar badges, daprd log source) |
-| `--gold` / `--purple` | Catalyst-brand secondary accents — available for highlights / category chips (not yet used in default UI) |
+| `--gold` / `--purple` | Diagrid-brand secondary accents — available for highlights / category chips (not yet used in default UI) |
 
 ### Status palette (paired bg/fg)
 Each status has a background and foreground token, used together:
