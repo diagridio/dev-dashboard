@@ -124,9 +124,9 @@ describe('App shell', () => {
     }
   })
 
-  it('b swaps to the Dapr logo and hides the Resources sidebar; b again restores both', async () => {
+  it('Ctrl+B swaps to the Dapr logo and hides the Resources sidebar; Ctrl+B again restores both', async () => {
     const { container } = renderApp('/')
-    const press = () => act(() => { fireEvent.keyDown(window, { key: 'b' }) })
+    const press = () => act(() => { fireEvent.keyDown(window, { key: 'b', ctrlKey: true }) })
     expect(await screen.findByRole('complementary', { name: 'Resources' })).toBeInTheDocument()
     expect(container.querySelector('.app')).not.toHaveClass('dapr-mode')
 
@@ -153,6 +153,9 @@ describe('App shell', () => {
       const code = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a']
       for (const key of code) fireEvent.keyDown(window, { key })
       expect(await screen.findByRole('heading', { name: 'REPLAY' })).toBeInTheDocument()
+      // The code's plain B must not trigger the Ctrl+B logo/sidebar easter egg.
+      expect(screen.getByRole('img', { name: 'Diagrid' })).toBeInTheDocument()
+      expect(screen.queryByRole('img', { name: 'Dapr' })).toBeNull()
     } finally {
       getContext.mockRestore()
       window.requestAnimationFrame = origRaf

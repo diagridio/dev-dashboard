@@ -32,7 +32,7 @@ export const NAV_ITEMS: NavItem[] = [
 interface TopNavProps {
   theme: Theme
   onThemeChange: (t: Theme) => void
-  /** Show the Dapr logo instead of the Diagrid one (the B-key easter egg, owned by App). */
+  /** Show the Dapr logo instead of the Diagrid one (the Ctrl+B easter egg, owned by App). */
   daprLogo?: boolean
 }
 

@@ -9,7 +9,7 @@ import { safeGet } from './lib/safeStorage'
 import { trackAction, trackView } from './lib/telemetry'
 import { useDiscoveryTelemetry } from './hooks/useDiscoveryTelemetry'
 import { useKonami } from './hooks/useKonami'
-import { useKeyToggle } from './hooks/useKeyToggle'
+import { useCtrlKeyToggle } from './hooks/useCtrlKeyToggle'
 
 const SIDEBAR_COLLAPSED_KEY = 'devdash.sidebarCollapsed'
 
@@ -26,9 +26,10 @@ export function App() {
   const [collapsed, setCollapsed] = useState(getInitialCollapsed)
   const [hasNew, setHasNew] = useState(false)
   const [updateAvailable, setUpdateAvailable] = useState(false)
-  // Easter egg: B swaps the Diagrid logo for the Dapr logo and hides the
-  // Resources sidebar; B again restores both.
-  const daprMode = useKeyToggle('b')
+  // Easter egg: Ctrl+B swaps the Diagrid logo for the Dapr logo and hides the
+  // Resources sidebar; Ctrl+B again restores both. Ctrl keeps the Konami
+  // code's plain B from triggering it.
+  const daprMode = useCtrlKeyToggle('b')
   const matches = useMatches()
 
   const rumView = [...matches]
