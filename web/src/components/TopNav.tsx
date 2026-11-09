@@ -70,7 +70,7 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
   return (
     <header className="topbar" ref={headerRef}>
       <span className="brand">
-        {daprLogo ? <DaprLogo height={21} /> : <Logo height={21} />}
+        {daprLogo ? <DaprLogo height={31.5} /> : <Logo height={21} />}
         <span className="dot">/</span>
         <span className="app-name">Dapr Dev Dashboard</span>
       </span>

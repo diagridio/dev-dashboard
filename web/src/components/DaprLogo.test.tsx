@@ -28,6 +28,15 @@ describe('DaprLogo', () => {
     expect(css).toMatch(/\.daprlogo\s*\{[^}]*color:\s*var\(--dapr-logo\)/)
   })
 
+  // 50% larger than the 21px Diagrid logo; the negative margin keeps its
+  // layout box at 21px so the top bar does not grow when it is shown.
+  it('renders 50% larger than the Diagrid logo without growing the top bar', () => {
+    const css = readFileSync(themeCss, 'utf8')
+    const rule = css.match(/\.daprlogo\s*\{([^}]*)\}/)?.[1] ?? ''
+    expect(rule).toMatch(/height:\s*31\.5px/)
+    expect(rule).toMatch(/margin:\s*-5\.25px 0/)
+  })
+
   it('defines --dapr-logo for both themes', () => {
     const css = readFileSync(themeCss, 'utf8')
     expect(css.match(/--dapr-logo:/g)?.length).toBe(2)
