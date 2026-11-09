@@ -104,7 +104,11 @@ cd web && npx vitest run src/path/to/file.test.tsx
   run another version locally. For Aspire, the runtime comes from your `dapr init`. With
   `DAPR_RUNTIME_VERSION` ≥ 1.19 the compose test also runs the workflow data-reference
   scenario (`datarefapp` + a `binarystore.in-memory` component, compose profile `dataref`);
-  below 1.19 that subtest skips.
+  below 1.19 that subtest skips. `TestComposeContainerPosture` runs the same fixture with
+  the dashboard **image** (built from the repo `Dockerfile`) as a compose service via the
+  `dashboard.yaml` override, covering compose container posture over the compose network
+  (sidecar-gRPC workflows without a store, a mounted store, and a stopped sidecar); the e2e
+  workflow's compose job runs both compose tests.
 - **Golden files** (`testdata/golden/*`): regenerate after an intentional shape change with
   `-update`, e.g. `go test -tags integration ./pkg/workflow -run Golden -update`.
 

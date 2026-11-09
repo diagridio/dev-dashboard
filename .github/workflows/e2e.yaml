@@ -108,8 +108,11 @@ jobs:
           MODE: ${{ matrix.mode }}
         run: |
           case "$MODE" in
-            compose)        run=TestComposeDiscovery ;;
+            compose)        run='TestComposeDiscovery|TestComposeContainerPosture' ;;
             testcontainers) run=TestTestcontainersDiscovery ;;
             aspire)         run=TestAspireDiscovery ;;
           esac
-          go test -tags e2e -run "$run" -timeout 20m -v ./test/e2e/...
+          # -count=1: the compose container test builds the dashboard image
+          # from the repo, which Go's test cache can't see, so never reuse a
+          # cached pass.
+          go test -count=1 -tags e2e -run "$run" -timeout 25m -v ./test/e2e/...

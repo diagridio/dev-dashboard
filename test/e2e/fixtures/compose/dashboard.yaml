@@ -1,0 +1,34 @@
+# Compose override for TestComposeContainerPosture: adds the dashboard image,
+# built from this repository, as a service inside the fixture project. It
+# discovers the apps declared by the DEVDASHBOARD_APP_* contract over the
+# compose network, with no Docker socket. Used with:
+#   docker compose -f docker-compose.yaml -f dashboard.yaml up
+#
+# Knobs (set by the test):
+#   E2E_DASH_APP_COUNT          1, or 2 with the "dataref" profile (Dapr 1.19+)
+#   E2E_DASH_STATESTORE_FILE    empty (sidecar-only workflows) or
+#                               /components/statestore.yaml (store mounted)
+services:
+  dev-dashboard:
+    build:
+      context: ../../../..
+    ports:
+      - "8080"
+    environment:
+      # The image bakes in DEVDASHBOARD_MODE=aspire; compose users override it.
+      DEVDASHBOARD_MODE: compose
+      DEVDASHBOARD_APP_COUNT: "${E2E_DASH_APP_COUNT:-1}"
+      # daprd owns the shared network namespace (wfapp joins it), so the
+      # sidecar is addressed by daprd's service name. The gRPC address is
+      # derived as daprd:50001.
+      DEVDASHBOARD_APP_0_ID: wfapp
+      DEVDASHBOARD_APP_0_DAPR_HTTP: http://daprd:3500
+      # Only read when E2E_DASH_APP_COUNT is 2.
+      DEVDASHBOARD_APP_1_ID: datarefapp
+      DEVDASHBOARD_APP_1_DAPR_HTTP: http://daprd-dataref:3500
+      DEVDASHBOARD_RESOURCES_PATH: /components:/components-dataref
+      DEVDASHBOARD_STATESTORE_FILE: "${E2E_DASH_STATESTORE_FILE:-}"
+      DEVDASHBOARD_TELEMETRY_OPTOUT: "true"
+    volumes:
+      - "./components:/components:ro"
+      - "./components-dataref:/components-dataref:ro"
