@@ -559,6 +559,7 @@ func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
 				AppID:       in.AppID,
 				Addr:        addr,
 				Unreachable: contract && !in.SidecarReachable,
+				TLS:         in.DaprGRPCTLS,
 			})
 		}
 		return eps

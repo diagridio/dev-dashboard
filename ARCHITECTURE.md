@@ -524,7 +524,11 @@ pre-1.17) falls back to the store, and keeps the sidecar outcome only if the sto
 all-apps queries merge both (sidecar wins collisions, first page only), and the no-store /
 unreachable-store banners still fire when nothing is sidecar-eligible. The reconciler's
 `ServiceFor` builds this composite (`cmd/reconciler.go`); sidecar gRPC connections are
-cached per address in a `SidecarPool` closed on shutdown.
+cached per address in a `SidecarPool` closed on shutdown. Connections are plaintext unless
+the endpoint asks for TLS (`SidecarEndpoint.TLS`, from a contract app's
+`DEVDASHBOARD_APP_<i>_DAPR_GRPC_TLS` or an `https` `DAPR_HTTP`), verified against the
+system roots; TLS and plaintext connections to one address are cached separately
+(`ConnFor`), and binary-store reads use the same flag.
 
 **To add a workflow field:** add it to the types (`types.go`) and extract it in
 `decode.go`. **To add a store backend:** add a case in `statestore.New` and satisfy the

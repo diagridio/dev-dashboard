@@ -379,7 +379,13 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
                 <div className="vv mono">{app.daprHttpBaseUrl}</div>
 
                 <div className="kk">Sidecar gRPC</div>
-                <div className="vv mono">{app.daprGrpcAddr || <span className="faint">—</span>}</div>
+                <div className="vv mono">
+                  {app.daprGrpcAddr ? (
+                    app.daprGrpcTls ? `${app.daprGrpcAddr} · TLS` : app.daprGrpcAddr
+                  ) : (
+                    <span className="faint">—</span>
+                  )}
+                </div>
               </>
             ) : (
               <>

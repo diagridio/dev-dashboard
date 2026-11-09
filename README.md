@@ -172,10 +172,12 @@ docker run --rm -p 8080:8080 \
 | `DEVDASHBOARD_APP_<i>_NAMESPACE` | no | per-app Dapr namespace; defaults to `DEVDASHBOARD_NAMESPACE`. Used for **app-scoped** workflow operations — fetching one instance's history, an app-filtered workflow list/stats, and force delete — so those honor the app's own namespace. The store-wide workflow list, stats, and app-id dropdown (all-apps scans) still use the global `DEVDASHBOARD_NAMESPACE` |
 | `DEVDASHBOARD_APP_<i>_LABEL` | no | display name; defaults to the app-id. Shown in the applications list and app detail header whenever it differs from the app-id |
 | `DEVDASHBOARD_APP_<i>_DAPR_GRPC` | no | daprd gRPC endpoint as `host:port`, reachable from the dashboard container. Only used by compose mode, to read workflows from the sidecar (Dapr 1.17+). Defaults to the host of `DAPR_HTTP` on port `50001` (e.g. `http://myapp-dapr:3500` becomes `myapp-dapr:50001`); set it when the sidecar runs with a non-default `-dapr-grpc-port` |
+| `DEVDASHBOARD_APP_<i>_DAPR_GRPC_TLS` | no | `true` dials the sidecar's gRPC endpoint with TLS, verified against the system root certificates (for a sidecar behind a TLS proxy). Defaults to `true` when `DAPR_HTTP` is `https`, else `false`; a value that isn't a boolean fails at startup naming the variable |
 
 Validation is fail-fast at startup: a missing or non-numeric `DEVDASHBOARD_APP_COUNT`, any
-missing required per-app var, an unparsable `DAPR_HTTP` URL, or a malformed `DAPR_GRPC`
-`host:port` exits with an error naming the exact variable.
+missing required per-app var, an unparsable `DAPR_HTTP` URL, a malformed `DAPR_GRPC`
+`host:port`, or a non-boolean `DAPR_GRPC_TLS` exits with an error naming the exact
+variable.
 
 **Security note:** in aspire mode the dashboard drops the loopback `Host` check (the container
 is addressed by its Docker-network name or a published port). Without `DEVDASHBOARD_ALLOWED_HOSTS`

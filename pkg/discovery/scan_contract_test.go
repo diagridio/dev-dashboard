@@ -339,3 +339,43 @@ func TestContractSidecarReachability(t *testing.T) {
 		})
 	}
 }
+
+func TestContractScannerGRPCTLS(t *testing.T) {
+	tests := []struct {
+		name     string
+		daprHTTP string
+		tlsVar   string
+		want     bool
+	}{
+		{name: "http sidecar is plaintext", daprHTTP: "http://order-dapr:3500", want: false},
+		{name: "https sidecar implies TLS", daprHTTP: "https://order-dapr:3500", want: true},
+		{name: "explicit true on http", daprHTTP: "http://order-dapr:3500", tlsVar: "true", want: true},
+		{name: "explicit false on https", daprHTTP: "https://order-dapr:3500", tlsVar: "false", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			env := baseContract()
+			env["DEVDASHBOARD_APP_0_DAPR_HTTP"] = tc.daprHTTP
+			if tc.tlsVar != "" {
+				env["DEVDASHBOARD_APP_0_DAPR_GRPC_TLS"] = tc.tlsVar
+			}
+			scan, err := NewContractScanner(envMap(env), SourceCompose)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			got, _ := scan()
+			if got[0].DaprGRPCTLS != tc.want {
+				t.Fatalf("DaprGRPCTLS = %v want %v", got[0].DaprGRPCTLS, tc.want)
+			}
+		})
+	}
+}
+
+func TestContractScannerRejectsMalformedGRPCTLS(t *testing.T) {
+	env := baseContract()
+	env["DEVDASHBOARD_APP_0_DAPR_GRPC_TLS"] = "maybe"
+	_, err := NewContractScanner(envMap(env), SourceCompose)
+	if err == nil || !strings.Contains(err.Error(), "DEVDASHBOARD_APP_0_DAPR_GRPC_TLS") {
+		t.Fatalf("want an error naming the variable, got %v", err)
+	}
+}

@@ -2,6 +2,8 @@ package workflow
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -13,6 +15,7 @@ import (
 	dtwf "github.com/dapr/durabletask-go/workflow"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
@@ -39,6 +42,9 @@ type SidecarEndpoint struct {
 	// at once with ErrSidecarUnreachable (the composite then falls back to
 	// the store). The zero value means reachable.
 	Unreachable bool
+	// TLS dials the endpoint with TLS (verified against the system roots)
+	// instead of plaintext.
+	TLS bool
 }
 
 // EndpointsFunc returns the current set of sidecar-sourced apps. It is called
@@ -71,35 +77,50 @@ type SidecarPool struct {
 	mu     sync.Mutex
 	conns  map[string]*grpc.ClientConn
 	closed bool
+	// tlsRoots overrides the system roots for TLS endpoints (tests only).
+	tlsRoots *x509.CertPool
 }
 
 func NewSidecarPool() *SidecarPool {
 	return &SidecarPool{conns: map[string]*grpc.ClientConn{}}
 }
 
-// Conn returns the cached lazy gRPC connection for addr, creating it on first
-// use. Other packages (e.g. binarystore) share these connections, so the
-// connection is shared: callers must not Close it (the pool owns it).
+// Conn returns the cached lazy plaintext gRPC connection for addr.
 func (p *SidecarPool) Conn(addr string) (*grpc.ClientConn, error) {
+	return p.ConnFor(addr, false)
+}
+
+// ConnFor returns the cached lazy gRPC connection for addr, dialed with TLS
+// (verified against the system roots) when useTLS is set, else plaintext.
+// TLS and plaintext connections to one address are cached separately. Other
+// packages (e.g. binarystore) share these connections, so callers must not
+// Close them (the pool owns them).
+func (p *SidecarPool) ConnFor(addr string, useTLS bool) (*grpc.ClientConn, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.closed {
 		return nil, errors.New("sidecar pool closed")
 	}
-	conn, ok := p.conns[addr]
+	key := addr
+	creds := insecure.NewCredentials()
+	if useTLS {
+		key = "tls://" + addr
+		creds = credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12, RootCAs: p.tlsRoots})
+	}
+	conn, ok := p.conns[key]
 	if !ok {
-		c, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		c, err := grpc.NewClient(addr, grpc.WithTransportCredentials(creds))
 		if err != nil {
 			return nil, err
 		}
-		p.conns[addr] = c
+		p.conns[key] = c
 		conn = c
 	}
 	return conn, nil
 }
 
-func (p *SidecarPool) client(addr string) (*dtwf.Client, error) {
-	conn, err := p.Conn(addr)
+func (p *SidecarPool) client(ep SidecarEndpoint) (*dtwf.Client, error) {
+	conn, err := p.ConnFor(ep.Addr, ep.TLS)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +320,7 @@ func (s *SidecarService) Get(ctx context.Context, appID, instanceID string) (Exe
 	if ep.Unreachable {
 		return Execution{}, unreachableErr(appID)
 	}
-	cl, err := s.pool.client(ep.Addr)
+	cl, err := s.pool.client(ep)
 	if err != nil {
 		return Execution{}, err
 	}
@@ -343,7 +364,7 @@ func (s *SidecarService) AppIDs(ctx context.Context) ([]string, error) {
 		ids []string
 	)
 	s.forEachReachable(ctx, func(ep SidecarEndpoint) {
-		cl, err := s.pool.client(ep.Addr)
+		cl, err := s.pool.client(ep)
 		if err != nil {
 			return
 		}
@@ -367,7 +388,7 @@ func (s *SidecarService) AppIDs(ctx context.Context) ([]string, error) {
 // listApp fetches an app's instance IDs (all pages, capped) and their
 // metadata with bounded concurrency.
 func (s *SidecarService) listApp(ctx context.Context, ep SidecarEndpoint) ([]ExecutionSummary, error) {
-	cl, err := s.pool.client(ep.Addr)
+	cl, err := s.pool.client(ep)
 	if err != nil {
 		return nil, err
 	}

@@ -41,8 +41,11 @@ type Instance struct {
 	// contract-declared apps ("" otherwise; consumers fall back to
 	// 127.0.0.1:grpcPort).
 	DaprGRPCAddr string `json:"daprGrpcAddr,omitempty"`
-	Namespace    string `json:"namespace,omitempty"`
-	Label        string `json:"label,omitempty"`
+	// DaprGRPCTLS is true when the contract asks for TLS on DaprGRPCAddr
+	// (DAPR_HTTP is https, or DEVDASHBOARD_APP_<i>_DAPR_GRPC_TLS=true).
+	DaprGRPCTLS bool   `json:"daprGrpcTls,omitempty"`
+	Namespace   string `json:"namespace,omitempty"`
+	Label       string `json:"label,omitempty"`
 
 	// TestcontainersSession groups one Testcontainers run's containers
 	// (org.testcontainers.sessionId label; "" for other sources).

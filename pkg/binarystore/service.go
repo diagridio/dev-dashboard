@@ -24,9 +24,10 @@ const MaxBytes int64 = 1 << 20
 
 const readTimeout = 10 * time.Second
 
-// ConnProvider hands out gRPC connections to sidecars (workflow.SidecarPool).
+// ConnProvider hands out gRPC connections to sidecars (workflow.SidecarPool),
+// with TLS when useTLS is set.
 type ConnProvider interface {
-	Conn(addr string) (*grpc.ClientConn, error)
+	ConnFor(addr string, useTLS bool) (*grpc.ClientConn, error)
 }
 
 type Service struct {
@@ -73,7 +74,7 @@ func (s *Service) Read(ctx context.Context, appKey, store, key string, declaredS
 			Msg: fmt.Sprintf("binary store component '%s' is not loaded by %s", store, in.AppID)}
 	}
 
-	conn, err := s.conns.Conn(addr)
+	conn, err := s.conns.ConnFor(addr, in.DaprGRPCTLS)
 	if err != nil {
 		return nil, &Error{Kind: KindSidecarUnreachable, Msg: "sidecar unreachable"}
 	}

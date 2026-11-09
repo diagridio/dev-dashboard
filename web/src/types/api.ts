@@ -32,6 +32,8 @@ export interface AppSummary {
   daprHttpBaseUrl?: string
   /** daprd gRPC host:port for env-contract apps (container posture); absent otherwise */
   daprGrpcAddr?: string
+  /** true when the dashboard dials daprGrpcAddr with TLS */
+  daprGrpcTls?: boolean
   httpPort: number
   grpcPort: number
   appPort: number

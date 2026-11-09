@@ -82,11 +82,24 @@ func NewContractScanner(getenv func(string) string, source string) (Scanner, err
 			errs = append(errs, fmt.Errorf("%s: %w", grpcKey, err))
 			continue
 		}
+		// TLS on the sidecar gRPC endpoint follows the HTTP scheme unless the
+		// contract says otherwise explicitly.
+		grpcTLS := u.Scheme == "https"
+		tlsKey := fmt.Sprintf("DEVDASHBOARD_APP_%d_DAPR_GRPC_TLS", i)
+		if v := strings.TrimSpace(getenv(tlsKey)); v != "" {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				errs = append(errs, fmt.Errorf("%s: expected true or false, got %q", tlsKey, v))
+				continue
+			}
+			grpcTLS = b
+		}
 		seenID[id] = idKey
 		results = append(results, ScanResult{
 			AppID:            id,
 			DaprHTTPBaseURL:  strings.TrimRight(raw, "/"),
 			DaprGRPCAddr:     grpcAddr,
+			DaprGRPCTLS:      grpcTLS,
 			Namespace:        ns,
 			Label:            label,
 			Source:           source,

@@ -73,9 +73,13 @@ func (f *fakeApps) Get(_ context.Context, key string) (discovery.Instance, error
 type testConns struct {
 	mu    sync.Mutex
 	conns []*grpc.ClientConn
+	tls   []bool // useTLS per ConnFor call, in order
 }
 
-func (c *testConns) Conn(addr string) (*grpc.ClientConn, error) {
+func (c *testConns) ConnFor(addr string, useTLS bool) (*grpc.ClientConn, error) {
+	c.mu.Lock()
+	c.tls = append(c.tls, useTLS)
+	c.mu.Unlock()
 	cc, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
@@ -165,6 +169,24 @@ func TestRead_UsesContractGRPCAddr(t *testing.T) {
 	}
 	if string(got) != "ok" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+// A contract app whose sidecar gRPC needs TLS is dialed with TLS.
+func TestRead_PassesGRPCTLSFlag(t *testing.T) {
+	f := &fakeDaprFull{chunks: [][]byte{[]byte("ok")}}
+	port, _ := startServer(t, f)
+	i := inst(0)
+	i.DaprGRPCAddr = "127.0.0.1:" + strconv.Itoa(port)
+	i.DaprGRPCTLS = true
+	conns := &testConns{}
+	t.Cleanup(conns.close)
+	svc := New(&fakeApps{instances: []discovery.Instance{i}}, conns)
+	_, _ = svc.Read(context.Background(), "orders", "payloads", "k", 0)
+	conns.mu.Lock()
+	defer conns.mu.Unlock()
+	if len(conns.tls) != 1 || !conns.tls[0] {
+		t.Fatalf("ConnFor useTLS calls = %v, want [true]", conns.tls)
 	}
 }
 
