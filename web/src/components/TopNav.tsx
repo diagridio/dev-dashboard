@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { Logo } from './Logo'
+import { DaprLogo } from './DaprLogo'
 import { ThemeToggle } from './ThemeToggle'
 import { RefreshControl } from './RefreshControl'
 import { ShareDialog } from './ShareDialog'
@@ -31,9 +32,11 @@ export const NAV_ITEMS: NavItem[] = [
 interface TopNavProps {
   theme: Theme
   onThemeChange: (t: Theme) => void
+  /** Show the Dapr logo instead of the Diagrid one (the Ctrl+B easter egg, owned by App). */
+  daprLogo?: boolean
 }
 
-export function TopNav({ theme, onThemeChange }: TopNavProps) {
+export function TopNav({ theme, onThemeChange, daprLogo = false }: TopNavProps) {
   const headerRef = useRef<HTMLElement>(null)
   const caps = getCapabilities()
   const items = NAV_ITEMS.filter((item) => !item.cap || caps[item.cap])
@@ -65,7 +68,7 @@ export function TopNav({ theme, onThemeChange }: TopNavProps) {
   return (
     <header className="topbar" ref={headerRef}>
       <span className="brand">
-        <Logo height={21} />
+        {daprLogo ? <DaprLogo /> : <Logo height={21} />}
         <span className="dot">/</span>
         <span className="app-name">Dapr Dev Dashboard</span>
       </span>
