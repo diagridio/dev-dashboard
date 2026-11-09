@@ -279,7 +279,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               {isContract && !app.appStatus ? (
                 <span
                   className="faint"
-                  title="The app has no port the dashboard can probe and no connected workflow worker, so its process status can't be seen from the compose network"
+                  title="The app has no port the dashboard can probe and no connected workflow worker, so its process status can't be seen from the dashboard's container"
                 >
                   not observable
                 </span>

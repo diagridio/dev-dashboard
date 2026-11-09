@@ -344,6 +344,16 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		if md.RunTemplate != "" {
 			in.RunTemplate = md.RunTemplate
 		}
+		if r.DaprHTTPBaseURL != "" {
+			// Same network-observed app status as compose contract apps. With
+			// Aspire, daprd usually runs on the host and the dashboard reaches
+			// it via host.docker.internal; a loopback app channel then resolves
+			// to that same host, where the app listens.
+			if md.AppPort > 0 {
+				in.AppPort = md.AppPort
+			}
+			in.AppStatus = s.contractAppStatus(r.DaprHTTPBaseURL, md)
+		}
 		return in
 	}
 	if in.Source == SourceTestcontainers {

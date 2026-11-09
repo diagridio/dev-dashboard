@@ -455,7 +455,7 @@ Which scanners run is decided by `--mode` (`cmd/sources.go` `sourcesFor`): unset
 Env-contract apps have no process or container to inspect, so enrichment works from the
 sidecar alone. A compose contract app whose sidecar answers neither `/v1.0/healthz` nor
 `/v1.0/metadata` is marked `SidecarReachable=false` (recovering on the next poll), which the
-workflow layer uses to skip it without dialing. Its app status (`contract_liveness.go`) comes
+workflow layer uses to skip it without dialing. A contract app's status, compose or aspire (`contract_liveness.go`), comes
 from a TCP probe of daprd's reported app port, reached at the sidecar's host when the channel
 address is loopback (shared network namespace) and at the channel address otherwise; without a
 port, a connected workflow worker (`workflows.connectedWorkers` in the metadata) means running.

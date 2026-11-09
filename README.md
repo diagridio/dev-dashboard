@@ -292,7 +292,8 @@ tailing, self-update/update-check, automatic browser opening, and secret-value r
 - State-store connections can't be saved. There is no connection registry inside the
   container, so the store from `DEVDASHBOARD_STATESTORE_FILE` is listed read-only, "Add
   connection" is hidden, and the connections API answers `409`.
-- App status comes only from what the compose network can show. If daprd reports an app port,
+- App status comes only from what the dashboard's container can observe (the same applies in
+  aspire container posture). If daprd reports an app port,
   the dashboard probes it; otherwise the app counts as running while it has a workflow worker
   connected to its sidecar. With neither signal, App Detail shows the app status as "not
   observable" and the Applications list marks the row with ⓘ: the health shown there is the
