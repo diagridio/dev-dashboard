@@ -14,11 +14,18 @@ describe('DaprLogo', () => {
     expect(svg.getAttribute('viewBox')).toBe('0 0 480 359.12279')
   })
 
-  it('colours its shapes from the --dapr-logo token, not a hex', () => {
+  // Same pattern as Logo.tsx: shapes fill with currentColor and CSS sets the
+  // colour, so no var() lives in an SVG presentation attribute.
+  it('fills its shapes with currentColor', () => {
     const { container } = render(<DaprLogo />)
     const shapes = container.querySelectorAll('path, polygon, rect')
     expect(shapes.length).toBeGreaterThan(0)
-    for (const s of shapes) expect(s.getAttribute('fill')).toBe('var(--dapr-logo)')
+    for (const s of shapes) expect(s.getAttribute('fill')).toBe('currentColor')
+  })
+
+  it('takes its colour from the --dapr-logo token in CSS', () => {
+    const css = readFileSync(themeCss, 'utf8')
+    expect(css).toMatch(/\.daprlogo\s*\{[^}]*color:\s*var\(--dapr-logo\)/)
   })
 
   it('defines --dapr-logo for both themes', () => {
