@@ -114,7 +114,7 @@ dashboard surface — applications, workflows, state stores, the Control Plane v
 targets — to a single source; filters are exclusive and never combined:
 
 - `--mode dapr-run` — host `dapr run` processes only (Control Plane shows the `dapr init` containers).
-- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler), or a service inside your compose project when the `DEVDASHBOARD_APP_*` contract is set.
+- `--mode compose` — Docker Compose containers only (Control Plane shows compose-run placement/scheduler), or a service inside your compose project when the `DEVDASHBOARD_APP_*` contract is set and the dashboard runs in a container.
 - `--mode test-containers` — Testcontainers discovery only (no control-plane detection yet).
 - `--mode aspire` — Aspire resources only. Inside an AppHost-managed container (the
   `DEVDASHBOARD_APP_*` contract is present) this is the container serving posture described
@@ -196,6 +196,7 @@ development tool — never expose it publicly.
 | `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra resource directories for the Components, Configurations, Resiliency and HTTP Endpoints pages, `os.PathListSeparator`-separated |
 | `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, container posture only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
 | `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
+| `DEVDASHBOARD_IN_CONTAINER` | `true` (baked into the image) | marks the process as running in a container; compose container posture requires it (or Docker's `/.dockerenv` / Podman's `/run/.containerenv`). Set it yourself only for a runtime that leaves neither marker |
 
 Precedence everywhere is **flag > env > posture default**.
 
@@ -207,7 +208,11 @@ without the override the contract runs in aspire mode and the dashboard cannot r
 from the sidecars. With the contract present, `compose` selects the container posture above
 (port `8080`, bound to `0.0.0.0`, no container runtime or docker socket needed). Without the
 contract, `--mode compose` keeps its host behavior of scanning compose containers through
-docker.
+docker, and so does a host run where `DEVDASHBOARD_APP_*` happens to be set: compose
+container posture also requires running in a container, so a variable left exported in your
+shell can't switch it on. The startup banner says which posture was chosen and how many apps
+the contract declares; in aspire container posture it also reminds you to set
+`DEVDASHBOARD_MODE=compose` inside a compose project.
 
 ```yaml
 services:

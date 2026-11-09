@@ -159,7 +159,7 @@ threads through everything.
 |------|---------|----------|
 | `--port` | `9090` | HTTP listen port (`8080` default in container posture) |
 | `--bind` | `127.0.0.1` | Listen address (`0.0.0.0` default in container posture) |
-| `--mode` | unset | Exclusive discovery filter: `dapr-run`, `compose`, `test-containers`, `aspire`; unset = complete scan; `compose` (like `aspire`) selects container posture when the `DEVDASHBOARD_APP_*` contract is present (env: `DEVDASHBOARD_MODE`, flag wins) |
+| `--mode` | unset | Exclusive discovery filter: `dapr-run`, `compose`, `test-containers`, `aspire`; unset = complete scan; `compose` (like `aspire`) selects container posture when the `DEVDASHBOARD_APP_*` contract is present (compose additionally requires running in a container) (env: `DEVDASHBOARD_MODE`, flag wins) |
 | `--base-path` | `""` | Sub-path mount, e.g. `/dashboard` (must match the SPA's `DASH_BASE_PATH` build var) |
 | `--no-open` | `false` | Skip auto-opening the browser |
 | `--statestore` | `""` | Explicit state-store component YAML; disables auto-detection |
@@ -178,12 +178,16 @@ container posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, and `DASH_CONTAINER_RUNTIME
 ### `serve` boot sequence (`cmd/root.go` `runServe` → `cmd/serve.go` `assembleOptions`)
 
 1. Resolve the mode and posture (`cmd/mode.go`): `resolveMode` validates
-   `--mode`/`DEVDASHBOARD_MODE`; **container posture** = aspire **or compose** mode *with* the
-   `DEVDASHBOARD_APP_*` env contract present, and drives the port/bind defaults
-   (`resolveServeSettings`, flag > env > posture default), Host-guard relaxation,
+   `--mode`/`DEVDASHBOARD_MODE`; **container posture** = aspire mode with the
+   `DEVDASHBOARD_APP_*` env contract present, **or** compose mode with the contract present
+   *and* the process running in a container (`inContainer`: the image's
+   `DEVDASHBOARD_IN_CONTAINER=true`, `/.dockerenv`, or `/run/.containerenv`), so a contract
+   variable left in a host shell can't flip a host compose run. Posture drives the port/bind
+   defaults (`resolveServeSettings`, flag > env > posture default), Host-guard relaxation,
    registry persistence, and browser auto-open. Aspire *without* the contract is a
-   host-posture run filtered to Aspire-managed apps, and compose *without* the contract is
-   the host docker-scan.
+   host-posture run filtered to Aspire-managed apps, and compose *without* container
+   posture is the host docker-scan. `postureNotice` adds a banner line naming the chosen
+   posture (and, in aspire container posture, the `DEVDASHBOARD_MODE=compose` hint).
 2. Print the startup logo; `logging.New(verbose)` → set as the default `slog.Logger`.
 3. Load the embedded SPA (`web.DistFS()`) and the component catalog (`metadata.Init()`).
 4. Resolve the bind address and the browser URL (base-path aware).

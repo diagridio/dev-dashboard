@@ -55,15 +55,61 @@ func resolveMode(flagValue string, getenv func(string) string) (Mode, error) {
 }
 
 // containerPosture reports whether the dashboard serves as a container inside
-// the orchestrator it is inspecting: aspire or compose mode with the
-// DEVDASHBOARD_APP_* env contract present. Either mode without the contract is
-// a host-run dashboard filtered to that source and keeps host serving defaults.
-func containerPosture(mode Mode, getenv func(string) string) bool {
+// the orchestrator it is inspecting. Aspire: the DEVDASHBOARD_APP_* env
+// contract is present (the AppHost integration may run the dashboard outside
+// a container, so presence alone decides). Compose: the contract is present
+// AND the process runs in a container, so a DEVDASHBOARD_APP_COUNT left
+// exported in a host shell can't turn a host `--mode compose` run (Docker
+// scan, loopback, port 9090) into container posture. Either mode without the
+// contract is a host-run dashboard filtered to that source.
+func containerPosture(mode Mode, getenv func(string) string, inContainer bool) bool {
 	switch mode {
-	case ModeAspire, ModeCompose:
+	case ModeAspire:
 		return discovery.ContractPresent(getenv)
+	case ModeCompose:
+		return discovery.ContractPresent(getenv) && inContainer
 	}
 	return false
+}
+
+// inContainer reports whether this process runs inside a container: the
+// dashboard image sets DEVDASHBOARD_IN_CONTAINER=true (also a manual override
+// for runtimes that leave no marker), Docker creates /.dockerenv and Podman
+// /run/.containerenv in every container.
+func inContainer(getenv func(string) string, exists func(string) bool) bool {
+	if strings.EqualFold(strings.TrimSpace(getenv("DEVDASHBOARD_IN_CONTAINER")), "true") {
+		return true
+	}
+	return exists("/.dockerenv") || exists("/run/.containerenv")
+}
+
+// fileExists reports whether path exists (inContainer's default probe).
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// postureNotice is the startup line that says which posture the dashboard
+// chose and why, or "" when there is nothing to explain (plain host runs).
+// In aspire container posture it also points compose users at
+// DEVDASHBOARD_MODE, because the image defaults to aspire and the wrong mode
+// otherwise fails silently (workflows then need a store; apps are labelled
+// Aspire).
+func postureNotice(mode Mode, posture, inContainer bool, getenv func(string) string) string {
+	count := strings.TrimSpace(getenv("DEVDASHBOARD_APP_COUNT"))
+	apps := count + " apps declared via DEVDASHBOARD_APP_*"
+	if count == "1" {
+		apps = "1 app declared via DEVDASHBOARD_APP_*"
+	}
+	switch {
+	case posture && mode == ModeCompose:
+		return "Running in compose container posture: " + apps + "."
+	case posture && mode == ModeAspire:
+		return "Running in aspire container posture: " + apps + ". Inside a Docker Compose project, set DEVDASHBOARD_MODE=compose (the image defaults to aspire)."
+	case mode == ModeCompose && !inContainer && discovery.ContractPresent(getenv):
+		return "DEVDASHBOARD_APP_* is set, but the dashboard is not running in a container: scanning compose containers from the host instead. Set DEVDASHBOARD_IN_CONTAINER=true to use compose container posture."
+	}
+	return ""
 }
 
 // serveSettings is the fully resolved serve configuration: flag > env >

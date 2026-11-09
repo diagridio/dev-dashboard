@@ -57,18 +57,20 @@ func NewRootCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			posture := containerPosture(mode, os.Getenv)
+			inCtr := inContainer(os.Getenv, fileExists)
+			posture := containerPosture(mode, os.Getenv, inCtr)
 			settings, err := resolveServeSettings(posture, cmd.Flags().Changed, port, bind, stateStore, namespace, os.Getenv)
 			if err != nil {
 				return err
 			}
-			return runServe(cmd.Context(), mode, posture, settings, basePath, noOpen, verbose)
+			notice := postureNotice(mode, posture, inCtr, os.Getenv)
+			return runServe(cmd.Context(), mode, posture, settings, basePath, noOpen, verbose, notice)
 		},
 	}
 	c.SetVersionTemplate(fmt.Sprintf("diagrid-dev-dashboard {{.Version}} (commit %s, built %s)\n", info.Commit, info.Date))
 	c.Flags().IntVar(&port, "port", 9090, "port to serve the dashboard on")
 	c.Flags().StringVar(&bind, "bind", "127.0.0.1", "address to bind (container posture defaults to 0.0.0.0); binding a non-loopback address outside container posture leaves the loopback Host guard in place, which rejects remote clients")
-	c.Flags().StringVar(&modeFlag, "mode", "", `discovery filter: "dapr-run", "compose", "test-containers", or "aspire" show only that source's resources ("aspire" and "compose" also switch to container posture when the DEVDASHBOARD_APP_* contract is present); unset scans every source`)
+	c.Flags().StringVar(&modeFlag, "mode", "", `discovery filter: "dapr-run", "compose", "test-containers", or "aspire" show only that source's resources ("aspire" and "compose" also switch to container posture when the DEVDASHBOARD_APP_* contract is present; compose only inside a container); unset scans every source`)
 	c.Flags().StringVar(&basePath, "base-path", "", "optional base path (e.g. /dashboard)")
 	c.Flags().BoolVar(&noOpen, "no-open", false, "do not open the browser on start")
 	c.Flags().StringVar(&stateStore, "statestore", "", "path to a state-store component YAML (overrides auto-detect)")
@@ -85,7 +87,7 @@ func Execute() error {
 	return NewRootCmd().ExecuteContext(ctx)
 }
 
-func runServe(ctx context.Context, mode Mode, containerPosture bool, settings serveSettings, basePath string, noOpen, verbose bool) error {
+func runServe(ctx context.Context, mode Mode, containerPosture bool, settings serveSettings, basePath string, noOpen, verbose bool, postureNotice string) error {
 	writeStartupLogo(os.Stdout)
 	logger := logging.New(verbose)
 	slog.SetDefault(logger)
@@ -236,7 +238,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	if err := srv.Listen(); err != nil {
 		return listenError(err, addr, settings.Port, url)
 	}
-	writeStartupBanner(os.Stdout, url, telemetry)
+	writeStartupBanner(os.Stdout, url, telemetry, postureNotice)
 	if !noOpen && !containerPosture {
 		go func() { time.Sleep(400 * time.Millisecond); _ = openBrowser(url) }()
 	}
@@ -279,9 +281,13 @@ func writeStartupLogo(w io.Writer) {
 }
 
 // writeStartupBanner prints the lines shown when the server starts: the URL,
-// the telemetry notice, and a hint at the REPLAY easter egg.
-func writeStartupBanner(w io.Writer, url string, telemetry bool) {
+// the posture notice (when there is one), the telemetry notice, and a hint at
+// the REPLAY easter egg.
+func writeStartupBanner(w io.Writer, url string, telemetry bool, postureNotice string) {
 	fmt.Fprintf(w, "Diagrid Dapr Dev Dashboard is starting → %s\n", url)
+	if postureNotice != "" {
+		fmt.Fprintln(w, postureNotice)
+	}
 	if telemetry {
 		fmt.Fprintln(w, "We're using anonymous usage telemetry to improve the dashboard. Set DEVDASHBOARD_TELEMETRY_OPTOUT=true to disable (restart required).")
 	} else {
