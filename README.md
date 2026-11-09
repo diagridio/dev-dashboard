@@ -3,9 +3,15 @@
 A local dashboard for Dapr developers that offers a live view of everything Dapr running on
 your machine, plus guided builders for authoring Dapr component and resiliency YAML.
 
-![Dev Dashboard - Applications](docs/images/applications-light.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/applications-dark.png">
+  <img alt="Dev Dashboard - Applications" src="docs/images/applications-light.png">
+</picture>
 
-![Dev Dashboard - Workflows](docs/images/workflow-overview-light.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-overview-dark.png">
+  <img alt="Dev Dashboard - Workflows" src="docs/images/workflow-overview-light.png">
+</picture>
 
 ## Goal
 
@@ -13,7 +19,8 @@ The Diagrid Dapr Dev Dashboard is a companion for local Dapr development. It ins
 apps you start with `dapr run` / `dapr run -f`, Aspire, Docker Compose, or Dapr
 Testcontainers (e.g. Spring Boot apps run with `mvn spring-boot:test-run` and
 `dapr-spring-boot-starter-test`), and surfaces everything about them — sidecars, workflows,
-actors, subscriptions, components, resiliency policies, configurations, and logs.
+actors, subscriptions, components, resiliency policies, HTTP endpoints, configurations, and
+logs.
 
 It also helps you author Dapr resources. The **Component Builder** walks you through
 picking a component type from the full Dapr catalog, filling in its metadata fields, and
@@ -208,7 +215,7 @@ services:
     build: ./order-processor
 
   order-processor-dapr:
-    image: daprio/daprd:1.18.1
+    image: daprio/daprd:1.19.1
     command:
       - "./daprd"
       - "-app-id"
@@ -337,11 +344,14 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   **Clear inactive**. This only hides them from the dashboard; no containers or files are
   deleted, and an app that starts running again reappears.
 - **Inspect an application** — drill into a single app for its ports, PIDs, command,
-  resource/config paths, runtime metadata, enabled features, and loaded components. Stop
+  resource/config paths, runtime metadata, enabled features, and loaded components and HTTP
+  endpoints. Stop
   works for every discovery mode; Start and Restart are offered for Docker Compose apps only.
 - **Debug workflows** — browse workflow executions across all apps with status filters and
   search, then open a run to watch its **live event history**, input/output, custom status,
-  and a continuously-ticking wall-clock while it runs.
+  and a continuously-ticking wall-clock while it runs. Payloads that a Dapr 1.19 SDK moved to a
+  binary store (a `$daprRef` data reference) show as a card; **Load payload** fetches the value
+  through the app's sidecar (up to 1 MiB) and checks its sha256.
 - **Clean up workflows** — terminate and/or purge individual or bulk workflows, with an
   explicit "force delete" fallback for stuck/orphaned state.
 - **Browse, add & clean state records** — the **State** page lists the records in any connected
@@ -373,7 +383,14 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   are extracted and shown too, with a container-prefixed path. A component's `secretKeyRef`
   and `envRef` values are resolved against your local secret stores (`local.file`,
   `local.env`), and each reference shows whether it resolved, and if not, which env var or
-  file path was tried.
+  file path was tried. Each configuration shows which apps use it, matched on the file the
+  app's sidecar was started with (`--config`, or a run template's `configFilePath`).
+- **Review resiliency policies & HTTP endpoints** — the **Resiliency** page lists discovered
+  `Resiliency` files with their scopes, policies, targets, and the apps that loaded them. The
+  **HTTP Endpoints** page does the same for `HTTPEndpoint` resources (non-Dapr services called
+  through `/v1.0/invoke`): base URL, scopes, headers, and loaded-by apps. Headers that use
+  `secretKeyRef` or `envRef` show whether the reference resolves, never the value, and plain
+  values that look like credentials are masked until you click **Show**.
 - **Build component YAML** — a guided wizard over the full Dapr component catalog: pick a
   type, fill in its metadata fields (with per-field docs and defaults), choose an
   authentication profile, then copy or download the generated YAML.
@@ -395,36 +412,173 @@ backend is unreachable and resumes on recovery), full keyboard operability, and
 cross-navigation between related entities (app →
 component → "loaded by" app, etc.).
 
-### CLI drawer
+# Pages
 
-Open the **CLI** tab on the right edge of the page to see the Dapr CLI commands for what
-you're looking at. On a workflow instance, for example, it lists the commands to view the
-history, raise an event, terminate, suspend, resume, re-run, or purge that instance, and to
-inspect its scheduler reminder. Each command has a link to its docs and a **Copy** button.
-The drawer shows on the Applications, Application detail, Workflows, Workflow detail, Actors,
-and Subscriptions pages. Only self-hosted commands are listed; Kubernetes-only (`-k`) commands
-are left out.
+The sections below follow the order of the menu, from left to right.
 
-![Dev Dashboard - CLI drawer](docs/images/cli-drawer.png)
+## Applications
 
-### State records
+The **Applications** page lists every running app and sidecar: app ID, health, runtime, ports, PIDs, age and the run process that owns it. Apps that have fully stopped can be removed from the list one at a time or all at once with **Clear inactive**.
 
-The **State** page lists the key/value records in a connected state store. Filter by app
-prefix, search by key, and expand a row to see the full value with its size, version, and
-encoding. Workflow and actor state is hidden unless you tick *Show internal keys*.
-**+ New record** adds a record, and records can be deleted one at a time or by multi-select.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/applications-dark.png">
+  <img alt="Dev Dashboard - Applications" src="docs/images/applications-light.png">
+</picture>
 
-![Dev Dashboard - State records](docs/images/state-records.png)
+Open an app to see its ports, PIDs, command, resource and config paths, runtime metadata, enabled features, and the components and HTTP endpoints its sidecar loaded. Stop works in every discovery mode; Start and Restart are offered for Docker Compose apps only.
 
-### Publish a message
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/application-detail-dark.png">
+  <img alt="Dev Dashboard - Application detail" src="docs/images/application-detail-light.png">
+</picture>
 
-On the **Subscriptions** page, **Publish** opens a dialog that sends a message to that
-subscription's pub/sub component and topic. Enter the payload, pick a content type, and
-optionally set `ttlInSeconds` or `rawPayload` under *Show advanced*. The message goes through
-the app's sidecar to the real broker, so the subscriber receives it like any other message.
-The button is disabled when the sidecar is unreachable, and errors from daprd are shown as-is.
+## Components
 
-![Dev Dashboard - Publish a message](docs/images/publish-message.png)
+The **Components** page lists the discovered components with their type and the apps that loaded them. On the same page you manage the state-store connections the dashboard reads workflows from.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/components-dark.png">
+  <img alt="Dev Dashboard - Components" src="docs/images/components-light.png">
+</picture>
+
+Each component shows its YAML and the apps that loaded it. `secretKeyRef` and `envRef` values are resolved against your local secret stores, and each reference shows whether it resolved.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/component-detail-dark.png">
+  <img alt="Dev Dashboard - Component detail" src="docs/images/component-detail-light.png">
+</picture>
+
+The **Component Builder** walks you through the full Dapr component catalog: pick a type, fill in its metadata fields and choose an authentication profile. The wizard ends in a YAML preview you can copy or download.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/component-builder-dark.png">
+  <img alt="Dev Dashboard - Component Builder" src="docs/images/component-builder-light.png">
+</picture>
+
+## Workflows
+
+The **Workflows** page lists workflow runs across all apps, with status filters and search. Runs can be terminated and purged one at a time or in bulk.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-overview-dark.png">
+  <img alt="Dev Dashboard - Workflows" src="docs/images/workflow-overview-light.png">
+</picture>
+
+A workflow run shows its live event history, input, output and custom status. When a run fails, a banner at the top shows the error, and the event that failed shows its error details inline.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-detail-dark.png">
+  <img alt="Dev Dashboard - Workflow detail" src="docs/images/workflow-detail-light.png">
+</picture>
+
+A payload that a Dapr 1.19 SDK moved to a binary store shows as a `$daprRef` card with its store, key and size. **Load payload** fetches the value through the app's sidecar and checks its sha256.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-dataref-dark.png">
+  <img alt="Dev Dashboard - Workflow data reference" src="docs/images/workflow-dataref-light.png">
+</picture>
+
+## State
+
+The **State** page lists the key/value records in a connected state store, with the key, app prefix, value preview, size, version and TTL. Workflow and actor state is hidden unless you tick *Show internal keys*.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/state-dark.png">
+  <img alt="Dev Dashboard - State" src="docs/images/state-light.png">
+</picture>
+
+Expand a row to see the full value with its size, version and encoding. **+ New record** adds a record, and records can be deleted one at a time or by multi-select.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/state-records-dark.png">
+  <img alt="Dev Dashboard - State records" src="docs/images/state-records-light.png">
+</picture>
+
+## Actors
+
+The **Actors** page lists the actor types across all apps: the host app, the number of active actors, the idle timeout, reminders and placement status.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/actors-dark.png">
+  <img alt="Dev Dashboard - Actors" src="docs/images/actors-light.png">
+</picture>
+
+## Subscriptions
+
+The **Subscriptions** page lists the pub/sub subscriptions across all apps, with their type (declarative, programmatic or streaming), topic and routes. Subscriptions with several rules expand to show every match expression.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/subscriptions-dark.png">
+  <img alt="Dev Dashboard - Subscriptions" src="docs/images/subscriptions-light.png">
+</picture>
+
+**Publish** opens a dialog that sends a message to that subscription's pub/sub component and topic. Enter the payload, pick a content type, and optionally set `ttlInSeconds` or `rawPayload` under *Show advanced*. The message goes through the app's sidecar to the real broker, so the subscriber receives it like any other message.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/publish-message-dark.png">
+  <img alt="Dev Dashboard - Publish a message" src="docs/images/publish-message-light.png">
+</picture>
+
+## Resiliency
+
+The **Resiliency** page lists the discovered `Resiliency` files with their scopes, policies, targets and the apps that loaded them.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/resiliency-dark.png">
+  <img alt="Dev Dashboard - Resiliency" src="docs/images/resiliency-light.png">
+</picture>
+
+The **Resiliency Builder** lets you compose named timeouts, retries and circuit breakers, apply them to apps, actors and components, and export the resiliency spec as YAML.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/resiliency-builder-dark.png">
+  <img alt="Dev Dashboard - Resiliency Builder" src="docs/images/resiliency-builder-light.png">
+</picture>
+
+## HTTP Endpoints
+
+The **HTTP Endpoints** page lists `HTTPEndpoint` resources with their base URL, scopes, headers and the apps that loaded them. Secret-backed headers show whether they resolve, never the value.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/http-endpoints-dark.png">
+  <img alt="Dev Dashboard - HTTP endpoints" src="docs/images/http-endpoints-light.png">
+</picture>
+
+## Configurations
+
+The **Configurations** page shows each Dapr `Configuration` file as YAML, with the apps whose sidecar was started with it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/configurations-dark.png">
+  <img alt="Dev Dashboard - Configurations" src="docs/images/configurations-light.png">
+</picture>
+
+## Control Plane
+
+The **Control Plane** page shows the `dapr init` containers (placement, scheduler and the rest) with their status, and lets you start, restart or stop them.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/control-plane-dark.png">
+  <img alt="Dev Dashboard - Control plane" src="docs/images/control-plane-light.png">
+</picture>
+
+## Logs
+
+Stream an app's daprd or application logs live, with level coloring, keyword highlighting and a follow toggle.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logs-dark.png">
+  <img alt="Dev Dashboard - Logs" src="docs/images/logs-light.png">
+</picture>
+
+## CLI drawer
+
+The **CLI** tab on the right edge of the page isn't a menu item, but it's available on the Applications, Application detail, Workflows, Workflow detail, Actors and Subscriptions pages. It lists the self-hosted Dapr CLI commands for what you're looking at, already filled in with the app ID or workflow instance ID. On a workflow instance, for example, it lists the commands to view the history, raise an event, terminate, suspend, resume, re-run, or purge that instance. Each command has a link to its docs and a **Copy** button.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/cli-drawer-dark.png">
+  <img alt="Dev Dashboard - CLI drawer" src="docs/images/cli-drawer-light.png">
+</picture>
 
 ## Non-Goals
 
@@ -442,340 +596,23 @@ The dashboard is a **local development tool**, and only that:
 Run it on your own machine, alongside the apps you start with `dapr run`, Aspire, Docker
 Compose, or Dapr Testcontainers.
 
-## Building from source
-
-**Prerequisites:** Go ≥ 1.26 and Node.js 20 (with `npm`). The binary embeds the React SPA via
-`go:embed`, so the web assets (`web/dist`) must be built **before** the Go binary — `make build`
-does both in the right order.
-
-**macOS / Linux:**
-
-```sh
-make build            # builds web/dist, then the Go binary at bin/diagrid-dev-dashboard
-./bin/diagrid-dev-dashboard
-```
-
-Equivalent manual steps (if you don't have `make`):
-
-```sh
-cd web && npm install && npm run build && cd ..
-go build -o bin/diagrid-dev-dashboard .
-./bin/diagrid-dev-dashboard
-```
-
-**Windows (PowerShell):** `make` is usually unavailable, so run the steps directly:
-
-```powershell
-cd web; npm install; npm run build; cd ..
-go build -o bin/diagrid-dev-dashboard.exe .
-.\bin\diagrid-dev-dashboard.exe
-```
-
-To build for a sub-path mount, set `DASH_BASE_PATH` before building (see
-[Mounting under a sub-path](#mounting-under-a-sub-path)). On Windows that is
-`$env:DASH_BASE_PATH='/dashboard/'` before the `npm run build` step.
-
-Other useful targets: `make test` (Go unit + web suites), `make test-go`, `make test-web`,
-`make test-integration`, `make test-e2e`, `make tidy`.
-
-### Trying it against a real workflow app
-
-The dashboard is a **passive observer**: it discovers your app the same way `dapr list` does
-and reads workflow data directly from your Dapr **state store**. You don't point it at your app —
-you just run both on the same machine.
-
-**Prerequisites:**
-
-- `dapr init` has been run. This creates `~/.dapr/components/statestore.yaml` (a Redis store with
-  `actorStateStore: "true"`) and starts Redis. That `actorStateStore` store is what Dapr
-  Workflows persist to, and what the dashboard reads.
-- A Dapr workflow app — e.g. the
-  [Dapr Workflow quickstart](https://github.com/dapr/quickstarts/tree/master/workflows), or any
-  app using the Workflow API.
-
-**Steps:**
-
-1. Run your workflow app with Dapr (from the app's directory):
-   ```sh
-   dapr run --app-id order-processor --app-port 6001 -- <your app start command>
-   # or, for a multi-app project:
-   dapr run -f .
-   ```
-2. Trigger at least one workflow instance (via the app's endpoint / the quickstart's flow). The
-   dashboard only shows state that already exists — an idle store shows an empty list.
-3. Start your from-source build:
-   ```sh
-   ./bin/diagrid-dev-dashboard    # opens http://localhost:9090
-   ```
-4. In the UI: the **Apps** table shows your app (health, ports, PIDs); the **Workflows** page
-   lists instances read from the state store — open one for its live event history, input/output,
-   status, and a ticking wall-clock. You can also terminate / purge an instance (with the
-   force-delete fallback).
-
-**If the Workflows page is empty:** the dashboard auto-detects state-store components from
-`~/.dapr/components` and from the live `--resources-path` of running apps, then uses the one
-marked `actorStateStore: "true"` (falling back to the first detected). Check:
-
-- If detection is ambiguous (several stores), either pick one with the store selector on the
-  Workflows page, or point it explicitly:
-  `./bin/diagrid-dev-dashboard --statestore ~/.dapr/components/statestore.yaml`. You can also add a
-  store by hand via the connection manager on the Components page.
-- Workflow keys are namespaced; the dashboard defaults to `default`. For another namespace, pass
-  `--namespace <ns>`.
-- Only **Redis / PostgreSQL / SQLite / MongoDB** state stores can be opened directly. Apps whose store
-  the dashboard can't open (e.g. `state.in-memory`, or a Testcontainers app whose store lives
-  inside the container) are served **via their sidecar's gRPC workflow API** instead — this
-  requires Dapr ≥ 1.17 and only works while the sidecar is running.
-- Confirm the app actually persisted a workflow (an empty store → empty list).
-
-**Testcontainers apps** (e.g. the Java quickstarts run with `mvn spring-boot:test-run`) need
-none of the store setup above: workflows, components, and app details all come from the
-Testcontainers-managed sidecar itself.
-
-## Testing
-
-There are four suites: Go **unit** tests, Go **integration** tests, the **web**
-(frontend) tests, and an opt-in Go **e2e** suite. The unit and web suites are self-contained.
-The integration suite runs its state-store and workflow tests against a temporary SQLite
-database plus real Redis, PostgreSQL, and MongoDB containers (via testcontainers-go), so it
-needs Docker or Podman for full coverage; without one, the container-backed tests skip. The
-**e2e** suite drives a real `daprd` and is local-only — it skips automatically when Dapr is not
-installed (see below).
-
-**Prerequisites:** Go ≥ 1.26 (Go tests) and Node.js 20 with `npm` (web tests).
-
-**Run everything (macOS / Linux):**
-
-```sh
-make test          # Go unit tests (with -race) + web tests
-```
-
-`make test` runs `make test-go` then `make test-web`. It does **not** run the Go integration
-tests — run those separately (see below).
-
-**Go unit tests** — gated by `//go:build unit`:
-
-```sh
-make test-go                        # = go test -tags unit -race ./...
-# or directly:
-go test -tags unit ./...
-go test -tags unit -race ./cmd/...  # one package, with the race detector
-```
-
-(`make test-go` uses `gotestsum` for nicer output if it's installed, otherwise plain `go test`.)
-
-**Go integration tests** — gated by `//go:build integration`; they exercise the state-store and
-workflow read paths (including a parity test of the workflow list/stats/detail against all four
-supported backends), the parsed sidecar `/v1.0/metadata`, and the full assembled HTTP server.
-Backends run as containers through testcontainers-go (skipped when no container runtime is
-available) alongside a temp SQLite DB. They run in CI but are not part of `make test`:
-
-```sh
-make test-integration               # = go test -tags integration -race ./...
-# or directly:
-go test -tags integration ./...
-```
-
-Some integration tests use golden files (`testdata/golden/*`); regenerate them after an
-intentional shape change with `-update`, e.g.
-`go test -tags integration ./pkg/workflow -run Golden -update`.
-
-**Go e2e tests** — gated by `//go:build e2e`; they run a real Dapr workflow app under
-`dapr run` and read its state back through the dashboard's own packages, validating against
-state authored by a live runtime. They require a local Dapr install (`dapr init`) — `dapr` on
-your `PATH` and `daprd` on `PATH` or in `~/.dapr/bin` — and **skip automatically** when Dapr is
-not found. They are local-only and not run in CI:
-
-```sh
-make test-e2e                       # = go test -tags e2e ./...
-```
-
-**Web tests** — Vitest:
-
-```sh
-make test-web            # = cd web && npm install && npm test  (vitest run)
-# or from web/:
-cd web
-npm install
-npm test                 # single run
-npm run test:watch       # watch mode
-```
-
-**Windows (PowerShell)** — `make` is usually unavailable, so run the commands directly:
-
-```powershell
-go test -tags unit -race ./...
-go test -tags integration ./...
-cd web; npm install; npm test; cd ..
-```
-
-> **Tip:** the Go tests are build-tag-gated, so a plain `go test ./...` (without `-tags unit`,
-> `-tags integration`, or `-tags e2e`) reports "no test files" for most packages. Always pass
-> the tag.
-
-## Linting
-
-```sh
-make lint          # lint-go (gofmt + go vet) + lint-web (eslint)
-make lint-go       # = gofmt check + go vet -tags unit ./...
-make lint-web      # = cd web && npm install && npm run lint  (eslint .)
-```
-
-The Go checks (`gofmt`, `go vet`) and the web `eslint` run in CI on every push and pull request.
-
-**Pre-commit hook (optional):** install a hook that lints only your staged files before each
-commit:
-
-```sh
-make hooks         # symlinks .git/hooks/pre-commit -> scripts/pre-commit
-```
-
-It runs `gofmt`/`go vet` on staged Go files and `eslint` on staged `web/` files. Bypass it for a
-single commit with `git commit --no-verify`.
-
-## Releasing
-
-> For maintainers with push access. Releases are built and published by the
-> [`release` GitHub Actions workflow](.github/workflows/release.yaml): pushing a `vX.Y.Z` tag
-> runs [GoReleaser](https://goreleaser.com), which compiles the cross-platform archives plus
-> `checksums.txt` and publishes them to a GitHub Release. The version (`diagrid-dev-dashboard --version`)
-> is injected from the tag via build-time ldflags. The same tag-driven run also builds and
-> pushes the multi-arch container image to `ghcr.io/diagridio/dev-dashboard` via goreleaser.
-> Prerelease tags (any `-suffix`, e.g. `v1.5.0-rc.1`) push their version-tagged image but
-> skip the `:latest` manifest, so release candidates never reach `:latest` consumers.
-
-Because `go install` cannot run `npm`, the release tag commit must embed the prebuilt
-`web/dist`. `scripts/release.sh` handles this: it builds the SPA, creates a **detached** commit
-that force-adds `web/dist` (past `.gitignore`), tags it, and returns you to your branch — so the
-tagged commit ships the full UI for `go install` while `main` stays free of built assets.
-
-**Cut a release (macOS / Linux, or Git Bash / WSL on Windows — `release.sh` is a POSIX `sh` script):**
-
-1. Be on an up-to-date `main` with a clean working tree.
-2. Build + tag the release:
-   ```sh
-   scripts/release.sh vX.Y.Z
-   ```
-   It builds the SPA, creates the tag on a detached commit embedding the UI, and prints the
-   push command.
-3. Push the tag to trigger the release workflow:
-   ```sh
-   git push origin vX.Y.Z
-   ```
-4. Wait for the `release` workflow to finish. It publishes a GitHub Release with one archive per
-   platform + `checksums.txt`. After that, the install one-liners and
-   `go install github.com/diagridio/dev-dashboard@vX.Y.Z` resolve to the new version.
-
-**Validate locally before tagging (optional, requires GoReleaser v2):**
-
-```sh
-make release-check      # validate .goreleaser.yaml
-make release-snapshot   # build a local snapshot into dist/ without publishing
-```
-
-> The release matrix is **5 archives**: macOS and Linux (amd64 + arm64) and Windows (amd64).
-> There is no native Windows/arm64 build — Windows on ARM uses the amd64 build via emulation.
-
 ## Architecture
 
-The dashboard is a **single Go binary** that embeds a React SPA and talks to your local Dapr
-sidecars and state store.
+The dashboard is a **single Go binary** with an embedded React SPA. It discovers running
+apps the same way `dapr list` does (plus Docker Compose, Testcontainers, and Aspire),
+enriches them from each sidecar's `/v1.0/metadata` and `/v1.0/healthz` endpoints, and reads
+workflows from your state store (Redis, PostgreSQL, SQLite, or MongoDB), or live from the
+sidecar's gRPC workflow API (Dapr ≥ 1.17) when the store can't be opened.
 
-> **For the full architecture** — how discovery, state-store election, the reconciler, the
-> HTTP layer, and the SPA fit together, plus a guide to extending each part — see
-> [ARCHITECTURE.md](ARCHITECTURE.md). The summary below is the quick tour.
-
-```
-┌───────────────────────────────────────────────────────────────┐
-│  diagrid-dev-dashboard (single Go binary)                     │
-│                                                               │
-│  cmd/            cobra root, flags, serve boot,               │
-│                  connection registry + reconciler             │
-│  pkg/server      chi router + go:embed SPA                    │
-│  pkg/discovery   standalone.List() + /v1.0/metadata           │
-│  pkg/workflow    list / history / purge                       │
-│  pkg/state       state record listing / add / delete          │
-│  pkg/statestore  client (redis / postgres / sqlite / mongodb) │
-│  pkg/controlplane docker/podman inspect + lifecycle           │
-│  pkg/metadata    component metadata catalog                   │
-│  pkg/resources   component + configuration YAML loader        │
-│  pkg/logs        file tail → SSE                              │
-│  web/            React + Vite SPA → dist/ (embedded)          │
-└───────────────────────────────────────────────────────────────┘
-   │ HTTP /v1.0/*   │ files / TCP        │ docker/podman
-   ▼                ▼                    ▼
- running daprd   ~/.dapr, resource paths,   control-plane
- sidecars        state store backend        containers
-```
-
-**Components**
-
-- **Backend (Go + `chi`)** — exposes a REST + JSON API (with SSE for log/stream tails) and
-  serves the embedded SPA. Each domain lives in an isolated `pkg/*` package (a `service.go`
-  plus its response types); the HTTP layer lives in `pkg/server`, one file per domain. No
-  domain package depends on `cmd/`.
-- **Frontend (React + TypeScript + Vite)** — a single-page app built to static assets and
-  embedded into the binary via `go:embed`. Uses **TanStack Query** for polling/caching,
-  headless accessible primitives styled in-house, and a custom lightweight read-only YAML
-  highlighter (not Monaco). Client-side History-API routing (`react-router-dom`); the Go
-  server falls back to `index.html` for unknown paths and is base-path-aware. List
-  virtualization is planned, not yet in v1. The UI styling conventions (design tokens,
-  page anatomy, component classes) are documented in
-  [`web/STYLEGUIDE.md`](web/STYLEGUIDE.md).
-
-**Key dependencies & data sources**
-
-- **App discovery** reuses `github.com/dapr/cli/pkg/standalone` (the same mechanism as
-  `dapr list`). `standalone.List()` reads the local process table and is the source of truth
-  for existence/ports/PIDs; the **`/v1.0/metadata`** call per sidecar is enrichment (runtime
-  version, components, actors, subscriptions, extended metadata) and degrades gracefully when
-  a sidecar is down. A **`/v1.0/healthz`** check per sidecar drives the health badge — computed
-  on demand during each `/api/apps` fetch (no separate background poller), so its refresh cadence
-  follows the UI's autorefresh interval. A second scanner discovers Dapr apps running under
-  **docker compose** by inspecting compose-labelled containers (app id and ports from the daprd
-  argv, logs streamed from the container runtime). A third scanner discovers **Dapr
-  Testcontainers** sessions (`org.testcontainers`-labelled daprd containers, e.g. from
-  `dapr-spring-boot-starter-test`): the randomly-published HTTP/gRPC ports are re-read every
-  poll, the host app process is paired via the app port (real PID, uptime, runtime), and the
-  component YAML declared in test config is extracted from the container so it appears on the
-  Components page. All sources are merged, so one failing never hides the others.
-- **Workflows** are read from the detected **state store backend** (Redis / PostgreSQL /
-  SQLite / MongoDB); a client is built from the auto-detected component YAML. When the dashboard cannot
-  open an app's store — Testcontainers apps (whose store lives inside the container,
-  `state.in-memory` included), or any app when no store is openable — workflows are read live
-  from the **sidecar's gRPC workflow API** (Dapr ≥ 1.17) instead, per app. Purge uses the
-  official Dapr workflow API when reachable, with direct state-store key deletion as an
-  explicit force fallback.
-- **Connections registry** — the state stores the dashboard can read from are tracked in a
-  registry: auto-detected component refs plus any connections added in the UI, persisted to
-  `~/.dapr/dev-dashboard/connections.yaml` (mode `0600`). The `pkg/metadata` catalog drives the
-  add/edit forms, the workflow backend connects to the selected store lazily (on demand), and
-  `secretKeyRef` metadata is resolved through local secret stores
-  (`secretstores.local.file` / `secretstores.local.env`).
-- **Resources** (components + configurations) are loaded from `~/.dapr` and live
-  `--resources-path` directories read from daprd args.
-- **Logs** are tailed from `~/.dapr/logs/*` and the `appLogPath`/`daprdLogPath` reported in
-  extended metadata, then streamed to the SPA over SSE.
-- **Control plane** is inspected through the resolved container runtime (`docker`, else
-  `podman`): `dapr_scheduler` / `dapr_placement` are the self-hosted containers the dashboard
-  can start/restart/stop (allowlisted to those names). Container logs stream over SSE via
-  `docker logs -f`.
-- **News** (optional) — the Resources sidebar pulls the Diagrid product feed, proxied and
-  cached behind the backend's own `GET /api/news` endpoint so the SPA only ever talks to its
-  own origin.
-
-**Portability** — all logic lives in `pkg/*` domain packages with no dependency on `cmd/`,
-the server mounts as a `chi` sub-router, and the SPA is an embedded `fs.FS`, so the whole
-thing can later be re-mounted under a `diagrid dashboard` subcommand.
-
-For the full architecture and extension guide, see [ARCHITECTURE.md](ARCHITECTURE.md); for the
-original design rationale, see
-[`docs/superpowers/specs/2026-06-25-dev-dashboard-design.md`](docs/superpowers/specs/2026-06-25-dev-dashboard-design.md).
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how discovery, state-store election, the HTTP
+layer, and the SPA fit together, and where to extend each part. The original design
+rationale is in
+[`docs/specs/2026-06-25-dev-dashboard-design.md`](docs/specs/2026-06-25-dev-dashboard-design.md).
 
 ## Contributing
 
 Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for how to report issues,
-set up a development environment, and submit pull requests. All commits must be signed off
+build from source, run the tests and linters, submit pull requests, and cut a release. All commits must be signed off
 per the [Developer Certificate of Origin](https://developercertificate.org/) (`git commit -s`).
 
 ## License

@@ -54,6 +54,25 @@ describe('AppDetail', () => {
     daprdStatus: 'running',
   }
 
+  it('links the HTTP endpoints the sidecar loaded', async () => {
+    server.use(
+      http.get('/api/apps/order', () =>
+        HttpResponse.json({ ...runningApp, httpEndpoints: [{ name: 'identity-api' }] }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.getByText('Loaded HTTP endpoints')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'identity-api' })).toHaveAttribute('href', '/http-endpoints/identity-api')
+  })
+
+  it('has no HTTP endpoints section when the sidecar loaded none', async () => {
+    server.use(http.get('/api/apps/order', () => HttpResponse.json(runningApp)))
+    renderDetail()
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'order' })).toBeInTheDocument())
+    expect(screen.queryByText('Loaded HTTP endpoints')).not.toBeInTheDocument()
+  })
+
   it('stops the whole instance from the header after confirm', async () => {
     let posted = ''
     server.use(

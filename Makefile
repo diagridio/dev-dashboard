@@ -1,4 +1,4 @@
-.PHONY: web build lint lint-go lint-web hooks test test-go test-web test-integration test-e2e tidy release-snapshot release-check
+.PHONY: web build lint lint-go lint-web hooks test test-go test-web test-integration test-e2e tidy release-snapshot release-check demo demo-reset screenshots
 
 web:
 	cd web && npm install && npm run build
@@ -41,3 +41,15 @@ release-snapshot:
 
 release-check:
 	goreleaser check
+
+# Enterprise diagnostics demo (see demo/README.md). Start the dashboard separately.
+demo:
+	cd demo && dapr run -f .
+
+demo-reset:
+	demo/scripts/reset.sh
+
+# Resets the demo, then captures every page in both themes into docs/images.
+# Needs `make demo` and the dashboard running (DASH_URL, default http://localhost:9090).
+screenshots:
+	demo/scripts/reset.sh && cd demo/screenshots && npm install && npx playwright install chromium && node capture.mjs

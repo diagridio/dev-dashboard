@@ -50,6 +50,8 @@ export interface AppSummary {
   created: string
   runTemplate: string
   components?: { name: string; type: string; version?: string }[]
+  /** HTTPEndpoint resources the sidecar reports in /v1.0/metadata. */
+  httpEndpoints?: { name: string }[]
 }
 
 /**

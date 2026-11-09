@@ -32,23 +32,7 @@ func parseDaprdArgs(argv []string) (daprdArgs, bool) {
 	if start == -1 {
 		return daprdArgs{}, false
 	}
-	flags := map[string]string{}
-	rest := argv[start+1:]
-	for i := 0; i < len(rest); i++ {
-		tok := rest[i]
-		if !strings.HasPrefix(tok, "-") {
-			continue
-		}
-		name := strings.TrimLeft(tok, "-")
-		if eq := strings.IndexByte(name, '='); eq >= 0 {
-			flags[name[:eq]] = name[eq+1:]
-			continue
-		}
-		if i+1 < len(rest) && !strings.HasPrefix(rest[i+1], "-") {
-			flags[name] = rest[i+1]
-			i++
-		}
-	}
+	flags := parseFlags(argv[start+1:])
 	atoi := func(s string) int { n, _ := strconv.Atoi(s); return n }
 	d := daprdArgs{
 		AppID:             flags["app-id"],
@@ -70,4 +54,28 @@ func parseDaprdArgs(argv []string) (daprdArgs, bool) {
 		d.GRPCPort = 50001
 	}
 	return d, true
+}
+
+// parseFlags collects daprd-style flags from args into name -> value. It
+// accepts -flag value, --flag value, -flag=value and --flag=value; tokens that
+// are not flags are skipped, and a following token that starts with "-" is
+// never taken as a value (the flag is then a boolean and is not recorded).
+func parseFlags(args []string) map[string]string {
+	flags := map[string]string{}
+	for i := 0; i < len(args); i++ {
+		tok := args[i]
+		if !strings.HasPrefix(tok, "-") {
+			continue
+		}
+		name := strings.TrimLeft(tok, "-")
+		if eq := strings.IndexByte(name, '='); eq >= 0 {
+			flags[name[:eq]] = name[eq+1:]
+			continue
+		}
+		if i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+			flags[name] = args[i+1]
+			i++
+		}
+	}
+	return flags
 }

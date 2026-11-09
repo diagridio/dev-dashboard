@@ -6,7 +6,7 @@ import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { elapsed, elapsedTenths, formatOffset, formatDateTime, formatDuration } from '../lib/wallclock'
-import { highlightJson } from '../lib/json-highlight'
+import { PayloadView } from '../components/PayloadView'
 import { useToast, type ToastHandle } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import type { WorkflowStatus, WorkflowHistoryEvent, WorkflowFailureDetails } from '../types/workflow'
@@ -236,7 +236,7 @@ export function EventRow({
                       ⧉ Copy
                     </button>
                   </div>
-                  <pre className="json">{highlightJson(event.input)}</pre>
+                  <PayloadView value={event.input} appId={appId} />
                 </div>
               )}
               {event.output && (
@@ -253,7 +253,7 @@ export function EventRow({
                       ⧉ Copy
                     </button>
                   </div>
-                  <pre className="json">{highlightJson(event.output)}</pre>
+                  <PayloadView value={event.output} appId={appId} />
                 </div>
               )}
             </div>
@@ -689,7 +689,7 @@ export function WorkflowDetail() {
             </button>
           </div>
           {execution.input ? (
-            <pre className="json">{highlightJson(execution.input)}</pre>
+            <PayloadView value={execution.input} appId={appId ?? ''} />
           ) : (
             <span className="faint">—</span>
           )}
@@ -726,7 +726,7 @@ export function WorkflowDetail() {
             </div>
           ) : (
             execution.output
-              ? <pre className="json">{highlightJson(execution.output)}</pre>
+              ? <PayloadView value={execution.output} appId={appId ?? ''} />
               : <span className="faint">—</span>
           )}
         </div>
@@ -753,7 +753,7 @@ export function WorkflowDetail() {
               ⧉ Copy
             </button>
           </div>
-          <pre className="json">{highlightJson(execution.customStatus)}</pre>
+          <PayloadView value={execution.customStatus} appId={appId ?? ''} />
         </div>
       )}
 

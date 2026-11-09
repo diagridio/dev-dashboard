@@ -491,6 +491,27 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         </div>
       </div>
 
+      {/* Loaded HTTP endpoints — only when the sidecar reports any */}
+      {app.httpEndpoints && app.httpEndpoints.length > 0 && (
+        <>
+          <div className="sec-title">
+            Loaded HTTP endpoints{' '}
+            <span className="faint" style={{ textTransform: 'none', letterSpacing: 0 }}>
+              — from /v1.0/metadata
+            </span>
+          </div>
+          <div className="panel">
+            <div className="compchips">
+              {app.httpEndpoints.map((e) => (
+                <Link key={e.name} className="chip k" to={`/http-endpoints/${encodeURIComponent(e.name)}`}>
+                  {e.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+
       <ConfirmDialog
         open={confirm !== null}
         title={confirm?.title ?? ''}

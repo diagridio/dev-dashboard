@@ -33,6 +33,16 @@
       "version": "v1"
     }
   ],
+  "Resiliencies": [
+    {
+      "name": "order-resiliency"
+    }
+  ],
+  "HTTPEndpoints": [
+    {
+      "name": "identity-api"
+    }
+  ],
   "EnabledFeatures": [
     "ServiceInvocation",
     "StateManagement"

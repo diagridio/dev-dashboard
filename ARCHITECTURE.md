@@ -5,7 +5,8 @@ how they fit, and how the dashboard discovers and reads everything it shows (sid
 applications, workflows, control-plane services, resources, logs). It is written for
 people **and** agents who want to understand the structure and extend it safely.
 
-For end-user/maintainer docs (install, run, build, release) see [README.md](README.md).
+For end-user docs (install, run, use cases) see [README.md](README.md); for building,
+testing, linting and releasing see [CONTRIBUTING.md](CONTRIBUTING.md).
 For the agent working agreement (build/test gates, conventions) see [AGENTS.md](AGENTS.md).
 For UI styling conventions see [`web/STYLEGUIDE.md`](web/STYLEGUIDE.md).
 
@@ -18,30 +19,39 @@ The dashboard is a **single Go binary** that:
 1. **Observes** local Dapr development — it discovers your apps; it only starts or stops
    them when you use the explicit lifecycle controls.
 2. **Embeds** a React SPA (via `go:embed`) and serves it from the same origin as its API.
-3. **Discovers** running apps from three merged sources — the local process table (the same
-   scan as `dapr list`), Docker Compose containers, and Dapr Testcontainers sessions — then
-   enriches each with a live `GET /v1.0/metadata` call to the sidecar.
+3. **Discovers** running apps from merged sources — the local process table (the same
+   scan as `dapr list`), Docker Compose containers, Dapr Testcontainers sessions, and the
+   Aspire `DEVDASHBOARD_APP_*` env contract when present — then enriches each with a live
+   `GET /v1.0/metadata` call to the sidecar.
 4. **Reads workflows** from the Dapr **state store** backend (Redis / PostgreSQL / SQLite / MongoDB)
    when it can open one, and **live from the sidecar's gRPC workflow API** (Dapr ≥ 1.17)
    per app when it can't — Testcontainers apps always, and every reachable sidecar when no
    store is openable. That is what makes `state.in-memory` workflows inspectable.
 5. **Degrades gracefully** — a down sidecar, an unreachable store, or a missing runtime
    turns into a partial result or a clear error, never a crash.
-6. **Resolves component secret references** (`secretKeyRef` / `envRef` metadata) both for
-   display on the Components page and to open state-store connections that need them —
+6. **Resolves secret references** (`secretKeyRef` / `envRef` in component metadata and
+   HTTPEndpoint headers) both for display on the Components and HTTP Endpoints pages and to
+   open state-store connections that need them —
    using the **dashboard's own environment and working directory, not daprd's**. The
    dashboard is a separate process: a `secretstores.local.env` reference reads the
    dashboard's environment, not the app's or daprd's, and a relative `secretsFile` for
    `secretstores.local.file` is resolved against a documented candidate list rather than
    daprd's cwd.
 
-The only mutating operations in the entire product are: workflow **terminate/purge**,
-managing your own saved **state-store connections** (persisted to
-`~/.dapr/dev-dashboard/connections.yaml`, mode `0600`), **app lifecycle** actions
-(start/stop/restart of discovered `dapr run` and compose apps — refused for Testcontainers
-apps, whose containers belong to ryuk and whose app belongs to the test process), and
-**control-plane lifecycle** actions (start/restart/stop of the self-hosted
-`dapr_scheduler` / `dapr_placement` containers, allowlisted to those names).
+The only mutating operations in the entire product are:
+
+- workflow **terminate/purge** (with an explicit force-delete fallback);
+- managing your own saved **state-store connections** (persisted to
+  `~/.dapr/dev-dashboard/connections.yaml`, mode `0600`);
+- **State page** record writes and deletes, only when the user asks for them;
+- **app lifecycle** actions (`pkg/lifecycle`): stop for `dapr run` and compose apps;
+  start/restart for compose apps only; refused for Testcontainers apps (ryuk owns the
+  containers, the test process owns the app) and for Aspire-managed apps. Clearing stopped
+  apps from the list is non-destructive (it only hides them);
+- **control-plane lifecycle** actions (start/restart/stop of the self-hosted
+  `dapr_scheduler` / `dapr_placement` containers, plus compose-run placement/scheduler
+  containers found by the last listing, never arbitrary names);
+- **publishing a test message** to a subscription's pub/sub topic through the sidecar.
 
 ### Top-level data flow
 
@@ -52,9 +62,11 @@ apps, whose containers belong to ryuk and whose app belongs to the test process)
         │   │  SSE        │  cmd/         cobra root, flags, serve boot          │
         │   └─────────────┤  pkg/server   chi router + go:embed SPA              │
         │                 │  reconciler   apps → stores → active store           │
-        │  static assets  │  pkg/discovery standalone.List + metadata            │
+        │  static assets  │  pkg/discovery process / compose / testcontainers    │
         └─────────────────┤  pkg/workflow list / history / purge                 │
+                          │  pkg/state    state record browse / add / delete     │
                           │  pkg/statestore redis / postgres / sqlite / mongodb  │
+                          │  pkg/lifecycle app start / stop / restart            │
                           │  pkg/controlplane docker/podman inspect+logs         │
                           │  pkg/resources / logs / news / metadata              │
                           └───────┬───────────────────────┬──────────────────────┘
@@ -64,8 +76,10 @@ apps, whose containers belong to ryuk and whose app belongs to the test process)
                                                 state-store backend, container runtime
 ```
 
-Everything the SPA talks to is its **own origin**. Cross-origin data (the Diagrid product
-feed) is proxied through the backend so the browser never leaves `localhost`.
+All SPA data comes from its **own origin**. Cross-origin data (the Diagrid product feed)
+is proxied through the backend. The one exception is anonymous usage telemetry: unless
+`DEVDASHBOARD_TELEMETRY_OPTOUT=true`, the SPA loads Datadog RUM (`web/src/lib/telemetry.ts`),
+which sends events to Datadog directly.
 
 ---
 
@@ -81,21 +95,30 @@ cmd/                    cobra root + subcommands; process wiring; NO domain logi
                         server.StoreRegistry + server.WorkflowBackend
   derive.go             derivePaths() + appsFingerprint() (reconcile trigger)
   connpool.go           lazy per-store connection pool (identity-keyed)
+  mode.go               --mode / DEVDASHBOARD_MODE resolution + container posture
+  sources.go            mode → discovery scanners + control-plane families
+  listen_error.go       friendly "port in use" error
   update.go             `update` subcommand → pkg/selfupdate
+  update_notice.go      startup update notice / offer
+  restart_*.go          re-exec after a self-update (unix / windows)
   workflow.go           store-election precedence (newStoreRegistry)
 pkg/                    domain packages — each isolated, none import cmd/
   discovery/            standalone.List() + /v1.0/metadata + /v1.0/healthz enrichment;
-                        also scans compose containers (scan_compose.go) and Testcontainers
-                        daprd containers (scan_testcontainers.go, tar_extract.go)
+                        also scans compose containers (scan_compose.go), Testcontainers
+                        daprd containers (scan_testcontainers.go, tar_extract.go), and the
+                        Aspire env contract (scan_aspire.go); Merge + FilterAspire
   statestore/           Store client (redis/postgres/sqlite/mongodb), Detect, secret resolution
   state/                State page: browse / add / delete state-store records
+  binarystore/          read-only binary store file reads via the sidecar's gRPC
+                        `GetBinaryFileAlpha1` (1 MiB cap); backs workflow data references
   workflow/             list / stats / history / terminate / purge; store-backed reads
                         (service.go) + sidecar-gRPC reads (sidecar.go) routed per app
                         (composite.go)
   controlplane/         docker/podman detection, inspect, lifecycle actions, log stream
-  lifecycle/            start / stop / restart of discovered apps and sidecars
+  lifecycle/            start / stop / restart of discovered apps and sidecars, plus the
+                        overlay that keeps stopped apps listed (and hides cleared ones)
   containerruntime/     docker/podman resolution + exec runner (shared by controlplane & discovery)
-  resources/            component + configuration YAML loader
+  resources/            Component / Configuration / Resiliency / HTTPEndpoint YAML loader
   secrets/              local secret-store detection + secretKeyRef/envRef resolution,
                         delegating to components-contrib's own local.file / local.env
                         stores; feeds pkg/resources and cmd/reconciler
@@ -125,8 +148,8 @@ without untangling dependencies. Preserve this when extending.
 
 ## 3. Process lifecycle (`cmd/`)
 
-`main.go` → `cmd.Execute()` builds a cobra root whose **default** action is `serve`
-(`cmd/root.go`). `Execute()` installs a signal-cancelled context (Ctrl-C / SIGTERM) that
+`main.go` → `cmd.Execute()` builds a cobra root whose own `RunE` serves the dashboard
+(`cmd/root.go`); there is no separate `serve` subcommand. `Execute()` installs a signal-cancelled context (Ctrl-C / SIGTERM) that
 threads through everything.
 
 ### Global flags (`cmd/root.go`)
@@ -142,9 +165,14 @@ threads through everything.
 | `--namespace` | `default` | Dapr namespace for workflow state keys |
 | `--verbose` | `false` | Emit diagnostic slog output to stderr |
 
-Subcommands: `serve` (default) and `update [version]` (self-update). (`cmd/workflow.go` is
-not a subcommand — it holds the store-election and target-resolution helpers used by the
+The only subcommand is `update [version]` (self-update). (`cmd/workflow.go` is not a
+subcommand — it holds the store-election and target-resolution helpers used by the
 reconciler.)
+
+Environment variables read at startup: `DEVDASHBOARD_MODE` (same as `--mode`),
+`DEVDASHBOARD_APP_*` (Aspire env contract), `DEVDASHBOARD_ALLOWED_HOSTS` (Host allowlist in
+container posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, and `DASH_CONTAINER_RUNTIME` (force
+`docker` / `podman`).
 
 ### `serve` boot sequence (`cmd/root.go` `runServe` → `cmd/serve.go` `assembleOptions`)
 
@@ -154,8 +182,8 @@ reconciler.)
    (`resolveServeSettings`, flag > env > posture default), Host-guard relaxation,
    registry persistence, and browser auto-open. Aspire *without* the contract is a
    host-posture run filtered to Aspire-managed apps, and compose *without* the contract is
-   today's host docker-scan.
-2. `logging.New(verbose)` → set as the default `slog.Logger`.
+   the host docker-scan.
+2. Print the startup logo; `logging.New(verbose)` → set as the default `slog.Logger`.
 3. Load the embedded SPA (`web.DistFS()`) and the component catalog (`metadata.Init()`).
 4. Resolve the bind address and the browser URL (base-path aware).
 5. Select discovery sources. Container posture branches first to the env-contract scanner
@@ -167,17 +195,23 @@ reconciler.)
    startup here** when no container runtime is found. The control-plane manager gets
    the matching family filter (`cpSourcesFor` → `controlplane.Sources`), and the mode
    is echoed to the SPA via the capabilities flags.
-6. Resolve `~` (`os.UserHomeDir()`); if unavailable, warn and run with registry
-   persistence disabled (features degrade to in-memory no-ops rather than writing a
-   CWD-relative `.dapr/`).
+6. In host posture, resolve `~` (`os.UserHomeDir()`); if unavailable, warn and run with
+   registry persistence disabled (features degrade to in-memory no-ops rather than writing
+   a CWD-relative `.dapr/`). Container posture never persists the registry. The discovery
+   service is wrapped in the `lifecycle.Overlay` (keeps stopped apps visible, hides cleared
+   ones) and, for aspire host mode, `FilterAspire`.
 7. `assembleOptions`: load the connection registry (`LoadRegistry`), build the lazy
    connection pool (`newConnPool`), build the reconciler, and **synchronously seed** it
    with one reconcile against the boot apps snapshot (so the active store is elected and
    pre-warmed before the first request). The discovery service is wrapped in a
    `reconcilingApps` decorator (see §4).
-8. `server.New(addr, opts)` builds the chi router; start it in a goroutine.
-9. Open the browser (unless `--no-open` or container posture), then block on `select`:
-   server error → log + exit non-zero; signal → 5-second graceful `Shutdown`.
+8. `server.New(addr, opts)` builds the chi router. In host posture, announce (and, on an
+   interactive terminal, offer) an available update.
+9. **Bind before announcing**: `srv.Listen()` fails a taken port with a friendly message
+   (`listen_error.go`) before any banner is printed.
+10. Print the banner (URL + telemetry notice), open the browser (unless `--no-open` or
+    container posture), start serving in a goroutine, then block on `select`: server error
+    → log + exit non-zero; signal → 5-second graceful `Shutdown`.
 
 ---
 
@@ -193,8 +227,9 @@ depends on: `server.StoreRegistry` (list/add/edit/delete connections) and
 There is **no polling timer**. Every call to `apps.List()` — which the SPA drives by
 polling `/api/apps`, `/api/actors`, `/api/subscriptions`, `/api/resources` — passes
 through the `reconcilingApps` decorator (`cmd/reconciler.go`), which computes an
-`appsFingerprint` (`cmd/derive.go`: an order-independent hash of app ids, resource paths,
-and loaded state-store names, with sentinel bytes so group boundaries can't collide). If
+`appsFingerprint` (`cmd/derive.go`: an order-independent hash of app ids, resource paths and
+config files, loaded state-store names, and running app ids, with sentinel bytes so group
+boundaries can't collide). If
 the fingerprint changed since the last reconcile, a background reconcile is spawned under a
 CAS single-flight guard (`maybeReconcile`); concurrent polls skip and let the next one
 catch up. Identical fingerprint → no work.
@@ -202,7 +237,8 @@ catch up. Identical fingerprint → no work.
 ### What a reconcile does (`reconcile`)
 
 1. `derivePaths()` computes: **resource scan paths** (`~/.dapr/components`, `~/.dapr`, each
-   app's resource paths, config-file dirs), **state-store scan paths** (the explicit
+   app's resource paths, and each app's Configuration **file** — never its directory, since
+   the resources loader walks paths recursively), **state-store scan paths** (the explicit
    `--statestore` if set, else `~/.dapr/components` + app paths), the set of store-component
    **names loaded** by running apps, and the running apps' resource paths.
 2. `statestore.Detect` + `DetectSecretStores` scan those paths for `Component` YAML of
@@ -250,14 +286,16 @@ store changes — switching stores doesn't churn connections.
 ## 5. HTTP server + SPA (`pkg/server`, `web/embed.go`)
 
 `server.NewRouter(opts)` (`pkg/server/server.go`) builds a `chi` router with two
-middlewares — `middleware.Recoverer` and the custom `localhostGuard` — then mounts the API
+middlewares — `middleware.Recoverer` and the custom `requestGuard` — then mounts the API
 and the SPA. If `opts.BasePath` is set, everything mounts under a `chi` sub-router at that
 prefix (the portability rule in action).
 
 ### Dependency injection
 
 All domain services are passed in via `server.Options` (`BasePath`, `DistFS`, `Version`,
-`Apps`, `Backend`, `Stores`, `Resources`, `News`, `ControlPlane`), assembled once in
+`Apps`, `ContainerLogs`, `Lifecycle`, `Backend`, `StateBackend`, `Stores`, `Resources`,
+`News`, `ControlPlane`, `UpdateCheck`), plus serving settings (`TelemetryEnabled`,
+`AllowNonLoopback`, `AllowedHosts`, `ListenPort`, `Capabilities`), assembled once in
 `cmd/serve.go`. Handlers never construct services; they receive interfaces.
 
 ### Route table (`pkg/server/api.go` + per-domain files)
@@ -278,6 +316,7 @@ All domain services are passed in via `server.Options` (`BasePath`, `DistFS`, `V
 | DELETE | `/api/apps/{appId}` | lifecycle (clear one inactive app) | apps.go |
 | POST | `/api/apps/clear-inactive` | lifecycle | apps.go |
 | POST | `/api/apps/{appId}/publish` | discovery (pub/sub test message) | apps.go |
+| GET | `/api/apps/{appKey}/binarystore/{store}/file` | binarystore (read-only; `?key=&size=`) | binarystore.go |
 | GET | `/api/actors` | discovery | actors.go |
 | GET | `/api/subscriptions` | discovery | subscriptions.go |
 | GET | `/api/workflows` | reconciler (WorkflowBackend) | workflows.go |
@@ -320,12 +359,16 @@ layer has three tiers:
    log files to tail. Compose container posture additionally gets `Workflows` from the
    sidecar-gRPC source whenever an app is declared, with no store (Dapr 1.17+); `State`
    has no sidecar fallback and still needs `DEVDASHBOARD_STATESTORE_FILE`. A nil
-   `Options.Capabilities` defaults to full host capabilities.
-2. **Enforced server-side** (`pkg/server/api.go`): route *registration* is conditional —
-   `caps.Workflows` gates the workflow routes, `caps.ControlPlane` gates
-   `/api/controlplane`. This is the design rule to keep: **the JSON flags are advisory
-   UX; absent routes are the real boundary.** A disabled feature is unroutable, not
-   merely hidden.
+   `Options.Capabilities` defaults to full host capabilities. `SecretReveal` is
+   additionally forced off whenever the server binds a non-loopback
+   address (`finalizeSecretReveal`).
+2. **Enforced server-side** (`pkg/server/api.go`, `apps.go`): route *registration* is
+   conditional — `caps.Workflows` gates the workflow routes, `caps.State` the state routes,
+   `caps.ControlPlane` `/api/controlplane`, `caps.Logs` the app log stream,
+   and `caps.Lifecycle` the app action route. This is the design rule to keep: **the JSON
+   flags are advisory UX; absent routes are the real boundary.** A disabled feature is
+   unroutable, not merely hidden. (The one exception is `SecretReveal`: the secret-value
+   route stays registered but answers `403` when it is off.)
 3. **Advertised to the SPA** (`pkg/server/spa.go` `serveIndex`): the struct is marshaled
    into the served `index.html` as `window.__DASH_CAPABILITIES__` (alongside the
    telemetry flag and version). The frontend reads it via `getCapabilities()`
@@ -347,13 +390,21 @@ files only — directory auto-indexing is suppressed), returns 404 for missing p
 have a file extension, and otherwise serves `index.html` (`Cache-Control: no-store`) so the
 client router handles the route.
 
-### Security: `localhostGuard` (`pkg/server/middleware.go`)
+### Security: `requestGuard` (`pkg/server/middleware.go`)
 
 Because the API can terminate workflows and stop containers, it is hardened against
-DNS-rebinding / CSRF even though it binds to loopback: every request's `Host` must be
-`localhost` / `127.0.0.1` / `::1` (any port); state-changing methods (POST/PUT/DELETE/PATCH)
-additionally require any present `Origin` to be loopback (any port, so the Vite dev server
-works; absent `Origin`, as from curl/CLI, is allowed). Non-conforming requests get `403`.
+DNS-rebinding / CSRF even though it binds to loopback. It has two postures:
+
+- **Host posture** (default): every request's `Host` must be `localhost` / `127.0.0.1` /
+  `::1` (any port); state-changing methods (POST/PUT/DELETE/PATCH) additionally require any
+  present `Origin` to be loopback (any port, so the Vite dev server works).
+- **Container posture** (`AllowNonLoopback`, aspire behind a proxy): the loopback Host check
+  is dropped; if `DEVDASHBOARD_ALLOWED_HOSTS` is set, `Host` must be loopback or on that
+  list. A present `Origin` on a mutating request must be normalized same-origin with the
+  request `Host` (hostname + effective port).
+
+Requests without an `Origin` (curl, CLI tools) pass in both postures. Non-conforming
+requests get `403`.
 
 ### SSE streaming
 
@@ -370,11 +421,16 @@ each and returning when the request context is cancelled.
 `Service.List(ctx)` returns `[]Instance`, one per running app/sidecar. The source of truth
 is `StandaloneScanner`, wrapping `github.com/dapr/cli/pkg/standalone.List()` (the same
 process-table scan as `dapr list`) — that supplies app id, ports (app/HTTP/gRPC), daprd &
-CLI PIDs, created time, run-template, resource paths, and command. Each result is then
+CLI PIDs, created time, run-template, resource paths, and command. `standalone.List()` does
+not report `--config`, so the scanner reads it from the daprd process's own command line
+(gopsutil), resolving a relative path against daprd's cwd (and ignoring it when that cwd
+can't be read); the CLI has already resolved a run template's `configFilePath` to an
+absolute path. Each result is then
 **enriched in parallel** (bounded worker pool) by:
 
-- `GET /v1.0/metadata` (2s timeout) → runtime version, components, actors, subscriptions,
-  enabled features, placement address, and `Extended` fields (app PID, command, log paths,
+- `GET /v1.0/metadata` (2s timeout) → runtime version, components, resiliency policies,
+  HTTP endpoints, actors, subscriptions, enabled features, placement address, and
+  `Extended` fields (app PID, command, log paths,
   run-template). Failure sets `MetadataOK=false` and degrades to scan-only data.
 - `GET /v1.0/healthz` via `CheckHealth` → the health badge. **Computed on demand during
   each `List`, not by a background poller** — the badge's refresh cadence is whatever the
@@ -450,6 +506,17 @@ cached per address in a `SidecarPool` closed on shutdown.
 `decode.go`. **To add a store backend:** add a case in `statestore.New` and satisfy the
 components-contrib `state.Store` (+ `KeysLiker`) interface.
 
+### Workflow data references (`pkg/binarystore`)
+
+Dapr 1.19 SDKs can replace large workflow payloads in history with a `{"$daprRef": {...}}`
+envelope (store, key, size, sha256) pointing at a binary store component. The SPA detects the
+envelope (`web/src/lib/daprRef.ts`) and `PayloadView` renders a card instead of the JSON; on
+**Load** it calls `GET /api/apps/{appKey}/binarystore/{store}/file?key=&size=`. `pkg/binarystore`
+opens the running app's sidecar gRPC port (cached per address) and streams
+`GetBinaryFileAlpha1`, refusing anything over 1 MiB; the browser verifies the sha256. The path
+is read-only (no `SetBinaryFile`/delete is exposed) and needs a running sidecar, so a stopped
+app yields a "start the app" hint rather than an error.
+
 ### State records (`pkg/state`)
 
 `pkg/state` reads, writes and deletes state-store records for the State page. It pages keys through
@@ -471,6 +538,20 @@ and a logical key via `state.ComposeKey`, so the API cannot be asked to write a 
 key that the listing would classify as actor state. The value is stored verbatim — no JSON
 wrapping — and an existing key is refused with `ErrExists` (409) unless the request opts into
 overwriting.
+
+### App lifecycle (`pkg/lifecycle`)
+
+`Manager.Do(key, target, action)` acts on a discovered app (`target` = app / daprd / all).
+Compose apps map to their app and daprd containers and shell out to the container runtime
+for start/stop/restart. Host (`dapr run`) apps support **stop** only: the manager snapshots
+the processes, sends a terminate signal and escalates to kill. Start and restart are
+refused outside compose, as are all actions on Testcontainers and Aspire-managed apps,
+with `ErrUnsupported`. An orphaned sidecar (app gone) can only be stopped.
+
+Stopped apps would vanish from a stateless process scan, so `Overlay` wraps the discovery
+service: it keeps a `Registry` of apps the dashboard stopped (with their captured process
+snapshot) and synthesizes stopped entries for them. `Dismiss` / `ClearInactive` suppress
+fully-stopped entries; nothing on disk changes.
 
 ### Control plane (`pkg/controlplane`)
 
@@ -495,8 +576,10 @@ stdout+stderr onto one channel for the SSE handler. **To add an action:** extend
 
 ### Resources (`pkg/resources`)
 
-Loads `Component` and `Configuration` YAML (multi-doc) from the reconciler's scan paths,
-deduped by absolute path, merged with an **extras provider** — entries that exist outside
+Loads `Component`, `Configuration`, `Resiliency` and `HTTPEndpoint` YAML (multi-doc) from
+the reconciler's scan paths (directories and single files), deduped by **canonical path**
+(`CanonicalPath`: symlinks resolved, case-folded on Windows — daprd's cwd comes back
+symlink-resolved while CLI-reported paths don't), merged with an **extras provider** — entries that exist outside
 the host filesystem, today the YAML extracted from Testcontainers daprd containers. Extras
 carry their raw YAML inline and a container-prefixed display path
 (`crazy_lamport:/dapr-resources/kvstore.yaml`), so `Get` never reads a display path from
@@ -505,9 +588,18 @@ never `statestore.Detect`, the reconciler's paths, or store election. An extract
 `state.in-memory` component with `actorStateStore: true` would otherwise win the election
 and break other apps' workflow views; a guard test
 (`TestVirtualPathsDoNotFeedStoreDetection`) pins this. The HTTP layer enriches each
-component with `LoadedBy` — which running apps loaded it — by cross-referencing discovery.
-`Get` returns the raw YAML for the detail view. **To add a resource kind:** extend the
-`Kind` type + `kindFromString` and the API validation in `pkg/server/resources.go`.
+component, resiliency policy and HTTP endpoint with `LoadedBy` — which running apps loaded it — by
+cross-referencing the names each sidecar reports in `/v1.0/metadata`. Metadata does not name
+the Configuration, so a configuration's `LoadedBy` matches its canonical file path against
+each app's `ConfigPath` instead (`loadedKey` / `loadedNames` in `pkg/server/resources.go`).
+Resiliency entries also carry `scopes` and the parsed spec (policies + targets) for the
+Resiliency page; HTTPEndpoint entries carry `scopes`, `baseUrl` and headers (secretKeyRef/envRef
+headers keep the reference only, never the value). Components and HTTPEndpoints both carry
+`SecretRefs` — each reference's resolution status from `pkg/secrets` (`ParseRefs` reads
+component `spec.metadata` and HTTPEndpoint `spec.headers`) — but only components can reveal a
+value or carry `SecretStoreInfo`. `Get` returns the raw YAML for the detail view. **To add a
+resource kind:** extend the `Kind` type + `kindFromString`, the API validation in
+`pkg/server/resources.go`, and `loadedNames` there if sidecar metadata reports the kind.
 
 ### Logs (`pkg/logs`)
 
@@ -569,20 +661,22 @@ error boundaries.
 Client-side History-API routing; the router `basename` and all API URLs derive from
 `import.meta.env.BASE_URL` (the `DASH_BASE_PATH` build var), and the Go server falls back to
 `index.html` for unknown paths. Pages: **Applications** (`/`), **AppDetail**
-(`/apps/:id`), **Workflows** + **WorkflowDetail**, **Actors**, **Subscriptions**,
-**ResourceList/Detail** (`/components`, `/configurations`), **ComponentBuilder**
-(`/components/new`), **Resiliency** + **ResiliencyBuilder** (`/resiliency/new`),
-**ControlPlane**, and **Logs**. Feature-gated pages (Logs, ControlPlane, lifecycle
+(`/apps/:appId`), **Workflows** + **WorkflowDetail**, **State** (`/state`), **Actors**,
+**Subscriptions**, **ResourceList/Detail** (`/components`, `/configurations`),
+**ComponentBuilder** (`/components/new`), **Resiliency** (`/resiliency`, discovered
+policies) + **ResiliencyBuilder** (`/resiliency/new`), **HttpEndpoints** (`/http-endpoints`), **ControlPlane** (`/control-plane`),
+and **Logs**. Feature-gated pages (Workflows, State, Logs, ControlPlane, lifecycle
 surfaces) mount only when their server-injected capability flag is on — see
-*Capabilities* in §5.
+*Capabilities* in §5. The shell also hosts the **CLI drawer** (`CliDrawer`), a right-side
+panel of Dapr CLI commands for the current page.
 
 `/replay` is a hidden easter egg: REPLAY, a small runner game that teaches workflow
 replay and determinism (Konami code or direct URL; not linked in the nav). It is the one
 lazy route (`lazy: () => import('./pages/replay/Replay')`), so it ships as its own chunk.
 It is browser-only: a pure, event-sourced engine in `pages/replay/engine/` (guarded by
 `purity.test.ts`), a runtime state machine in `pages/replay/runtime/`, and its only
-persistence is `localStorage` (`devdash.replay.*`). Design: `docs/superpowers/specs/2026-09-29-replay-easter-egg-design.md`.
-v2 adds safety layers (circuit breaker, ×3 boost, a RetryPolicy rewind), a fan-out level, level montages, a daily seed and shareable run codes: a run is reproducible from its *tape* (inputs by live tick plus the quantised random values), which is what a run code carries. Design: `docs/superpowers/specs/2026-09-30-replay-gameplay-v2-design.md`. How the mechanics work and how to change them: `web/REPLAY.md`.
+persistence is `localStorage` (`devdash.replay.*`). Design: `docs/specs/2026-09-29-replay-easter-egg-design.md`.
+v2 adds safety layers (circuit breaker, ×3 boost, a RetryPolicy rewind), a fan-out level, level montages, a daily seed and shareable run codes: a run is reproducible from its *tape* (inputs by live tick plus the quantised random values), which is what a run code carries. Design: `docs/specs/2026-09-30-replay-gameplay-v2-design.md`. How the mechanics work and how to change them: `web/REPLAY.md`.
 
 ### Data fetching & live data
 
@@ -609,6 +703,9 @@ counter distinct from buffer length, and a `closed`-vs-`error` status) with
 
 ### Reusable machinery
 
+There is no UI component library: accessible primitives are built in-house and styled
+with `theme.css`, and YAML/JSON are shown with small read-only highlighters
+(`lib/yaml-highlight.tsx`, `lib/json-highlight.tsx`) rather than an editor like Monaco.
 The two YAML builders share `components/wizard/` (Wizard/Stepper/StepNav),
 `components/form/` (DialogShell + typed inputs), `YamlPreview`, and reducer-based form
 state. Cross-cutting primitives: `useModalFocus` (focus trap + restore) behind `Modal` and
@@ -627,8 +724,9 @@ styleguide.
 
 ## 8. End-to-end flows
 
-- **An app appears:** SPA polls `/api/apps` → discovery merges the three scanners (process
-  table via `standalone.List`, compose containers, Testcontainers containers) → enriches
+- **An app appears:** SPA polls `/api/apps` → discovery merges the enabled scanners (process
+  table via `standalone.List`, compose containers, Testcontainers containers, Aspire env
+  contract) → enriches
   each with `/v1.0/metadata` + `/v1.0/healthz` in parallel → the `reconcilingApps`
   decorator fingerprints the app set and, if changed, kicks a background reconcile → the
   table renders.
@@ -655,17 +753,17 @@ styleguide.
 | New state-store backend | case in `statestore.New` + satisfy components-contrib `state.Store`/`KeysLiker` |
 | New workflow field | `pkg/workflow/types.go` + extract in `decode.go` |
 | New control-plane action | extend `ValidAction` (+ `LiveServiceNames` for a new container) |
-| New resource kind | `Kind` + `kindFromString` in `pkg/resources`, validation in `pkg/server/resources.go` |
+| New resource kind | `Kind` + `kindFromString` in `pkg/resources`, validation + `loadedNames` in `pkg/server/resources.go` |
 | New CLI flag | declare + register in `cmd/root.go`, thread through `runServe` → `assembleOptions` |
 | New CLI subcommand | add `cmd/<name>.go`, register in `NewRootCmd` |
 | New SPA page | page + hook + type + route + nav entry (see §7) |
-| Support a new discovery source | implement a discovery.Scanner + add it to Merge in cmd/root.go |
+| Support a new discovery source | implement a `discovery.Scanner`, add a flag to `sourceSet` in `cmd/sources.go`, and append it to the `Merge` in `cmd/root.go` `runServe` |
 
 ---
 
 ## 10. Testing map
 
-Four suites (see [README.md](README.md#testing) and [AGENTS.md](AGENTS.md#test) for
+Four suites (see [CONTRIBUTING.md](CONTRIBUTING.md#testing) and [AGENTS.md](AGENTS.md#test) for
 commands):
 
 - **unit** (`//go:build unit`) + **web** (Vitest) — self-contained, the everyday gate.
@@ -684,4 +782,4 @@ backend), is run manually: `go test -tags integration -run '^$' -bench Benchmark
 ---
 
 For the original design rationale, see
-[`docs/superpowers/specs/2026-06-25-dev-dashboard-design.md`](docs/superpowers/specs/2026-06-25-dev-dashboard-design.md).
+[`docs/specs/2026-06-25-dev-dashboard-design.md`](docs/specs/2026-06-25-dev-dashboard-design.md).

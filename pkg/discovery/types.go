@@ -77,6 +77,8 @@ type Instance struct {
 	Actors          []ActorType    `json:"actors,omitempty"`
 	Subscriptions   []Subscription `json:"subscriptions,omitempty"`
 	Components      []Component    `json:"components,omitempty"`
+	Resiliencies    []Resiliency   `json:"resiliencies,omitempty"`
+	HTTPEndpoints   []HTTPEndpoint `json:"httpEndpoints,omitempty"`
 	EnabledFeatures []string       `json:"enabledFeatures,omitempty"`
 	Placement       string         `json:"placement,omitempty"`
 }

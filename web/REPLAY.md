@@ -4,8 +4,8 @@ REPLAY is the hidden runner game at `/replay` (Konami code or direct URL). It
 teaches Dapr workflow replay and determinism through its mechanics: the game
 really is event-sourced, and it really diverges when workflow code is
 non-deterministic. This file explains how it works so you can change it
-safely. Design history: `docs/superpowers/specs/2026-09-29-replay-easter-egg-design.md`
-(v1) and `docs/superpowers/specs/2026-09-30-replay-gameplay-v2-design.md` (v2).
+safely. Design history: `docs/specs/2026-09-29-replay-easter-egg-design.md`
+(v1) and `docs/specs/2026-09-30-replay-gameplay-v2-design.md` (v2).
 
 All code lives in `src/pages/replay/`. Outside it, only the lazy route in
 `src/router.tsx` and the Konami hook reference the game.

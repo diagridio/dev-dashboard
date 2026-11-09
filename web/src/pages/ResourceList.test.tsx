@@ -173,6 +173,15 @@ describe('ResourceList kind=component', () => {
     )
   })
 
+  it('names the folders the dashboard actually scans', async () => {
+    server.use(http.get('/api/resources', () => HttpResponse.json([])))
+    renderComponents()
+    await waitFor(() => expect(screen.getByText(/no components/i)).toBeInTheDocument())
+    const sub = document.querySelector('.phead .sub')?.textContent ?? ''
+    expect(sub).toContain('~/.dapr/components')
+    expect(sub).not.toContain('~/.dapr/resources')
+  })
+
   it('shows "not currently loaded" in detail pane when loadedBy is empty', async () => {
     server.use(
       http.get('/api/resources', ({ request }) => {

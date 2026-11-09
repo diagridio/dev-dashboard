@@ -59,14 +59,13 @@ const SECTIONS: Section[] = [
   {
     heading: 'Build',
     links: [
-      { label: 'Dapr Workflow Skills', href: 'https://diagrid.ws/dev-dashboard-workflow-skill' },
-      { label: 'Workflow Composer', href: 'https://diagrid.ws/dev-dashboard-workflow-composer' },
+      { label: 'Dapr Skills', href: 'https://diagrid.ws/dev-dashboard-workflow-skill' },
     ],
   },
   {
     heading: 'Run & Operate',
     links: [
-      { label: 'Diagrid Catalyst', href: 'https://diagrid.ws/dev-dashboard-try-catalyst' },
+      { label: 'Diagrid Cloud', href: 'https://diagrid.ws/dev-dashboard-try-catalyst' },
       { label: 'Dapr Ops Dashboard', href: 'https://diagrid.ws/dev-dashboard-ops-dashboard' },
       { label: 'Dapr Support', href: 'https://diagrid.ws/dev-dashboard-dapr-support' },
     ],
