@@ -16,7 +16,11 @@ import (
 // single-source filter — they are never combined:
 //
 //   - ModeDaprRun: host `dapr run` process scan only.
-//   - ModeCompose: Docker Compose container discovery only.
+//   - ModeCompose: Docker Compose only. With the DEVDASHBOARD_APP_* env
+//     contract present the dashboard is a service inside the user's compose
+//     project (container posture, discovery restricted to the contract);
+//     without it the dashboard runs on the host and scans compose containers
+//     via the container runtime.
 //   - ModeTestcontainers: Testcontainers container discovery only.
 //   - ModeAspire: Aspire resources only. With the DEVDASHBOARD_APP_* env
 //     contract present the dashboard is the AppHost-managed container
@@ -50,12 +54,16 @@ func resolveMode(flagValue string, getenv func(string) string) (Mode, error) {
 	return ModeDefault, fmt.Errorf("unknown mode %q: supported values are \"dapr-run\", \"compose\", \"test-containers\", \"aspire\" (or unset for the complete scan)", v)
 }
 
-// containerPosture reports whether the dashboard serves as the
-// AppHost-managed container: aspire mode with the DEVDASHBOARD_APP_* env
-// contract present. Aspire mode without the contract is a host-run dashboard
-// filtered to Aspire resources and keeps host serving defaults.
+// containerPosture reports whether the dashboard serves as a container inside
+// the orchestrator it is inspecting: aspire or compose mode with the
+// DEVDASHBOARD_APP_* env contract present. Either mode without the contract is
+// a host-run dashboard filtered to that source and keeps host serving defaults.
 func containerPosture(mode Mode, getenv func(string) string) bool {
-	return mode == ModeAspire && discovery.AspireContractPresent(getenv)
+	switch mode {
+	case ModeAspire, ModeCompose:
+		return discovery.ContractPresent(getenv)
+	}
+	return false
 }
 
 // serveSettings is the fully resolved serve configuration: flag > env >
@@ -121,4 +129,13 @@ func resolveServeSettings(containerPosture bool, flagChanged func(string) bool, 
 		}
 	}
 	return s, nil
+}
+
+// contractSource maps a container-posture mode to the discovery Source the
+// contract scanner stamps on its results.
+func contractSource(mode Mode) string {
+	if mode == ModeCompose {
+		return discovery.SourceCompose
+	}
+	return discovery.SourceAspire
 }

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 
@@ -52,7 +51,10 @@ func (s *Service) Read(ctx context.Context, appKey, store, key string, declaredS
 		}
 		return nil, &Error{Kind: KindUpstream, Msg: err.Error()}
 	}
-	if !in.SidecarReachable || in.GRPCPort == 0 {
+	// GRPCAddr covers both host-discovered apps (127.0.0.1:<GRPCPort>) and
+	// contract-declared ones (DaprGRPCAddr); "" means no known gRPC endpoint.
+	addr := in.GRPCAddr()
+	if !in.SidecarReachable || addr == "" {
 		return nil, &Error{Kind: KindSidecarUnreachable, Msg: "sidecar unreachable"}
 	}
 	if !in.MetadataOK {
@@ -71,7 +73,7 @@ func (s *Service) Read(ctx context.Context, appKey, store, key string, declaredS
 			Msg: fmt.Sprintf("binary store component '%s' is not loaded by %s", store, in.AppID)}
 	}
 
-	conn, err := s.conns.Conn("127.0.0.1:" + strconv.Itoa(in.GRPCPort))
+	conn, err := s.conns.Conn(addr)
 	if err != nil {
 		return nil, &Error{Kind: KindSidecarUnreachable, Msg: "sidecar unreachable"}
 	}

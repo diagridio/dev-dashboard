@@ -13,6 +13,7 @@ import (
 
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/resources"
+	"github.com/diagridio/dev-dashboard/pkg/server"
 	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/diagridio/dev-dashboard/pkg/updatecheck"
 	"github.com/stretchr/testify/require"
@@ -48,11 +49,13 @@ func TestAssembleOptions_NoHomeDir_NoCWDRelativeRegistry(t *testing.T) {
 		}
 	})
 
-	// A store mutation must not create .dapr relative to the CWD.
-	require.NoError(t, opts.Stores.AddStore("mem", "state.sqlite",
-		map[string]string{"connectionString": filepath.Join(tmp, "mem.db")}))
+	// A store mutation is refused (no registry to save to) and must not
+	// create .dapr relative to the CWD.
+	err := opts.Stores.AddStore("mem", "state.sqlite",
+		map[string]string{"connectionString": filepath.Join(tmp, "mem.db")})
+	require.ErrorIs(t, err, server.ErrRegistryReadOnly)
 
-	_, err := os.Stat(filepath.Join(tmp, ".dapr"))
+	_, err = os.Stat(filepath.Join(tmp, ".dapr"))
 	require.True(t, os.IsNotExist(err),
 		"no .dapr directory may be created relative to the CWD when the home dir is unknown")
 }

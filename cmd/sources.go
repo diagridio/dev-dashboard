@@ -14,7 +14,7 @@ type sourceSet struct {
 }
 
 // sourcesFor maps a host-posture mode to its discovery sources. Container
-// posture (aspire + env contract) never reaches this function — runServe
+// posture (aspire or compose + env contract) never reaches this function — runServe
 // branches to the env-contract scanner before consulting it.
 func sourcesFor(mode Mode, contractPresent bool) sourceSet {
 	switch mode {

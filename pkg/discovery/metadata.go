@@ -46,15 +46,22 @@ type HTTPEndpoint struct {
 }
 
 type Metadata struct {
-	ID              string
-	RuntimeVersion  string
-	AppPID          int
-	CLIPID          int
-	AppCommand      string
-	AppLogPath      string
-	DaprdLogPath    string
-	RunTemplate     string
-	AppProtocol     string
+	ID             string
+	RuntimeVersion string
+	AppPID         int
+	CLIPID         int
+	AppCommand     string
+	AppLogPath     string
+	DaprdLogPath   string
+	RunTemplate    string
+	AppProtocol    string
+	// AppPort and AppChannelAddress are daprd's app channel (where daprd
+	// reaches the app); 0/"" when the app has no port.
+	AppPort           int
+	AppChannelAddress string
+	// WorkflowWorkers is the number of workflow workers connected to the
+	// sidecar (omitted by daprd at zero).
+	WorkflowWorkers int
 	Actors          []ActorType
 	Subscriptions   []Subscription
 	Components      []Component
@@ -86,8 +93,13 @@ type rawMetadata struct {
 		Placement string `json:"placement"`
 	} `json:"actorRuntime"`
 	AppConnectionProperties struct {
-		Protocol string `json:"protocol"`
+		Port           int    `json:"port"`
+		Protocol       string `json:"protocol"`
+		ChannelAddress string `json:"channelAddress"`
 	} `json:"appConnectionProperties"`
+	Workflows struct {
+		ConnectedWorkers int `json:"connectedWorkers"`
+	} `json:"workflows"`
 }
 
 // runTemplateFromExtended returns the run template's display name. The
@@ -137,21 +149,24 @@ func FetchMetadata(ctx context.Context, client *http.Client, baseURL string) (Me
 	}
 
 	return Metadata{
-		ID:              raw.ID,
-		RuntimeVersion:  raw.RuntimeVersion,
-		AppPID:          atoi("appPID"),
-		CLIPID:          atoi("cliPID"),
-		AppCommand:      raw.Extended["appCommand"],
-		AppLogPath:      raw.Extended["appLogPath"],
-		DaprdLogPath:    raw.Extended["daprdLogPath"],
-		RunTemplate:     runTemplateFromExtended(raw.Extended),
-		AppProtocol:     raw.AppConnectionProperties.Protocol,
-		Actors:          raw.Actors,
-		Components:      raw.Components,
-		Subscriptions:   subs,
-		Resiliencies:    raw.Resiliencies,
-		HTTPEndpoints:   raw.HTTPEndpoints,
-		EnabledFeatures: raw.EnabledFeatures,
-		Placement:       raw.ActorRuntime.Placement,
+		ID:                raw.ID,
+		RuntimeVersion:    raw.RuntimeVersion,
+		AppPID:            atoi("appPID"),
+		CLIPID:            atoi("cliPID"),
+		AppCommand:        raw.Extended["appCommand"],
+		AppLogPath:        raw.Extended["appLogPath"],
+		DaprdLogPath:      raw.Extended["daprdLogPath"],
+		RunTemplate:       runTemplateFromExtended(raw.Extended),
+		AppProtocol:       raw.AppConnectionProperties.Protocol,
+		AppPort:           raw.AppConnectionProperties.Port,
+		AppChannelAddress: raw.AppConnectionProperties.ChannelAddress,
+		WorkflowWorkers:   raw.Workflows.ConnectedWorkers,
+		Actors:            raw.Actors,
+		Components:        raw.Components,
+		Subscriptions:     subs,
+		Resiliencies:      raw.Resiliencies,
+		HTTPEndpoints:     raw.HTTPEndpoints,
+		EnabledFeatures:   raw.EnabledFeatures,
+		Placement:         raw.ActorRuntime.Placement,
 	}, nil
 }

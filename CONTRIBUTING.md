@@ -155,8 +155,9 @@ There are four suites: Go **unit** tests, Go **integration** tests, the **web**
 The integration suite runs its state-store and workflow tests against a temporary SQLite
 database plus real Redis, PostgreSQL, and MongoDB containers (via testcontainers-go), so it
 needs Docker or Podman for full coverage; without one, the container-backed tests skip. The
-**e2e** suite drives a real `daprd` and is local-only — it skips automatically when Dapr is not
-installed (see below).
+**e2e** suite drives a real `daprd`; each test skips automatically when its prerequisite
+(Dapr, Docker or .NET) is missing, and CI runs it only through the manual `e2e` workflow (see
+below).
 
 **Prerequisites:** Go ≥ 1.26 (Go tests) and Node.js 20 with `npm` (web tests).
 
@@ -196,14 +197,26 @@ Some integration tests use golden files (`testdata/golden/*`); regenerate them a
 intentional shape change with `-update`, e.g.
 `go test -tags integration ./pkg/workflow -run Golden -update`.
 
-**Go e2e tests** — gated by `//go:build e2e`; they run a real Dapr workflow app under
-`dapr run` and read its state back through the dashboard's own packages, validating against
-state authored by a live runtime. They require a local Dapr install (`dapr init`) — `dapr` on
-your `PATH` and `daprd` on `PATH` or in `~/.dapr/bin` — and **skip automatically** when Dapr is
-not found. They are local-only and not run in CI:
+**Go e2e tests** — gated by `//go:build e2e`; they validate the dashboard against state and
+apps run by a live Dapr runtime. Each test **skips automatically** when its prerequisite is
+missing:
+
+- `TestDaprWorkflowReadBack` runs a workflow app under `dapr run` and reads its state back
+  through the dashboard's packages. It needs a local Dapr install (`dapr init`): `dapr` on your
+  `PATH` and `daprd` on `PATH` or in `~/.dapr/bin`.
+- `TestComposeDiscovery` brings up `test/e2e/fixtures/compose` and runs the dashboard binary on
+  the host in `--mode compose`; `TestComposeContainerPosture` runs the dashboard **image**,
+  built from the repo `Dockerfile`, as a service inside that fixture. Both need Docker.
+- `TestTestcontainersDiscovery` needs Docker; `TestAspireDiscovery` needs .NET, Docker and the
+  `dapr` CLI with `dapr init`.
+
+The tests that boot the binary need `make build` first. In CI they run only through the manual
+`e2e` workflow, against the latest Dapr 1.18.x and 1.19.x. Pass `-count=1`: the compose
+container test builds an image from the repo, which Go's test cache can't see.
 
 ```sh
 make test-e2e                       # = go test -tags e2e ./...
+go test -count=1 -tags e2e -run TestComposeContainerPosture -v ./test/e2e/
 ```
 
 **Web tests** — Vitest:

@@ -7,6 +7,7 @@ import { copyText } from '../lib/clipboard'
 import { useToast } from '../lib/toast'
 import { SecretStatusPill } from '../components/SecretStatusPill'
 import type { HTTPEndpointHeader, ResourceSummary, SecretRefStatus } from '../types/resources'
+import { ResourceSources } from '../components/ResourceSources'
 
 function PageHead() {
   return (
@@ -15,8 +16,15 @@ function PageHead() {
         <h1>HTTP Endpoints</h1>
         <div className="sub">
           Dapr <span className="mono">HTTPEndpoint</span> resources (non-Dapr services called through{' '}
-          <span className="mono">/v1.0/invoke</span>) from <span className="mono">~/.dapr/components</span> and live{' '}
-          <span className="mono">--resources-path</span> args
+          <span className="mono">/v1.0/invoke</span>) from{' '}
+          <ResourceSources
+            host={
+              <>
+                <span className="mono">~/.dapr/components</span> and live{' '}
+                <span className="mono">--resources-path</span> args
+              </>
+            }
+          />
         </div>
       </div>
     </div>

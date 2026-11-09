@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -148,6 +149,22 @@ func TestRead_ConcatenatesChunks(t *testing.T) {
 	calls := f.recorded()
 	if len(calls) != 1 || calls[0].ComponentName != "payloads" {
 		t.Fatalf("calls = %v", calls)
+	}
+}
+
+// Contract-declared apps (compose/aspire container posture) carry no
+// GRPCPort; their sidecar is addressed by DaprGRPCAddr instead.
+func TestRead_UsesContractGRPCAddr(t *testing.T) {
+	f := &fakeDaprFull{chunks: [][]byte{[]byte("ok")}}
+	port, _ := startServer(t, f)
+	i := inst(0)
+	i.DaprGRPCAddr = "127.0.0.1:" + strconv.Itoa(port)
+	got, err := newSvc(t, i).Read(context.Background(), "orders", "payloads", "k", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "ok" {
+		t.Fatalf("got %q", got)
 	}
 }
 

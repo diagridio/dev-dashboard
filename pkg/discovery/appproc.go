@@ -114,6 +114,16 @@ func gopsutilPidAlive(pid int) bool {
 
 // tcpPortOpen probes a loopback TCP port; a refused dial fails immediately,
 // so the timeout only bites for half-open ports (absent on loopback).
+// tcpAddrOpen reports whether host:port accepts a TCP connection.
+func tcpAddrOpen(addr string) bool {
+	conn, err := net.DialTimeout("tcp", addr, 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
 func tcpPortOpen(port int) bool {
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 200*time.Millisecond)
 	if err != nil {

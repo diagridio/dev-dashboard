@@ -361,6 +361,60 @@ describe('Applications', () => {
     expect(screen.getByTitle(/publish the daprd HTTP port/i)).toBeInTheDocument()
   })
 
+  it('shows the container-posture tooltip for an unreachable compose sidecar', async () => {
+    window.__DASH_CAPABILITIES__ = {
+      lifecycle: false,
+      controlPlane: false,
+      logs: true,
+      workflows: true,
+      mode: 'compose',
+      containerPosture: true,
+    }
+    try {
+      mockApps([
+        {
+          ...baseApp,
+          appId: 'primes-go',
+          source: 'compose',
+          composeProject: 'saga',
+          sidecarReachable: false,
+          health: 'unknown',
+          appStatus: 'running',
+          daprdStatus: 'running',
+        },
+      ])
+      renderAt()
+      await waitFor(() => expect(screen.getByText('primes-go')).toBeInTheDocument())
+      expect(
+        screen.getByTitle('sidecar unreachable — the dashboard and this app must share a Docker network'),
+      ).toBeInTheDocument()
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
+  })
+
+  it('flags a contract app whose own status the sidecar cannot show', async () => {
+    window.__DASH_CAPABILITIES__ = {
+      lifecycle: false, controlPlane: false, logs: false, workflows: true,
+      mode: 'compose', containerPosture: true,
+    }
+    try {
+      mockApps([
+        { ...baseApp, appId: 'wfapp', source: 'compose', health: 'healthy', sidecarReachable: true,
+          daprHttpBaseUrl: 'http://daprd:3500', appStatus: undefined, daprdStatus: undefined },
+        { ...baseApp, appId: 'orders', source: 'compose', health: 'healthy', sidecarReachable: true,
+          daprHttpBaseUrl: 'http://orders:3500', appStatus: 'running', daprdStatus: undefined },
+      ])
+      renderAt()
+      await waitFor(() => expect(screen.getByText('wfapp')).toBeInTheDocument())
+      const hinted = screen.getAllByTitle(/sidecar is healthy; the app's own status can't be observed/i)
+      expect(hinted).toHaveLength(1)
+      expect(hinted[0]).toHaveTextContent('ⓘ')
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
+  })
+
   it('shows the global Clear inactive button with the stopped count', async () => {
     mockApps([{ ...baseApp }, stoppedApp])
     renderAt()

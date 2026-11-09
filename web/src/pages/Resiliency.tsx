@@ -5,6 +5,7 @@ import { highlightYaml } from '../lib/yaml-highlight'
 import { copyText } from '../lib/clipboard'
 import { useToast } from '../lib/toast'
 import type { ResourceSummary, ResiliencySpec } from '../types/resources'
+import { ResourceSources } from '../components/ResourceSources'
 
 function PageHead() {
   return (
@@ -13,8 +14,14 @@ function PageHead() {
         <h1>Resiliency</h1>
         <div className="sub">
           Dapr <span className="mono">Resiliency</span> resources from{' '}
-          <span className="mono">~/.dapr/components</span> and live{' '}
-          <span className="mono">--resources-path</span> args
+          <ResourceSources
+            host={
+              <>
+                <span className="mono">~/.dapr/components</span> and live{' '}
+                <span className="mono">--resources-path</span> args
+              </>
+            }
+          />
         </div>
       </div>
       <Link className="btn primary" to="/resiliency/new">+ New resiliency policy</Link>

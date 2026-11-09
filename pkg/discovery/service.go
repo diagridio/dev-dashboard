@@ -58,10 +58,12 @@ type ScanResult struct {
 	// not published to the host (metadata/health enrichment impossible).
 	SidecarReachable bool
 
-	// DaprHTTPBaseURL, when set (aspire source), replaces
+	// DaprHTTPBaseURL, when set (contract source: aspire or compose), replaces
 	// http://127.0.0.1:<HTTPPort> as the daprd HTTP endpoint for health,
 	// metadata, and workflow calls.
 	DaprHTTPBaseURL string
+	// DaprGRPCAddr is the contract-supplied or derived from DaprHTTPBaseURL daprd gRPC endpoint (host:port).
+	DaprGRPCAddr string
 	// Namespace and Label come from the Aspire env contract ("" for other
 	// sources). Label is the orchestrator's display name for the app.
 	Namespace string
@@ -112,11 +114,13 @@ type service struct {
 	procStart  func(pid int) (time.Time, bool)
 	pidAlive   func(pid int) bool
 	portOpen   func(port int) bool
+	// addrOpen probes host:port reachability (contract apps, in-network).
+	addrOpen func(addr string) bool
 }
 
 func New(scan Scanner, client *http.Client) Service {
 	return &service{scan: scan, client: client, appProc: gopsutilResolver{}, stdoutFile: lsofStdoutFile,
-		procStart: gopsutilProcStart, pidAlive: gopsutilPidAlive, portOpen: tcpPortOpen}
+		procStart: gopsutilProcStart, pidAlive: gopsutilPidAlive, portOpen: tcpPortOpen, addrOpen: tcpAddrOpen}
 }
 
 // procStartTime resolves a process's start time, returning false if the resolver is nil or pid is 0.
@@ -203,7 +207,7 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		AppContainerID: r.AppContainerID, AppContainerName: r.AppContainerName,
 		SidecarReachable: r.SidecarReachable,
 		AppStatus:        r.AppStatus, DaprdStatus: r.DaprdStatus,
-		DaprHTTPBaseURL: r.DaprHTTPBaseURL, Namespace: r.Namespace, Label: r.Label,
+		DaprHTTPBaseURL: r.DaprHTTPBaseURL, DaprGRPCAddr: r.DaprGRPCAddr, Namespace: r.Namespace, Label: r.Label,
 		TestcontainersSession: r.TestcontainersSession,
 	}
 	// A zero Created (e.g. a compose container created but never started)
@@ -273,6 +277,13 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	if err != nil {
 		in.MetadataOK = false
 		logger().Warn("app metadata unavailable", "appID", r.AppID, "httpPort", r.HTTPPort, "err", err)
+		// A contract-declared compose sidecar (only the contract scanner sets
+		// DaprHTTPBaseURL) that answers neither health nor metadata is
+		// unreachable from this container. The scanner sets true again on the
+		// next poll, so it recovers without a restart.
+		if in.Source == SourceCompose && r.DaprHTTPBaseURL != "" && in.Health != HealthHealthy {
+			in.SidecarReachable = false
+		}
 		return in
 	}
 	in.MetadataOK = true
@@ -316,6 +327,14 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		// sources don't apply. Logs stream from the container runtime instead.
 		if md.RunTemplate != "" {
 			in.RunTemplate = md.RunTemplate
+		}
+		if r.DaprHTTPBaseURL != "" {
+			// Contract-declared (compose container posture): no container
+			// runtime, so the app's status comes from what the network shows.
+			if md.AppPort > 0 {
+				in.AppPort = md.AppPort
+			}
+			in.AppStatus = s.contractAppStatus(r.DaprHTTPBaseURL, md)
 		}
 		return in
 	}

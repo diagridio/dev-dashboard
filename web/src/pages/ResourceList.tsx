@@ -4,6 +4,7 @@ import type { ResourceKind } from '../types/resources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import { ResourceDetail } from './ResourceDetail'
 import { StateStoreConnectionsPanel } from '../components/StateStoreConnectionsPanel'
+import { ResourceSources } from '../components/ResourceSources'
 
 type ListKind = Exclude<ResourceKind, 'resiliency' | 'httpendpoint'>
 
@@ -22,8 +23,15 @@ const LABELS: Record<
     title: 'Components',
     sub: (
       <>
-        Resource files from <span className="mono">~/.dapr/components</span> and live{' '}
-        <span className="mono">--resources-path</span> args
+        Resource files from{' '}
+        <ResourceSources
+          host={
+            <>
+              <span className="mono">~/.dapr/components</span> and live{' '}
+              <span className="mono">--resources-path</span> args
+            </>
+          }
+        />
       </>
     ),
   },
@@ -32,8 +40,13 @@ const LABELS: Record<
     sub: (
       <>
         Dapr <span className="mono">Configuration</span> resources from{' '}
-        <span className="mono">~/.dapr/config.yaml</span> and{' '}
-        <span className="mono">--config</span> args
+        <ResourceSources
+          host={
+            <>
+              <span className="mono">~/.dapr/config.yaml</span> and <span className="mono">--config</span> args
+            </>
+          }
+        />
       </>
     ),
   },

@@ -111,6 +111,12 @@ export function Workflows() {
   // Using null-sentinel avoids a double-fetch: the workflow query is disabled
   // until selectedStore is resolved.
   const [selectedStore, setSelectedStore] = useState<string | null>(null)
+  // With no store listed the page still queries, store-less: the backend then
+  // serves workflows read live from app sidecars (compose container posture,
+  // Testcontainers with an in-memory store). It answers 503 when nothing can
+  // serve, which is when the no-store guidance below is shown.
+  const queryEnabled = selectedStore !== null || noStores
+  const queryStore = noStores ? undefined : selectedStore ?? undefined
   useEffect(() => {
     if (!displayStores || displayStores.length === 0) return
     if (selectedStore !== null && displayStores.some((s) => s.id === selectedStore)) return
@@ -186,9 +192,9 @@ export function Workflows() {
     search: debouncedSearch || undefined,
     page,
     appId: selectedApp || undefined,
-    store: selectedStore ?? undefined,
+    store: queryStore,
     includeChildren: showChildren,
-    enabled: selectedStore !== null,
+    enabled: queryEnabled,
   })
 
   // Previous rows stay on screen while a new filter/search/page loads (same
@@ -199,9 +205,9 @@ export function Workflows() {
   const { data: stats } = useWorkflowStats({
     appId: selectedApp || undefined,
     search: debouncedSearch || undefined,
-    store: selectedStore ?? undefined,
+    store: queryStore,
     includeChildren: showChildren,
-    enabled: selectedStore !== null,
+    enabled: queryEnabled,
   })
 
   // Null-safe guard + de-duplicate by appId/instanceId (safety net against duplicate rows).
@@ -216,8 +222,8 @@ export function Workflows() {
   // workflow data), not the current page of rows — so applying the filter never
   // collapses the option list to just the selected app.
   const { data: storeAppIds } = useWorkflowAppIds({
-    store: selectedStore ?? undefined,
-    enabled: selectedStore !== null,
+    store: queryStore,
+    enabled: queryEnabled,
   })
   const appIds = useMemo(() => storeAppIds ?? [], [storeAppIds])
 
@@ -310,8 +316,9 @@ export function Workflows() {
 
   // --- Error states ---
 
-  // No-store guidance block — full-page, only when the store list itself is empty
-  // (there is no selector to degrade to in that case).
+  // No-store guidance block — full-page, only when the store list is empty AND
+  // the store-less query failed (no sidecar could serve either); there is no
+  // selector to degrade to in that case.
   const noStoreGuidance = (
     <div className="page">
       <p className="err b">No state store detected</p>
@@ -322,7 +329,7 @@ export function Workflows() {
     </div>
   )
 
-  if (noStores) return noStoreGuidance
+  if (noStores && isError) return noStoreGuidance
 
   // Any workflow-list load error degrades gracefully: the page chrome (store
   // selector, filters) stays rendered and usable; the error is shown as a
@@ -380,6 +387,11 @@ export function Workflows() {
                 </Link>
               )}
             </>
+          ) : noStores ? (
+            <span className="chip" title="No state store is configured; workflows are read live from each app's Dapr sidecar">
+              <span className="led ok" />
+              read live from app sidecars
+            </span>
           ) : (
             <span className="chip">
               <span className="led" />

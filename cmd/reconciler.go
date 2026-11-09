@@ -358,6 +358,11 @@ func underScanPath(compPath, scanPath string) bool {
 // use their inline metadata. ok=false means no registry entry with that id.
 func (rc *reconciler) componentFor(id string) (statestore.Component, bool) {
 	if rc.registry == nil {
+		// No registry (container posture): the only addressable stores are
+		// the elected ones Stores() lists, under the same auto-entry ids.
+		if active := rc.activeComponent(); active != nil && entryID(SourceAuto, normPath(active.Path)) == id {
+			return *active, true
+		}
 		return statestore.Component{}, false
 	}
 	for _, e := range rc.registry.List() {
@@ -380,7 +385,14 @@ func ptr(c statestore.Component) *statestore.Component { return &c }
 // Connection (unreachable), not an error.
 func (rc *reconciler) Stores() []server.StoreInfo {
 	if rc.registry == nil {
-		return []server.StoreInfo{}
+		// No registry (container posture): list the elected store read-only so
+		// the Workflows and State pages can address it.
+		rc.mu.RLock()
+		defer rc.mu.RUnlock()
+		if rc.electedReg == nil {
+			return []server.StoreInfo{}
+		}
+		return rc.electedReg.Stores()
 	}
 	var activeID string
 	if active := rc.activeComponent(); active != nil {
@@ -444,7 +456,7 @@ func sortStores(out []server.StoreInfo) {
 // with a user-facing message (the API surfaces err.Error() in the 400 body).
 func (rc *reconciler) AddStore(name, typ string, metadata map[string]string) error {
 	if rc.registry == nil {
-		return nil
+		return server.ErrRegistryReadOnly
 	}
 	err := rc.registry.Add(ConnEntry{Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
 	if errors.Is(err, os.ErrExist) {
@@ -459,7 +471,7 @@ func (rc *reconciler) AddStore(name, typ string, metadata map[string]string) err
 // next select reconnects with new metadata, and returns the recomputed id.
 func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]string) (string, error) {
 	if rc.registry == nil {
-		return id, nil
+		return "", server.ErrRegistryReadOnly
 	}
 	oldComp, hadOld := rc.componentFor(id)
 	newID, err := rc.registry.Update(ConnEntry{ID: id, Name: name, Type: typ, Source: SourceManual, Metadata: metadata})
@@ -478,7 +490,7 @@ func (rc *reconciler) UpdateStore(id, name, typ string, metadata map[string]stri
 // apps are using it — which the API maps to 409.
 func (rc *reconciler) DeleteStore(id string) error {
 	if rc.registry == nil {
-		return nil
+		return server.ErrRegistryReadOnly
 	}
 	comp, ok := rc.componentFor(id)
 	if ok {
@@ -495,12 +507,16 @@ func (rc *reconciler) DeleteStore(id string) error {
 	return nil
 }
 
-// sidecarEndpoints returns the workflow sidecar endpoints eligible under the
+// sidecarEndpoints returns the sidecar-sourced app endpoints under the current
 // selection rule. Testcontainers apps are always eligible (their store lives
-// inside the container and is never host-readable). When includeAll is true
-// (no openable active store), every reachable non-aspire sidecar with a
-// published gRPC port becomes eligible. The list is computed per query from
-// live discovery so re-published random ports apply immediately.
+// inside the container and is never host-readable). Contract-declared apps
+// (explicit in-network gRPC address) are eligible while their sidecar is
+// reachable, and also when unreachable if no store is openable; with a store
+// up, an unreachable contract sidecar defers to the store. When includeAll is
+// true (no openable active store), every
+// reachable non-aspire sidecar with a gRPC endpoint becomes eligible. The list
+// is computed per query from live discovery so re-published random ports apply
+// immediately.
 func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
 	return func(ctx context.Context) []workflow.SidecarEndpoint {
 		if rc.apps == nil {
@@ -513,18 +529,36 @@ func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
 		var eps []workflow.SidecarEndpoint
 		seen := map[string]bool{}
 		for _, in := range apps {
-			if in.GRPCPort == 0 || seen[in.AppID] {
+			addr := in.GRPCAddr()
+			if addr == "" || seen[in.AppID] {
 				continue
 			}
+			// Aspire apps are never sidecar-sourced. This is checked first and
+			// unconditionally: the contract scanner sets DaprGRPCAddr for aspire
+			// posture too, so folding it into the includeAll clause below would
+			// silently admit them.
+			if in.Source == discovery.SourceAspire {
+				continue
+			}
+			// A contract-declared app carries its own gRPC address and is
+			// sidecar-sourced while its sidecar is reachable. When it is not,
+			// it stays eligible only if no store is openable (the sidecar is
+			// then the sole source); otherwise the store serves its workflows.
+			contract := in.DaprGRPCAddr != ""
 			include := in.Source == discovery.SourceTestcontainers ||
-				(includeAll && in.SidecarReachable && in.Source != discovery.SourceAspire)
+				(contract && (in.SidecarReachable || includeAll)) ||
+				(includeAll && in.SidecarReachable)
 			if !include {
 				continue
 			}
 			seen[in.AppID] = true
+			// Only contract apps carry a probed reachability (the discovery
+			// service flips SidecarReachable when health and metadata both
+			// fail); flag them so all-apps reads skip them without dialing.
 			eps = append(eps, workflow.SidecarEndpoint{
-				AppID: in.AppID,
-				Addr:  "127.0.0.1:" + strconv.Itoa(in.GRPCPort),
+				AppID:       in.AppID,
+				Addr:        addr,
+				Unreachable: contract && !in.SidecarReachable,
 			})
 		}
 		return eps

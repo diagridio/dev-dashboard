@@ -60,6 +60,9 @@ func (f *fakeHub) GetInstance(ctx context.Context, req *protos.GetInstanceReques
 		<-ctx.Done()
 		return nil, ctx.Err()
 	}
+	if f.unimplemented {
+		return nil, status.Error(codes.Unimplemented, "not implemented")
+	}
 	st, ok := f.states[req.GetInstanceId()]
 	if !ok {
 		return &protos.GetInstanceResponse{Exists: false}, nil
