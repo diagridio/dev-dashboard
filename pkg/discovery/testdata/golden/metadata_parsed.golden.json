@@ -8,6 +8,9 @@
   "DaprdLogPath": "/home/dev/.dapr/logs/order_daprd.log",
   "RunTemplate": "dapr.yaml",
   "AppProtocol": "",
+  "AppPort": 0,
+  "AppChannelAddress": "",
+  "WorkflowWorkers": 0,
   "Actors": [
     {
       "type": "dapr.internal.default.order.workflow",

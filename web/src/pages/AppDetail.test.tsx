@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { server } from '../test/setup'
 import { makeQueryClient, QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
@@ -13,7 +13,7 @@ async function answerConfirmDialog(label: string) {
   within(dialog).getByRole('button', { name: label }).click()
 }
 
-function renderDetail() {
+function renderDetail(appId = 'order') {
   const client = makeQueryClient()
   const router = createMemoryRouter(
     [
@@ -21,7 +21,7 @@ function renderDetail() {
       { path: '/apps/:appId', element: <AppDetail /> },
       { path: '/components/:name', element: <div>Component detail</div> },
     ],
-    { initialEntries: ['/apps/order'], future: { v7_relativeSplatPath: true } },
+    { initialEntries: [`/apps/${appId}`], future: { v7_relativeSplatPath: true } },
   )
   return render(
     <QueryProvider client={client}>
@@ -279,6 +279,58 @@ describe('AppDetail', () => {
     renderDetail()
     expect(await screen.findByText(/same Docker network/i)).toBeInTheDocument()
     expect(screen.queryByText(/publish the daprd HTTP port/i)).not.toBeInTheDocument()
+  })
+
+  describe('contract-declared app in container posture', () => {
+    const contractApp = {
+      appId: 'wfapp',
+      health: 'healthy',
+      runtime: 'unknown',
+      httpPort: 0,
+      grpcPort: 0,
+      appPort: 0,
+      daprdPid: 0,
+      appPid: 0,
+      cliPid: 0,
+      metadataOk: true,
+      runtimeVersion: '1.19.1',
+      source: 'compose',
+      sidecarReachable: true,
+      daprHttpBaseUrl: 'http://daprd:3500',
+      daprGrpcAddr: 'daprd:50001',
+    }
+    beforeEach(() => {
+      window.__DASH_CAPABILITIES__ = {
+        lifecycle: false, controlPlane: false, logs: false, workflows: true, state: false,
+        secretReveal: false, mode: 'compose', containerPosture: true,
+      }
+    })
+
+    it('shows the sidecar addresses instead of empty container, PID and path rows', async () => {
+      server.use(http.get('/api/apps/wfapp', () => HttpResponse.json(contractApp)))
+      renderDetail('wfapp')
+      expect(await screen.findByText('http://daprd:3500')).toBeInTheDocument()
+      expect(screen.getByText('daprd:50001')).toBeInTheDocument()
+      expect(screen.getByText('Sidecar HTTP')).toBeInTheDocument()
+      expect(screen.getByText('Sidecar gRPC')).toBeInTheDocument()
+      for (const row of ['Container ID', 'Compose project', 'Command', 'Metrics port', 'Uptime', 'HTTP port', 'gRPC port']) {
+        expect(screen.queryByText(row)).not.toBeInTheDocument()
+      }
+      expect(screen.queryByText(/click any path to copy/i)).not.toBeInTheDocument()
+    })
+
+    it('says the app status is not observable when the sidecar gives no signal', async () => {
+      server.use(http.get('/api/apps/wfapp', () => HttpResponse.json(contractApp)))
+      renderDetail('wfapp')
+      expect(await screen.findByText(/not observable/i)).toBeInTheDocument()
+    })
+
+    it('shows the observed app status when there is one', async () => {
+      server.use(http.get('/api/apps/wfapp', () => HttpResponse.json({ ...contractApp, appStatus: 'running' })))
+      renderDetail('wfapp')
+      await screen.findByText('http://daprd:3500')
+      expect(screen.queryByText(/not observable/i)).not.toBeInTheDocument()
+    })
   })
 
   it('renders metadata section with component chips and enabled features', async () => {

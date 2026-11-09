@@ -114,11 +114,13 @@ type service struct {
 	procStart  func(pid int) (time.Time, bool)
 	pidAlive   func(pid int) bool
 	portOpen   func(port int) bool
+	// addrOpen probes host:port reachability (contract apps, in-network).
+	addrOpen func(addr string) bool
 }
 
 func New(scan Scanner, client *http.Client) Service {
 	return &service{scan: scan, client: client, appProc: gopsutilResolver{}, stdoutFile: lsofStdoutFile,
-		procStart: gopsutilProcStart, pidAlive: gopsutilPidAlive, portOpen: tcpPortOpen}
+		procStart: gopsutilProcStart, pidAlive: gopsutilPidAlive, portOpen: tcpPortOpen, addrOpen: tcpAddrOpen}
 }
 
 // procStartTime resolves a process's start time, returning false if the resolver is nil or pid is 0.
@@ -325,6 +327,14 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 		// sources don't apply. Logs stream from the container runtime instead.
 		if md.RunTemplate != "" {
 			in.RunTemplate = md.RunTemplate
+		}
+		if r.DaprHTTPBaseURL != "" {
+			// Contract-declared (compose container posture): no container
+			// runtime, so the app's status comes from what the network shows.
+			if md.AppPort > 0 {
+				in.AppPort = md.AppPort
+			}
+			in.AppStatus = s.contractAppStatus(r.DaprHTTPBaseURL, md)
 		}
 		return in
 	}

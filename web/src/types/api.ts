@@ -28,6 +28,10 @@ export interface AppSummary {
   composeProject?: string
   /** false when a compose sidecar's HTTP port is not published to the host */
   sidecarReachable?: boolean
+  /** daprd HTTP base URL for env-contract apps (container posture); absent otherwise */
+  daprHttpBaseUrl?: string
+  /** daprd gRPC host:port for env-contract apps (container posture); absent otherwise */
+  daprGrpcAddr?: string
   httpPort: number
   grpcPort: number
   appPort: number

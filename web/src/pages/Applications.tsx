@@ -176,6 +176,12 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
   const unreachableHint = containerPosture
     ? 'sidecar unreachable — the dashboard and this app must share a Docker network'
     : 'publish the daprd HTTP port (e.g. 3500:3500) to enable health & metadata'
+  // An env-contract app with a healthy sidecar but no observable app signal
+  // (no probeable port, no connected workflow worker): say so rather than let
+  // "healthy" imply the app itself is up.
+  const appUnobserved =
+    containerPosture && !!app.daprHttpBaseUrl && !app.appStatus && !unreachable && state.label === 'healthy'
+  const unobservedHint = "sidecar is healthy; the app's own status can't be observed from the compose network"
   const key = appKey(app)
   const hasContainerName = key !== app.appId
   const hasLabel = !hasContainerName && !!app.label && app.label !== app.appId
@@ -185,10 +191,10 @@ function AppRow({ app, onOpen }: { app: AppSummary; onOpen: () => void }) {
       <td>
         <span
           className="health"
-          title={state.hint ?? (unreachable ? unreachableHint : undefined)}
+          title={state.hint ?? (unreachable ? unreachableHint : appUnobserved ? unobservedHint : undefined)}
         >
           <span className={`led ${state.led}`} /> {state.label}
-          {unreachable && ' ⓘ'}
+          {(unreachable || appUnobserved) && ' ⓘ'}
         </span>
       </td>
       <td className="b">

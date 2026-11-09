@@ -41,6 +41,10 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
   const isTestcontainers = app.source === 'testcontainers'
   const unreachable = isCompose && app.sidecarReachable === false && app.daprdStatus !== 'stopped'
   const containerPosture = caps.containerPosture === true
+  // An env-contract app (compose or Aspire container posture) is known only by
+  // its sidecar addresses: there is no container, PID, log file or host path
+  // to show, and its app status is only what the sidecar network can observe.
+  const isContract = containerPosture && !!app.daprHttpBaseUrl
 
   const now = useNow()
   const appRunning = app.appStatus === 'running'
@@ -271,10 +275,25 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           </div>
           <div className="kv">
             <div className="kk">Status</div>
-            <div className="vv">{statusCell(app.appStatus)}</div>
+            <div className="vv">
+              {isContract && !app.appStatus ? (
+                <span
+                  className="faint"
+                  title="The app has no port the dashboard can probe and no connected workflow worker, so its process status can't be seen from the compose network"
+                >
+                  not observable
+                </span>
+              ) : (
+                statusCell(app.appStatus)
+              )}
+            </div>
 
-            <div className="kk">Uptime</div>
-            <div className="vv mono">{uptimeCell(appRunning, app.appStartedAt)}</div>
+            {!isContract && (
+              <>
+                <div className="kk">Uptime</div>
+                <div className="vv mono">{uptimeCell(appRunning, app.appStartedAt)}</div>
+              </>
+            )}
 
             <div className="kk">Runtime</div>
             <div className="vv">{app.runtime || <span className="faint">—</span>}</div>
@@ -288,7 +307,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
             <div className="kk">App protocol</div>
             <div className="vv mono">{app.appProtocol || <span className="faint">—</span>}</div>
 
-            {isCompose ? (
+            {isContract ? null : isCompose ? (
               <>
                 <div className="kk">Container</div>
                 <div className="vv mono">{app.appContainerName || <span className="faint">—</span>}</div>
@@ -320,8 +339,12 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
               </>
             )}
 
-            <div className="kk">Command</div>
-            <div className="vv mono">{app.command || <span className="faint">—</span>}</div>
+            {!isContract && (
+              <>
+                <div className="kk">Command</div>
+                <div className="vv mono">{app.command || <span className="faint">—</span>}</div>
+              </>
+            )}
           </div>
         </div>
 
@@ -334,24 +357,44 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           </div>
           <div className="kv">
             <div className="kk">Status</div>
-            <div className="vv">{statusCell(app.daprdStatus)}</div>
+            <div className="vv">
+              {isContract && !app.daprdStatus
+                ? statusCell(app.sidecarReachable === false ? 'unreachable' : 'running')
+                : statusCell(app.daprdStatus)}
+            </div>
 
-            <div className="kk">Uptime</div>
-            <div className="vv mono">{uptimeCell(daprdRunning, app.daprdStartedAt)}</div>
+            {!isContract && (
+              <>
+                <div className="kk">Uptime</div>
+                <div className="vv mono">{uptimeCell(daprdRunning, app.daprdStartedAt)}</div>
+              </>
+            )}
 
             <div className="kk">Runtime ver.</div>
             <div className="vv mono">{app.runtimeVersion || <span className="faint">—</span>}</div>
 
-            <div className="kk">HTTP port</div>
-            <div className="vv mono">{app.httpPort || <span className="faint">—</span>}</div>
+            {isContract ? (
+              <>
+                <div className="kk">Sidecar HTTP</div>
+                <div className="vv mono">{app.daprHttpBaseUrl}</div>
 
-            <div className="kk">gRPC port</div>
-            <div className="vv mono">{app.grpcPort || <span className="faint">—</span>}</div>
+                <div className="kk">Sidecar gRPC</div>
+                <div className="vv mono">{app.daprGrpcAddr || <span className="faint">—</span>}</div>
+              </>
+            ) : (
+              <>
+                <div className="kk">HTTP port</div>
+                <div className="vv mono">{app.httpPort || <span className="faint">—</span>}</div>
 
-            <div className="kk">Metrics port</div>
-            <div className="vv mono"><span className="faint">—</span></div>
+                <div className="kk">gRPC port</div>
+                <div className="vv mono">{app.grpcPort || <span className="faint">—</span>}</div>
 
-            {isCompose || isTestcontainers ? (
+                <div className="kk">Metrics port</div>
+                <div className="vv mono"><span className="faint">—</span></div>
+              </>
+            )}
+
+            {isContract ? null : isCompose || isTestcontainers ? (
               <>
                 <div className="kk">Container</div>
                 <div className="vv mono">{app.daprdContainerName || <span className="faint">—</span>}</div>
@@ -377,7 +420,8 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         </div>
       </div>
 
-      {/* Paths panel */}
+      {/* Paths panel — env-contract apps have no host paths to show */}
+      {!isContract && (
       <div className="panel paths">
         <div className="ph">
           Paths <span className="faint" style={{ fontWeight: 400, fontSize: 11 }}>— click any path to copy</span>
@@ -454,6 +498,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
           )}
         </div>
       </div>
+      )}
 
       {/* Enabled features (preserved data, not in mock layout but present in data) */}
       {app.enabledFeatures && app.enabledFeatures.length > 0 && (
