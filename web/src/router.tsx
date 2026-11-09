@@ -12,6 +12,7 @@ import { ResourceList } from './pages/ResourceList'
 import { ComponentBuilder } from './pages/component-builder/ComponentBuilder'
 import { Resiliency } from './pages/Resiliency'
 import { ResiliencyBuilder } from './pages/resiliency-builder/ResiliencyBuilder'
+import { HttpEndpoints } from './pages/HttpEndpoints'
 import { ControlPlane } from './pages/ControlPlane'
 import { RouteError } from './components/RouteError'
 import { getCapabilities } from './lib/capabilities'
@@ -38,6 +39,8 @@ const gatedChildren: RouteObject[] = [
   { path: 'resiliency', element: <Resiliency />, handle: { rumView: 'Resiliency' } },
   { path: 'resiliency/new', element: <ResiliencyBuilder />, handle: { rumView: 'ResiliencyBuilder' } },
   { path: 'resiliency/:name', element: <Resiliency />, handle: { rumView: 'Resiliency' } },
+  { path: 'http-endpoints', element: <HttpEndpoints />, handle: { rumView: 'HttpEndpoints' } },
+  { path: 'http-endpoints/:name', element: <HttpEndpoints />, handle: { rumView: 'HttpEndpoints' } },
   ...(caps.controlPlane
     ? [{ path: 'control-plane', element: <ControlPlane />, handle: { rumView: 'ControlPlane' } }]
     : []),

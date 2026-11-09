@@ -81,6 +81,15 @@ describe('Resiliency page', () => {
     expect(link).toHaveAttribute('href', '/resiliency/new')
   })
 
+  it('names the folders the dashboard actually scans', async () => {
+    serve([])
+    renderPage()
+    await screen.findByText(/no resiliency policies/i)
+    const sub = document.querySelector('.phead .sub')?.textContent ?? ''
+    expect(sub).toContain('~/.dapr/components')
+    expect(sub).not.toContain('~/.dapr/resources')
+  })
+
   it('lists discovered policies and shows the first one with scopes, policies and targets', async () => {
     serve([GLOBAL, PARTY])
     renderPage('/resiliency/res111res111')

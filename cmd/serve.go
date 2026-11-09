@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/binarystore"
 	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
 	"github.com/diagridio/dev-dashboard/pkg/controlplane"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
@@ -154,6 +155,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		ControlPlane:     deps.ControlPlane,
 		TelemetryEnabled: deps.TelemetryEnabled,
 		UpdateCheck:      deps.UpdateCheck,
+		BinaryStore:      binarystore.New(decorated, rc.sidecarPool),
 		AllowNonLoopback: deps.AllowNonLoopback,
 		AllowedHosts:     deps.AllowedHosts,
 		ListenPort:       deps.ListenPort,

@@ -3,8 +3,11 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- CI sets DAPR_DOTNET_SDK_VERSION to match the Dapr runtime it installs. -->
+    <DaprWorkflowVersion>$(DAPR_DOTNET_SDK_VERSION)</DaprWorkflowVersion>
+    <DaprWorkflowVersion Condition="'$(DaprWorkflowVersion)' == ''">1.18.4</DaprWorkflowVersion>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Dapr.Workflow" Version="1.18.4" />
+    <PackageReference Include="Dapr.Workflow" Version="$(DaprWorkflowVersion)" />
   </ItemGroup>
 </Project>

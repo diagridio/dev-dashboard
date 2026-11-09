@@ -91,6 +91,27 @@ describe('useComponentCatalog', () => {
     expect(screen.getByTestId('redis-has-conn-str')).toHaveTextContent('no')
   })
 
+  it.each([
+    ['v1 listed first', ['v1', 'v2']],
+    ['v2 listed first', ['v2', 'v1']],
+  ])('picks the highest stable version whatever the catalog order (%s)', async (_label, order) => {
+    const pg = (version: string) => ({
+      type: 'state', name: 'postgresql', version, title: 'PostgreSQL', status: 'stable',
+      metadata: [{ name: `only-${version}`, required: false, type: 'string' }],
+    })
+    server.use(
+      http.get('/api/metadata/components', () =>
+        HttpResponse.json({ schemaVersion: 'v1', date: '2026-01-01', components: order.map(pg) }),
+      ),
+    )
+    const client = makeQueryClient()
+    const { result } = renderHook(() => useComponentCatalog(), {
+      wrapper: ({ children }: { children: React.ReactNode }) => <QueryProvider client={client}>{children}</QueryProvider>,
+    })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.fieldsFor('state.postgresql').map((f) => f.name)).toContain('only-v2')
+  })
+
   it('keeps schemas and fieldsFor referentially stable across re-renders with the same data', async () => {
     server.use(http.get('/api/metadata/components', () => HttpResponse.json(bundle)))
     const client = makeQueryClient()

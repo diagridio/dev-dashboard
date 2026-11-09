@@ -19,7 +19,8 @@ func TestDerivePaths_AutoDetect(t *testing.T) {
 	require.Contains(t, resPaths, "/home/me/.dapr/components")
 	require.Contains(t, resPaths, "/home/me/.dapr")
 	require.Contains(t, resPaths, "/app/resources")
-	require.Contains(t, resPaths, "/app/config") // dir of ConfigPath
+	require.Contains(t, resPaths, "/app/config/cfg.yaml") // the Configuration file itself
+	require.NotContains(t, resPaths, "/app/config")       // never its directory (recursive walk)
 
 	require.Contains(t, scanPaths, "/home/me/.dapr/components")
 	require.Contains(t, scanPaths, "/app/resources")
@@ -145,4 +146,11 @@ func TestDerivePathsExtraResPaths(t *testing.T) {
 	if len(scanPaths) != 1 || scanPaths[0] != "/app/components/state.yaml" {
 		t.Fatalf("explicit statestore must own scanPaths: %v", scanPaths)
 	}
+}
+
+func TestAppsFingerprint_ConfigFileChange(t *testing.T) {
+	a := []discovery.Instance{{AppID: "order", ConfigPath: "/p/a.yaml"}}
+	b := []discovery.Instance{{AppID: "order", ConfigPath: "/p/b.yaml"}}
+	require.NotEqual(t, appsFingerprint(a), appsFingerprint(b),
+		"a different config file in the same dir must change the fingerprint")
 }

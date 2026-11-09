@@ -3,9 +3,15 @@
 A local dashboard for Dapr developers that offers a live view of everything Dapr running on
 your machine, plus guided builders for authoring Dapr component and resiliency YAML.
 
-![Dev Dashboard - Applications](docs/images/applications-light.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/applications-dark.png">
+  <img alt="Dev Dashboard - Applications" src="docs/images/applications-light.png">
+</picture>
 
-![Dev Dashboard - Workflows](docs/images/workflow-overview-light.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-overview-dark.png">
+  <img alt="Dev Dashboard - Workflows" src="docs/images/workflow-overview-light.png">
+</picture>
 
 ## Goal
 
@@ -13,7 +19,8 @@ The Diagrid Dapr Dev Dashboard is a companion for local Dapr development. It ins
 apps you start with `dapr run` / `dapr run -f`, Aspire, Docker Compose, or Dapr
 Testcontainers (e.g. Spring Boot apps run with `mvn spring-boot:test-run` and
 `dapr-spring-boot-starter-test`), and surfaces everything about them — sidecars, workflows,
-actors, subscriptions, components, resiliency policies, configurations, and logs.
+actors, subscriptions, components, resiliency policies, HTTP endpoints, configurations, and
+logs.
 
 It also helps you author Dapr resources. The **Component Builder** walks you through
 picking a component type from the full Dapr catalog, filling in its metadata fields, and
@@ -230,11 +237,14 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   **Clear inactive**. This only hides them from the dashboard; no containers or files are
   deleted, and an app that starts running again reappears.
 - **Inspect an application** — drill into a single app for its ports, PIDs, command,
-  resource/config paths, runtime metadata, enabled features, and loaded components. Stop
+  resource/config paths, runtime metadata, enabled features, and loaded components and HTTP
+  endpoints. Stop
   works for every discovery mode; Start and Restart are offered for Docker Compose apps only.
 - **Debug workflows** — browse workflow executions across all apps with status filters and
   search, then open a run to watch its **live event history**, input/output, custom status,
-  and a continuously-ticking wall-clock while it runs.
+  and a continuously-ticking wall-clock while it runs. Payloads that a Dapr 1.19 SDK moved to a
+  binary store (a `$daprRef` data reference) show as a card; **Load payload** fetches the value
+  through the app's sidecar (up to 1 MiB) and checks its sha256.
 - **Clean up workflows** — terminate and/or purge individual or bulk workflows, with an
   explicit "force delete" fallback for stuck/orphaned state.
 - **Browse, add & clean state records** — the **State** page lists the records in any connected
@@ -266,7 +276,14 @@ Developers use the dashboard to observe and debug Dapr apps while building local
   are extracted and shown too, with a container-prefixed path. A component's `secretKeyRef`
   and `envRef` values are resolved against your local secret stores (`local.file`,
   `local.env`), and each reference shows whether it resolved, and if not, which env var or
-  file path was tried.
+  file path was tried. Each configuration shows which apps use it, matched on the file the
+  app's sidecar was started with (`--config`, or a run template's `configFilePath`).
+- **Review resiliency policies & HTTP endpoints** — the **Resiliency** page lists discovered
+  `Resiliency` files with their scopes, policies, targets, and the apps that loaded them. The
+  **HTTP Endpoints** page does the same for `HTTPEndpoint` resources (non-Dapr services called
+  through `/v1.0/invoke`): base URL, scopes, headers, and loaded-by apps. Headers that use
+  `secretKeyRef` or `envRef` show whether the reference resolves, never the value, and plain
+  values that look like credentials are masked until you click **Show**.
 - **Build component YAML** — a guided wizard over the full Dapr component catalog: pick a
   type, fill in its metadata fields (with per-field docs and defaults), choose an
   authentication profile, then copy or download the generated YAML.
@@ -288,36 +305,173 @@ backend is unreachable and resumes on recovery), full keyboard operability, and
 cross-navigation between related entities (app →
 component → "loaded by" app, etc.).
 
-### CLI drawer
+# Pages
 
-Open the **CLI** tab on the right edge of the page to see the Dapr CLI commands for what
-you're looking at. On a workflow instance, for example, it lists the commands to view the
-history, raise an event, terminate, suspend, resume, re-run, or purge that instance, and to
-inspect its scheduler reminder. Each command has a link to its docs and a **Copy** button.
-The drawer shows on the Applications, Application detail, Workflows, Workflow detail, Actors,
-and Subscriptions pages. Only self-hosted commands are listed; Kubernetes-only (`-k`) commands
-are left out.
+The sections below follow the order of the menu, from left to right.
 
-![Dev Dashboard - CLI drawer](docs/images/cli-drawer.png)
+## Applications
 
-### State records
+The **Applications** page lists every running app and sidecar: app ID, health, runtime, ports, PIDs, age and the run process that owns it. Apps that have fully stopped can be removed from the list one at a time or all at once with **Clear inactive**.
 
-The **State** page lists the key/value records in a connected state store. Filter by app
-prefix, search by key, and expand a row to see the full value with its size, version, and
-encoding. Workflow and actor state is hidden unless you tick *Show internal keys*.
-**+ New record** adds a record, and records can be deleted one at a time or by multi-select.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/applications-dark.png">
+  <img alt="Dev Dashboard - Applications" src="docs/images/applications-light.png">
+</picture>
 
-![Dev Dashboard - State records](docs/images/state-records.png)
+Open an app to see its ports, PIDs, command, resource and config paths, runtime metadata, enabled features, and the components and HTTP endpoints its sidecar loaded. Stop works in every discovery mode; Start and Restart are offered for Docker Compose apps only.
 
-### Publish a message
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/application-detail-dark.png">
+  <img alt="Dev Dashboard - Application detail" src="docs/images/application-detail-light.png">
+</picture>
 
-On the **Subscriptions** page, **Publish** opens a dialog that sends a message to that
-subscription's pub/sub component and topic. Enter the payload, pick a content type, and
-optionally set `ttlInSeconds` or `rawPayload` under *Show advanced*. The message goes through
-the app's sidecar to the real broker, so the subscriber receives it like any other message.
-The button is disabled when the sidecar is unreachable, and errors from daprd are shown as-is.
+## Components
 
-![Dev Dashboard - Publish a message](docs/images/publish-message.png)
+The **Components** page lists the discovered components with their type and the apps that loaded them. On the same page you manage the state-store connections the dashboard reads workflows from.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/components-dark.png">
+  <img alt="Dev Dashboard - Components" src="docs/images/components-light.png">
+</picture>
+
+Each component shows its YAML and the apps that loaded it. `secretKeyRef` and `envRef` values are resolved against your local secret stores, and each reference shows whether it resolved.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/component-detail-dark.png">
+  <img alt="Dev Dashboard - Component detail" src="docs/images/component-detail-light.png">
+</picture>
+
+The **Component Builder** walks you through the full Dapr component catalog: pick a type, fill in its metadata fields and choose an authentication profile. The wizard ends in a YAML preview you can copy or download.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/component-builder-dark.png">
+  <img alt="Dev Dashboard - Component Builder" src="docs/images/component-builder-light.png">
+</picture>
+
+## Workflows
+
+The **Workflows** page lists workflow runs across all apps, with status filters and search. Runs can be terminated and purged one at a time or in bulk.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-overview-dark.png">
+  <img alt="Dev Dashboard - Workflows" src="docs/images/workflow-overview-light.png">
+</picture>
+
+A workflow run shows its live event history, input, output and custom status. When a run fails, a banner at the top shows the error, and the event that failed shows its error details inline.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-detail-dark.png">
+  <img alt="Dev Dashboard - Workflow detail" src="docs/images/workflow-detail-light.png">
+</picture>
+
+A payload that a Dapr 1.19 SDK moved to a binary store shows as a `$daprRef` card with its store, key and size. **Load payload** fetches the value through the app's sidecar and checks its sha256.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/workflow-dataref-dark.png">
+  <img alt="Dev Dashboard - Workflow data reference" src="docs/images/workflow-dataref-light.png">
+</picture>
+
+## State
+
+The **State** page lists the key/value records in a connected state store, with the key, app prefix, value preview, size, version and TTL. Workflow and actor state is hidden unless you tick *Show internal keys*.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/state-dark.png">
+  <img alt="Dev Dashboard - State" src="docs/images/state-light.png">
+</picture>
+
+Expand a row to see the full value with its size, version and encoding. **+ New record** adds a record, and records can be deleted one at a time or by multi-select.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/state-records-dark.png">
+  <img alt="Dev Dashboard - State records" src="docs/images/state-records-light.png">
+</picture>
+
+## Actors
+
+The **Actors** page lists the actor types across all apps: the host app, the number of active actors, the idle timeout, reminders and placement status.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/actors-dark.png">
+  <img alt="Dev Dashboard - Actors" src="docs/images/actors-light.png">
+</picture>
+
+## Subscriptions
+
+The **Subscriptions** page lists the pub/sub subscriptions across all apps, with their type (declarative, programmatic or streaming), topic and routes. Subscriptions with several rules expand to show every match expression.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/subscriptions-dark.png">
+  <img alt="Dev Dashboard - Subscriptions" src="docs/images/subscriptions-light.png">
+</picture>
+
+**Publish** opens a dialog that sends a message to that subscription's pub/sub component and topic. Enter the payload, pick a content type, and optionally set `ttlInSeconds` or `rawPayload` under *Show advanced*. The message goes through the app's sidecar to the real broker, so the subscriber receives it like any other message.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/publish-message-dark.png">
+  <img alt="Dev Dashboard - Publish a message" src="docs/images/publish-message-light.png">
+</picture>
+
+## Resiliency
+
+The **Resiliency** page lists the discovered `Resiliency` files with their scopes, policies, targets and the apps that loaded them.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/resiliency-dark.png">
+  <img alt="Dev Dashboard - Resiliency" src="docs/images/resiliency-light.png">
+</picture>
+
+The **Resiliency Builder** lets you compose named timeouts, retries and circuit breakers, apply them to apps, actors and components, and export the resiliency spec as YAML.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/resiliency-builder-dark.png">
+  <img alt="Dev Dashboard - Resiliency Builder" src="docs/images/resiliency-builder-light.png">
+</picture>
+
+## HTTP Endpoints
+
+The **HTTP Endpoints** page lists `HTTPEndpoint` resources with their base URL, scopes, headers and the apps that loaded them. Secret-backed headers show whether they resolve, never the value.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/http-endpoints-dark.png">
+  <img alt="Dev Dashboard - HTTP endpoints" src="docs/images/http-endpoints-light.png">
+</picture>
+
+## Configurations
+
+The **Configurations** page shows each Dapr `Configuration` file as YAML, with the apps whose sidecar was started with it.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/configurations-dark.png">
+  <img alt="Dev Dashboard - Configurations" src="docs/images/configurations-light.png">
+</picture>
+
+## Control Plane
+
+The **Control Plane** page shows the `dapr init` containers (placement, scheduler and the rest) with their status, and lets you start, restart or stop them.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/control-plane-dark.png">
+  <img alt="Dev Dashboard - Control plane" src="docs/images/control-plane-light.png">
+</picture>
+
+## Logs
+
+Stream an app's daprd or application logs live, with level coloring, keyword highlighting and a follow toggle.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/logs-dark.png">
+  <img alt="Dev Dashboard - Logs" src="docs/images/logs-light.png">
+</picture>
+
+## CLI drawer
+
+The **CLI** tab on the right edge of the page isn't a menu item, but it's available on the Applications, Application detail, Workflows, Workflow detail, Actors and Subscriptions pages. It lists the self-hosted Dapr CLI commands for what you're looking at, already filled in with the app ID or workflow instance ID. On a workflow instance, for example, it lists the commands to view the history, raise an event, terminate, suspend, resume, re-run, or purge that instance. Each command has a link to its docs and a **Copy** button.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/cli-drawer-dark.png">
+  <img alt="Dev Dashboard - CLI drawer" src="docs/images/cli-drawer-light.png">
+</picture>
 
 ## Non-Goals
 

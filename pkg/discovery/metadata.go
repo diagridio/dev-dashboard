@@ -39,6 +39,12 @@ type Resiliency struct {
 	Name string `json:"name"`
 }
 
+// HTTPEndpoint is an HTTPEndpoint resource a sidecar has loaded. daprd
+// reports only the name.
+type HTTPEndpoint struct {
+	Name string `json:"name"`
+}
+
 type Metadata struct {
 	ID              string
 	RuntimeVersion  string
@@ -53,6 +59,7 @@ type Metadata struct {
 	Subscriptions   []Subscription
 	Components      []Component
 	Resiliencies    []Resiliency
+	HTTPEndpoints   []HTTPEndpoint
 	EnabledFeatures []string
 	Placement       string
 }
@@ -74,6 +81,7 @@ type rawMetadata struct {
 	Components      []Component       `json:"components"`
 	Subscriptions   []rawSubscription `json:"subscriptions"`
 	Resiliencies    []Resiliency      `json:"resiliencies"`
+	HTTPEndpoints   []HTTPEndpoint    `json:"httpEndpoints"`
 	ActorRuntime    struct {
 		Placement string `json:"placement"`
 	} `json:"actorRuntime"`
@@ -142,6 +150,7 @@ func FetchMetadata(ctx context.Context, client *http.Client, baseURL string) (Me
 		Components:      raw.Components,
 		Subscriptions:   subs,
 		Resiliencies:    raw.Resiliencies,
+		HTTPEndpoints:   raw.HTTPEndpoints,
 		EnabledFeatures: raw.EnabledFeatures,
 		Placement:       raw.ActorRuntime.Placement,
 	}, nil

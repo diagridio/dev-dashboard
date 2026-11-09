@@ -11,7 +11,8 @@
 // -app-channel-address/-app-port (that makes daprd's placement client hang
 // indefinitely waiting on an app channel nothing will ever answer).
 //
-// This fixture runs daprd/placement/scheduler at 1.18.1, and unlike the
+// This fixture runs daprd/placement/scheduler at $DAPR_RUNTIME_VERSION
+// (default 1.18.1; CI sets the latest 1.18.x and 1.19.x), and unlike the
 // compose fixture it REQUIRES daprd 1.17+: the dashboard's workflow composite
 // service always routes testcontainers apps through the sidecar's gRPC
 // workflow-management API (ListInstanceIDs/GetInstanceHistory), which daprd
@@ -36,8 +37,19 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+// daprVersion is the daprd/placement/scheduler image tag.
+var daprVersion = envOr("DAPR_RUNTIME_VERSION", "1.18.1")
+
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
 func main() {
 	ctx := context.Background()
+	fmt.Fprintf(os.Stderr, "tcfixture: using Dapr %s\n", daprVersion)
 
 	net, err := network.New(ctx)
 	must(err)
@@ -53,7 +65,7 @@ func main() {
 	// Placement service — required for Dapr actor/workflow placement.
 	placement, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:          "daprio/placement:1.18.1",
+			Image:          "daprio/placement:" + daprVersion,
 			Networks:       []string{net.Name},
 			NetworkAliases: map[string][]string{net.Name: {"placement"}},
 			Cmd:            []string{"./placement", "-port", "50005"},
@@ -71,7 +83,7 @@ func main() {
 	// user with "permission denied".
 	scheduler, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:          "daprio/scheduler:1.18.1",
+			Image:          "daprio/scheduler:" + daprVersion,
 			Networks:       []string{net.Name},
 			NetworkAliases: map[string][]string{net.Name: {"scheduler"}},
 			Cmd:            []string{"./scheduler", "--port", "50006", "--etcd-data-dir", "/tmp/scheduler-data"},
@@ -89,7 +101,7 @@ func main() {
 	must(err)
 	daprd, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image:          "daprio/daprd:1.18.1",
+			Image:          "daprio/daprd:" + daprVersion,
 			Networks:       []string{net.Name},
 			NetworkAliases: map[string][]string{net.Name: {"daprd"}},
 			Cmd: []string{

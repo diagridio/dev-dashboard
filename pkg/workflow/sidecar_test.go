@@ -281,3 +281,20 @@ func TestSidecarOwnsAndAppIDs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"app"}, ids)
 }
+
+func TestSidecarPoolConnReusesConnection(t *testing.T) {
+	p := NewSidecarPool()
+	defer p.Close()
+	a, err := p.Conn("127.0.0.1:1")
+	require.NoError(t, err)
+	b, err := p.Conn("127.0.0.1:1")
+	require.NoError(t, err)
+	require.Same(t, a, b)
+}
+
+func TestSidecarPoolConnAfterClose(t *testing.T) {
+	p := NewSidecarPool()
+	require.NoError(t, p.Close())
+	_, err := p.Conn("127.0.0.1:1")
+	require.EqualError(t, err, "sidecar pool closed")
+}

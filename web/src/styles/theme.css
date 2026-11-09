@@ -58,7 +58,9 @@ body {
      only switch. Without it those popups stay light in the dark theme. */
   color-scheme: dark;
   --dapr-hat-outline: rgba(255, 255, 255, 0.35);
-  /* Catalyst-aligned green-tinted dark surfaces */
+  /* Dapr logo (Ctrl+B easter egg): the CNCF navy is unreadable on the dark surface, so white like the Diagrid wordmark. */
+  --dapr-logo: #FFFFFF;
+  /* Diagrid-aligned green-tinted dark surfaces */
   --bg: #161918; --surface: #1C1F1E; --surface-2: #232625; --raise: #2B2E2D;
   --line: #373A39; --line-soft: #262928;
   --text: #F8F8F8; --muted: #A6A6A6; --faint: #6A6A6A;
@@ -75,6 +77,8 @@ body {
 .app[data-theme="light"] {
   color-scheme: light;
   --dapr-hat-outline: transparent;
+  /* Dapr logo (Ctrl+B easter egg): CNCF brand navy, same as --dapr-hat. */
+  --dapr-logo: #0D2192;
   --bg: color-mix(in srgb, var(--accent-bright) 3%, #FFFFFF); --surface: #FFFFFF; --surface-2: #F9FAFB; --raise: #FFFFFF;
   --line: #DFE3E8; --line-soft: #ECEFF2;
   --text: #212B36; --muted: #637381; --faint: #919EAB;
@@ -91,11 +95,16 @@ body {
 .app * { box-sizing: border-box; }
 .app { --sbw: 240px; }
 .app.collapsed { --sbw: 44px; }
+/* Ctrl+B easter egg: the Resources sidebar is not rendered, so the body takes its space. */
+.app.dapr-mode { --sbw: 0px; }
 
 /* ---- Logo ---- */
 .dglogo { height: 21px; width: auto; display: block; color: #fff; }
 .app[data-theme="light"] .dglogo { color: #121C29; }
 .app[data-theme="dark"] .dglogo { color: #FFFFFF; }
+/* As wide as the Diagrid logo (21px × 176/55 = 67.2px), so ~50.28px tall at 480:359.12;
+   the negative margin keeps the layout box at 21px so the top bar does not grow. */
+.daprlogo { width: 67.2px; height: auto; margin: -14.64px 0; display: block; color: var(--dapr-logo); }
 
 /* ---- Left resources sidebar ---- */
 .sidebar { position: fixed; left: 0; top: var(--topbar-h, 46px); bottom: 0; width: var(--sbw); background: var(--surface); border-right: 1px solid var(--line); z-index: 9; transition: width .18s ease; display: flex; flex-direction: column; overflow: hidden; }
@@ -167,6 +176,13 @@ body {
 .nav a { font-size: 13px; color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 7px; font-weight: 500; cursor: pointer; }
 .nav a:hover { color: var(--text); }
 .nav a.active { color: var(--text); background: color-mix(in srgb, var(--accent-bright) 10%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-bright) 35%, transparent); }
+/* Narrow screens: between the brand and the right-hand controls the nav gets
+   only a sliver and wraps into a tall column. Give it its own full-width row
+   instead (TopNav publishes the resulting height as --topbar-h). */
+@media (max-width: 1100px) {
+  .topbar { flex-wrap: wrap; row-gap: 6px; }
+  .nav { order: 3; flex-basis: 100%; margin-left: 0; }
+}
 .topright { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 .tbtn { font: inherit; font-size: 12.5px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; cursor: pointer; display: flex; align-items: center; gap: 7px; }
 .tbtn:hover { color: var(--text); border-color: var(--faint); }
@@ -221,6 +237,15 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .secref-ok { background: var(--done-bg); color: var(--done-fg); }
 .secref-warn { background: var(--pend-bg); color: var(--pend-fg); }
 .secref-err { background: var(--fail-bg); color: var(--fail-fg); }
+.integ-ok { background: var(--done-bg); color: var(--done-fg); }
+.integ-warn { background: var(--pend-bg); color: var(--pend-fg); }
+.integ-unknown { background: var(--surface-2); color: var(--muted); }
+/* Binary-store reference card: inset within a panel body (10px nested tier, no shadow) */
+.refcard { margin: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.refcard-bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; }
+.refcard-bar.wrap { flex-wrap: wrap; }
+.refcard-note { padding: 0 14px; }
+.refcard > pre.json { border-top: 1px solid var(--line); }
 .cn-secretwarn { color: var(--fail-fg); font-size: 11px; }
 .health { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; }
 .health .led { width: 8px; height: 8px; border-radius: 50%; }

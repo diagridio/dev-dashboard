@@ -40,6 +40,9 @@ const REQUIRED_OVERRIDES: Record<string, string[]> = {
   'state.mongodb': ['databaseName'],
 }
 
+// "v2" -> 2; unparseable versions sort last.
+const versionNum = (v: string) => Number(/^v(\d+)/.exec(v)?.[1] ?? -1)
+
 export function useComponentCatalog() {
   const query = useQuery<MetadataBundle>({
     queryKey: ['metadata', 'components'],
@@ -56,8 +59,15 @@ export function useComponentCatalog() {
 
   const fieldsFor = useCallback((type: string): MetadataField[] => {
     const name = implFor(type)
-    const matches = schemas.filter((s) => s.name === name)
-    const chosen = matches.find((s) => s.status === 'stable') ?? matches[0]
+    // Prefer stable, then the highest version (v2 over v1), independent of
+    // catalog order.
+    const chosen = schemas
+      .filter((s) => s.name === name)
+      .sort(
+        (a, b) =>
+          Number(b.status === 'stable') - Number(a.status === 'stable') ||
+          versionNum(b.version) - versionNum(a.version),
+      )[0]
     const overrides = REQUIRED_OVERRIDES[type] ?? []
     const base = (chosen?.metadata ?? []).map((f) =>
       overrides.includes(f.name) ? { ...f, required: true } : f,

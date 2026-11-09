@@ -38,6 +38,11 @@
       "name": "order-resiliency"
     }
   ],
+  "HTTPEndpoints": [
+    {
+      "name": "identity-api"
+    }
+  ],
   "EnabledFeatures": [
     "ServiceInvocation",
     "StateManagement"

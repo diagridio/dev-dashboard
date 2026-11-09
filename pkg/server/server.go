@@ -40,6 +40,9 @@ type Options struct {
 	News         news.Service
 	ControlPlane controlplane.Manager
 	UpdateCheck  updatecheck.Service
+	// BinaryStore reads binary store files via sidecars; nil disables the
+	// GET /api/apps/{appId}/binarystore/{store}/file route.
+	BinaryStore BinaryFileReader
 	// TelemetryEnabled controls whether the served SPA loads Datadog RUM.
 	TelemetryEnabled bool
 	// AllowNonLoopback switches the request guard from the loopback
@@ -105,7 +108,7 @@ func NewRouter(opts Options) http.Handler {
 	}
 
 	mount := func(router chi.Router) {
-		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Lifecycle, opts.Backend, opts.StateBackend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane, opts.UpdateCheck, caps))
+		router.Mount("/api", apiRouter(opts.Version, opts.Apps, opts.ContainerLogs, opts.Lifecycle, opts.Backend, opts.StateBackend, opts.Stores, opts.Resources, opts.News, opts.ControlPlane, opts.UpdateCheck, opts.BinaryStore, caps))
 		router.Handle("/*", SPAHandler(opts.DistFS, opts.BasePath, opts.TelemetryEnabled, opts.Version.Version, caps))
 	}
 

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { act, render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -124,6 +124,23 @@ describe('App shell', () => {
     }
   })
 
+  it('Ctrl+B swaps to the Dapr logo and hides the Resources sidebar; Ctrl+B again restores both', async () => {
+    const { container } = renderApp('/')
+    const press = () => act(() => { fireEvent.keyDown(window, { key: 'b', ctrlKey: true }) })
+    expect(await screen.findByRole('complementary', { name: 'Resources' })).toBeInTheDocument()
+    expect(container.querySelector('.app')).not.toHaveClass('dapr-mode')
+
+    press()
+    expect(screen.getByRole('img', { name: 'Dapr' })).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Resources' })).toBeNull()
+    expect(container.querySelector('.app')).toHaveClass('dapr-mode')
+
+    press()
+    expect(screen.getByRole('img', { name: 'Diagrid' })).toBeInTheDocument()
+    expect(screen.getByRole('complementary', { name: 'Resources' })).toBeInTheDocument()
+    expect(container.querySelector('.app')).not.toHaveClass('dapr-mode')
+  })
+
   it('opens the REPLAY easter egg on the Konami code', async () => {
     // Restore only what this test replaces, so other tests keep the matchMedia stub.
     const origRaf = window.requestAnimationFrame
@@ -136,6 +153,9 @@ describe('App shell', () => {
       const code = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a']
       for (const key of code) fireEvent.keyDown(window, { key })
       expect(await screen.findByRole('heading', { name: 'REPLAY' })).toBeInTheDocument()
+      // The code's plain B must not trigger the Ctrl+B logo/sidebar easter egg.
+      expect(screen.getByRole('img', { name: 'Diagrid' })).toBeInTheDocument()
+      expect(screen.queryByRole('img', { name: 'Dapr' })).toBeNull()
     } finally {
       getContext.mockRestore()
       window.requestAnimationFrame = origRaf
