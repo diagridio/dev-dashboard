@@ -21,10 +21,24 @@ import (
 // management API (ListInstanceIDs/GetInstanceHistory, Dapr 1.17+).
 var ErrSidecarUnsupported = errors.New("workflow inspection via the sidecar requires Dapr 1.17 or newer")
 
+// ErrSidecarUnreachable marks a sidecar that discovery already reports as
+// unreachable, or whose gRPC calls time out or fail to connect.
+var ErrSidecarUnreachable = errors.New("sidecar unreachable")
+
+// unreachableErr names the app whose sidecar cannot be reached.
+func unreachableErr(appID string) error {
+	return fmt.Errorf("the Dapr sidecar of app %q is unreachable: %w", appID, ErrSidecarUnreachable)
+}
+
 // SidecarEndpoint is one app's daprd gRPC endpoint.
 type SidecarEndpoint struct {
 	AppID string
 	Addr  string // host:port, e.g. "127.0.0.1:58445"
+	// Unreachable is set when discovery already knows the sidecar can't be
+	// reached. All-apps reads skip it without dialing; app-scoped reads fail
+	// at once with ErrSidecarUnreachable (the composite then falls back to
+	// the store). The zero value means reachable.
+	Unreachable bool
 }
 
 // EndpointsFunc returns the current set of sidecar-sourced apps. It is called
@@ -149,26 +163,79 @@ func (s *SidecarService) endpointFor(ctx context.Context, appID string) (Sidecar
 // counts, so store-style cursor paging buys nothing here). A failing app is
 // skipped and logged — one down sidecar never empties the whole page.
 func (s *SidecarService) List(ctx context.Context, q ListQuery) (ListResult, error) {
-	var items []ExecutionSummary
-	for _, ep := range s.eps(ctx) {
+	var (
+		mu    sync.Mutex
+		items []ExecutionSummary
+	)
+	s.forEachReachable(ctx, func(ep SidecarEndpoint) {
 		if q.AppID != "" && ep.AppID != q.AppID {
-			continue
+			return
 		}
 		sums, err := s.listApp(ctx, ep)
 		if err != nil {
 			sidecarLogger().Warn("sidecar workflow list failed", "appID", ep.AppID, "addr", ep.Addr, "err", err)
-			continue
+			return
 		}
+		mu.Lock()
+		defer mu.Unlock()
 		for _, sum := range sums {
 			if matches(sum, q) {
 				items = append(items, sum)
 			}
 		}
-	}
+	})
 	sort.SliceStable(items, func(a, b int) bool {
 		return afterOrZero(items[a].CreatedAt, items[b].CreatedAt)
 	})
 	return ListResult{Items: items}, nil
+}
+
+// forEachReachable runs fn for every endpoint discovery reports reachable,
+// concurrently (each app's calls are already bounded by sidecarCallTimeout),
+// so N slow sidecars cost one timeout rather than N. Unreachable endpoints are
+// skipped without dialing.
+func (s *SidecarService) forEachReachable(ctx context.Context, fn func(SidecarEndpoint)) {
+	var wg sync.WaitGroup
+	for _, ep := range s.eps(ctx) {
+		if ep.Unreachable {
+			continue
+		}
+		wg.Add(1)
+		go func(ep SidecarEndpoint) {
+			defer wg.Done()
+			fn(ep)
+		}(ep)
+	}
+	wg.Wait()
+}
+
+// statsPerApp tallies the all-apps Stats query per reachable sidecar app,
+// including only apps whose sidecar answered. The composite uses the key set
+// to count those apps from the sidecar alone.
+func (s *SidecarService) statsPerApp(ctx context.Context, q ListQuery) map[string]StatsResult {
+	sq := statsQuery(q)
+	var mu sync.Mutex
+	out := map[string]StatsResult{}
+	s.forEachReachable(ctx, func(ep SidecarEndpoint) {
+		if sq.AppID != "" && ep.AppID != sq.AppID {
+			return
+		}
+		sums, err := s.listApp(ctx, ep)
+		if err != nil {
+			sidecarLogger().Warn("sidecar workflow stats failed", "appID", ep.AppID, "addr", ep.Addr, "err", err)
+			return
+		}
+		var items []ExecutionSummary
+		for _, sum := range sums {
+			if matches(sum, sq) {
+				items = append(items, sum)
+			}
+		}
+		mu.Lock()
+		out[ep.AppID] = tally(ListResult{Items: items})
+		mu.Unlock()
+	})
+	return out
 }
 
 // listOwned is the app-scoped List for one sidecar-owned app. Unlike List,
@@ -178,6 +245,9 @@ func (s *SidecarService) listOwned(ctx context.Context, q ListQuery) (ListResult
 	ep, ok := s.endpointFor(ctx, q.AppID)
 	if !ok {
 		return ListResult{}, nil
+	}
+	if ep.Unreachable {
+		return ListResult{}, unreachableErr(ep.AppID)
 	}
 	sums, err := s.listApp(ctx, ep)
 	if err != nil {
@@ -226,6 +296,9 @@ func (s *SidecarService) Get(ctx context.Context, appID, instanceID string) (Exe
 	if !ok {
 		return Execution{}, ErrNotFound
 	}
+	if ep.Unreachable {
+		return Execution{}, unreachableErr(appID)
+	}
 	cl, err := s.pool.client(ep.Addr)
 	if err != nil {
 		return Execution{}, err
@@ -237,11 +310,11 @@ func (s *SidecarService) Get(ctx context.Context, appID, instanceID string) (Exe
 		if errors.Is(err, api.ErrInstanceNotFound) {
 			return Execution{}, ErrNotFound
 		}
-		return Execution{}, mapSidecarErr(err)
+		return Execution{}, mapSidecarErrFor(appID, err)
 	}
 	hist, err := cl.GetInstanceHistory(ctx, instanceID)
 	if err != nil {
-		return Execution{}, mapSidecarErr(err)
+		return Execution{}, mapSidecarErrFor(appID, err)
 	}
 	events := hist.Events
 	// Order like the dapr CLI: EventId when both present, else timestamp.
@@ -265,23 +338,28 @@ func (s *SidecarService) Get(ctx context.Context, appID, instanceID string) (Exe
 
 // AppIDs returns the sidecar-sourced apps that hold at least one instance.
 func (s *SidecarService) AppIDs(ctx context.Context) ([]string, error) {
-	var ids []string
-	for _, ep := range s.eps(ctx) {
+	var (
+		mu  sync.Mutex
+		ids []string
+	)
+	s.forEachReachable(ctx, func(ep SidecarEndpoint) {
 		cl, err := s.pool.client(ep.Addr)
 		if err != nil {
-			continue
+			return
 		}
 		probeCtx, cancel := context.WithTimeout(ctx, sidecarCallTimeout)
 		resp, err := cl.ListInstanceIDs(probeCtx)
 		cancel()
 		if err != nil {
 			sidecarLogger().Warn("sidecar workflow app probe failed", "appID", ep.AppID, "err", err)
-			continue
+			return
 		}
 		if len(resp.InstanceIds) > 0 || resp.ContinuationToken != nil {
+			mu.Lock()
 			ids = append(ids, ep.AppID)
+			mu.Unlock()
 		}
-	}
+	})
 	sort.Strings(ids)
 	return ids, nil
 }
@@ -300,13 +378,13 @@ func (s *SidecarService) listApp(ctx context.Context, ep SidecarEndpoint) ([]Exe
 	defer cancel()
 	resp, err := cl.ListInstanceIDs(ctx)
 	if err != nil {
-		return nil, mapSidecarErr(err)
+		return nil, mapSidecarErrFor(ep.AppID, err)
 	}
 	ids := append([]string{}, resp.InstanceIds...)
 	for resp.ContinuationToken != nil && len(ids) < maxSidecarInstances {
 		resp, err = cl.ListInstanceIDs(ctx, dtwf.WithListInstanceIDsContinuationToken(*resp.ContinuationToken))
 		if err != nil {
-			return nil, mapSidecarErr(err)
+			return nil, mapSidecarErrFor(ep.AppID, err)
 		}
 		ids = append(ids, resp.InstanceIds...)
 	}
@@ -360,6 +438,18 @@ func summaryFromMetadata(appID, instanceID string, md *dtwf.WorkflowMetadata) Ex
 		sum.LastUpdatedAt = &t
 	}
 	return sum
+}
+
+// mapSidecarErrFor maps a timeout or connection failure to
+// ErrSidecarUnreachable naming appID, and everything else via mapSidecarErr.
+func mapSidecarErrFor(appID string, err error) error {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return unreachableErr(appID)
+	}
+	if c, ok := status.FromError(err); ok && (c.Code() == codes.DeadlineExceeded || c.Code() == codes.Unavailable) {
+		return unreachableErr(appID)
+	}
+	return mapSidecarErr(err)
 }
 
 // mapSidecarErr converts the pre-1.17 "not implemented" gRPC codes into

@@ -60,7 +60,8 @@ func TestSidecarEndpointsAddressResolution(t *testing.T) {
 				{AppID: "order", Source: discovery.SourceCompose, DaprGRPCAddr: "order-dapr:50001", SidecarReachable: false},
 			},
 			includeAll: true,
-			want:       []workflowEndpoint{{AppID: "order", Addr: "order-dapr:50001"}},
+			// Flagged so all-apps reads skip it without dialing.
+			want: []workflowEndpoint{{AppID: "order", Addr: "order-dapr:50001", Unreachable: true}},
 		},
 		{
 			name: "host compose app without a gRPC port is skipped",
@@ -87,7 +88,7 @@ func TestSidecarEndpointsAddressResolution(t *testing.T) {
 				t.Fatalf("got %d endpoints %v, want %d", len(got), got, len(tc.want))
 			}
 			for i := range tc.want {
-				if got[i].AppID != tc.want[i].AppID || got[i].Addr != tc.want[i].Addr {
+				if got[i] != tc.want[i] {
 					t.Fatalf("endpoint %d: got %+v want %+v", i, got[i], tc.want[i])
 				}
 			}

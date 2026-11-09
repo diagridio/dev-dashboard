@@ -21,12 +21,15 @@ type fakeBase struct {
 func (f fakeBase) List(context.Context, ListQuery) (ListResult, error) {
 	return ListResult{Items: f.items, NextToken: "tok"}, f.err
 }
-func (f fakeBase) Stats(context.Context, ListQuery) (StatsResult, error) {
+func (f fakeBase) Stats(_ context.Context, q ListQuery) (StatsResult, error) {
 	if f.err != nil {
 		return StatsResult{}, f.err
 	}
 	res := StatsResult{Counts: map[Status]int{}}
 	for _, it := range f.items {
+		if q.AppID != "" && it.AppID != q.AppID {
+			continue
+		}
 		res.Counts[it.Status]++
 		res.Total++
 	}
@@ -230,4 +233,43 @@ func TestComposite_OwnedAppSidecarFailureWithoutStore(t *testing.T) {
 
 	_, err = svc.Get(ctx, "old-app", "s1")
 	require.ErrorIs(t, err, ErrSidecarUnsupported)
+}
+
+// With a store mounted, a sidecar-owned app's workflows are reported by both
+// the sidecar and the store (the store is the sidecar's own actor store).
+// All-apps stats must count each such workflow once, matching the merged list.
+func TestComposite_StatsCountsSidecarAppsOnce(t *testing.T) {
+	now := time.Now()
+	base := fakeBase{items: []ExecutionSummary{
+		{AppID: "wfapp", InstanceID: "w1", Status: StatusCompleted, CreatedAt: &now},
+		{AppID: "store-app", InstanceID: "s1", Status: StatusRunning, CreatedAt: &now},
+	}}
+	sc := sidecarWith(t, "wfapp", &fakeHub{
+		pages:  [][]string{{"w1"}},
+		states: map[string]*protos.WorkflowState{"w1": wfState("w1", "W", protos.OrchestrationStatus_ORCHESTRATION_STATUS_COMPLETED, "")},
+	})
+	svc := NewComposite(base, sc)
+	ctx := context.Background()
+
+	lr, err := svc.List(ctx, ListQuery{})
+	require.NoError(t, err)
+	require.Len(t, lr.Items, 2)
+
+	st, err := svc.Stats(ctx, ListQuery{})
+	require.NoError(t, err)
+	require.Equal(t, 2, st.Total, "stats must match the merged list")
+	require.Equal(t, 1, st.Counts[StatusCompleted])
+	require.Equal(t, 1, st.Counts[StatusRunning])
+}
+
+// An owned app whose sidecar can't answer keeps its store counts.
+func TestComposite_StatsKeepsStoreCountsForFailingSidecar(t *testing.T) {
+	now := time.Now()
+	base := fakeBase{items: []ExecutionSummary{
+		{AppID: "old-app", InstanceID: "s1", Status: StatusCompleted, CreatedAt: &now},
+	}}
+	sc := sidecarWith(t, "old-app", &fakeHub{unimplemented: true, pages: [][]string{{}}})
+	st, err := NewComposite(base, sc).Stats(context.Background(), ListQuery{})
+	require.NoError(t, err)
+	require.Equal(t, 1, st.Total)
 }

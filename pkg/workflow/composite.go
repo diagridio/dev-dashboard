@@ -97,28 +97,44 @@ func (c *composite) Stats(ctx context.Context, q ListQuery) (StatsResult, error)
 	if baseErr != nil && !(storeMissing(baseErr) && c.sc.HasEndpoints(ctx)) {
 		return StatsResult{}, baseErr
 	}
-	scRes, scErr := c.sc.Stats(ctx, q)
-	if scErr != nil {
-		if baseErr != nil {
-			return StatsResult{}, baseErr
-		}
-		return baseRes, nil
+	perApp := c.sc.statsPerApp(ctx, q)
+	out := StatsResult{Counts: map[Status]int{}}
+	for _, r := range perApp {
+		addStats(&out, r, 1)
 	}
 	if baseErr != nil {
-		return scRes, nil
+		return out, nil
 	}
-	// Counts are summed; an app-id present in both sources (a testcontainers
-	// app whose id also has stale store data) can double-count — instance
-	// identity is not available at stats granularity. Rare and benign locally.
-	out := StatsResult{Counts: map[Status]int{}}
-	for k, v := range baseRes.Counts {
-		out.Counts[k] += v
+	addStats(&out, baseRes, 1)
+	// An app the sidecar answered for is counted from the sidecar alone: the
+	// store usually is that sidecar's actor store, so its workflows would
+	// otherwise count twice (the merged list shows them once). Apps whose
+	// sidecar failed keep their store counts, matching the store fallback.
+	for appID := range perApp {
+		aq := statsQuery(q)
+		aq.AppID = appID
+		if b, err := c.base.Stats(ctx, aq); err == nil {
+			addStats(&out, b, -1)
+		}
 	}
-	for k, v := range scRes.Counts {
-		out.Counts[k] += v
-	}
-	out.Total = baseRes.Total + scRes.Total
 	return out, nil
+}
+
+// addStats adds sign*r into out, never letting a count drop below zero.
+func addStats(out *StatsResult, r StatsResult, sign int) {
+	for k, v := range r.Counts {
+		n := out.Counts[k] + sign*v
+		if n <= 0 {
+			delete(out.Counts, k)
+			continue
+		}
+		out.Counts[k] = n
+	}
+	total := 0
+	for _, v := range out.Counts {
+		total += v
+	}
+	out.Total = total
 }
 
 func (c *composite) Get(ctx context.Context, appID, instanceID string) (Execution, error) {

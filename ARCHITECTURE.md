@@ -358,7 +358,9 @@ layer has three tiers:
    process table for lifecycle, no docker socket for the control plane, and no `~/.dapr`
    log files to tail. Compose container posture additionally gets `Workflows` from the
    sidecar-gRPC source whenever an app is declared, with no store (Dapr 1.17+); `State`
-   has no sidecar fallback and still needs `DEVDASHBOARD_STATESTORE_FILE`. A nil
+   has no sidecar fallback and still needs `DEVDASHBOARD_STATESTORE_FILE`. Without a
+   connection registry (container posture, or no home dir) `/api/statestores` lists the elected
+   store read-only and add/edit/delete answer 409 (`ErrRegistryReadOnly`). A nil
    `Options.Capabilities` defaults to full host capabilities. `SecretReveal` is
    additionally forced off whenever the server binds a non-loopback
    address (`finalizeSecretReveal`).
@@ -493,8 +495,12 @@ A second data source, `SidecarService` (`sidecar.go`), reads workflows **live fr
 gRPC workflow management API** (`ListInstanceIDs` / `FetchWorkflowMetadata` /
 `GetInstanceHistory` via the durabletask-go client, Dapr ≥ 1.17; pre-1.17 sidecars map to a
 version message). It works with any backing store — `state.in-memory` included — because
-the sidecar itself answers; per-app gRPC calls are timeout-bounded, and a failing app is
-skipped, never failing the page. `NewComposite` (`composite.go`) routes per app: apps the
+the sidecar itself answers; per-app gRPC calls are timeout-bounded and run in parallel, a
+sidecar discovery already reports unreachable is never dialed (`SidecarEndpoint.Unreachable`),
+and a failing app is skipped, never failing the page. Timeouts and connection failures map to
+`ErrSidecarUnreachable` (a 503 naming the app). All-apps stats count an app the sidecar
+answered for from the sidecar alone, so a store that is also that sidecar's actor store isn't
+counted twice. `NewComposite` (`composite.go`) routes per app: apps the
 sidecar source **owns** (Testcontainers apps always; contract-declared compose apps while
 their sidecar is reachable, or always when no store is openable; every reachable non-aspire
 sidecar with a gRPC port when no store is openable) read via gRPC, everything else via the

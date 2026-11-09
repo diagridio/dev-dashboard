@@ -357,6 +357,17 @@ func TestWorkflowDetailUnreachableStore(t *testing.T) {
 	require.NotContains(t, body, "no state store detected")
 }
 
+// An unreachable sidecar (down, or timed out) is a readable 503 naming the
+// app, not a raw 500 "context deadline exceeded".
+func TestWorkflowDetailUnreachableSidecar(t *testing.T) {
+	err := fmt.Errorf("the Dapr sidecar of app %q is unreachable: %w", "order", workflow.ErrSidecarUnreachable)
+	h := workflowsRouter(newFakeBackend(fakeWF{err: err}), nil)
+
+	res, body := get(t, h, "/order/abc")
+	require.Equal(t, http.StatusServiceUnavailable, res.StatusCode)
+	require.Contains(t, body, `sidecar of app \"order\" is unreachable`)
+}
+
 func TestWorkflowsNoStoreMessageUnchanged(t *testing.T) {
 	noStore := fakeWF{err: workflow.ErrNoStore}
 	h := workflowsRouter(newFakeBackend(noStore), nil)

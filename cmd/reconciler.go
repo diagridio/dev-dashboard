@@ -552,7 +552,14 @@ func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
 				continue
 			}
 			seen[in.AppID] = true
-			eps = append(eps, workflow.SidecarEndpoint{AppID: in.AppID, Addr: addr})
+			// Only contract apps carry a probed reachability (the discovery
+			// service flips SidecarReachable when health and metadata both
+			// fail); flag them so all-apps reads skip them without dialing.
+			eps = append(eps, workflow.SidecarEndpoint{
+				AppID:       in.AppID,
+				Addr:        addr,
+				Unreachable: contract && !in.SidecarReachable,
+			})
 		}
 		return eps
 	}

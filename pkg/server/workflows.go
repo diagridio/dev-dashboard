@@ -153,7 +153,7 @@ func workflowsRouter(backend WorkflowBackend, stores StoreRegistry) http.Handler
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "workflow not found"})
 		case errors.Is(err, workflow.ErrNoStore):
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no state store detected"})
-		case errors.Is(err, workflow.ErrStoreUnreachable):
+		case errors.Is(err, workflow.ErrStoreUnreachable), errors.Is(err, workflow.ErrSidecarUnreachable):
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": err.Error()})
 		case err != nil:
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
