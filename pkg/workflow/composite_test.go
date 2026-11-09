@@ -186,3 +186,48 @@ func TestComposite_GetRoutesToOwner(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "W", ex.Name)
 }
+
+// A sidecar-owned app whose sidecar cannot answer (here: a pre-1.17 daprd)
+// falls back to the store for app-scoped reads when the store is usable, so a
+// mounted store keeps per-app views working (compose container posture, spec §8).
+func TestComposite_OwnedAppFallsBackToStoreWhenSidecarFails(t *testing.T) {
+	now := time.Now()
+	base := fakeBase{items: []ExecutionSummary{{AppID: "old-app", InstanceID: "s1", Status: StatusCompleted, CreatedAt: &now}}}
+	sc := sidecarWith(t, "old-app", &fakeHub{unimplemented: true, pages: [][]string{{}}})
+	svc := NewComposite(base, sc)
+	ctx := context.Background()
+
+	lr, err := svc.List(ctx, ListQuery{AppID: "old-app"})
+	require.NoError(t, err)
+	require.Len(t, lr.Items, 1)
+	require.Equal(t, "s1", lr.Items[0].InstanceID)
+
+	st, err := svc.Stats(ctx, ListQuery{AppID: "old-app"})
+	require.NoError(t, err)
+	require.Equal(t, 1, st.Total)
+
+	ex, err := svc.Get(ctx, "old-app", "s1")
+	require.NoError(t, err)
+	require.Equal(t, "s1", ex.InstanceID)
+}
+
+// Without a usable store the sidecar outcome stands: app-scoped lists stay
+// empty (a failing app is skipped, never errors the page) and Get surfaces the
+// sidecar error.
+func TestComposite_OwnedAppSidecarFailureWithoutStore(t *testing.T) {
+	base := fakeBase{err: ErrNoStore}
+	sc := sidecarWith(t, "old-app", &fakeHub{unimplemented: true, pages: [][]string{{}}})
+	svc := NewComposite(base, sc)
+	ctx := context.Background()
+
+	lr, err := svc.List(ctx, ListQuery{AppID: "old-app"})
+	require.NoError(t, err)
+	require.Empty(t, lr.Items)
+
+	st, err := svc.Stats(ctx, ListQuery{AppID: "old-app"})
+	require.NoError(t, err)
+	require.Zero(t, st.Total)
+
+	_, err = svc.Get(ctx, "old-app", "s1")
+	require.ErrorIs(t, err, ErrSidecarUnsupported)
+}

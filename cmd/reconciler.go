@@ -497,9 +497,11 @@ func (rc *reconciler) DeleteStore(id string) error {
 
 // sidecarEndpoints returns the sidecar-sourced app endpoints under the current
 // selection rule. Testcontainers apps are always eligible (their store lives
-// inside the container and is never host-readable), as are contract-declared
-// apps (they carry an explicit in-network gRPC address and may have no
-// readable store). When includeAll is true (no openable active store), every
+// inside the container and is never host-readable). Contract-declared apps
+// (explicit in-network gRPC address) are eligible while their sidecar is
+// reachable, and also when unreachable if no store is openable; with a store
+// up, an unreachable contract sidecar defers to the store. When includeAll is
+// true (no openable active store), every
 // reachable non-aspire sidecar with a gRPC endpoint becomes eligible. The list
 // is computed per query from live discovery so re-published random ports apply
 // immediately.
@@ -527,10 +529,12 @@ func (rc *reconciler) sidecarEndpoints(includeAll bool) workflow.EndpointsFunc {
 				continue
 			}
 			// A contract-declared app carries its own gRPC address and is
-			// always sidecar-sourced: there may be no readable store at all,
-			// exactly as for Testcontainers apps.
+			// sidecar-sourced while its sidecar is reachable. When it is not,
+			// it stays eligible only if no store is openable (the sidecar is
+			// then the sole source); otherwise the store serves its workflows.
+			contract := in.DaprGRPCAddr != ""
 			include := in.Source == discovery.SourceTestcontainers ||
-				in.DaprGRPCAddr != "" ||
+				(contract && (in.SidecarReachable || includeAll)) ||
 				(includeAll && in.SidecarReachable)
 			if !include {
 				continue

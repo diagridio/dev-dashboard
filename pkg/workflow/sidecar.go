@@ -171,19 +171,54 @@ func (s *SidecarService) List(ctx context.Context, q ListQuery) (ListResult, err
 	return ListResult{Items: items}, nil
 }
 
+// listOwned is the app-scoped List for one sidecar-owned app. Unlike List,
+// which skips a failing app so one bad sidecar never errors an all-apps page,
+// it surfaces the app's error so the composite can fall back to the store.
+func (s *SidecarService) listOwned(ctx context.Context, q ListQuery) (ListResult, error) {
+	ep, ok := s.endpointFor(ctx, q.AppID)
+	if !ok {
+		return ListResult{}, nil
+	}
+	sums, err := s.listApp(ctx, ep)
+	if err != nil {
+		sidecarLogger().Warn("sidecar workflow list failed", "appID", ep.AppID, "addr", ep.Addr, "err", err)
+		return ListResult{}, err
+	}
+	var items []ExecutionSummary
+	for _, sum := range sums {
+		if matches(sum, q) {
+			items = append(items, sum)
+		}
+	}
+	sort.SliceStable(items, func(a, b int) bool {
+		return afterOrZero(items[a].CreatedAt, items[b].CreatedAt)
+	})
+	return ListResult{Items: items}, nil
+}
+
 // Stats tallies statuses across all matching instances (Status filter and
 // paging ignored, mirroring the store-backed Stats contract).
 func (s *SidecarService) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
-	lr, err := s.List(ctx, ListQuery{AppID: q.AppID, Search: q.Search, IncludeChildren: q.IncludeChildren})
+	lr, err := s.List(ctx, statsQuery(q))
 	if err != nil {
 		return StatsResult{}, err
 	}
+	return tally(lr), nil
+}
+
+// statsQuery narrows q to the fields Stats honors (Status and paging ignored).
+func statsQuery(q ListQuery) ListQuery {
+	return ListQuery{AppID: q.AppID, Search: q.Search, IncludeChildren: q.IncludeChildren}
+}
+
+// tally counts a list result's instances per status.
+func tally(lr ListResult) StatsResult {
 	res := StatsResult{Counts: map[Status]int{}}
 	for _, it := range lr.Items {
 		res.Counts[it.Status]++
 		res.Total++
 	}
-	return res, nil
+	return res
 }
 
 func (s *SidecarService) Get(ctx context.Context, appID, instanceID string) (Execution, error) {

@@ -43,6 +43,26 @@ func TestSidecarEndpointsAddressResolution(t *testing.T) {
 			want:       []workflowEndpoint{{AppID: "order", Addr: "order-dapr:50001"}},
 		},
 		{
+			// With an openable store, an unreachable contract sidecar is not
+			// sidecar-owned: the store serves its workflows instead.
+			name: "unreachable contract compose app defers to the store",
+			instances: []discovery.Instance{
+				{AppID: "order", Source: discovery.SourceCompose, DaprGRPCAddr: "order-dapr:50001", SidecarReachable: false},
+			},
+			includeAll: false,
+			want:       nil,
+		},
+		{
+			// With no openable store the sidecar is the only possible source,
+			// so the contract app stays eligible even while unreachable.
+			name: "unreachable contract compose app stays eligible without a store",
+			instances: []discovery.Instance{
+				{AppID: "order", Source: discovery.SourceCompose, DaprGRPCAddr: "order-dapr:50001", SidecarReachable: false},
+			},
+			includeAll: true,
+			want:       []workflowEndpoint{{AppID: "order", Addr: "order-dapr:50001"}},
+		},
+		{
 			name: "host compose app without a gRPC port is skipped",
 			instances: []discovery.Instance{
 				{AppID: "order", Source: discovery.SourceCompose, SidecarReachable: true},

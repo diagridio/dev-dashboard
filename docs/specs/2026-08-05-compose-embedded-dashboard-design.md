@@ -200,10 +200,18 @@ func (in Instance) GRPCAddr() string {
 `sidecarEndpoints` (`cmd/reconciler.go:445`) uses `in.GRPCAddr()` and skips empty results
 instead of testing `GRPCPort == 0`. Host behavior is bit-for-bit identical.
 
-**Eligibility** (`reconciler.go:460`) gains one clause: in compose container posture every
-declared app is sidecar-eligible unconditionally, for the same reason Testcontainers apps
-are — the sidecar is authoritative and there may be no readable store at all. The existing
-`includeAll && in.SidecarReachable && in.Source != SourceAspire` clause is unchanged.
+**Eligibility** (`reconciler.go:460`) gains one clause: in compose container posture a
+declared app is sidecar-eligible while its sidecar is reachable, and also while unreachable
+when no store is openable (the sidecar is then the only possible source, as for
+Testcontainers apps). With a store up, an unreachable contract sidecar defers to the store.
+Aspire apps stay excluded, checked first and unconditionally.
+
+**Store fallback for owned apps.** An app-scoped read (`Get`, or `List`/`Stats` filtered to
+one app) of a sidecar-owned app that the sidecar cannot answer — unreachable, or a pre-1.17
+daprd returning `ErrSidecarUnsupported` — falls back to the store. If the store fails too,
+the sidecar outcome stands: app-scoped lists are empty (one bad sidecar never errors a
+page) and `Get` returns the sidecar error. This is what makes §8's "store-backed path still
+available" true for per-app views, not only for the all-apps list.
 
 Because workflow inspection no longer requires a store, capabilities cannot gate on the
 store file:
@@ -353,8 +361,9 @@ work).
 - **One bad sidecar never hides the others.** Per-app gRPC budgets already exist
   (`sidecarCallTimeout`, 3s, `pkg/workflow/sidecar.go`), and HTTP metadata probes are
   per-instance.
-- **Dapr below 1.17**: workflow routes exist but return `ErrSidecarUnsupported`, with the
-  store-backed path still available if a store YAML is mounted.
+- **Dapr below 1.17**: without a store, workflow detail returns `ErrSidecarUnsupported`
+  and lists are empty for that app. With a store YAML mounted, every view (all-apps and
+  per-app) falls back to the store-backed path (section 4).
 
 ## Testing
 

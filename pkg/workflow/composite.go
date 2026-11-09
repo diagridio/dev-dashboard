@@ -18,6 +18,10 @@ import (
 //     surfaced on page one and re-merging it on every page would repeat
 //     those rows.
 //
+// An app-scoped read of a sidecar-owned app that the sidecar cannot answer
+// (unreachable, or a pre-1.17 daprd without the workflow management API)
+// falls back to the store; if the store fails too, the sidecar outcome stands.
+//
 // Base errors ErrNoStore/ErrStoreUnreachable are suppressed when the sidecar
 // currently has endpoints — otherwise they propagate unchanged so the
 // existing store banners keep firing.
@@ -40,7 +44,7 @@ func storeMissing(err error) bool {
 func (c *composite) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	if q.AppID != "" {
 		if c.sc.Owns(ctx, q.AppID) {
-			return c.sc.List(ctx, q)
+			return c.ownedList(ctx, q)
 		}
 		return c.base.List(ctx, q)
 	}
@@ -85,7 +89,7 @@ func (c *composite) List(ctx context.Context, q ListQuery) (ListResult, error) {
 func (c *composite) Stats(ctx context.Context, q ListQuery) (StatsResult, error) {
 	if q.AppID != "" {
 		if c.sc.Owns(ctx, q.AppID) {
-			return c.sc.Stats(ctx, q)
+			return c.ownedStats(ctx, q)
 		}
 		return c.base.Stats(ctx, q)
 	}
@@ -119,9 +123,43 @@ func (c *composite) Stats(ctx context.Context, q ListQuery) (StatsResult, error)
 
 func (c *composite) Get(ctx context.Context, appID, instanceID string) (Execution, error) {
 	if c.sc.Owns(ctx, appID) {
-		return c.sc.Get(ctx, appID, instanceID)
+		ex, err := c.sc.Get(ctx, appID, instanceID)
+		if err == nil {
+			return ex, nil
+		}
+		if fb, fbErr := c.base.Get(ctx, appID, instanceID); fbErr == nil {
+			return fb, nil
+		}
+		return Execution{}, err
 	}
 	return c.base.Get(ctx, appID, instanceID)
+}
+
+// ownedList serves an app-scoped list for a sidecar-owned app, falling back
+// to the store when the sidecar fails. With no usable store the failing app
+// yields an empty list, matching the all-apps rule that one bad sidecar never
+// errors the page.
+func (c *composite) ownedList(ctx context.Context, q ListQuery) (ListResult, error) {
+	res, err := c.sc.listOwned(ctx, q)
+	if err == nil {
+		return res, nil
+	}
+	if fb, fbErr := c.base.List(ctx, q); fbErr == nil {
+		return fb, nil
+	}
+	return ListResult{}, nil
+}
+
+// ownedStats is the Stats counterpart of ownedList.
+func (c *composite) ownedStats(ctx context.Context, q ListQuery) (StatsResult, error) {
+	lr, err := c.sc.listOwned(ctx, statsQuery(q))
+	if err != nil {
+		if fb, fbErr := c.base.Stats(ctx, q); fbErr == nil {
+			return fb, nil
+		}
+		return StatsResult{Counts: map[Status]int{}}, nil
+	}
+	return tally(lr), nil
 }
 
 func (c *composite) AppIDs(ctx context.Context) ([]string, error) {

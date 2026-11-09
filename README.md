@@ -279,7 +279,8 @@ tailing, self-update/update-check, automatic browser opening, and secret-value r
 - Workflows works without a state store: the dashboard reads them through each declared
   sidecar's gRPC endpoint (Dapr 1.17+; older runtimes report that the sidecar does not
   support workflow inspection). If `DEVDASHBOARD_STATESTORE_FILE` also points at a mounted
-  store, both sources are merged and the sidecar wins on collisions.
+  store, both sources are merged and the sidecar wins on collisions; an app whose sidecar is
+  unreachable or older than 1.17 is served from the store instead.
 - The State page appears only when `DEVDASHBOARD_STATESTORE_FILE` points at a mounted
   state-store component. Mounting components via `DEVDASHBOARD_RESOURCES_PATH` alone feeds the
   Resources page but does not enable State.
@@ -299,7 +300,8 @@ tailing, self-update/update-check, automatic browser opening, and secret-value r
    `network_mode: "service:..."` the sidecar is only reachable by the namespace owner's
    service name.
 3. **Workflows page reports the sidecar does not support workflow inspection.** Sidecar
-   workflow reads need Dapr 1.17+.
+   workflow reads need Dapr 1.17+. Upgrade daprd, or mount the state store via
+   `DEVDASHBOARD_STATESTORE_FILE` so that app's workflows are read from the store.
 
 ## Updating the dashboard
 

@@ -495,8 +495,11 @@ gRPC workflow management API** (`ListInstanceIDs` / `FetchWorkflowMetadata` /
 version message). It works with any backing store — `state.in-memory` included — because
 the sidecar itself answers; per-app gRPC calls are timeout-bounded, and a failing app is
 skipped, never failing the page. `NewComposite` (`composite.go`) routes per app: apps the
-sidecar source **owns** (Testcontainers apps always; every reachable non-aspire sidecar
-with a gRPC port when no store is openable) read via gRPC, everything else via the store;
+sidecar source **owns** (Testcontainers apps always; contract-declared compose apps while
+their sidecar is reachable, or always when no store is openable; every reachable non-aspire
+sidecar with a gRPC port when no store is openable) read via gRPC, everything else via the
+store. An app-scoped read of an owned app that the sidecar cannot answer (unreachable,
+pre-1.17) falls back to the store, and keeps the sidecar outcome only if the store fails too;
 all-apps queries merge both (sidecar wins collisions, first page only), and the no-store /
 unreachable-store banners still fire when nothing is sidecar-eligible. The reconciler's
 `ServiceFor` builds this composite (`cmd/reconciler.go`); sidecar gRPC connections are
@@ -733,8 +736,9 @@ styleguide.
 - **Workflows load:** SPA polls `/api/workflows?store=<id>` → reconciler resolves the id to
   a workflow service (elected active store if empty) via the connection pool, composed with
   the sidecar-gRPC source (`NewComposite`) → store-backed apps enumerate + decode instances
-  from the state store, sidecar-owned apps (Testcontainers; all reachable sidecars when no
-  store is openable) read live over gRPC → merged, paginated JSON.
+  from the state store, sidecar-owned apps (Testcontainers; reachable contract-declared
+  compose apps; all reachable sidecars when no store is openable) read live over gRPC →
+  merged, paginated JSON.
 - **A store is elected:** reconcile detects `state.*` components across scan paths, resolves
   secrets, upserts them into the registry, and elects the active one by the 6-level
   precedence, then pre-warms it.
