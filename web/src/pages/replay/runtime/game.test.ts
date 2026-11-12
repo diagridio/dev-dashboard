@@ -859,6 +859,44 @@ describe('run tape', () => {
     expect(viewer.playback).toBe(false)
   })
 
+  describe('starting kiosk mode from a playback', () => {
+    /** startKiosk leaves playback for a kiosk run and clears the store; the kiosk never reads the outside world. */
+    function expectKiosk(viewer: Game, store: MemoryStore): void {
+      store.saved = { version: 2 } as unknown as Save
+      expect(viewer.startKiosk()).toBe(true)
+      expect(viewer.playback).toBe(false)
+      expect(viewer.kiosk).toBe(true)
+      expect(viewer.start.seed).toBe(KIOSK_SEED)
+      expect(viewer.phase).toEqual({ kind: 'tip', level: 0 })
+      expect(viewer.view().playbackDate).toBeNull()
+      expect(store.saved).toBeNull()
+      for (let f = 0; f < KIOSK_CARD_FRAMES + 120; f++) viewer.frame(1)
+      expect(viewer.phase.kind).toBe('playing')
+    }
+
+    it('works from a paused playback', () => {
+      const store = memoryStore()
+      const viewer = new Game(deps({ store, levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
+      viewer.watch(recording().tape)
+      for (let f = 0; f < 10 && viewer.phase.kind !== 'playing'; f++) viewer.frame(1)
+      viewer.command('pause')
+      expect(viewer.phase.kind).toBe('paused')
+      expect(viewer.playback).toBe(true)
+      expectKiosk(viewer, store)
+    })
+
+    it('works from a playback end card', () => {
+      const store = memoryStore()
+      const viewer = new Game(deps({ store, levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
+      const live = recording()
+      viewer.watch({ ...live.tape, chaos: live.tape.chaos.slice(0, 1), impure: [] })
+      for (let f = 0; f < 60_000 && viewer.phase.kind !== 'over'; f++) viewer.frame(1)
+      expect(viewer.phase.kind).toBe('over')
+      expect(viewer.playback).toBe(true)
+      expectKiosk(viewer, store)
+    })
+  })
+
   it('lets Enter unpause a paused playback', () => {
     const viewer = new Game(deps({ levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
     viewer.watch(recording().tape)
@@ -1241,6 +1279,13 @@ describe('kiosk mode', () => {
 
   describe('stopKiosk', () => {
     const boss = (g: Game) => g.phase.kind === 'playing' && g.state.bossUntil > 0
+    /** The bot never fails on its own: put a rack on the hat once playing (level 0 has no retries), then wait for the end card. */
+    const overNow = (g: Game): boolean => {
+      if (g.phase.kind === 'playing' && g.state.level === 0) {
+        g.state = { ...g.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+      }
+      return g.phase.kind === 'over'
+    }
     const nth = (kind: string, level: number) => (g: Game) => g.phase.kind === kind && g.state.level === level
     const targets: [string, (g: Game) => boolean][] = [
       ['tip', is('tip')],
@@ -1250,6 +1295,7 @@ describe('kiosk mode', () => {
       ['montage', is('montage')],
       ['lost', is('lost')],
       ['boss playing', boss],
+      ['over', overNow],
     ]
     // Rewinding is skipped: it needs the bot to get hit, and with KIOSK_SEED it never is (the loop test sees no rewind).
     it.each(targets)('returns to live mode from %s', (_name, until) => {
