@@ -5,6 +5,7 @@ import { seedForDate } from '../engine/seed'
 import { FAN_LANES, continueAsNew, initialState, livePlayer, step } from '../engine/step'
 import type { GameState, HistoryEvent, InputEvent, InputKind, Level, PlayerInput, StartInput } from '../engine/types'
 import { ChaosScheduler } from './chaos'
+import { KIOSK_SEED, KioskBot, KioskSource } from './kiosk'
 import { Montage, type MontageSegment } from './montage'
 import type { SaveStore } from './persistence'
 import { REWIND_FRAMES, REWIND_PX, RewindBuffer, sample } from './rewind'
@@ -22,6 +23,12 @@ export const NOTICE_TICKS = 180
 /** Speeds a recorded run can be watched at. */
 export const PLAYBACK_SPEEDS = [1, 2, 5, 10] as const
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
+/** Kiosk mode: frames a tip or "Progress lost" card stays up before it confirms itself (~4 s). */
+export const KIOSK_CARD_FRAMES = 240
+/** Kiosk mode: frames the end card stays up if the bot ever fails (~6 s). */
+export const KIOSK_OVER_FRAMES = 360
+/** Kiosk mode: the last level played; its montage ends the loop. */
+export const KIOSK_LAST_LEVEL = 3
 
 export interface GameDeps {
   /** The one deliberate source of non-determinism (Math.random at runtime). */
@@ -47,6 +54,8 @@ export interface GameView {
   playbackDate: string | null
   /** The playback speed while watching a run; null in live play. */
   playbackSpeed: PlaybackSpeed | null
+  /** Whether the game is playing itself (kiosk mode). */
+  kiosk: boolean
 }
 
 const emptyStats = (): RunStats => ({ replays: 0, fromHistory: 0, executed: 0, incidents: 0, retriesUsed: 0, circuitTrips: 0, boostsLost: 0 })
@@ -67,6 +76,8 @@ export class Game {
   tape: Tape
   /** Whether a recorded tape is being played back instead of live play. */
   playback = false
+  /** Whether the game plays itself (booth kiosk mode): seeded world, bot inputs, nothing stored. */
+  kiosk = false
   private speed: PlaybackSpeed = 1
 
   private source: Source
@@ -96,6 +107,11 @@ export class Game {
   private readonly rewind = new RewindBuffer()
   private readonly levels: LevelTable
   private readonly chaos: ChaosScheduler
+  private readonly bot: KioskBot
+  /** Kiosk: whether this loop's level-2 orb was taken (the bot takes exactly one, for the boss). */
+  private kioskOrbTaken = false
+  /** Kiosk: frames the current card has been up. */
+  private kioskWait = 0
 
   get liveTicks(): number {
     return this.liveTick
@@ -104,6 +120,7 @@ export class Game {
   constructor(private readonly deps: GameDeps) {
     this.levels = deps.levels ?? LEVELS
     this.chaos = new ChaosScheduler(() => this.source.chaos(), this.levels)
+    this.bot = new KioskBot(this.levels)
     this.best = deps.store.loadBest()
     this.runDate = deps.today()
     this.tape = emptyTape(this.runDate)
@@ -137,10 +154,13 @@ export class Game {
       montage: m ? { events: m.events, flash: m.flash, trail: m.trail } : null,
       playbackDate: this.playback ? this.runDate : null,
       playbackSpeed: this.playback ? this.speed : null,
+      kiosk: this.kiosk,
     }
   }
 
   command(c: Command): void {
+    // The page stops kiosk mode before it sends commands; anything that slips through is ignored.
+    if (this.kiosk) return
     if (c === 'slideStart') this.slideHeld = true
     else if (c === 'slideEnd') this.slideHeld = false
     if (this.playback) {
@@ -215,6 +235,7 @@ export class Game {
   }
 
   private frameStep(liveTicks: number): void {
+    if (this.kiosk) this.kioskStep()
     if (this.playback) this.autoplay()
     const p = this.phase
     if (p.kind === 'playing') {
@@ -252,25 +273,99 @@ export class Game {
     return this.playback && this.tape.restarts[this.restartCursor]?.liveTick === this.liveTick
   }
 
+  /** Kiosk: cards confirm themselves after a dwell, and the loop starts over after level 3 or a failure. */
+  private kioskStep(): void {
+    const p = this.phase
+    if (p.kind === 'tip' && p.level > KIOSK_LAST_LEVEL) this.startKioskRun()
+    else if (p.kind === 'tip' || p.kind === 'lost') {
+      if (++this.kioskWait >= KIOSK_CARD_FRAMES) this.confirm()
+    } else if (p.kind === 'over') {
+      if (++this.kioskWait >= KIOSK_OVER_FRAMES) this.startKioskRun()
+    }
+  }
+
+  /** Starts kiosk mode; false (and nothing changes) unless a title, end, pause or resume card is up. */
+  startKiosk(): boolean {
+    const k = this.phase.kind
+    if (k !== 'title' && k !== 'over' && k !== 'paused' && k !== 'resume') return false
+    // The one store write of kiosk mode: an interrupted run would otherwise be offered later.
+    this.deps.store.clear()
+    this.savedRun = null
+    this.leavePlayback()
+    this.kiosk = true
+    this.startKioskRun()
+    return true
+  }
+
+  /** A fresh kiosk loop: same seed, freshly seeded world, so every loop is the same show. */
+  private startKioskRun(): void {
+    this.source = new KioskSource(KIOSK_SEED)
+    this.bot.reset()
+    // Never written in kiosk mode; it only keeps `tape` meaningful for the page.
+    this.tape = emptyTape(this.runDate)
+    this.kioskOrbTaken = false
+    this.slideHeld = false
+    this.kioskWait = 0
+    this.montage = null
+    this.replayer = null
+    this.startRun()
+  }
+
+  /** Leaves kiosk mode for the title card, with live mode's date, scores and tape restored. */
+  stopKiosk(): void {
+    if (!this.kiosk) return
+    this.kiosk = false
+    this.runDate = this.deps.today()
+    this.best = this.deps.store.loadBest()
+    this.dailyBest = this.deps.store.loadDailyBest(this.runDate)
+    this.tape = emptyTape(this.runDate)
+    this.source = new TapeRecorder(this.tape, this.deps)
+    this.montage = null
+    this.replayer = null
+    this.notice = null
+    this.divergedAt = null
+    this.history = []
+    this.segments = []
+    this.orbValues = new Map()
+    this.pending = []
+    this.queued = []
+    this.stats = emptyStats()
+    this.liveTick = 0
+    this.start = this.levelZero()
+    this.state = initialState(this.start, this.levels)
+    this.prevState = null
+    this.setPhase({ kind: 'title' })
+  }
+
+  /** The run's seed: the kiosk constant, or today's daily seed. */
+  private runSeed(): number {
+    return this.kiosk ? KIOSK_SEED : seedForDate(this.runDate)
+  }
+
+  private levelZero(): StartInput {
+    return { level: 0, seed: this.runSeed(), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[0].retries, shield: 0 }
+  }
+
   /** Dismisses a tip or "Progress lost" card. */
   private confirm(): void {
     if (this.phase.kind === 'tip') {
       this.setPhase({ kind: 'playing' })
     } else if (this.phase.kind === 'lost') {
       this.stats = emptyStats()
-      this.beginSegment({ level: 1, seed: seedFrom(seedForDate(this.runDate)), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[1].retries, shield: 0 }, true)
+      this.beginSegment({ level: 1, seed: seedFrom(this.runSeed()), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[1].retries, shield: 0 }, true)
       this.setNotice('Dapr Workflow enabled')
     }
   }
 
   /** Tab hidden or page left: pause a running game and persist it. */
   suspend(): void {
+    if (this.kiosk) return
     if (this.phase.kind === 'playing') this.setPhase({ kind: 'paused' })
     this.save()
   }
 
   save(): void {
-    if (this.playback) return
+    if (this.playback || this.kiosk) return
     const k = this.phase.kind
     if (k === 'title' || k === 'resume' || k === 'over' || k === 'lost') return
     // A non-durable level keeps nothing: a save would promise a resume it can't deliver.
@@ -294,7 +389,10 @@ export class Game {
     this.queued = []
     const L = this.liveTick++
     let pending: PlayerInput[]
-    if (this.playback) {
+    if (this.kiosk) {
+      // The bot sees every live tick's state before the step, exactly once.
+      pending = this.bot.inputs(this.state, this.state.level === 2 && !this.kioskOrbTaken)
+    } else if (this.playback) {
       pending = []
       const ins = this.tape.inputs
       while (this.inputCursor < ins.length && ins[this.inputCursor][0] === L) pending.push(ins[this.inputCursor++][1])
@@ -330,7 +428,10 @@ export class Game {
     }
     for (const e of events) {
       this.history.push(e)
-      if (e.type === 'OrbTaken') this.chaos.onPickup(state.level, 'orb', state.tick)
+      if (e.type === 'OrbTaken') {
+        this.chaos.onPickup(state.level, 'orb', state.tick)
+        if (this.kiosk) this.kioskOrbTaken = true
+      }
       else if (e.type === 'ActivityCoinCollected' || e.type === 'ActivityCrateCollected') {
         this.stats.executed += 1
         if (e.type === 'ActivityCrateCollected') this.chaos.onPickup(state.level, 'crate', state.tick)
@@ -434,7 +535,7 @@ export class Game {
     this.liveTick = 0
     this.inputCursor = 0
     this.restartCursor = 0
-    this.beginSegment({ level: 0, seed: seedForDate(this.runDate), score: 0, elapsed: 0, distance: 0, boss: false, retries: this.levels[0].retries, shield: 0 }, true)
+    this.beginSegment(this.levelZero(), true)
   }
 
   private beginSegment(start: StartInput, showTip: boolean): void {
@@ -461,6 +562,11 @@ export class Game {
 
   private endMontage(): void {
     this.montage = null
+    // The kiosk loop: level 3's montage leads straight back to level 0, never to the level-4 tip.
+    if (this.kiosk && this.start.level > KIOSK_LAST_LEVEL) {
+      this.startKioskRun()
+      return
+    }
     this.setPhase({ kind: 'tip', level: this.start.level })
   }
 
@@ -472,7 +578,7 @@ export class Game {
 
   private startReplay(): void {
     if (!this.levels[this.start.level].durable) {
-      if (!this.playback) this.deps.store.clear()
+      if (!this.playback && !this.kiosk) this.deps.store.clear()
       this.setPhase({ kind: 'lost' })
       return
     }
@@ -563,7 +669,7 @@ export class Game {
   }
 
   private gameOver(reason: string): void {
-    if (!this.playback) {
+    if (!this.playback && !this.kiosk) {
       this.deps.store.clear()
       if (this.state.score > this.best) {
         this.best = this.state.score
@@ -585,6 +691,10 @@ export class Game {
 
   private setPhase(phase: Phase): void {
     this.phase = phase
+    if (this.kiosk) {
+      this.kioskWait = 0
+      if (phase.kind !== 'playing') this.bot.reset()
+    }
     if (phase.kind === 'playing') this.syncSlide()
     this.touch()
   }
@@ -595,6 +705,8 @@ export class Game {
    * recorded at the next tick like any other input, so replay stays exact.
    */
   private syncSlide(): void {
+    // The bot re-derives slides from the state; no key is held in kiosk mode.
+    if (this.kiosk) return
     this.pending = this.pending.filter((k) => k === 'jump')
     const sliding = livePlayer(this.state).sliding
     if (sliding && !this.slideHeld) this.pending.push('slideEnd')
