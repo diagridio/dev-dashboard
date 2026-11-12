@@ -9,7 +9,7 @@ import { GROUND_Y, PLAYER_X, type EntityKind } from '../engine/types'
 import type { Palette } from '../render/palette'
 import { render } from '../render/canvas'
 import { autopilot, counter, lcg, makeLevels } from '../testing'
-import { CRASH_FRAMES, Game, KIOSK_CARD_FRAMES, KIOSK_LAST_LEVEL, KIOSK_OVER_FRAMES, REPLAY_MAX_FRAMES, type GameDeps } from './game'
+import { CRASH_FRAMES, Game, KIOSK_CARD_TICKS, KIOSK_LAST_LEVEL, KIOSK_OVER_TICKS, REPLAY_MAX_FRAMES, type GameDeps } from './game'
 import { KIOSK_SEED } from './kiosk'
 import type { SaveStore } from './persistence'
 import { MONTAGE_FRAMES } from './montage'
@@ -870,7 +870,7 @@ describe('run tape', () => {
       expect(viewer.phase).toEqual({ kind: 'tip', level: 0 })
       expect(viewer.view().playbackDate).toBeNull()
       expect(store.saved).toBeNull()
-      for (let f = 0; f < KIOSK_CARD_FRAMES + 120; f++) viewer.frame(1)
+      for (let f = 0; f < KIOSK_CARD_TICKS + 120; f++) viewer.frame(1)
       expect(viewer.phase.kind).toBe('playing')
     }
 
@@ -1107,9 +1107,32 @@ describe('kiosk mode', () => {
   }
 
   it('exports its dwell constants', () => {
-    expect(KIOSK_CARD_FRAMES).toBe(240)
-    expect(KIOSK_OVER_FRAMES).toBe(360)
+    expect(KIOSK_CARD_TICKS).toBe(240)
+    expect(KIOSK_OVER_TICKS).toBe(360)
     expect(KIOSK_LAST_LEVEL).toBe(3)
+  })
+
+  it('counts card dwell in 60 Hz ticks, not animation frames', () => {
+    const game = kioskGame()
+    for (let i = 0; i < KIOSK_CARD_TICKS / 2 - 1; i++) game.frame(2)
+    expect(game.phase.kind).toBe('tip')
+    game.frame(2)
+    expect(game.phase.kind).toBe('playing')
+  })
+
+  it('startKiosk returns false when kiosk is already running', () => {
+    const store = memoryStore()
+    const clear = vi.spyOn(store, 'clear')
+    const game = new Game(deps({ store }))
+    expect(game.startKiosk()).toBe(true)
+    expect(clear).toHaveBeenCalledTimes(1)
+    for (let i = 0; i < KIOSK_CARD_TICKS; i++) game.frame(1)
+    // Force the kiosk end card, one of the phases startKiosk otherwise accepts.
+    game.state = { ...game.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+    game.frame(1)
+    expect(game.phase.kind).toBe('over')
+    expect(game.startKiosk()).toBe(false)
+    expect(clear).toHaveBeenCalledTimes(1)
   })
 
   it('startKiosk works only on title, over, paused and resume', () => {
@@ -1261,7 +1284,7 @@ describe('kiosk mode', () => {
 
   it('confirms tip cards after the dwell and restarts after an end card', () => {
     const game = kioskGame()
-    for (let i = 0; i < KIOSK_CARD_FRAMES - 1; i++) game.frame(1)
+    for (let i = 0; i < KIOSK_CARD_TICKS - 1; i++) game.frame(1)
     expect(game.phase.kind).toBe('tip')
     game.frame(1)
     expect(game.phase.kind).toBe('playing')
@@ -1269,7 +1292,7 @@ describe('kiosk mode', () => {
     game.state = { ...game.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
     game.frame(1)
     expect(game.phase.kind).toBe('over')
-    for (let i = 0; i < KIOSK_OVER_FRAMES - 1; i++) game.frame(1)
+    for (let i = 0; i < KIOSK_OVER_TICKS - 1; i++) game.frame(1)
     expect(game.phase.kind).toBe('over')
     game.frame(1)
     expect(game.phase).toEqual({ kind: 'tip', level: 0 })

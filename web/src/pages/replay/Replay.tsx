@@ -92,11 +92,13 @@ export function Component() {
   }
 
   /** Any input while kiosk mode plays hands the game back, at a clean title card. */
-  const stopKiosk = () => {
+  const stopKioskRef = useRef(() => {})
+  stopKioskRef.current = () => {
     game.stopKiosk()
     trackAction('replay_kiosk_stop')
     stageRef.current?.focus()
   }
+  const stopKiosk = () => stopKioskRef.current()
 
   const onSpeed = (speed: PlaybackSpeed) => {
     game.setPlaybackSpeed(speed)
@@ -125,10 +127,12 @@ export function Component() {
         // Held keys, bare modifier presses (the Control before a Ctrl+B / Ctrl+K), and Ctrl+B
         // (the app shell's own toggle) don't hand the game back.
         if (e.repeat || MODIFIER_KEYS.has(e.key) || (e.ctrlKey && e.key.toLowerCase() === 'b')) return
-        e.preventDefault()
-        game.stopKiosk()
-        trackAction('replay_kiosk_stop')
-        stageRef.current?.focus()
+        // Browser/OS combinations (reload, zoom, fullscreen, tab switch) stop kiosk but still run;
+        // Ctrl+K is swallowed so the browser's search bar doesn't open.
+        const combo = e.ctrlKey || e.metaKey || e.altKey
+        const ctrlK = e.ctrlKey && e.key.toLowerCase() === 'k'
+        if (!combo || ctrlK) e.preventDefault()
+        stopKioskRef.current()
         return
       }
       if (e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'k' && !e.repeat && !isInteractiveTarget(e.target)) {
@@ -193,7 +197,7 @@ export function Component() {
       const pose = hatPose.update(livePlayer(game.state), reducedMotion)
       const view = game.view()
       if (ctx && palette) {
-        render(ctx, { ...view, state: blend(view.prev, view.state, alpha), reducedMotion, frame, pose, pixelScale, kiosk: view.kiosk }, palette)
+        render(ctx, { ...view, state: blend(view.prev, view.state, alpha), reducedMotion, frame, pose, pixelScale }, palette)
       }
     })
     const onVisibility = () => {

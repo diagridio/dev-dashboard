@@ -30,8 +30,9 @@ montages and shared execution IDs all go out of sync.
   - player inputs, recorded by live tick.
 
   Live play records them on the run *tape*, and playback reads them back.
-  Kiosk mode (below) is the third `Source`: seeded streams plus the bot's
-  inputs, with no tape.
+  Kiosk mode (below) is the third `Source`: `KioskSource`, with seeded impure
+  and chaos streams and no tape. The bot's inputs are fed to the game directly
+  and don't go through `Source`.
   Never call `Math.random` or `this.deps.impure` directly in `runtime/game.ts`.
 
 ## Code map
@@ -77,33 +78,40 @@ ticks. Every other phase is frame-driven and consumes no ticks.
 ## Kiosk mode
 
 An unattended demo: the bot plays REPLAY by itself in a loop, for a screen at
-a booth. Press Ctrl+K to start it. Any other key stops it.
+a booth. Press Ctrl+K to start it. Any other key stops it, except bare modifier
+presses (Ctrl, Shift, Alt, Meta) and Ctrl+B (the app's sidebar toggle).
 
 - **Entry:** `Game.startKiosk()` works from `title`, `over`, `paused` and
   `resume`, live or during playback. It clears the save once and keeps the
   best scores.
 - **Seed and source:** a fixed `KIOSK_SEED`, so every loop is identical.
-  `KioskSource` supplies the orb `impure()` values and chaos timing from two
-  seeded mulberry32 streams.
+  `KioskSource` supplies the orb `impure()` values
+  and chaos timing from two seeded mulberry32 streams.
 - **Bot:** `KioskBot` tries candidate input scripts, simulates each ahead with
   the real `step()`, and plays the best one. It drops its plan on any tick
   jump and is reset in every non-playing phase. In level 2 it takes one orb on
   purpose, so the boss phase appears.
 - **No persistence:** no saves, no best-score writes, no tape, no auto-pause
-  on blur. Commands (pause, speed, share) are ignored.
+  on blur. `Game.command` (jump, slide, pause, confirm, cancel) is ignored, the
+  playback speed setter is a no-op (kiosk is never a playback), and the share
+  and replay actions are hidden.
 - **Cards:** tip, over and similar cards dwell on their own:
-  `KIOSK_CARD_FRAMES` (240) and `KIOSK_OVER_FRAMES` (360). The end card hides
+  `KIOSK_CARD_TICKS` (240, about 4 s) and `KIOSK_OVER_TICKS` (360, about 6 s).
+  The dwell counts 60 Hz ticks, so it doesn't depend on the monitor's refresh rate. The end card hides
   the execution ID and the share/replay actions.
-- **Loop:** after level 3's montage a new identical loop starts. One loop is
-  about 9,530 frames, roughly 2 min 39 s. It covers levels 0 to 3, the
+- **Loop:** after level 3's montage a new identical loop starts. One loop takes
+  roughly 2–3 minutes. It covers levels 0 to 3, the
   level 0 crash ("lost"), the replay, the level 2 boss and the montage, and
   never reaches game over.
 - **Banner:** `KIOSK_BANNER` (`AUTO PLAY · press any key to play`) shows on
   the canvas and on kiosk cards (`render/canvas.ts`, `Overlay.tsx`).
 - **Stopping:** `Game.stopKiosk()` returns to a clean live title card. In
-  `Replay.tsx`, any non-modifier, non-repeat key stops it. Bare
-  Control/Shift/Alt/Meta keydowns and Ctrl+B (the app's sidebar toggle) are
-  ignored. A pointerdown on the game stage stops it; clicks elsewhere don't.
+  `Replay.tsx`, any non-repeat key stops it, except bare
+  Control/Shift/Alt/Meta keydowns and Ctrl+B (the app's sidebar toggle), which
+  are ignored. A plain key is also `preventDefault`ed; a combination with
+  Ctrl, Meta or Alt (reload, zoom, fullscreen, tab switch) stops kiosk but still
+  reaches the browser, except Ctrl+K, which is prevented so the browser's
+  search bar doesn't open. A pointerdown on the game stage stops it; clicks elsewhere don't.
 - **Telemetry:** `replay_kiosk_start` and `replay_kiosk_stop`.
 
 ## History events

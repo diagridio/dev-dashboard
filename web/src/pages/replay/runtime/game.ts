@@ -23,10 +23,10 @@ export const NOTICE_TICKS = 180
 /** Speeds a recorded run can be watched at. */
 export const PLAYBACK_SPEEDS = [1, 2, 5, 10] as const
 export type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number]
-/** Kiosk mode: frames a tip or "Progress lost" card stays up before it confirms itself (~4 s). */
-export const KIOSK_CARD_FRAMES = 240
-/** Kiosk mode: frames the end card stays up if the bot ever fails (~6 s). */
-export const KIOSK_OVER_FRAMES = 360
+/** Kiosk mode: 60 Hz ticks a tip or "Progress lost" card stays up before it confirms itself (~4 s). */
+export const KIOSK_CARD_TICKS = 240
+/** Kiosk mode: 60 Hz ticks the end card stays up if the bot ever fails (~6 s). */
+export const KIOSK_OVER_TICKS = 360
 /** Kiosk mode: the last level played; its montage ends the loop. */
 export const KIOSK_LAST_LEVEL = 3
 
@@ -235,7 +235,7 @@ export class Game {
   }
 
   private frameStep(liveTicks: number): void {
-    if (this.kiosk) this.kioskStep()
+    if (this.kiosk) this.kioskStep(liveTicks)
     if (this.playback) this.autoplay()
     const p = this.phase
     if (p.kind === 'playing') {
@@ -274,18 +274,19 @@ export class Game {
   }
 
   /** Kiosk: cards confirm themselves after a dwell, and the loop starts over after level 3 or a failure. */
-  private kioskStep(): void {
+  private kioskStep(liveTicks: number): void {
     const p = this.phase
     if (p.kind === 'tip' && p.level > KIOSK_LAST_LEVEL) this.startKioskRun()
     else if (p.kind === 'tip' || p.kind === 'lost') {
-      if (++this.kioskWait >= KIOSK_CARD_FRAMES) this.confirm()
+      if ((this.kioskWait += liveTicks) >= KIOSK_CARD_TICKS) this.confirm()
     } else if (p.kind === 'over') {
-      if (++this.kioskWait >= KIOSK_OVER_FRAMES) this.startKioskRun()
+      if ((this.kioskWait += liveTicks) >= KIOSK_OVER_TICKS) this.startKioskRun()
     }
   }
 
-  /** Starts kiosk mode; false (and nothing changes) unless a title, end, pause or resume card is up. */
+  /** Starts kiosk mode; false (and nothing changes) unless a title, end, pause or resume card is up and kiosk is not already running. */
   startKiosk(): boolean {
+    if (this.kiosk) return false
     const k = this.phase.kind
     if (k !== 'title' && k !== 'over' && k !== 'paused' && k !== 'resume') return false
     // The one store write of kiosk mode: an interrupted run would otherwise be offered later.

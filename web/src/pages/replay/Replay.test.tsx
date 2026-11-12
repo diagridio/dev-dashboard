@@ -386,6 +386,29 @@ describe('Replay page', () => {
       expect(screen.queryByText(KIOSK_BANNER)).toBeNull()
     })
 
+    it('a browser combination stops kiosk without being prevented', async () => {
+      await startKiosk()
+      const event = createEvent.keyDown(window, { key: '=', ctrlKey: true })
+      fireEvent(window, event)
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('Ctrl+K stops kiosk and is prevented', async () => {
+      await startKiosk()
+      const event = ctrlK()
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it('a plain key stops kiosk and is prevented', async () => {
+      await startKiosk()
+      const event = createEvent.keyDown(window, { key: 'Enter' })
+      fireEvent(window, event)
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(event.defaultPrevented).toBe(true)
+    })
+
     it('auto-repeat does not stop kiosk', async () => {
       await startKiosk()
       ctrlK({ repeat: true })
