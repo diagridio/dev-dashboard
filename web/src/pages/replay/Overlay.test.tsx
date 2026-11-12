@@ -2,6 +2,8 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Overlay } from './Overlay'
 import { KIOSK_BANNER } from './render/canvas'
+import { TICK_HZ } from './engine/types'
+import { KIOSK_CARD_TICKS, KIOSK_OVER_TICKS } from './runtime/game'
 
 const stats = { replays: 2, fromHistory: 5, executed: 9, incidents: 1, retriesUsed: 2, circuitTrips: 1, boostsLost: 3 }
 
@@ -155,9 +157,29 @@ describe('Overlay', () => {
     expect(screen.getByText('Space / ↑ jump (hold for higher) · ↓ slide · Esc pause')).toBeInTheDocument()
   })
 
-  it('title card shows the kiosk hint', () => {
-    render(<Overlay phase={{ kind: 'title' }} {...common} />)
-    expect(screen.getByText('press CTRL+K to start kiosk mode')).toBeInTheDocument()
+  it('title card ends with the small kiosk hint, below the execution ID form', () => {
+    const { container } = render(<Overlay phase={{ kind: 'title' }} {...common} onWatch={vi.fn()} />)
+    const hint = screen.getByText('press CTRL+K to start kiosk mode (auto play)')
+    expect(hint).toHaveClass('replay-kiosk-hint')
+    expect(container.querySelector('.replay-card')?.lastElementChild).toBe(hint)
+  })
+
+  it('kiosk cards show a draining bar for the time until they continue on their own', () => {
+    const bar = (phase: Parameters<typeof Overlay>[0]['phase']) => {
+      const { container, unmount } = render(<Overlay phase={phase} {...common} kiosk />)
+      const el = container.querySelector<HTMLElement>('.replay-autobar')
+      const duration = el?.style.animationDuration ?? null
+      unmount()
+      return duration
+    }
+    expect(bar({ kind: 'tip', level: 1 })).toBe(`${KIOSK_CARD_TICKS / TICK_HZ}s`)
+    expect(bar({ kind: 'lost' })).toBe(`${KIOSK_CARD_TICKS / TICK_HZ}s`)
+    expect(bar({ kind: 'over', reason: 'x' })).toBe(`${KIOSK_OVER_TICKS / TICK_HZ}s`)
+  })
+
+  it('cards outside kiosk mode have no draining bar', () => {
+    const { container } = render(<Overlay phase={{ kind: 'tip', level: 1 }} {...common} />)
+    expect(container.querySelector('.replay-autobar')).toBeNull()
   })
 
   it('kiosk tip card shows the take-over hint', () => {

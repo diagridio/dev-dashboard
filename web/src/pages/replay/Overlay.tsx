@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { LEVELS } from './engine/levels'
+import { TICK_HZ } from './engine/types'
 import { KIOSK_BANNER } from './render/canvas'
+import { KIOSK_CARD_TICKS, KIOSK_OVER_TICKS } from './runtime/game'
 import type { Phase, RunStats } from './runtime/types'
 
 interface Props {
@@ -33,10 +35,19 @@ interface Props {
   kiosk?: boolean
 }
 
-function Card({ children }: { children: ReactNode }) {
+/**
+ * A card over the canvas. With `autoTicks`, a thin bar along its bottom drains over that many
+ * game ticks: kiosk mode moves on by itself then, and the bar shows the viewer when.
+ */
+function Card({ children, autoTicks }: { children: ReactNode; autoTicks?: number }) {
   return (
     <div className="replay-overlay">
-      <div className="card replay-card">{children}</div>
+      <div className="card replay-card">
+        {children}
+        {autoTicks !== undefined && (
+          <div className="replay-autobar" aria-hidden="true" style={{ animationDuration: `${autoTicks / TICK_HZ}s` }} />
+        )}
+      </div>
     </div>
   )
 }
@@ -94,7 +105,6 @@ export function Overlay({
           <p>Guide a workflow through a datacenter full of chaos. It will crash. Dapr will replay it.</p>
           <p className="replay-keys replay-start-meta">Daily run · {date} (UTC)</p>
           <p className="replay-keys replay-start-meta">Space / ↑ jump (hold for higher) · ↓ slide · Esc pause</p>
-          <p className="replay-keys replay-start-meta">press CTRL+K to start kiosk mode</p>
           {(best > 0 || dailyBest > 0) && <p className="replay-keys replay-start-meta">Today's best: {dailyBest} · Best: {best}</p>}
           {onWatch && (
             <>
@@ -102,6 +112,7 @@ export function Overlay({
               <WatchForm onWatch={onWatch} error={watchError ?? null} />
             </>
           )}
+          <p className="replay-keys replay-kiosk-hint">press CTRL+K to start kiosk mode (auto play)</p>
         </Card>
       )
     case 'resume':
@@ -115,7 +126,7 @@ export function Overlay({
     case 'tip': {
       const cfg = LEVELS[phase.level]
       return (
-        <Card>
+        <Card autoTicks={kiosk ? KIOSK_CARD_TICKS : undefined}>
           <h2>Level {phase.level} · {cfg.name}</h2>
           <p>{cfg.tip.body}</p>
           <p className="replay-keys">{kiosk ? KIOSK_BANNER : 'Enter to start'}</p>
@@ -131,7 +142,7 @@ export function Overlay({
       )
     case 'lost':
       return (
-        <Card>
+        <Card autoTicks={kiosk ? KIOSK_CARD_TICKS : undefined}>
           <h2>Progress lost</h2>
           <p>The process crashed and its state lived only in memory, so the workflow starts over from zero. Let's fix that.</p>
           <p className="replay-keys">{kiosk ? KIOSK_BANNER : 'Enter to enable Dapr Workflow'}</p>
@@ -139,7 +150,7 @@ export function Overlay({
       )
     case 'over':
       return (
-        <Card>
+        <Card autoTicks={kiosk ? KIOSK_OVER_TICKS : undefined}>
           {playback ? (
             <h2>Playback finished</h2>
           ) : (

@@ -63,7 +63,7 @@ ticks. Every other phase is frame-driven and consumes no ticks.
 
 | Phase | What happens | Leaves on |
 |---|---|---|
-| `title` | Title card; below a divider, an Execution ID field replays a run someone shared or you copied. Hint: `press CTRL+K to start kiosk mode` | Enter → new run · Ctrl+K → kiosk |
+| `title` | Title card; below a divider, an Execution ID field replays a run someone shared or you copied. At the very bottom, in small type: `press CTRL+K to start kiosk mode (auto play)` | Enter → new run · Ctrl+K → kiosk |
 | `resume` | A saved run was found | Enter → replay it · Esc → discard |
 | `tip` | Level tip card | Enter → `playing` |
 | `playing` | Ticks run; input recorded | crash, hit, level end, pause |
@@ -97,6 +97,8 @@ presses (Ctrl, Shift, Alt, Meta) and Ctrl+B (the app's sidebar toggle).
   and replay actions are hidden.
 - **Cards:** tip, over and similar cards dwell on their own:
   `KIOSK_CARD_TICKS` (240, about 4 s) and `KIOSK_OVER_TICKS` (360, about 6 s).
+  A thin bar along each such card's bottom (`.replay-autobar`) drains over the same time, so
+  viewers can see the card will move on by itself.
   The dwell counts 60 Hz ticks, so it doesn't depend on the monitor's refresh rate. The end card hides
   the execution ID and the share/replay actions.
 - **Loop:** after level 3's montage a new identical loop starts. One loop takes
