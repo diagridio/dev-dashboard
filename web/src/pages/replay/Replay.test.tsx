@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -9,6 +9,7 @@ import { RefreshProvider } from '../../lib/refresh'
 import { ConnectionContext } from '../../lib/connection'
 import { trackAction } from '../../lib/telemetry'
 import { copyText } from '../../lib/clipboard'
+import { KIOSK_BANNER } from './render/canvas'
 import { SAVE_KEY } from './runtime/persistence'
 import { encodeRun } from './runtime/share'
 import { emptyTape } from './runtime/tape'
@@ -335,5 +336,86 @@ describe('Replay page', () => {
     for (let i = 0; i < 5000 && !screen.queryByRole('heading', { name: 'Playback finished' }); i++) advance(1)
     expect(screen.getByRole('heading', { name: 'Playback finished' })).toBeInTheDocument()
     expect(await screen.findByRole('textbox', { name: 'Execution ID' })).toHaveValue(field.value)
+  })
+
+  describe('kiosk mode', () => {
+    const ctrlK = (init: KeyboardEventInit = {}) => {
+      const event = createEvent.keyDown(window, { key: 'k', ctrlKey: true, ...init })
+      fireEvent(window, event)
+      return event
+    }
+    const startKiosk = async () => {
+      renderAt('/replay')
+      await gameReady('Press Enter to start')
+      ctrlK()
+      await screen.findByRole('heading', { name: /^Level 0/ })
+    }
+
+    it('Ctrl+K on the title starts kiosk mode', async () => {
+      renderAt('/replay')
+      await gameReady('Press Enter to start')
+      const event = ctrlK()
+      expect(event.defaultPrevented).toBe(true)
+      expect(trackAction).toHaveBeenCalledWith('replay_kiosk_start')
+      expect(screen.queryByRole('heading', { name: 'Press Enter to start' })).toBeNull()
+      expect(await screen.findByRole('heading', { name: /^Level 0/ })).toBeInTheDocument()
+      expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    })
+
+    it('Ctrl+K from the resume card discards the save', async () => {
+      localStorage.setItem(SAVE_KEY, savedRun())
+      renderAt('/replay')
+      await gameReady('Resume your run?')
+      ctrlK()
+      expect(localStorage.getItem(SAVE_KEY)).toBeNull()
+    })
+
+    it('any key stops kiosk and shows the title', async () => {
+      await startKiosk()
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(trackAction).toHaveBeenCalledWith('replay_kiosk_stop')
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(await screen.findByRole('heading', { name: /^Level 0/ })).toBeInTheDocument()
+      expect(screen.queryByText(KIOSK_BANNER)).toBeNull()
+    })
+
+    it('auto-repeat does not stop kiosk', async () => {
+      await startKiosk()
+      ctrlK({ repeat: true })
+      expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    })
+
+    it('Ctrl+B does not stop kiosk', async () => {
+      await startKiosk()
+      fireEvent.keyDown(window, { key: 'b', ctrlKey: true })
+      expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    })
+
+    it('a click on the stage stops kiosk', async () => {
+      await startKiosk()
+      fireEvent.pointerDown(screen.getByLabelText('REPLAY game'))
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(trackAction).toHaveBeenCalledWith('replay_kiosk_stop')
+    })
+
+    it('Ctrl+K on the end card hides the execution ID', async () => {
+      await playToGameOver()
+      await screen.findByRole('textbox', { name: 'Execution ID' })
+      ctrlK()
+      await act(async () => {})
+      expect(screen.queryByText(/RPL1\./)).toBeNull()
+      expect(screen.queryByDisplayValue(/RPL1\./)).toBeNull()
+    })
+
+    it('Ctrl+K while playing is ignored', async () => {
+      renderAt('/replay')
+      await gameReady('Press Enter to start')
+      fireEvent.keyDown(window, { key: 'Enter' })
+      await screen.findByRole('heading', { name: /^Level 0/ })
+      const event = ctrlK()
+      expect(event.defaultPrevented).toBe(false)
+      expect(trackAction).not.toHaveBeenCalledWith('replay_kiosk_start')
+    })
   })
 })
