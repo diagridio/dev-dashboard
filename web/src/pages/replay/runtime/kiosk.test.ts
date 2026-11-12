@@ -117,6 +117,43 @@ describe('KioskBot', () => {
     expect(bot.inputs(under, false)).not.toContain('slideEnd')
   })
 
+  /** Drives a tall-rack world, keeping every state the bot saw, until `stop` says so. */
+  function until(bot: KioskBot, stop: (ins: PlayerInput[], s: GameState) => boolean): GameState[] {
+    const levels = makeLevels()
+    let s = world('tall')
+    const seen: GameState[] = []
+    for (let t = 0; t < 120; t++) {
+      seen.push(s)
+      const ins = bot.inputs(s, false)
+      if (stop(ins, s)) return seen
+      s = step(s, ins, ports, levels).state
+    }
+    throw new Error('stop condition never met')
+  }
+
+  it('drops its plan when the tick jumps back inside the plan window', () => {
+    const bot = new KioskBot(makeLevels())
+    const seen = until(bot, (ins) => ins.includes('jump'))
+    const jumped = seen[seen.length - 1]
+    // Keep going a few ticks so the plan is mid-script, then rewind to the jump tick on a clear road.
+    let s = step(jumped, ['jump'], ports, makeLevels()).state
+    for (let i = 0; i < 3; i++) s = step(s, bot.inputs(s, false), ports, makeLevels()).state
+    const rewound: GameState = { ...jumped, entities: [] }
+    expect(bot.inputs(rewound, false)).toEqual([])
+  })
+
+  it('reset() drops the active plan', () => {
+    // A reference run finds the tick of the planned jumpEnd.
+    const ref = until(new KioskBot(makeLevels()), (ins) => ins.includes('jumpEnd'))
+    const endTick = ref[ref.length - 1].tick
+    const bot = new KioskBot(makeLevels())
+    const seen = until(bot, (_, s) => s.tick === endTick - 1)
+    const next = step(seen[seen.length - 1], [], ports, makeLevels()).state
+    expect(next.tick).toBe(endTick)
+    bot.reset()
+    expect(bot.inputs(next, false)).not.toContain('jumpEnd')
+  })
+
   it('is a pure function of its plan, the state and takeOrb', () => {
     const run = () => drive(world('tall')).inputs
     expect(run()).toEqual(run())

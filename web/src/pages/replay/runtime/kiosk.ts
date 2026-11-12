@@ -157,13 +157,18 @@ function judge(s: GameState): { hit: boolean; tight: boolean } {
 /** The kiosk bot: plans short scripts of inputs by simulating them with the real engine. */
 export class KioskBot {
   private plan: Plan | null = null
+  /** Tick of the last state seen; any other next tick than lastTick + 1 (rewind, replay, new segment) drops the plan. */
+  private lastTick = Number.NaN
   constructor(private readonly levels: LevelTable) {}
 
   reset(): void {
     this.plan = null
+    this.lastTick = Number.NaN
   }
 
   inputs(s: GameState, takeOrb: boolean): PlayerInput[] {
+    if (s.tick !== this.lastTick + 1) this.plan = null
+    this.lastTick = s.tick
     if (s.status !== 'running') return []
     const plan = this.plan
     if (plan) {
