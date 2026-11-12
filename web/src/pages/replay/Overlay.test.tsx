@@ -177,6 +177,16 @@ describe('Overlay', () => {
     expect(bar({ kind: 'over', reason: 'x' })).toBe(`${KIOSK_OVER_TICKS / TICK_HZ}s`)
   })
 
+  it('each kiosk card gets a fresh draining bar, also straight after another kiosk card', () => {
+    // "Progress lost" moves straight on to the level 1 tip: reusing the drained bar would leave it empty.
+    const { container, rerender } = render(<Overlay phase={{ kind: 'lost' }} {...common} kiosk />)
+    const lostBar = container.querySelector('.replay-autobar')
+    rerender(<Overlay phase={{ kind: 'tip', level: 1 }} {...common} kiosk />)
+    const tipBar = container.querySelector('.replay-autobar')
+    expect(tipBar).not.toBeNull()
+    expect(tipBar).not.toBe(lostBar)
+  })
+
   it('cards outside kiosk mode have no draining bar', () => {
     const { container } = render(<Overlay phase={{ kind: 'tip', level: 1 }} {...common} />)
     expect(container.querySelector('.replay-autobar')).toBeNull()

@@ -37,15 +37,17 @@ interface Props {
 
 /**
  * A card over the canvas. With `autoTicks`, a thin bar along its bottom drains over that many
- * game ticks: kiosk mode moves on by itself then, and the bar shows the viewer when.
+ * game ticks: kiosk mode moves on by itself then, and the bar shows the viewer when. `barKey`
+ * names the card, so a card that follows another one (lost → level 1 tip) gets a fresh bar
+ * instead of reusing the drained one.
  */
-function Card({ children, autoTicks }: { children: ReactNode; autoTicks?: number }) {
+function Card({ children, autoTicks, barKey }: { children: ReactNode; autoTicks?: number; barKey?: string }) {
   return (
     <div className="replay-overlay">
       <div className="card replay-card">
         {children}
         {autoTicks !== undefined && (
-          <div className="replay-autobar" aria-hidden="true" style={{ animationDuration: `${autoTicks / TICK_HZ}s` }} />
+          <div key={barKey} className="replay-autobar" aria-hidden="true" style={{ animationDuration: `${autoTicks / TICK_HZ}s` }} />
         )}
       </div>
     </div>
@@ -126,7 +128,7 @@ export function Overlay({
     case 'tip': {
       const cfg = LEVELS[phase.level]
       return (
-        <Card autoTicks={kiosk ? KIOSK_CARD_TICKS : undefined}>
+        <Card autoTicks={kiosk ? KIOSK_CARD_TICKS : undefined} barKey={`tip-${phase.level}`}>
           <h2>Level {phase.level} · {cfg.name}</h2>
           <p>{cfg.tip.body}</p>
           <p className="replay-keys">{kiosk ? KIOSK_BANNER : 'Enter to start'}</p>
@@ -142,7 +144,7 @@ export function Overlay({
       )
     case 'lost':
       return (
-        <Card autoTicks={kiosk ? KIOSK_CARD_TICKS : undefined}>
+        <Card autoTicks={kiosk ? KIOSK_CARD_TICKS : undefined} barKey="lost">
           <h2>Progress lost</h2>
           <p>The process crashed and its state lived only in memory, so the workflow starts over from zero. Let's fix that.</p>
           <p className="replay-keys">{kiosk ? KIOSK_BANNER : 'Enter to enable Dapr Workflow'}</p>
@@ -150,7 +152,7 @@ export function Overlay({
       )
     case 'over':
       return (
-        <Card autoTicks={kiosk ? KIOSK_OVER_TICKS : undefined}>
+        <Card autoTicks={kiosk ? KIOSK_OVER_TICKS : undefined} barKey="over">
           {playback ? (
             <h2>Playback finished</h2>
           ) : (
