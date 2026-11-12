@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { LEVELS } from './engine/levels'
+import { KIOSK_BANNER } from './render/canvas'
 import type { Phase, RunStats } from './runtime/types'
 
 interface Props {
@@ -28,6 +29,8 @@ interface Props {
   /** Replays the run behind a pasted execution ID (title card). */
   onWatch?: (code: string) => void
   watchError?: string | null
+  /** Kiosk (auto-play) mode: cards show the take-over hint and the end card drops the run actions. */
+  kiosk?: boolean
 }
 
 function Card({ children }: { children: ReactNode }) {
@@ -81,7 +84,7 @@ function ExecutionId({ id, copied, onCopy }: { id: string; copied: boolean; onCo
 /** DOM cards over the canvas for every phase that waits on the player. */
 export function Overlay({
   phase, stats, best, score, level, date, dailyBest, onShare, playback,
-  executionId, executionIdError, onCopyExecutionId, idCopied, onReplayRun, onWatch, watchError,
+  executionId, executionIdError, onCopyExecutionId, idCopied, onReplayRun, onWatch, watchError, kiosk,
 }: Props) {
   switch (phase.kind) {
     case 'title':
@@ -91,6 +94,7 @@ export function Overlay({
           <p>Guide a workflow through a datacenter full of chaos. It will crash. Dapr will replay it.</p>
           <p className="replay-keys replay-start-meta">Daily run · {date} (UTC)</p>
           <p className="replay-keys replay-start-meta">Space / ↑ jump (hold for higher) · ↓ slide · Esc pause</p>
+          <p className="replay-keys replay-start-meta">press CTRL+K to start kiosk mode</p>
           {(best > 0 || dailyBest > 0) && <p className="replay-keys replay-start-meta">Today's best: {dailyBest} · Best: {best}</p>}
           {onWatch && (
             <>
@@ -114,7 +118,7 @@ export function Overlay({
         <Card>
           <h2>Level {phase.level} · {cfg.name}</h2>
           <p>{cfg.tip.body}</p>
-          <p className="replay-keys">Enter to start</p>
+          <p className="replay-keys">{kiosk ? KIOSK_BANNER : 'Enter to start'}</p>
         </Card>
       )
     }
@@ -130,7 +134,7 @@ export function Overlay({
         <Card>
           <h2>Progress lost</h2>
           <p>The process crashed and its state lived only in memory, so the workflow starts over from zero. Let's fix that.</p>
-          <p className="replay-keys">Enter to enable Dapr Workflow</p>
+          <p className="replay-keys">{kiosk ? KIOSK_BANNER : 'Enter to enable Dapr Workflow'}</p>
         </Card>
       )
     case 'over':
@@ -154,7 +158,7 @@ export function Overlay({
             <Stat label="Circuit trips" value={stats.circuitTrips} />
             <Stat label="Boosts lost" value={stats.boostsLost} />
           </div>
-          {executionId ? (
+          {kiosk ? null : executionId ? (
             <>
               <ExecutionId id={executionId} copied={idCopied ?? false} onCopy={onCopyExecutionId} />
               {!playback && <p>Share this execution ID with a friend or colleague so they can replay your game.</p>}
@@ -164,6 +168,9 @@ export function Overlay({
           ) : (
             <p className="replay-keys">Creating the execution ID…</p>
           )}
+          {kiosk ? (
+            <p className="replay-keys">{KIOSK_BANNER}</p>
+          ) : (
           <div className="replay-foot">
             <p className="replay-keys">Enter to play again</p>
             {onReplayRun && (
@@ -178,6 +185,7 @@ export function Overlay({
               </button>
             )}
           </div>
+          )}
         </Card>
       )
     default:

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Overlay } from './Overlay'
+import { KIOSK_BANNER } from './render/canvas'
 
 const stats = { replays: 2, fromHistory: 5, executed: 9, incidents: 1, retriesUsed: 2, circuitTrips: 1, boostsLost: 3 }
 
@@ -152,5 +153,28 @@ describe('Overlay', () => {
   it('documents variable jump height in the title-card key hint', () => {
     render(<Overlay phase={{ kind: 'title' }} {...common} />)
     expect(screen.getByText('Space / ↑ jump (hold for higher) · ↓ slide · Esc pause')).toBeInTheDocument()
+  })
+
+  it('title card shows the kiosk hint', () => {
+    render(<Overlay phase={{ kind: 'title' }} {...common} />)
+    expect(screen.getByText('press CTRL+K to start kiosk mode')).toBeInTheDocument()
+  })
+
+  it('kiosk tip card shows the take-over hint', () => {
+    render(<Overlay phase={{ kind: 'tip', level: 1 }} {...common} kiosk />)
+    expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    expect(screen.queryByText(/Enter to start/)).toBeNull()
+  })
+
+  it('kiosk end card hides execution ID and actions', () => {
+    render(
+      <Overlay phase={{ kind: 'over', reason: 'x' }} {...common} kiosk executionId="RPL1.abc" onReplayRun={vi.fn()} onShare={vi.fn()} />,
+    )
+    expect(screen.queryByDisplayValue('RPL1.abc')).toBeNull()
+    expect(screen.queryByText('RPL1.abc')).toBeNull()
+    expect(screen.queryByText('Replay entire run')).toBeNull()
+    expect(screen.queryByText('Share ↗')).toBeNull()
+    expect(screen.queryByText('Enter to play again')).toBeNull()
+    expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
   })
 })
