@@ -30,6 +30,9 @@ montages and shared execution IDs all go out of sync.
   - player inputs, recorded by live tick.
 
   Live play records them on the run *tape*, and playback reads them back.
+  Kiosk mode (below) is the third `Source`: `KioskSource`, with seeded impure
+  and chaos streams and no tape. The bot's inputs are fed to the game directly
+  and don't go through `Source`.
   Never call `Math.random` or `this.deps.impure` directly in `runtime/game.ts`.
 
 ## Code map
@@ -45,6 +48,7 @@ montages and shared execution IDs all go out of sync.
 | `runtime/rewind.ts` | Rewind ring buffer and the "safe spot" picker |
 | `runtime/montage.ts` | Level-end montage replayer |
 | `runtime/chaos.ts` | When the "process" crashes (outside-world randomness, via the tape) |
+| `runtime/kiosk.ts` | Kiosk mode: `KIOSK_SEED`, `KioskSource` (seeded impure and chaos streams), `KioskBot` (picks inputs by simulating candidate input scripts ahead with the real `step()`) |
 | `runtime/tape.ts`, `share.ts` | Run tape, `TapeRecorder`/`TapePlayer`, `RPL1.` run codes (shown to players as the *execution ID*) |
 | `runtime/persistence.ts`, `validate.ts` | `localStorage` saves (v2) and their shape validators |
 | `runtime/keys.ts`, `loop.ts`, `daily.ts` | Key mapping, fixed-timestep rAF loop, `utcDate()` |
@@ -59,7 +63,7 @@ ticks. Every other phase is frame-driven and consumes no ticks.
 
 | Phase | What happens | Leaves on |
 |---|---|---|
-| `title` | Title card; below a divider, an Execution ID field replays a run someone shared or you copied | Enter → new run |
+| `title` | Title card; below a divider, an Execution ID field replays a run someone shared or you copied. At the very bottom, in small type: `press CTRL+K to start kiosk mode (auto play)` | Enter → new run · Ctrl+K → kiosk |
 | `resume` | A saved run was found | Enter → replay it · Esc → discard |
 | `tip` | Level tip card | Enter → `playing` |
 | `playing` | Ticks run; input recorded | crash, hit, level end, pause |
@@ -70,6 +74,47 @@ ticks. Every other phase is frame-driven and consumes no ticks.
 | `montage` | Level-end replay of the level's history (~4 s) | Enter skips → `tip` |
 | `lost` | Level 0 crash: progress lost | Enter → level 1 |
 | `over` | Workflow FAILED (or Playback finished) card: stats, the run's execution ID with a `⧉ Copy` button and a line saying it can be shared (live runs only), Replay entire run, Share | Enter → new run |
+
+## Kiosk mode
+
+An unattended demo: the bot plays REPLAY by itself in a loop, for a screen at
+a booth. Press Ctrl+K to start it. Any other key stops it, except bare modifier
+presses (Ctrl, Shift, Alt, Meta) and Ctrl+B (the app's sidebar toggle).
+
+- **Entry:** `Game.startKiosk()` works from `title`, `over`, `paused` and
+  `resume`, live or during playback. It clears the save once and keeps the
+  best scores.
+- **Seed and source:** a fixed `KIOSK_SEED`, so every loop is identical.
+  `KioskSource` supplies the orb `impure()` values
+  and chaos timing from two seeded mulberry32 streams.
+- **Bot:** `KioskBot` tries candidate input scripts, simulates each ahead with
+  the real `step()`, and plays the best one. It drops its plan on any tick
+  jump and is reset in every non-playing phase. In level 2 it takes one orb on
+  purpose, so the boss phase appears.
+- **No persistence:** no saves, no best-score writes, no tape, no auto-pause
+  on blur. `Game.command` (jump, slide, pause, confirm, cancel) is ignored, the
+  playback speed setter is a no-op (kiosk is never a playback), and the share
+  and replay actions are hidden.
+- **Cards:** tip, over and similar cards dwell on their own:
+  `KIOSK_CARD_TICKS` (240, about 4 s) and `KIOSK_OVER_TICKS` (360, about 6 s).
+  A thin bar along each such card's bottom (`.replay-autobar`) drains over the same time, so
+  viewers can see the card will move on by itself.
+  The dwell counts 60 Hz ticks, so it doesn't depend on the monitor's refresh rate. The end card hides
+  the execution ID and the share/replay actions.
+- **Loop:** after level 3's montage a new identical loop starts. One loop takes
+  roughly 2–3 minutes. It covers levels 0 to 3, the
+  level 0 crash ("lost"), the replay, the level 2 boss and the montage, and
+  never reaches game over.
+- **Banner:** `KIOSK_BANNER` (`AUTO PLAY · press any key to play`) shows on
+  the canvas and on kiosk cards (`render/canvas.ts`, `Overlay.tsx`).
+- **Stopping:** `Game.stopKiosk()` returns to a clean live title card. In
+  `Replay.tsx`, any non-repeat key stops it, except bare
+  Control/Shift/Alt/Meta keydowns and Ctrl+B (the app's sidebar toggle), which
+  are ignored. A plain key is also `preventDefault`ed; a combination with
+  Ctrl, Meta or Alt (reload, zoom, fullscreen, tab switch) stops kiosk but still
+  reaches the browser, except Ctrl+K, which is prevented so the browser's
+  search bar doesn't open. A pointerdown on the game stage stops it; clicks elsewhere don't.
+- **Telemetry:** `replay_kiosk_start` and `replay_kiosk_stop`.
 
 ## History events
 
@@ -341,6 +386,12 @@ survive continue-as-new, add it to `StartInput`, `continueAsNew` and
 `LEVELS`, `makeLevels` in `testing.ts`, `nextLevel` in `game.ts`, and `isStart`
 in `validate.ts`.
 
+**Retune levels 0 to 3:** the kiosk loop test in `runtime/game.test.ts` runs
+the bot on the real `LEVELS` and asserts levels 0→3, lost, replay, the level 2
+boss, the montage and no game over. A retune can break it. Fix it by
+improving `KioskBot` or changing `KIOSK_SEED`, never by weakening the
+assertions.
+
 **Change the save shape:** keep `isSaveBody` in step with `Save`. Bump
 `SAVE_VERSION` if old saves can no longer be read correctly; old versions then
 read as "no save".
@@ -356,6 +407,8 @@ read as "no save".
   - `makeLevels(overrides, perLevel)` builds small level tables;
   - `autopilot(state, kinds)` steers toward pickups;
   - `counter()` and `lcg(seed)` are deterministic random sources.
+- `runtime/kiosk.test.ts` covers the source and bot. The kiosk loop test in
+  `runtime/game.test.ts` is slow and sensitive to level tuning (see Recipes).
 - The strongest checks are the tape tests in `runtime/game.test.ts`. They
   record a run with crashes, retries and a tab-close resume, then play it back
   at several frame sizes and require identical stats, history and state hash.
