@@ -24,9 +24,14 @@ export interface RenderView {
   playbackDate?: string | null
   /** Playback speed (1, 2, 5 or 10); shown next to the playback date. */
   playbackSpeed?: number | null
+  /** Kiosk (auto-play) mode: the HUD shows the AUTO PLAY banner. */
+  kiosk?: boolean
   /** Level-complete montage state; null or omitted outside the montage. */
   montage?: { events: number; flash: number; trail: number[] } | null
 }
+
+/** The kiosk-mode HUD banner; the Overlay cards reuse it as their hint. */
+export const KIOSK_BANNER = 'AUTO PLAY · press any key to play'
 
 const FONT = '10px ui-monospace, Menlo, Consolas, monospace'
 const BIG_FONT = 'bold 14px ui-monospace, Menlo, Consolas, monospace'
@@ -157,6 +162,8 @@ function drawHud(ctx: CanvasRenderingContext2D, view: RenderView, pal: Palette):
   if (view.playbackDate) {
     const speed = view.playbackSpeed ? ` · ${view.playbackSpeed}×` : ''
     banner(ctx, `▶ PLAYBACK · ${view.playbackDate}${speed}`, VIEW_H - 8, pal.glitch, FONT)
+  } else if (view.kiosk) {
+    banner(ctx, KIOSK_BANNER, VIEW_H - 8, pal.glitch, FONT)
   }
 }
 
