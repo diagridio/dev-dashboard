@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { BOSS_TICKS, initialState, LANE_SCALE, PLAYER_H, PLAYER_W, SLIDE_H } from '../engine/step'
 import { GROUND_Y, PLAYER_X, VIEW_W, type GameState } from '../engine/types'
 import type { Phase } from '../runtime/types'
-import { STRIP_H, render, type RenderView } from './canvas'
+import { KIOSK_BANNER, STRIP_H, render, type RenderView } from './canvas'
 import type { Palette } from './palette'
 
 const pal: Palette = {
@@ -319,5 +319,14 @@ describe('render', () => {
     const { ctx, calls } = mockCtx()
     render(ctx, view({ kind: 'playing' }, lvl1(), { playbackDate: '2026-09-30', playbackSpeed: 5 }), pal)
     expect(texts(calls)).toContain('▶ PLAYBACK · 2026-09-30 · 5×')
+  })
+
+  it('draws the kiosk banner only in kiosk mode', () => {
+    const on = mockCtx()
+    render(on.ctx, view({ kind: 'playing' }, lvl1(), { kiosk: true }), pal)
+    expect(texts(on.calls)).toContain(KIOSK_BANNER)
+    const off = mockCtx()
+    render(off.ctx, view({ kind: 'playing' }, lvl1(), { kiosk: false }), pal)
+    expect(texts(off.calls)).not.toContain(KIOSK_BANNER)
   })
 })

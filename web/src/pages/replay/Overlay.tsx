@@ -1,5 +1,8 @@
 import { useState, type ReactNode } from 'react'
 import { LEVELS } from './engine/levels'
+import { TICK_HZ } from './engine/types'
+import { KIOSK_BANNER } from './render/canvas'
+import { KIOSK_CARD_TICKS, KIOSK_OVER_TICKS } from './runtime/game'
 import type { Phase, RunStats } from './runtime/types'
 
 interface Props {
@@ -28,12 +31,25 @@ interface Props {
   /** Replays the run behind a pasted execution ID (title card). */
   onWatch?: (code: string) => void
   watchError?: string | null
+  /** Kiosk (auto-play) mode: cards show the take-over hint and the end card drops the run actions. */
+  kiosk?: boolean
 }
 
-function Card({ children }: { children: ReactNode }) {
+/**
+ * A card over the canvas. With `autoTicks`, a thin bar along its bottom drains over that many
+ * game ticks: kiosk mode moves on by itself then, and the bar shows the viewer when. `barKey`
+ * names the card, so a card that follows another one (lost → level 1 tip) gets a fresh bar
+ * instead of reusing the drained one.
+ */
+function Card({ children, autoTicks, barKey }: { children: ReactNode; autoTicks?: number; barKey?: string }) {
   return (
     <div className="replay-overlay">
-      <div className="card replay-card">{children}</div>
+      <div className="card replay-card">
+        {children}
+        {autoTicks !== undefined && (
+          <div key={barKey} className="replay-autobar" aria-hidden="true" style={{ animationDuration: `${autoTicks / TICK_HZ}s` }} />
+        )}
+      </div>
     </div>
   )
 }
@@ -81,7 +97,7 @@ function ExecutionId({ id, copied, onCopy }: { id: string; copied: boolean; onCo
 /** DOM cards over the canvas for every phase that waits on the player. */
 export function Overlay({
   phase, stats, best, score, level, date, dailyBest, onShare, playback,
-  executionId, executionIdError, onCopyExecutionId, idCopied, onReplayRun, onWatch, watchError,
+  executionId, executionIdError, onCopyExecutionId, idCopied, onReplayRun, onWatch, watchError, kiosk,
 }: Props) {
   switch (phase.kind) {
     case 'title':
@@ -98,6 +114,7 @@ export function Overlay({
               <WatchForm onWatch={onWatch} error={watchError ?? null} />
             </>
           )}
+          <p className="replay-keys replay-kiosk-hint">press CTRL+K to start kiosk mode (auto play)</p>
         </Card>
       )
     case 'resume':
@@ -111,10 +128,10 @@ export function Overlay({
     case 'tip': {
       const cfg = LEVELS[phase.level]
       return (
-        <Card>
+        <Card autoTicks={kiosk ? KIOSK_CARD_TICKS : undefined} barKey={`tip-${phase.level}`}>
           <h2>Level {phase.level} · {cfg.name}</h2>
           <p>{cfg.tip.body}</p>
-          <p className="replay-keys">Enter to start</p>
+          <p className="replay-keys">{kiosk ? KIOSK_BANNER : 'Enter to start'}</p>
         </Card>
       )
     }
@@ -127,15 +144,15 @@ export function Overlay({
       )
     case 'lost':
       return (
-        <Card>
+        <Card autoTicks={kiosk ? KIOSK_CARD_TICKS : undefined} barKey="lost">
           <h2>Progress lost</h2>
           <p>The process crashed and its state lived only in memory, so the workflow starts over from zero. Let's fix that.</p>
-          <p className="replay-keys">Enter to enable Dapr Workflow</p>
+          <p className="replay-keys">{kiosk ? KIOSK_BANNER : 'Enter to enable Dapr Workflow'}</p>
         </Card>
       )
     case 'over':
       return (
-        <Card>
+        <Card autoTicks={kiosk ? KIOSK_OVER_TICKS : undefined} barKey="over">
           {playback ? (
             <h2>Playback finished</h2>
           ) : (
@@ -154,7 +171,7 @@ export function Overlay({
             <Stat label="Circuit trips" value={stats.circuitTrips} />
             <Stat label="Boosts lost" value={stats.boostsLost} />
           </div>
-          {executionId ? (
+          {kiosk ? null : executionId ? (
             <>
               <ExecutionId id={executionId} copied={idCopied ?? false} onCopy={onCopyExecutionId} />
               {!playback && <p>Share this execution ID with a friend or colleague so they can replay your game.</p>}
@@ -164,6 +181,9 @@ export function Overlay({
           ) : (
             <p className="replay-keys">Creating the execution ID…</p>
           )}
+          {kiosk ? (
+            <p className="replay-keys">{KIOSK_BANNER}</p>
+          ) : (
           <div className="replay-foot">
             <p className="replay-keys">Enter to play again</p>
             {onReplayRun && (
@@ -178,6 +198,7 @@ export function Overlay({
               </button>
             )}
           </div>
+          )}
         </Card>
       )
     default:

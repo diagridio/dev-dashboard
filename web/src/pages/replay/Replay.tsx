@@ -19,6 +19,8 @@ import { utcDate } from './runtime/daily'
 import { localSaveStore } from './runtime/persistence'
 import { decodeRun, shareableRunCode } from './runtime/share'
 
+const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta'])
+
 function createGame(): Game {
   return new Game({
     impure: Math.random, // the one deliberate source of non-determinism
@@ -45,7 +47,7 @@ export function Component() {
 
   // Every game-over card shows the finished run's execution ID (its run code).
   useEffect(() => {
-    if (game.phase.kind !== 'over') {
+    if (game.phase.kind !== 'over' || game.kiosk) {
       cardToken.current += 1
       setExecutionId(null)
       setExecutionIdError(null)
@@ -89,6 +91,15 @@ export function Component() {
     else if (game.watch(structuredClone(game.tape))) stageRef.current?.focus()
   }
 
+  /** Any input while kiosk mode plays hands the game back, at a clean title card. */
+  const stopKioskRef = useRef(() => {})
+  stopKioskRef.current = () => {
+    game.stopKiosk()
+    trackAction('replay_kiosk_stop')
+    stageRef.current?.focus()
+  }
+  const stopKiosk = () => stopKioskRef.current()
+
   const onSpeed = (speed: PlaybackSpeed) => {
     game.setPlaybackSpeed(speed)
     trackAction('replay_speed', { speed })
@@ -112,6 +123,26 @@ export function Component() {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (game.kiosk) {
+        // Held keys, bare modifier presses (the Control before a Ctrl+B / Ctrl+K), and Ctrl+B
+        // (the app shell's own toggle) don't hand the game back.
+        if (e.repeat || MODIFIER_KEYS.has(e.key) || (e.ctrlKey && e.key.toLowerCase() === 'b')) return
+        // Browser/OS combinations (reload, zoom, fullscreen, tab switch) stop kiosk but still run;
+        // Ctrl+K is swallowed so the browser's search bar doesn't open.
+        const combo = e.ctrlKey || e.metaKey || e.altKey
+        const ctrlK = e.ctrlKey && e.key.toLowerCase() === 'k'
+        if (!combo || ctrlK) e.preventDefault()
+        stopKioskRef.current()
+        return
+      }
+      if (e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'k' && !e.repeat && !isInteractiveTarget(e.target)) {
+        if (game.startKiosk()) {
+          e.preventDefault()
+          trackAction('replay_kiosk_start')
+          stageRef.current?.focus()
+        }
+        return
+      }
       // Keys aimed at the app shell (links, buttons, fields, dialogs) are not game keys.
       if (e.ctrlKey || e.metaKey || e.altKey || isInteractiveTarget(e.target)) return
       const command = keyToCommand(e, true)
@@ -121,6 +152,7 @@ export function Component() {
     }
     // Releases always get through (they only ever end a slide), so a slide never sticks.
     const onKeyUp = (e: KeyboardEvent) => {
+      if (game.kiosk) return
       const command = keyToCommand(e, false)
       if (command) game.command(command)
     }
@@ -198,7 +230,7 @@ export function Component() {
       </div>
       <div className="replay-grid">
         <div className="replay-main">
-          <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game">
+          <div className="replay-stage" ref={stageRef} tabIndex={0} aria-label="REPLAY game" onPointerDown={() => game.kiosk && stopKiosk()}>
             <canvas ref={canvasRef} width={VIEW_W} height={VIEW_H} aria-label="REPLAY game screen" />
             <Overlay
               phase={game.phase}
@@ -209,17 +241,22 @@ export function Component() {
               date={game.runDate}
               dailyBest={game.dailyBest}
               playback={game.playback}
+              kiosk={game.kiosk}
               executionId={executionId}
               executionIdError={executionIdError}
               idCopied={idCopied}
               watchError={watchError}
               onCopyExecutionId={onCopyExecutionId}
-              onReplayRun={() => void onReplayRun()}
+              onReplayRun={game.kiosk ? undefined : () => void onReplayRun()}
               onWatch={(c) => void onWatch(c)}
-              onShare={() => {
-                setShareOpen(true)
-                trackAction('share_open', { source: 'replay' })
-              }}
+              onShare={
+                game.kiosk
+                  ? undefined
+                  : () => {
+                      setShareOpen(true)
+                      trackAction('share_open', { source: 'replay' })
+                    }
+              }
             />
           </div>
           {game.playback && (

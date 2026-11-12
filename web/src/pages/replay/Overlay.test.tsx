@@ -1,6 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { Overlay } from './Overlay'
+import { KIOSK_BANNER } from './render/canvas'
+import { TICK_HZ } from './engine/types'
+import { KIOSK_CARD_TICKS, KIOSK_OVER_TICKS } from './runtime/game'
 
 const stats = { replays: 2, fromHistory: 5, executed: 9, incidents: 1, retriesUsed: 2, circuitTrips: 1, boostsLost: 3 }
 
@@ -152,5 +155,58 @@ describe('Overlay', () => {
   it('documents variable jump height in the title-card key hint', () => {
     render(<Overlay phase={{ kind: 'title' }} {...common} />)
     expect(screen.getByText('Space / ↑ jump (hold for higher) · ↓ slide · Esc pause')).toBeInTheDocument()
+  })
+
+  it('title card ends with the small kiosk hint, below the execution ID form', () => {
+    const { container } = render(<Overlay phase={{ kind: 'title' }} {...common} onWatch={vi.fn()} />)
+    const hint = screen.getByText('press CTRL+K to start kiosk mode (auto play)')
+    expect(hint).toHaveClass('replay-kiosk-hint')
+    expect(container.querySelector('.replay-card')?.lastElementChild).toBe(hint)
+  })
+
+  it('kiosk cards show a draining bar for the time until they continue on their own', () => {
+    const bar = (phase: Parameters<typeof Overlay>[0]['phase']) => {
+      const { container, unmount } = render(<Overlay phase={phase} {...common} kiosk />)
+      const el = container.querySelector<HTMLElement>('.replay-autobar')
+      const duration = el?.style.animationDuration ?? null
+      unmount()
+      return duration
+    }
+    expect(bar({ kind: 'tip', level: 1 })).toBe(`${KIOSK_CARD_TICKS / TICK_HZ}s`)
+    expect(bar({ kind: 'lost' })).toBe(`${KIOSK_CARD_TICKS / TICK_HZ}s`)
+    expect(bar({ kind: 'over', reason: 'x' })).toBe(`${KIOSK_OVER_TICKS / TICK_HZ}s`)
+  })
+
+  it('each kiosk card gets a fresh draining bar, also straight after another kiosk card', () => {
+    // "Progress lost" moves straight on to the level 1 tip: reusing the drained bar would leave it empty.
+    const { container, rerender } = render(<Overlay phase={{ kind: 'lost' }} {...common} kiosk />)
+    const lostBar = container.querySelector('.replay-autobar')
+    rerender(<Overlay phase={{ kind: 'tip', level: 1 }} {...common} kiosk />)
+    const tipBar = container.querySelector('.replay-autobar')
+    expect(tipBar).not.toBeNull()
+    expect(tipBar).not.toBe(lostBar)
+  })
+
+  it('cards outside kiosk mode have no draining bar', () => {
+    const { container } = render(<Overlay phase={{ kind: 'tip', level: 1 }} {...common} />)
+    expect(container.querySelector('.replay-autobar')).toBeNull()
+  })
+
+  it('kiosk tip card shows the take-over hint', () => {
+    render(<Overlay phase={{ kind: 'tip', level: 1 }} {...common} kiosk />)
+    expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    expect(screen.queryByText(/Enter to start/)).toBeNull()
+  })
+
+  it('kiosk end card hides execution ID and actions', () => {
+    render(
+      <Overlay phase={{ kind: 'over', reason: 'x' }} {...common} kiosk executionId="RPL1.abc" onReplayRun={vi.fn()} onShare={vi.fn()} />,
+    )
+    expect(screen.queryByDisplayValue('RPL1.abc')).toBeNull()
+    expect(screen.queryByText('RPL1.abc')).toBeNull()
+    expect(screen.queryByText('Replay entire run')).toBeNull()
+    expect(screen.queryByText('Share ↗')).toBeNull()
+    expect(screen.queryByText('Enter to play again')).toBeNull()
+    expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
   })
 })
