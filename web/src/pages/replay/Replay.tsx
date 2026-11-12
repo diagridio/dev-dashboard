@@ -19,6 +19,8 @@ import { utcDate } from './runtime/daily'
 import { localSaveStore } from './runtime/persistence'
 import { decodeRun, shareableRunCode } from './runtime/share'
 
+const MODIFIER_KEYS = new Set(['Control', 'Shift', 'Alt', 'Meta'])
+
 function createGame(): Game {
   return new Game({
     impure: Math.random, // the one deliberate source of non-determinism
@@ -120,8 +122,9 @@ export function Component() {
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (game.kiosk) {
-        // Held keys, and Ctrl+B (the app shell's own toggle), don't hand the game back.
-        if (e.repeat || (e.ctrlKey && e.key.toLowerCase() === 'b')) return
+        // Held keys, bare modifier presses (the Control before a Ctrl+B / Ctrl+K), and Ctrl+B
+        // (the app shell's own toggle) don't hand the game back.
+        if (e.repeat || MODIFIER_KEYS.has(e.key) || (e.ctrlKey && e.key.toLowerCase() === 'b')) return
         e.preventDefault()
         game.stopKiosk()
         trackAction('replay_kiosk_stop')
