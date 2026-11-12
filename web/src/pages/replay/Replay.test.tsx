@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, createEvent, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
@@ -9,10 +9,16 @@ import { RefreshProvider } from '../../lib/refresh'
 import { ConnectionContext } from '../../lib/connection'
 import { trackAction } from '../../lib/telemetry'
 import { copyText } from '../../lib/clipboard'
+import { KIOSK_BANNER } from './render/canvas'
 import { SAVE_KEY } from './runtime/persistence'
 import { encodeRun } from './runtime/share'
 import { emptyTape } from './runtime/tape'
 
+const shareHook = vi.hoisted(() => ({ defer: null as null | (() => Promise<string | null>) }))
+vi.mock('./runtime/share', async (orig) => {
+  const actual = await orig<typeof import('./runtime/share')>()
+  return { ...actual, shareableRunCode: (tape: Parameters<typeof actual.shareableRunCode>[0]) => (shareHook.defer ? shareHook.defer() : actual.shareableRunCode(tape)) }
+})
 vi.mock('../../lib/telemetry', () => ({ trackAction: vi.fn(), trackView: vi.fn(), setTelemetryContext: vi.fn(), trackError: vi.fn() }))
 vi.mock('../../lib/clipboard', () => ({ copyText: vi.fn() }))
 
@@ -37,6 +43,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  shareHook.defer = null
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -335,5 +342,133 @@ describe('Replay page', () => {
     for (let i = 0; i < 5000 && !screen.queryByRole('heading', { name: 'Playback finished' }); i++) advance(1)
     expect(screen.getByRole('heading', { name: 'Playback finished' })).toBeInTheDocument()
     expect(await screen.findByRole('textbox', { name: 'Execution ID' })).toHaveValue(field.value)
+  })
+
+  describe('kiosk mode', () => {
+    const ctrlK = (init: KeyboardEventInit = {}) => {
+      const event = createEvent.keyDown(window, { key: 'k', ctrlKey: true, ...init })
+      fireEvent(window, event)
+      return event
+    }
+    const startKiosk = async () => {
+      renderAt('/replay')
+      await gameReady('Press Enter to start')
+      ctrlK()
+      await screen.findByRole('heading', { name: /^Level 0/ })
+    }
+
+    it('Ctrl+K on the title starts kiosk mode', async () => {
+      renderAt('/replay')
+      await gameReady('Press Enter to start')
+      const event = ctrlK()
+      expect(event.defaultPrevented).toBe(true)
+      expect(trackAction).toHaveBeenCalledWith('replay_kiosk_start')
+      expect(screen.queryByRole('heading', { name: 'Press Enter to start' })).toBeNull()
+      expect(await screen.findByRole('heading', { name: /^Level 0/ })).toBeInTheDocument()
+      expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    })
+
+    it('Ctrl+K from the resume card discards the save', async () => {
+      localStorage.setItem(SAVE_KEY, savedRun())
+      renderAt('/replay')
+      await gameReady('Resume your run?')
+      ctrlK()
+      expect(localStorage.getItem(SAVE_KEY)).toBeNull()
+    })
+
+    it('any key stops kiosk and shows the title', async () => {
+      await startKiosk()
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(trackAction).toHaveBeenCalledWith('replay_kiosk_stop')
+      fireEvent.keyDown(window, { key: 'Enter' })
+      expect(await screen.findByRole('heading', { name: /^Level 0/ })).toBeInTheDocument()
+      expect(screen.queryByText(KIOSK_BANNER)).toBeNull()
+    })
+
+    it('a browser combination stops kiosk without being prevented', async () => {
+      await startKiosk()
+      const event = createEvent.keyDown(window, { key: '=', ctrlKey: true })
+      fireEvent(window, event)
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(event.defaultPrevented).toBe(false)
+    })
+
+    it('Ctrl+K stops kiosk and is prevented', async () => {
+      await startKiosk()
+      const event = ctrlK()
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it('a plain key stops kiosk and is prevented', async () => {
+      await startKiosk()
+      const event = createEvent.keyDown(window, { key: 'Enter' })
+      fireEvent(window, event)
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(event.defaultPrevented).toBe(true)
+    })
+
+    it('auto-repeat does not stop kiosk', async () => {
+      await startKiosk()
+      ctrlK({ repeat: true })
+      expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    })
+
+    it('Ctrl+B does not stop kiosk', async () => {
+      await startKiosk()
+      fireEvent.keyDown(window, { key: 'b', ctrlKey: true })
+      expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    })
+
+    it('a click on the stage stops kiosk', async () => {
+      await startKiosk()
+      fireEvent.pointerDown(screen.getByLabelText('REPLAY game'))
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(trackAction).toHaveBeenCalledWith('replay_kiosk_stop')
+    })
+
+    it('Ctrl+K on the end card hides the execution ID, even when the encode resolves late', async () => {
+      let resolve: (id: string) => void = () => {}
+      shareHook.defer = () => new Promise<string | null>((r) => { resolve = r })
+      await playToGameOver()
+      ctrlK()
+      await act(async () => { resolve('RPL1.late') })
+      expect(screen.queryByText(/RPL1\./)).toBeNull()
+      expect(screen.queryByDisplayValue(/RPL1\./)).toBeNull()
+    })
+
+    it('a Control press then b does not stop kiosk', async () => {
+      await startKiosk()
+      fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
+      fireEvent.keyDown(window, { key: 'b', ctrlKey: true })
+      expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+      expect(trackAction).not.toHaveBeenCalledWith('replay_kiosk_stop')
+    })
+
+    it('a Control press then k stops kiosk and does not restart it', async () => {
+      await startKiosk()
+      fireEvent.keyDown(window, { key: 'Control', ctrlKey: true })
+      ctrlK()
+      expect(await screen.findByRole('heading', { name: 'Press Enter to start' })).toBeInTheDocument()
+      expect(vi.mocked(trackAction).mock.calls.filter(([n]) => n === 'replay_kiosk_stop')).toHaveLength(1)
+      expect(vi.mocked(trackAction).mock.calls.filter(([n]) => n === 'replay_kiosk_start')).toHaveLength(1)
+    })
+
+    it('a lone Shift press does not stop kiosk', async () => {
+      await startKiosk()
+      fireEvent.keyDown(window, { key: 'Shift', shiftKey: true })
+      expect(screen.getByText(KIOSK_BANNER)).toBeInTheDocument()
+    })
+
+    it('Ctrl+K while playing is ignored', async () => {
+      renderAt('/replay')
+      await gameReady('Press Enter to start')
+      fireEvent.keyDown(window, { key: 'Enter' })
+      await screen.findByRole('heading', { name: /^Level 0/ })
+      const event = ctrlK()
+      expect(event.defaultPrevented).toBe(false)
+      expect(trackAction).not.toHaveBeenCalledWith('replay_kiosk_start')
+    })
   })
 })
