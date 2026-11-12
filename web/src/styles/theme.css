@@ -692,6 +692,11 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .replay-card p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .replay-card .replay-keys { font-family: var(--mono); font-size: 11px; color: var(--faint); }
 .replay-card .replay-keys.replay-start-meta { font-size: 13px; color: var(--muted); }
+.replay-card { position: relative; }
+.replay-card .replay-keys.replay-kiosk-hint { font-size: 10px; text-align: center; }
+/* Kiosk mode: a thin bar along the card's bottom drains until the card moves on by itself. */
+.replay-autobar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent-bright); transform-origin: left; animation: replay-drain linear forwards; }
+@keyframes replay-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .replay-stats { margin: 4px 0 0; grid-template-columns: repeat(3, 1fr); }
 .replay-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .replay-divider { width: 100%; height: 0; margin: 2px 0; border: 0; border-top: 1px solid var(--line); }

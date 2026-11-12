@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { hashState } from '../engine/hash'
 import { chaosMeanTicks, type LevelConfig, type LevelTable } from '../engine/levels'
 import { replay } from '../engine/replay'
@@ -9,7 +9,8 @@ import { GROUND_Y, PLAYER_X, type EntityKind } from '../engine/types'
 import type { Palette } from '../render/palette'
 import { render } from '../render/canvas'
 import { autopilot, counter, lcg, makeLevels } from '../testing'
-import { CRASH_FRAMES, Game, REPLAY_MAX_FRAMES, type GameDeps } from './game'
+import { CRASH_FRAMES, Game, KIOSK_CARD_TICKS, KIOSK_LAST_LEVEL, KIOSK_OVER_TICKS, REPLAY_MAX_FRAMES, type GameDeps } from './game'
+import { KIOSK_SEED } from './kiosk'
 import type { SaveStore } from './persistence'
 import { MONTAGE_FRAMES } from './montage'
 import { REWIND_FRAMES } from './rewind'
@@ -858,6 +859,44 @@ describe('run tape', () => {
     expect(viewer.playback).toBe(false)
   })
 
+  describe('starting kiosk mode from a playback', () => {
+    /** startKiosk leaves playback for a kiosk run and clears the store; the kiosk never reads the outside world. */
+    function expectKiosk(viewer: Game, store: MemoryStore): void {
+      store.saved = { version: 2 } as unknown as Save
+      expect(viewer.startKiosk()).toBe(true)
+      expect(viewer.playback).toBe(false)
+      expect(viewer.kiosk).toBe(true)
+      expect(viewer.start.seed).toBe(KIOSK_SEED)
+      expect(viewer.phase).toEqual({ kind: 'tip', level: 0 })
+      expect(viewer.view().playbackDate).toBeNull()
+      expect(store.saved).toBeNull()
+      for (let f = 0; f < KIOSK_CARD_TICKS + 120; f++) viewer.frame(1)
+      expect(viewer.phase.kind).toBe('playing')
+    }
+
+    it('works from a paused playback', () => {
+      const store = memoryStore()
+      const viewer = new Game(deps({ store, levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
+      viewer.watch(recording().tape)
+      for (let f = 0; f < 10 && viewer.phase.kind !== 'playing'; f++) viewer.frame(1)
+      viewer.command('pause')
+      expect(viewer.phase.kind).toBe('paused')
+      expect(viewer.playback).toBe(true)
+      expectKiosk(viewer, store)
+    })
+
+    it('works from a playback end card', () => {
+      const store = memoryStore()
+      const viewer = new Game(deps({ store, levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
+      const live = recording()
+      viewer.watch({ ...live.tape, chaos: live.tape.chaos.slice(0, 1), impure: [] })
+      for (let f = 0; f < 60_000 && viewer.phase.kind !== 'over'; f++) viewer.frame(1)
+      expect(viewer.phase.kind).toBe('over')
+      expect(viewer.playback).toBe(true)
+      expectKiosk(viewer, store)
+    })
+  })
+
   it('lets Enter unpause a paused playback', () => {
     const viewer = new Game(deps({ levels: tapeLevels(), impure: noWorld, chaosRand: noWorld }))
     viewer.watch(recording().tape)
@@ -1021,5 +1060,314 @@ describe('run tape', () => {
     ;(b as unknown as { gameOver(r: string): void }).gameOver('hit an obstacle')
     expect(store.best).toBe(999)
     expect(store.daily).toEqual({ date: '2026-09-30', best: 50 })
+  })
+})
+
+describe('kiosk mode', () => {
+  /** The real level table: the loop tests prove the bot clears it. */
+  const real = (overrides: Partial<GameDeps> = {}) => deps({ levels: undefined, ...overrides })
+
+  /** Runs one frame at a time until `until` holds; throws after `max` frames. Returns the frames run. */
+  function runKiosk(game: Game, until: (g: Game) => boolean, max = 200_000, size = 1): number {
+    for (let frames = 0; frames < max; frames++) {
+      if (until(game)) return frames
+      game.frame(size)
+    }
+    throw new Error(`kiosk condition not reached (phase ${game.phase.kind}, level ${game.state.level})`)
+  }
+
+  /** Tracks one kiosk loop: the tip levels in order and which phases showed up where. */
+  function loopWatcher() {
+    const tips: number[] = []
+    let last = ''
+    const seen = { lost: false, replayingIn1to3: false, bossIn2: false, montageAfter3: false, over: false }
+    const observe = (g: Game): void => {
+      const p = g.phase
+      const key = p.kind === 'tip' ? `tip${p.level}` : p.kind
+      if (key !== last && p.kind === 'tip') tips.push(p.level)
+      last = key
+      if (p.kind === 'lost') seen.lost = true
+      if (p.kind === 'over') seen.over = true
+      if (p.kind === 'replaying' && g.state.level >= 1 && g.state.level <= 3) seen.replayingIn1to3 = true
+      if (g.state.bossUntil > 0 && g.state.level === 2) seen.bossIn2 = true
+      if (p.kind === 'montage' && tips.includes(3)) seen.montageAfter3 = true
+    }
+    /** Back at the level-0 tip after the level-3 tip: the loop started over. */
+    const looped = (g: Game): boolean => {
+      observe(g)
+      return tips.length > 4 && g.phase.kind === 'tip' && g.phase.level === 0
+    }
+    return { tips, seen, observe, looped }
+  }
+
+  function kioskGame(overrides: Partial<GameDeps> = {}): Game {
+    const game = new Game(real(overrides))
+    expect(game.startKiosk()).toBe(true)
+    return game
+  }
+
+  it('exports its dwell constants', () => {
+    expect(KIOSK_CARD_TICKS).toBe(240)
+    expect(KIOSK_OVER_TICKS).toBe(360)
+    expect(KIOSK_LAST_LEVEL).toBe(3)
+  })
+
+  it('counts card dwell in 60 Hz ticks, not animation frames', () => {
+    const game = kioskGame()
+    for (let i = 0; i < KIOSK_CARD_TICKS / 2 - 1; i++) game.frame(2)
+    expect(game.phase.kind).toBe('tip')
+    game.frame(2)
+    expect(game.phase.kind).toBe('playing')
+  })
+
+  it('startKiosk returns false when kiosk is already running', () => {
+    const store = memoryStore()
+    const clear = vi.spyOn(store, 'clear')
+    const game = new Game(deps({ store }))
+    expect(game.startKiosk()).toBe(true)
+    expect(clear).toHaveBeenCalledTimes(1)
+    for (let i = 0; i < KIOSK_CARD_TICKS; i++) game.frame(1)
+    // Force the kiosk end card, one of the phases startKiosk otherwise accepts.
+    game.state = { ...game.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+    game.frame(1)
+    expect(game.phase.kind).toBe('over')
+    expect(game.startKiosk()).toBe(false)
+    expect(clear).toHaveBeenCalledTimes(1)
+  })
+
+  it('startKiosk works only on title, over, paused and resume', () => {
+    const title = new Game(deps())
+    expect(title.startKiosk()).toBe(true)
+    expect(title.kiosk).toBe(true)
+
+    const over = new Game(deps())
+    play(over)
+    over.state = { ...over.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+    over.frame(1)
+    expect(over.phase.kind).toBe('over')
+    expect(over.startKiosk()).toBe(true)
+
+    const paused = new Game(deps())
+    play(paused)
+    paused.frame(5)
+    paused.command('pause')
+    expect(paused.phase.kind).toBe('paused')
+    expect(paused.startKiosk()).toBe(true)
+
+    const store = memoryStore()
+    const first = new Game(deps({ store }))
+    play(first)
+    first.frame(20)
+    first.save()
+    const resume = new Game(deps({ store }))
+    expect(resume.phase.kind).toBe('resume')
+    expect(resume.startKiosk()).toBe(true)
+
+    const tip = new Game(deps())
+    tip.command('confirm')
+    expect(tip.startKiosk()).toBe(false)
+    expect(tip.kiosk).toBe(false)
+    expect(tip.phase).toEqual({ kind: 'tip', level: 0 })
+
+    const playing = new Game(deps())
+    play(playing)
+    playing.frame(3)
+    const before = playing.state
+    expect(playing.startKiosk()).toBe(false)
+    expect(playing.kiosk).toBe(false)
+    expect(playing.phase.kind).toBe('playing')
+    expect(playing.state).toBe(before)
+  })
+
+  it('startKiosk discards a saved run and keeps best scores', () => {
+    const store = memoryStore()
+    const first = new Game(deps({ store }))
+    play(first)
+    first.frame(20)
+    first.save()
+    store.best = 42
+    store.daily = { date: '2026-09-30', best: 7 }
+    const game = new Game(deps({ store }))
+    expect(game.startKiosk()).toBe(true)
+    expect(store.saved).toBeNull()
+    expect(store.best).toBe(42)
+    expect(store.daily).toEqual({ date: '2026-09-30', best: 7 })
+  })
+
+  it('kiosk run uses the kiosk seed', () => {
+    const game = kioskGame()
+    expect(game.start.seed).toBe(KIOSK_SEED)
+    expect(game.start.level).toBe(0)
+    expect(game.phase).toEqual({ kind: 'tip', level: 0 })
+    expect(game.view().kiosk).toBe(true)
+  })
+
+  it('kiosk loop plays levels 0 to 3 and starts over', () => {
+    const game = kioskGame()
+    const w = loopWatcher()
+    // About 9,500 frames (~2.5 min at 60 fps); a few hundred ms in tests.
+    runKiosk(game, w.looped)
+    expect(w.tips).toEqual([0, 1, 2, 3, 0])
+    expect(w.seen.lost).toBe(true)
+    expect(w.seen.replayingIn1to3).toBe(true)
+    expect(w.seen.bossIn2).toBe(true)
+    expect(w.seen.montageAfter3).toBe(true)
+    expect(w.seen.over).toBe(false)
+    expect(game.start.seed).toBe(KIOSK_SEED)
+    expect(game.kiosk).toBe(true)
+  }, 120_000)
+
+  it('kiosk loop is deterministic', () => {
+    const a = kioskGame({ impure: lcg(1), chaosRand: lcg(2), today: () => '2026-01-01' })
+    // To the second loop's level-1 tip.
+    const total = runKiosk(a, loopWatcher().looped) + runKiosk(a, (g) => g.phase.kind === 'tip' && g.phase.level === 1)
+    const b = kioskGame({ impure: lcg(77), chaosRand: lcg(88), today: () => '2027-06-15' })
+    for (let i = 0; i < total; i++) b.frame(1)
+    expect(b.phase).toEqual({ kind: 'tip', level: 1 })
+    expect(hashState(b.state)).toBe(hashState(a.state))
+    expect(b.history).toEqual(a.history)
+    expect(b.stats).toEqual(a.stats)
+    expect(b.liveTicks).toBe(a.liveTicks)
+  }, 240_000)
+
+  it('kiosk is independent of frame size', () => {
+    const level3Montage = () => {
+      let tip3 = false
+      return (g: Game): boolean => {
+        if (g.phase.kind === 'tip' && g.phase.level === 3) tip3 = true
+        return tip3 && g.phase.kind === 'montage'
+      }
+    }
+    const one = kioskGame()
+    runKiosk(one, level3Montage(), 200_000, 1)
+    const three = kioskGame()
+    runKiosk(three, level3Montage(), 200_000, 3)
+    expect(hashState(three.state)).toBe(hashState(one.state))
+    expect(three.history).toEqual(one.history)
+    expect(three.stats).toEqual(one.stats)
+  }, 240_000)
+
+  it('kiosk writes nothing to the store and does not grow the tape', () => {
+    const base = memoryStore()
+    const store = {
+      ...base,
+      save: vi.fn(base.save), clear: vi.fn(base.clear), saveBest: vi.fn(base.saveBest), saveDailyBest: vi.fn(base.saveDailyBest),
+    }
+    const game = kioskGame({ store })
+    runKiosk(game, loopWatcher().looped)
+    expect(store.save).not.toHaveBeenCalled()
+    expect(store.saveBest).not.toHaveBeenCalled()
+    expect(store.saveDailyBest).not.toHaveBeenCalled()
+    expect(store.clear).toHaveBeenCalledTimes(1)
+    expect(game.tape.inputs).toHaveLength(0)
+    expect(game.tape.impure).toHaveLength(0)
+    expect(game.tape.chaos).toHaveLength(0)
+  }, 120_000)
+
+  it('suspend does not pause kiosk', () => {
+    const game = kioskGame()
+    runKiosk(game, is('playing'))
+    game.suspend()
+    expect(game.phase.kind).toBe('playing')
+  })
+
+  it('commands are ignored in kiosk', () => {
+    const game = kioskGame()
+    game.command('confirm')
+    expect(game.phase).toEqual({ kind: 'tip', level: 0 })
+    runKiosk(game, is('playing'))
+    game.command('pause')
+    expect(game.phase.kind).toBe('playing')
+    game.command('cancel')
+    expect(game.phase.kind).toBe('playing')
+  })
+
+  it('confirms tip cards after the dwell and restarts after an end card', () => {
+    const game = kioskGame()
+    for (let i = 0; i < KIOSK_CARD_TICKS - 1; i++) game.frame(1)
+    expect(game.phase.kind).toBe('tip')
+    game.frame(1)
+    expect(game.phase.kind).toBe('playing')
+    // Force a failure the bot cannot dodge (level 0 has no retries).
+    game.state = { ...game.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+    game.frame(1)
+    expect(game.phase.kind).toBe('over')
+    for (let i = 0; i < KIOSK_OVER_TICKS - 1; i++) game.frame(1)
+    expect(game.phase.kind).toBe('over')
+    game.frame(1)
+    expect(game.phase).toEqual({ kind: 'tip', level: 0 })
+    expect(game.start.seed).toBe(KIOSK_SEED)
+    expect(game.kiosk).toBe(true)
+  })
+
+  describe('stopKiosk', () => {
+    const boss = (g: Game) => g.phase.kind === 'playing' && g.state.bossUntil > 0
+    /** The bot never fails on its own: put a rack on the hat once playing (level 0 has no retries), then wait for the end card. */
+    const overNow = (g: Game): boolean => {
+      if (g.phase.kind === 'playing' && g.state.level === 0) {
+        g.state = { ...g.state, entities: [{ id: 999, kind: 'low', x: PLAYER_X + 4, y: GROUND_Y - 20, w: 14, h: 20, taken: false }] }
+      }
+      return g.phase.kind === 'over'
+    }
+    const nth = (kind: string, level: number) => (g: Game) => g.phase.kind === kind && g.state.level === level
+    const targets: [string, (g: Game) => boolean][] = [
+      ['tip', is('tip')],
+      ['playing', is('playing')],
+      ['crashing', is('crashing')],
+      ['replaying', nth('replaying', 1)],
+      ['montage', is('montage')],
+      ['lost', is('lost')],
+      ['boss playing', boss],
+      ['over', overNow],
+    ]
+    // Rewinding is skipped: it needs the bot to get hit, and with KIOSK_SEED it never is (the loop test sees no rewind).
+    it.each(targets)('returns to live mode from %s', (_name, until) => {
+      const store = memoryStore()
+      store.best = 3
+      const game = kioskGame({ store, today: () => '2026-09-30' })
+      runKiosk(game, until)
+      game.stopKiosk()
+      expect(game.phase.kind).toBe('title')
+      expect(game.kiosk).toBe(false)
+      const v = game.view()
+      expect(v.kiosk).toBe(false)
+      expect(v.montage).toBeNull()
+      expect(v.notice).toBeNull()
+      expect(v.divergedAt).toBeNull()
+      expect(game.history).toHaveLength(0)
+      expect(game.state.level).toBe(0)
+      expect(game.runDate).toBe('2026-09-30')
+      expect(game.best).toBe(3)
+      game.command('confirm')
+      expect(game.phase).toEqual({ kind: 'tip', level: 0 })
+      expect(game.start.seed).toBe(seedForDate('2026-09-30'))
+      game.command('confirm')
+      game.command('jump')
+      game.frame(1)
+      expect(game.tape.inputs).toEqual([[0, 'jump']])
+    }, 120_000)
+
+    it('is a no-op when not in kiosk', () => {
+      const game = new Game(deps())
+      play(game)
+      game.stopKiosk()
+      expect(game.phase.kind).toBe('playing')
+    })
+
+    it('leaves a normal run that saves again', () => {
+      const store = memoryStore()
+      const game = new Game(deps({ store }))
+      game.startKiosk()
+      runKiosk(game, is('playing'))
+      game.frame(30)
+      game.stopKiosk()
+      expect(store.saved).toBeNull()
+      play(game)
+      game.frame(10)
+      expect(game.start.seed).toBe(seedForDate('2026-09-30'))
+      expect(store.saved).not.toBeNull()
+      game.suspend()
+      expect(game.phase.kind).toBe('paused')
+    })
   })
 })
