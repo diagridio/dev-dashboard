@@ -53,13 +53,27 @@ export function TopNav({ theme, onThemeChange, daprLogo = false }: TopNavProps) 
   useEffect(() => {
     const el = headerRef.current
     if (!el || typeof ResizeObserver === 'undefined') return
+    // Unrounded height (offsetHeight rounds, which at fractional display
+    // scaling left the page a sub-pixel too tall), written only on change.
+    let last = ''
     const update = () => {
-      document.documentElement.style.setProperty('--topbar-h', `${el.offsetHeight}px`)
+      const h = `${el.getBoundingClientRect().height}px`
+      if (h === last) return
+      last = h
+      document.documentElement.style.setProperty('--topbar-h', h)
     }
     update()
-    const ro = new ResizeObserver(update)
+    // Write on the next frame, not inside the observer callback: changing
+    // layout there makes the browser report "ResizeObserver loop completed
+    // with undelivered notifications".
+    let raf = 0
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(update)
+    })
     ro.observe(el)
     return () => {
+      cancelAnimationFrame(raf)
       ro.disconnect()
       document.documentElement.style.removeProperty('--topbar-h')
     }

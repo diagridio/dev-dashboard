@@ -29,6 +29,10 @@
 :root[data-theme="light"] { color-scheme: light; --canvas: #F8FBFB; --canvas-text: #212B36; }
 
 html, body, #root { height: 100%; margin: 0; }
+/* Reserve the scrollbar's space even when the page doesn't scroll, so a scrollbar
+   appearing or disappearing never changes the page width (that width change made
+   the topbar's ResizeObserver loop and log errors). */
+html { scrollbar-gutter: stable; }
 body {
   /* Fallbacks cover the tick before App.tsx mirrors the theme onto <html>;
      they match the light theme, which is also getTheme()'s default. */
@@ -685,7 +689,9 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .replay-stage { position: relative; max-width: 960px; border-radius: 13px; }
 .replay-stage:focus { outline: none; }
 .replay-stage:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
-.replay-stage canvas { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: var(--shadow); }
+/* A fixed CSS aspect ratio means the device-pixel backing size that fit() writes to
+   the canvas attributes (rounded) can never change its layout size. */
+.replay-stage canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); box-shadow: var(--shadow); }
 .replay-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; border-radius: 13px; background: color-mix(in srgb, var(--bg) 55%, transparent); }
 .replay-card { max-width: 440px; padding: 18px 20px; display: grid; gap: 10px; }
 .replay-card h2 { margin: 0; font-size: 17px; font-weight: 680; display: flex; align-items: center; gap: 8px; }
