@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { TopNav, NAV_ITEMS } from './TopNav'
@@ -176,7 +176,7 @@ describe('TopNav', () => {
       document.documentElement.style.removeProperty('--topbar-h')
     })
 
-    it('publishes the topbar height as --topbar-h so the sidebar can start below it', () => {
+    it('publishes the topbar height as --topbar-h so the sidebar can start below it', async () => {
       let onResize: (() => void) | undefined
       const observed: Element[] = []
       vi.stubGlobal(
@@ -197,9 +197,13 @@ describe('TopNav', () => {
       expect(header).not.toBeNull()
       expect(observed).toContain(header)
       // Simulate the topbar wrapping to multiple rows (e.g. zoom / narrow window)
-      Object.defineProperty(header, 'offsetHeight', { value: 82, configurable: true })
+      // at a fractional height (display scaling), which must not be rounded.
+      vi.spyOn(header as HTMLElement, 'getBoundingClientRect').mockReturnValue({ height: 82.5 } as DOMRect)
       onResize?.()
-      expect(document.documentElement.style.getPropertyValue('--topbar-h')).toBe('82px')
+      // Deferred to the next frame: writing layout inside the observer callback
+      // causes "ResizeObserver loop completed with undelivered notifications".
+      expect(document.documentElement.style.getPropertyValue('--topbar-h')).not.toBe('82.5px')
+      await waitFor(() => expect(document.documentElement.style.getPropertyValue('--topbar-h')).toBe('82.5px'))
     })
 
     it('removes --topbar-h on unmount', () => {

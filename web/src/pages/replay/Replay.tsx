@@ -185,7 +185,14 @@ export function Component() {
       }
       pixelScale = canvas.width / VIEW_W
     }
-    const resizeObserver = canvas && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null
+    // Resize the backing store on the next frame rather than inside the observer
+    // callback, so it can never trigger "ResizeObserver loop" errors.
+    let fitRaf = 0
+    const scheduleFit = () => {
+      cancelAnimationFrame(fitRaf)
+      fitRaf = requestAnimationFrame(fit)
+    }
+    const resizeObserver = canvas && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(scheduleFit) : null
     if (canvas) resizeObserver?.observe(canvas)
     // Moving the window between monitors changes the pixel ratio without resizing the canvas.
     window.addEventListener('resize', fit)
@@ -210,6 +217,7 @@ export function Component() {
     window.addEventListener('blur', onBlur)
     return () => {
       loop.stop()
+      cancelAnimationFrame(fitRaf)
       resizeObserver?.disconnect()
       window.removeEventListener('resize', fit)
       unwatch()

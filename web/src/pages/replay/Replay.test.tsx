@@ -150,6 +150,9 @@ describe('Replay page', () => {
       unobserve = vi.fn()
     })
     vi.stubGlobal('devicePixelRatio', 2)
+    // Capture frames (the game loop's included) so the deferred fit can be flushed.
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', vi.fn((cb: FrameRequestCallback) => frames.push(cb)))
     let width = 0
     vi.spyOn(HTMLCanvasElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
     const { unmount } = renderAt('/replay')
@@ -158,6 +161,9 @@ describe('Replay page', () => {
     expect(canvas.width).toBe(480) // clientWidth 0: keeps the previous size
     width = 700
     act(() => onResize())
+    // Deferred to the next frame so resizing never loops inside the observer callback.
+    expect(canvas.width).toBe(480)
+    act(() => { for (const cb of frames.splice(0)) cb(0) })
     expect(canvas.width).toBe(1400)
     expect(canvas.height).toBe(Math.round((1400 * 270) / 480))
     width = 960
