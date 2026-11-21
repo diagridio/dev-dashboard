@@ -291,6 +291,7 @@ component fails the suite until the doc is updated.
 | CLI command drawer | `components/CliDrawer.tsx` — right-edge overlay panel with a vertical `CLI` edge tab; open state persists via `lib/safeStorage.ts`. Its rows are `components/CliCommand.tsx` — a titled command with an optional docs `↗` link and a `⧉ Copy` `.copybtn`. Context-sensitive command sets and placeholder substitution come from `lib/cli.ts` (`getCliContent` / `resolvePlaceholders`). |
 | Busy indicator | `components/Spinner.tsx` — inline braille-dots spinner for in-progress text. Decorative only (`aria-hidden`): always pair it with a text label, inside a `role="status"` element (e.g. the remove dialog's busy state, the Workflows pager's "Updating…"). Renders nothing under `prefers-reduced-motion`, so the label alone carries the state. |
 | Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. |
+| Promotion banner | `components/PromoBanner.tsx` — mounted once in the `App.tsx` shell (not on `/replay`); a dismissible bottom-right `<aside>` for the product feed's `promotion`, `inert` until it slides in, moving left of the open CLI drawer. Don't build per-page announcement banners; feed content goes here. |
 | Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx` → `<pre className="json">` / `<pre className="code">`. |
 
 ### CSS primitives (class → what it is)
@@ -390,6 +391,8 @@ scrollbars.
 
 **Feedback**
 - `.toast` (`.show`) — driven by `useToast`.
+- `.promo` (`.show`) with `.promo-body` / `.promo-title` / `.promo-text` / `.promo-link` /
+  `.promo-close` — the floating promotion banner, driven by `PromoBanner`.
 - `.hint` — centered faint helper line under content.
 - `.refresh-compact` — the compact global refresh control in the top nav (`.beatbtn` + `.beat`
   pulse toggle, `.select.compact` interval dropdown); rendered by `RefreshControl`. The dot
