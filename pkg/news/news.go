@@ -49,11 +49,12 @@ type Service interface {
 
 // feedPayload mirrors the upstream JSON structure.
 type feedPayload struct {
-	LatestBlogPosts  []Item     `json:"latestBlogPosts"`
-	LatestReports    []Item     `json:"latestReports"`
-	UpcomingWebinars []Item     `json:"upcomingWebinars"`
-	UpcomingEvents   []Item     `json:"upcomingEvents"`
-	Promotion        *Promotion `json:"promotion"`
+	LatestBlogPosts  []Item `json:"latestBlogPosts"`
+	LatestReports    []Item `json:"latestReports"`
+	UpcomingWebinars []Item `json:"upcomingWebinars"`
+	UpcomingEvents   []Item `json:"upcomingEvents"`
+	// Raw so a malformed promotion only drops the promotion, not the whole feed.
+	Promotion json.RawMessage `json:"promotion"`
 }
 
 // maxNegativeTTL caps how long a failed refresh suppresses retries.
@@ -267,9 +268,22 @@ func derive(p *feedPayload) Response {
 		}
 	}
 
-	r.Promotion = validPromotion(p.Promotion)
+	r.Promotion = validPromotion(decodePromotion(p.Promotion))
 
 	return r
+}
+
+// decodePromotion decodes the feed's raw promotion, or returns nil when it is
+// absent, null or not a well-typed promotion object.
+func decodePromotion(raw json.RawMessage) *Promotion {
+	if len(raw) == 0 {
+		return nil
+	}
+	var p *Promotion
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil
+	}
+	return p
 }
 
 // validPromotion returns a normalised copy of p, or nil when a required field

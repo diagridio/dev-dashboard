@@ -3,6 +3,20 @@ import { useNews } from '../hooks/useNews'
 import { dismissPromo, isPromoDismissed } from '../lib/promoDismissed'
 import { trackAction } from '../lib/telemetry'
 
+const DAY_MS = 86_400_000
+// Re-check at least hourly; also keeps setTimeout below its ~24.8-day overflow.
+const MAX_WAIT_MS = 3_600_000
+
+/**
+ * End of the promotion window in epoch ms, mirroring the backend: a bare
+ * YYYY-MM-DD runs through the end of that UTC day. Undefined = no end.
+ */
+function promoEndMs(endsAt?: string): number | undefined {
+  if (!endsAt) return undefined
+  const ms = /^\d{4}-\d{2}-\d{2}$/.test(endsAt) ? Date.parse(`${endsAt}T00:00:00Z`) + DAY_MS : Date.parse(endsAt)
+  return Number.isNaN(ms) ? undefined : ms
+}
+
 /**
  * Floating bottom-right banner for the product feed's time-sensitive
  * `promotion`. Slides in after `delayMs`, and once closed (✕, Escape inside it,
@@ -16,8 +30,19 @@ export function PromoBanner({ delayMs = 1000 }: { delayMs?: number }) {
   const [closedId, setClosedId] = useState<string | null>(null)
   const [shown, setShown] = useState(false)
   const trackedId = useRef<string | null>(null)
+  // Bumped by a timer so an open tab re-checks endsAt without a refetch.
+  const [tick, setTick] = useState(0)
 
-  const visible = promo !== null && promo.id !== closedId && !isPromoDismissed(promo.id)
+  const endMs = promoEndMs(promo?.endsAt)
+  const expired = endMs !== undefined && Date.now() >= endMs
+
+  useEffect(() => {
+    if (endMs === undefined || Date.now() >= endMs) return
+    const t = setTimeout(() => setTick((n) => n + 1), Math.min(endMs - Date.now(), MAX_WAIT_MS))
+    return () => clearTimeout(t)
+  }, [endMs, tick])
+
+  const visible = promo !== null && !expired && promo.id !== closedId && !isPromoDismissed(promo.id)
   const visibleId = visible ? promo.id : null
 
   useEffect(() => {

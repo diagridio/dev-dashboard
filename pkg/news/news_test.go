@@ -4,6 +4,7 @@ package news
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -232,6 +233,13 @@ func TestWithUTM(t *testing.T) {
 	}
 }
 
+func rawPromo(t *testing.T, p *Promotion) json.RawMessage {
+	t.Helper()
+	b, err := json.Marshal(p)
+	require.NoError(t, err)
+	return b
+}
+
 func validPromo() *Promotion {
 	return &Promotion{ID: "aow-2026", Title: "Advent of Workflow", Text: "25 days", URL: "https://www.diagrid.io/advent-of-workflow", CTA: "Join now"}
 }
@@ -255,7 +263,7 @@ func TestPromotionValidation(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			r := derive(&feedPayload{Promotion: tc.in})
+			r := derive(&feedPayload{Promotion: rawPromo(t, tc.in)})
 			if !tc.keep {
 				require.Nil(t, r.Promotion)
 				return
@@ -270,7 +278,7 @@ func TestPromotionValidation(t *testing.T) {
 	t.Run("empty cta defaults", func(t *testing.T) {
 		p := validPromo()
 		p.CTA = ""
-		r := derive(&feedPayload{Promotion: p})
+		r := derive(&feedPayload{Promotion: rawPromo(t, p)})
 		require.NotNil(t, r.Promotion)
 		require.Equal(t, "Learn more", r.Promotion.CTA)
 	})
@@ -319,4 +327,21 @@ func TestPromotionExpiresWithinCache(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	require.Nil(t, svc.Get(context.Background()).Promotion, "expired promotion must disappear within the cache TTL")
 	require.Equal(t, int32(1), atomic.LoadInt32(&calls))
+}
+
+// A malformed promotion must only drop the promotion, never the rest of the feed.
+func TestMalformedPromotionKeepsFeed(t *testing.T) {
+	for _, promo := range []string{`"oops"`, `[]`, `{"id":2026,"title":"T","url":"https://x"}`, `{"id":"p","title":"T","url":"https://x","startsAt":1733011200}`} {
+		t.Run(promo, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(`{"latestBlogPosts":[{"title":"Blog A","url":"https://x/blog-a"}],"promotion":` + promo + `}`))
+			}))
+			defer ts.Close()
+
+			r := New(&http.Client{Timeout: 2 * time.Second}, ts.URL, time.Hour).Get(context.Background())
+			require.NotNil(t, r.Blog, "feed must still decode")
+			require.Equal(t, "Blog A", r.Blog.Title)
+			require.Nil(t, r.Promotion)
+		})
+	}
 }

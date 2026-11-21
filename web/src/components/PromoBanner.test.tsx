@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/setup'
@@ -147,5 +147,41 @@ describe('PromoBanner', () => {
     serve(promo('b'))
     await act(() => client.invalidateQueries({ queryKey: ['news'] }))
     expect(await banner()).toHaveTextContent('Advent of Workflow b')
+  })
+
+  it('hides in an open tab once endsAt passes, without a refetch', async () => {
+    let hits = 0
+    const endsAt = new Date(Date.now() + 300).toISOString()
+    server.use(
+      http.get('/api/news', () => {
+        hits++
+        return HttpResponse.json(news({ ...promo(), endsAt }))
+      }),
+    )
+    renderBanner()
+    await banner()
+    await waitFor(noBanner, { timeout: 2000 })
+    expect(hits).toBe(1)
+    expect(isPromoDismissed('aow-2026')).toBe(false)
+  })
+
+  it('treats a bare-date endsAt as the end of that UTC day', async () => {
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+    const today = new Date().toISOString().slice(0, 10)
+    serve({ ...promo(), endsAt: today })
+    renderBanner()
+    expect(await banner()).toBeInTheDocument()
+    cleanup()
+    let hit = false
+    server.use(
+      http.get('/api/news', () => {
+        hit = true
+        return HttpResponse.json(news({ ...promo(), endsAt: yesterday }))
+      }),
+    )
+    renderBanner()
+    await waitFor(() => expect(hit).toBe(true))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    noBanner()
   })
 })
