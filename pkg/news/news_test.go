@@ -186,9 +186,10 @@ func TestNewsFailureNeverEvictsLastGood(t *testing.T) {
 
 func TestWithUTM(t *testing.T) {
 	cases := []struct {
-		name string
-		in   string
-		want string
+		name   string
+		in     string
+		medium string
+		want   string
 	}{
 		{
 			name: "diagrid host gets utm params",
@@ -210,13 +211,112 @@ func TestWithUTM(t *testing.T) {
 			in:   "https://www.diagrid.io/blog/post?ref=newsletter",
 			want: "https://www.diagrid.io/blog/post?ref=newsletter&utm_medium=menu&utm_source=dev-dashboard",
 		},
+		{
+			name:   "banner medium",
+			in:     "https://www.diagrid.io/advent-of-workflow",
+			medium: "banner",
+			want:   "https://www.diagrid.io/advent-of-workflow?utm_medium=banner&utm_source=dev-dashboard",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := withUTM(tc.in)
+			medium := tc.medium
+			if medium == "" {
+				medium = "menu"
+			}
+			got := withUTM(tc.in, medium)
 			if got != tc.want {
 				t.Fatalf("withUTM(%q) = %q, want %q", tc.in, got, tc.want)
 			}
 		})
 	}
+}
+
+func validPromo() *Promotion {
+	return &Promotion{ID: "aow-2026", Title: "Advent of Workflow", Text: "25 days", URL: "https://www.diagrid.io/advent-of-workflow", CTA: "Join now"}
+}
+
+func TestPromotionValidation(t *testing.T) {
+	mod := func(f func(p *Promotion)) *Promotion { p := validPromo(); f(p); return p }
+	cases := []struct {
+		name string
+		in   *Promotion
+		keep bool
+	}{
+		{"valid", validPromo(), true},
+		{"nil", nil, false},
+		{"missing id", mod(func(p *Promotion) { p.ID = "  " }), false},
+		{"missing title", mod(func(p *Promotion) { p.Title = "" }), false},
+		{"missing url", mod(func(p *Promotion) { p.URL = "" }), false},
+		{"javascript url", mod(func(p *Promotion) { p.URL = "javascript:alert(1)" }), false},
+		{"ftp url", mod(func(p *Promotion) { p.URL = "ftp://x" }), false},
+		{"bad startsAt", mod(func(p *Promotion) { p.StartsAt = "not-a-date" }), false},
+		{"bad endsAt", mod(func(p *Promotion) { p.EndsAt = "soon" }), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := derive(&feedPayload{Promotion: tc.in})
+			if !tc.keep {
+				require.Nil(t, r.Promotion)
+				return
+			}
+			require.NotNil(t, r.Promotion)
+			require.Equal(t, "aow-2026", r.Promotion.ID)
+			require.Equal(t, "Join now", r.Promotion.CTA)
+			require.Equal(t, "https://www.diagrid.io/advent-of-workflow?utm_medium=banner&utm_source=dev-dashboard", r.Promotion.URL)
+		})
+	}
+
+	t.Run("empty cta defaults", func(t *testing.T) {
+		p := validPromo()
+		p.CTA = ""
+		r := derive(&feedPayload{Promotion: p})
+		require.NotNil(t, r.Promotion)
+		require.Equal(t, "Learn more", r.Promotion.CTA)
+	})
+}
+
+func TestPromotionWindow(t *testing.T) {
+	now := time.Date(2026, 12, 10, 12, 0, 0, 0, time.UTC)
+	with := func(start, end string) *Promotion { p := validPromo(); p.StartsAt = start; p.EndsAt = end; return p }
+	cases := []struct {
+		name  string
+		p     *Promotion
+		now   time.Time
+		shown bool
+	}{
+		{"nil", nil, now, false},
+		{"no dates", with("", ""), now, true},
+		{"before bare startsAt", with("2026-12-11", ""), now, false},
+		{"at RFC3339 startsAt", with("2026-12-10T00:00:00Z", ""), now, true},
+		{"after RFC3339 endsAt", with("", "2026-12-09T23:59:59Z"), now, false},
+		{"bare endsAt date is inclusive", with("", "2026-12-10"), now, true},
+		{"bare endsAt date ends at next midnight", with("", "2026-12-10"), time.Date(2026, 12, 11, 0, 0, 0, 0, time.UTC), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := activePromotion(tc.p, tc.now)
+			if tc.shown {
+				require.NotNil(t, got)
+			} else {
+				require.Nil(t, got)
+			}
+		})
+	}
+}
+
+func TestPromotionExpiresWithinCache(t *testing.T) {
+	var calls int32
+	end := time.Now().Add(150 * time.Millisecond).UTC().Format(time.RFC3339Nano)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		_, _ = w.Write([]byte(`{"promotion":{"id":"p1","title":"T","url":"https://www.diagrid.io/x","endsAt":"` + end + `"}}`))
+	}))
+	defer ts.Close()
+
+	svc := New(&http.Client{Timeout: 2 * time.Second}, ts.URL, time.Hour)
+	require.NotNil(t, svc.Get(context.Background()).Promotion)
+	time.Sleep(200 * time.Millisecond)
+	require.Nil(t, svc.Get(context.Background()).Promotion, "expired promotion must disappear within the cache TTL")
+	require.Equal(t, int32(1), atomic.LoadInt32(&calls))
 }

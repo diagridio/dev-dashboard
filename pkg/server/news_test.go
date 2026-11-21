@@ -22,3 +22,13 @@ func TestNewsEndpoint(t *testing.T) {
 	require.Contains(t, body, `"blog"`)
 	require.Contains(t, body, `"title":"Hi"`)
 }
+
+func TestNewsEndpointPromotion(t *testing.T) {
+	h := newsRouter(fakeNews{r: news.Response{Promotion: &news.Promotion{ID: "aow", Title: "T", URL: "https://x", CTA: "Go"}}})
+	_, body := get(t, h, "/")
+	require.Contains(t, body, `"promotion":{"id":"aow"`)
+
+	h = newsRouter(fakeNews{r: news.Response{}})
+	_, body = get(t, h, "/")
+	require.Contains(t, body, `"promotion":null`)
+}
