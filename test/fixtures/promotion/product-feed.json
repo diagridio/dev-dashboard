@@ -1,0 +1,19 @@
+{
+  "latestBlogPosts": [
+    {
+      "title": "Local test blog post",
+      "url": "https://www.diagrid.io/blog",
+      "publishedAt": "2026-11-16"
+    }
+  ],
+  "latestReports": [],
+  "upcomingWebinars": [],
+  "upcomingEvents": [],
+  "promotion": {
+    "id": "advent-of-workflow-local-test",
+    "title": "Advent of Workflow is live",
+    "text": "12 Dapr Workflow challenges, 1–23 December",
+    "url": "https://www.diagrid.io/advent-of-workflow",
+    "cta": "Join now"
+  }
+}

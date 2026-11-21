@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/diagridio/dev-dashboard/pkg/binarystore"
 	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
@@ -23,6 +22,9 @@ import (
 // Apps and HomeDir are injectable so tests can avoid real process scanning and
 // the real ~/.dapr directory.
 type serveDeps struct {
+	// NewsFeed is the product feed source (resolveNewsFeed); zero value means
+	// the production diagrid.io feed.
+	NewsFeed       newsFeed
 	BasePath       string
 	StateStorePath string // explicit component YAML; "" means auto-detect
 	Namespace      string
@@ -138,7 +140,11 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 	// /api/resources — drives the fingerprint-gated reconcile, not only /api/apps.
 	decorated := reconcilingApps{inner: appsSvc, rc: rc}
 
-	newsSvc := news.New(&http.Client{Timeout: 5 * time.Second}, "https://www.diagrid.io/api/product-feed", time.Hour)
+	feed := deps.NewsFeed
+	if feed.URL == "" {
+		feed, _ = resolveNewsFeed("") // production feed; never errors
+	}
+	newsSvc := news.New(feed.Client, feed.URL, feed.TTL)
 
 	return server.Options{
 		BasePath:         deps.BasePath,

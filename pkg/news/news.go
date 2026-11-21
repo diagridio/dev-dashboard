@@ -26,6 +26,20 @@ type Response struct {
 	Report  *Item `json:"report"`
 	Webinar *Item `json:"webinar"`
 	Event   *Item `json:"event"`
+	// Promotion is the single time-sensitive item to float in as a banner,
+	// or nil. The window (StartsAt/EndsAt) is applied on every Get.
+	Promotion *Promotion `json:"promotion"`
+}
+
+// Promotion is the feed's optional time-sensitive banner item.
+type Promotion struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Text     string `json:"text,omitempty"`
+	URL      string `json:"url"`
+	CTA      string `json:"cta"`
+	StartsAt string `json:"startsAt,omitempty"`
+	EndsAt   string `json:"endsAt,omitempty"`
 }
 
 // Service fetches and caches the product feed, exposing derived content slots.
@@ -39,6 +53,8 @@ type feedPayload struct {
 	LatestReports    []Item `json:"latestReports"`
 	UpcomingWebinars []Item `json:"upcomingWebinars"`
 	UpcomingEvents   []Item `json:"upcomingEvents"`
+	// Raw so a malformed promotion only drops the promotion, not the whole feed.
+	Promotion json.RawMessage `json:"promotion"`
 }
 
 // maxNegativeTTL caps how long a failed refresh suppresses retries.
@@ -74,12 +90,21 @@ func New(client *http.Client, url string, ttl time.Duration) Service {
 	}
 }
 
-// Get returns a Response with up to four content slots. It serves from cache when
+// Get returns the cached content slots, with the promotion filtered against
+// its time window at call time, so it disappears at endsAt even while the
+// feed itself is still cached.
+func (s *service) Get(ctx context.Context) Response {
+	r := s.get(ctx)
+	r.Promotion = activePromotion(r.Promotion, time.Now())
+	return r
+}
+
+// get returns a Response with up to four content slots. It serves from cache when
 // fresh. When stale, at most one fetch is in flight at a time: callers with a
 // last-good response get it immediately (the refresh runs in the background),
 // while callers with no last-good wait for the single in-flight fetch. A failed
 // fetch is negatively cached and never evicts the last-good response.
-func (s *service) Get(ctx context.Context) Response {
+func (s *service) get(ctx context.Context) Response {
 	s.mu.Lock()
 
 	if s.hasGood && time.Since(s.fetchedAt) < s.ttl {
@@ -184,7 +209,7 @@ func (e *httpError) Error() string {
 // withUTM appends dev-dashboard UTM parameters to URLs on the diagrid.io
 // domain, preserving any existing query parameters. URLs on other hosts (or
 // that fail to parse) are returned unchanged.
-func withUTM(raw string) string {
+func withUTM(raw, medium string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return raw
@@ -195,7 +220,7 @@ func withUTM(raw string) string {
 	}
 	q := u.Query()
 	q.Set("utm_source", "dev-dashboard")
-	q.Set("utm_medium", "menu")
+	q.Set("utm_medium", medium)
 	u.RawQuery = q.Encode()
 	return u.String()
 }
@@ -206,12 +231,12 @@ func derive(p *feedPayload) Response {
 
 	if len(p.LatestBlogPosts) > 0 {
 		item := p.LatestBlogPosts[0]
-		item.URL = withUTM(item.URL)
+		item.URL = withUTM(item.URL, "menu")
 		r.Blog = &item
 	}
 	if len(p.LatestReports) > 0 {
 		item := p.LatestReports[0]
-		item.URL = withUTM(item.URL)
+		item.URL = withUTM(item.URL, "menu")
 		r.Report = &item
 	}
 
@@ -224,7 +249,7 @@ func derive(p *feedPayload) Response {
 		}
 		if t.After(now) {
 			item := p.UpcomingWebinars[i]
-			item.URL = withUTM(item.URL)
+			item.URL = withUTM(item.URL, "menu")
 			r.Webinar = &item
 			break
 		}
@@ -237,11 +262,89 @@ func derive(p *feedPayload) Response {
 		}
 		if t.After(now) {
 			item := p.UpcomingEvents[i]
-			item.URL = withUTM(item.URL)
+			item.URL = withUTM(item.URL, "menu")
 			r.Event = &item
 			break
 		}
 	}
 
+	r.Promotion = validPromotion(decodePromotion(p.Promotion))
+
 	return r
+}
+
+// decodePromotion decodes the feed's raw promotion, or returns nil when it is
+// absent, null or not a well-typed promotion object.
+func decodePromotion(raw json.RawMessage) *Promotion {
+	if len(raw) == 0 {
+		return nil
+	}
+	var p *Promotion
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil
+	}
+	return p
+}
+
+// validPromotion returns a normalised copy of p, or nil when a required field
+// is missing, the URL isn't http(s), or a window bound doesn't parse.
+func validPromotion(p *Promotion) *Promotion {
+	if p == nil {
+		return nil
+	}
+	c := *p
+	c.ID, c.Title, c.URL = strings.TrimSpace(c.ID), strings.TrimSpace(c.Title), strings.TrimSpace(c.URL)
+	if c.ID == "" || c.Title == "" || c.URL == "" {
+		return nil
+	}
+	u, err := url.Parse(c.URL)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil
+	}
+	if _, _, err := parseBound(c.StartsAt, false); err != nil {
+		return nil
+	}
+	if _, _, err := parseBound(c.EndsAt, true); err != nil {
+		return nil
+	}
+	if strings.TrimSpace(c.CTA) == "" {
+		c.CTA = "Learn more"
+	}
+	c.URL = withUTM(c.URL, "banner")
+	return &c
+}
+
+// parseBound parses a window bound: RFC 3339, or a bare YYYY-MM-DD in UTC.
+// A bare-date end bound is inclusive, so it resolves to the next midnight.
+// ok is false for an empty string (no bound).
+func parseBound(s string, end bool) (t time.Time, ok bool, err error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, false, nil
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, true, nil
+	}
+	t, err = time.Parse("2006-01-02", s)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	if end {
+		t = t.AddDate(0, 0, 1)
+	}
+	return t, true, nil
+}
+
+// activePromotion returns p when now is inside its [startsAt, endsAt) window.
+func activePromotion(p *Promotion, now time.Time) *Promotion {
+	if p == nil {
+		return nil
+	}
+	if start, ok, err := parseBound(p.StartsAt, false); err != nil || (ok && now.Before(start)) {
+		return nil
+	}
+	if end, ok, err := parseBound(p.EndsAt, true); err != nil || (ok && !now.Before(end)) {
+		return nil
+	}
+	return p
 }
