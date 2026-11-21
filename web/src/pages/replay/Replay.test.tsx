@@ -157,7 +157,9 @@ describe('Replay page', () => {
     vi.spyOn(HTMLCanvasElement.prototype, 'clientWidth', 'get').mockImplementation(() => width)
     const { unmount } = renderAt('/replay')
     const canvas = (await screen.findByLabelText('REPLAY game screen')) as HTMLCanvasElement
-    expect(observe).toHaveBeenCalledWith(canvas)
+    // The lazy route mounts outside act(), so the effect that observes the canvas
+    // can run a tick after the canvas appears; wait for it instead of racing it.
+    await waitFor(() => expect(observe).toHaveBeenCalledWith(canvas))
     expect(canvas.width).toBe(480) // clientWidth 0: keeps the previous size
     width = 700
     act(() => onResize())
