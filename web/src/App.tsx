@@ -6,17 +6,10 @@ import { ResourcesSidebar } from './components/ResourcesSidebar'
 import { CliDrawer } from './components/CliDrawer'
 import { PromoBanner } from './components/PromoBanner'
 import { getTheme, type Theme } from './lib/prefs'
-import { safeGet } from './lib/safeStorage'
 import { trackAction, trackView } from './lib/telemetry'
 import { useDiscoveryTelemetry } from './hooks/useDiscoveryTelemetry'
 import { useKonami } from './hooks/useKonami'
 import { useCtrlKeyToggle } from './hooks/useCtrlKeyToggle'
-
-const SIDEBAR_COLLAPSED_KEY = 'devdash.sidebarCollapsed'
-
-function getInitialCollapsed(): boolean {
-  return safeGet(SIDEBAR_COLLAPSED_KEY) === 'true'
-}
 
 interface RouteHandle {
   rumView?: string
@@ -24,7 +17,8 @@ interface RouteHandle {
 
 export function App() {
   const [theme, setTheme] = useState<Theme>(getTheme)
-  const [collapsed, setCollapsed] = useState(getInitialCollapsed)
+  // Not persisted on purpose: Resources opens on every dashboard start.
+  const [collapsed, setCollapsed] = useState(false)
   const [hasNew, setHasNew] = useState(false)
   const [updateAvailable, setUpdateAvailable] = useState(false)
   // Easter egg: Ctrl+B swaps the Diagrid logo for the Dapr logo and hides the

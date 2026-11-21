@@ -61,6 +61,14 @@ function renderApp(path = '/') {
 }
 
 describe('App shell', () => {
+  it('always starts with the Resources sidebar open, ignoring a previously saved collapsed state', () => {
+    localStorage.setItem('devdash.sidebarCollapsed', 'true') // left behind by older versions
+    const { container } = renderApp()
+    expect(container.querySelector('.app')).not.toHaveClass('collapsed')
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
+    localStorage.removeItem('devdash.sidebarCollapsed')
+  })
+
   it('renders TopNav', () => {
     renderApp()
     // Nav links are present
