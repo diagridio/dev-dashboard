@@ -5,8 +5,6 @@ import { useVersion, useUpdateCheck } from '../hooks/useMeta'
 import type { NewsResponse, NewsItem } from '../types/logs'
 import { trackAction } from '../lib/telemetry'
 
-const STORAGE_KEY = 'devdash.sidebarCollapsed'
-
 /** Inline SVG bell — identical to the mock's #bell-h / #bell-v icon */
 function BellIcon() {
   return (
@@ -175,13 +173,7 @@ export function ResourcesSidebar({ collapsed, onCollapsedChange, onHasNewChange,
   }, [updateAvailable, onUpdateAvailableChange])
 
   function toggle() {
-    const next = !collapsed
-    try {
-      localStorage.setItem(STORAGE_KEY, String(next))
-    } catch {
-      // ignore
-    }
-    onCollapsedChange(next)
+    onCollapsedChange(!collapsed)
   }
 
   const handleMarkSeen = useCallback(() => {

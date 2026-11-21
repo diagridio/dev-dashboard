@@ -183,31 +183,14 @@ describe('ResourcesSidebar collapse toggle', () => {
     expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
   })
 
-  it('persists collapsed state to localStorage', () => {
+  it('does not remember the collapsed state (Resources opens on every start)', () => {
+    localStorage.clear()
     renderSidebar()
-    const toggle = screen.getByRole('button', { name: 'Collapse sidebar' })
-    fireEvent.click(toggle)
-    expect(localStorage.getItem('devdash.sidebarCollapsed')).toBe('true')
-  })
-
-  it('persists expanded state to localStorage after re-expanding', () => {
-    renderSidebar()
-    const toggle = screen.getByRole('button', { name: 'Collapse sidebar' })
-    fireEvent.click(toggle)
-    const toggleAgain = screen.getByRole('button', { name: 'Expand sidebar' })
-    fireEvent.click(toggleAgain)
-    expect(localStorage.getItem('devdash.sidebarCollapsed')).toBe('false')
-  })
-
-  it('reads initial collapsed state from localStorage', () => {
-    localStorage.setItem('devdash.sidebarCollapsed', 'true')
-    renderSidebar({ initialCollapsed: true })
-    // Starts collapsed — toggle button says "Expand sidebar"
-    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
+    expect(localStorage.getItem('devdash.sidebarCollapsed')).toBeNull()
   })
 
   it('clicking vertical Resources label in collapsed state expands sidebar', () => {
-    localStorage.setItem('devdash.sidebarCollapsed', 'true')
     renderSidebar({ initialCollapsed: true })
     const label = screen.getByRole('button', { name: 'Resources — expand sidebar' })
     fireEvent.click(label)
