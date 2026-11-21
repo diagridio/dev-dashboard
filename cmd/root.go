@@ -93,6 +93,12 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	slog.SetDefault(logger)
 	statestore.SetVerbose(verbose)
 
+	// Fail fast on a mistyped override rather than silently using the real feed.
+	newsFeed, err := resolveNewsFeed(os.Getenv(newsFeedEnv))
+	if err != nil {
+		return err
+	}
+
 	dist, err := web.DistFS()
 	if err != nil {
 		logger.Error("embedded UI failed to load", "err", err)
@@ -198,6 +204,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 
 	telemetry := telemetryEnabled(os.Getenv)
 	opts, closers := assembleOptions(ctx, serveDeps{
+		NewsFeed:         newsFeed,
 		BasePath:         basePath,
 		StateStorePath:   settings.StateStore,
 		Namespace:        settings.Namespace,
@@ -239,6 +246,9 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 		return listenError(err, addr, settings.Port, url)
 	}
 	writeStartupBanner(os.Stdout, url, telemetry, postureNotice)
+	if newsFeed.Notice != "" {
+		fmt.Fprintln(os.Stdout, newsFeed.Notice)
+	}
 	if !noOpen && !containerPosture {
 		go func() { time.Sleep(400 * time.Millisecond); _ = openBrowser(url) }()
 	}

@@ -148,6 +148,18 @@ make screenshots   # reset, then capture every page in light and dark mode into 
 the capture in `demo/screenshots/targets.mjs`. Check the images before you commit them, because
 App detail, HTTP Endpoints and Logs show your local paths and hostname.
 
+### Trying the promotion banner with your own feed
+
+The promotion banner and the Resources menu read the diagrid.io product feed. Set
+`DEVDASHBOARD_NEWS_FEED_URL` to a local JSON file (or URL) to test them with your own content:
+
+```sh
+DEVDASHBOARD_NEWS_FEED_URL=test/fixtures/promotion/product-feed.json ./bin/diagrid-dev-dashboard
+```
+
+See [docs/testing-promotion-banner.md](docs/testing-promotion-banner.md) for the feed format and
+a checklist of scenarios.
+
 ## Testing
 
 There are four suites: Go **unit** tests, Go **integration** tests, the **web**
