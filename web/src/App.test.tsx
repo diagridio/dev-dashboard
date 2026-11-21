@@ -254,3 +254,44 @@ describe('App CLI drawer wiring', () => {
     expect(screen.queryByRole('button', { name: 'CLI commands' })).toBeNull()
   })
 })
+
+describe('App promotion banner', () => {
+  const promotion = { id: 'aow-2026', title: 'Advent of Workflow', url: 'https://www.diagrid.io/advent-of-workflow', cta: 'Join now' }
+  let newsHits = 0
+
+  beforeEach(() => {
+    localStorage.clear()
+    newsHits = 0
+    server.use(
+      http.get('/api/news', () => {
+        newsHits++
+        return HttpResponse.json({ blog: null, report: null, webinar: null, event: null, promotion })
+      }),
+    )
+  })
+
+  it('shows the promotion banner on the Applications page', async () => {
+    renderApp('/')
+    expect(await screen.findByRole('complementary', { name: 'Promotion' })).toHaveTextContent('Advent of Workflow')
+  })
+
+  it('does not show the promotion banner on /replay', async () => {
+    const origRaf = window.requestAnimationFrame
+    const origCaf = window.cancelAnimationFrame
+    window.requestAnimationFrame = vi.fn(() => 1)
+    window.cancelAnimationFrame = vi.fn()
+    const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    try {
+      renderApp('/replay')
+      await screen.findByRole('heading', { name: 'REPLAY' })
+      await vi.waitFor(() => expect(newsHits).toBeGreaterThan(0))
+      // Let the response settle into the query cache and re-render.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+      expect(screen.queryByRole('complementary', { name: 'Promotion' })).toBeNull()
+    } finally {
+      getContext.mockRestore()
+      window.requestAnimationFrame = origRaf
+      window.cancelAnimationFrame = origCaf
+    }
+  })
+})

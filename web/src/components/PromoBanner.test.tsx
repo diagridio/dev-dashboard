@@ -64,7 +64,7 @@ describe('PromoBanner', () => {
     )
     renderBanner()
     await waitFor(() => expect(hit).toBe(true))
-    await act(async () => {})
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
     noBanner()
   })
 
@@ -78,7 +78,7 @@ describe('PromoBanner', () => {
     )
     renderBanner()
     await waitFor(() => expect(hits).toBeGreaterThan(0))
-    await act(async () => {})
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
     noBanner()
   })
 
@@ -93,7 +93,7 @@ describe('PromoBanner', () => {
     )
     renderBanner()
     await waitFor(() => expect(hit).toBe(true))
-    await act(async () => {})
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
     noBanner()
   })
 

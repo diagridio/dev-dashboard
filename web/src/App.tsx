@@ -4,6 +4,7 @@ import { SmallScreenGuard } from './components/SmallScreenGuard'
 import { TopNav } from './components/TopNav'
 import { ResourcesSidebar } from './components/ResourcesSidebar'
 import { CliDrawer } from './components/CliDrawer'
+import { PromoBanner } from './components/PromoBanner'
 import { getTheme, type Theme } from './lib/prefs'
 import { safeGet } from './lib/safeStorage'
 import { trackAction, trackView } from './lib/telemetry'
@@ -92,6 +93,8 @@ export function App() {
           <Outlet />
         </main>
         <CliDrawer context={rumView} values={cliValues} />
+        {/* Not on REPLAY (and so not in its kiosk mode): the game owns the whole frame. */}
+        {pathname !== '/replay' && <PromoBanner />}
       </div>
     </SmallScreenGuard>
   )
