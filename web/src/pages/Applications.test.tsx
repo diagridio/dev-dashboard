@@ -179,7 +179,7 @@ describe('Applications', () => {
     ]
     for (const [name, url] of courses) {
       const link = within(learn).getByRole('link', { name })
-      expect(link.getAttribute('href')).toMatch(new RegExp(`^${url}\\?`))
+      expect(link.getAttribute('href')?.startsWith(`${url}?`)).toBe(true)
       expect(link).toHaveAttribute('target', '_blank')
       expect(link).toHaveClass('celllink')
     }
