@@ -4,6 +4,8 @@ import emptyStatesYamlRaw from '../content/empty-states.yaml?raw'
 export interface EmptyStateContent {
   /** Applications page — hint shown when no Dapr apps were discovered. */
   apps: string
+  /** Applications page — encourages learning Dapr via Dapr University courses. */
+  learn: string
 }
 
 /**
