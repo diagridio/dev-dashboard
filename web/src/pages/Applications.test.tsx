@@ -166,6 +166,25 @@ describe('Applications', () => {
     expect(link).toHaveClass('celllink')
   })
 
+  it('encourages learning Dapr via Dapr University course links when no apps', async () => {
+    server.use(http.get('/api/apps', () => HttpResponse.json([])))
+    renderAt()
+    const learn = await screen.findByTestId('empty-learn')
+    // Copy comes from src/content/empty-states.yaml (key: learn).
+    expect(learn).toHaveTextContent(/dapr university/i)
+    const courses: [RegExp, string][] = [
+      [/dapr 101/i, 'https://www.diagrid.io/university/dapr-101'],
+      [/workflow/i, 'https://www.diagrid.io/university/dapr-workflow'],
+      [/pub\/sub/i, 'https://www.diagrid.io/university/dapr-pubsub'],
+    ]
+    for (const [name, url] of courses) {
+      const link = within(learn).getByRole('link', { name })
+      expect(link.getAttribute('href')?.startsWith(`${url}?`)).toBe(true)
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveClass('celllink')
+    }
+  })
+
   it('App ID link uses the table text color (celllink class)', async () => {
     server.use(http.get('/api/apps', () => HttpResponse.json(sampleApps)))
     renderAt()
