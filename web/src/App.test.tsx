@@ -270,6 +270,11 @@ describe('App promotion banner', () => {
     )
   })
 
+  it('lets the main content take programmatic focus (banner close returns focus there)', () => {
+    renderApp('/')
+    expect(document.querySelector('main.body')).toHaveAttribute('tabindex', '-1')
+  })
+
   it('shows the promotion banner on the Applications page', async () => {
     renderApp('/')
     expect(await screen.findByRole('complementary', { name: 'Promotion' })).toHaveTextContent('Advent of Workflow')

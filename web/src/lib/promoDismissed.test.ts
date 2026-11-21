@@ -1,5 +1,21 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { isPromoDismissed, dismissPromo } from './promoDismissed'
+import { isPromoDismissed, dismissPromo, markPromoShown } from './promoDismissed'
+
+describe('markPromoShown', () => {
+  beforeEach(() => sessionStorage.clear())
+
+  it('is true only the first time an id is shown in this tab', () => {
+    expect(markPromoShown('a')).toBe(true)
+    expect(markPromoShown('a')).toBe(false)
+    expect(markPromoShown('b')).toBe(true)
+    expect(JSON.parse(sessionStorage.getItem('devdash.promoShown')!)).toEqual(['a', 'b'])
+  })
+
+  it('treats corrupt session storage as nothing shown', () => {
+    sessionStorage.setItem('devdash.promoShown', 'oops')
+    expect(markPromoShown('a')).toBe(true)
+  })
+})
 
 const KEY = 'devdash.promoDismissed'
 

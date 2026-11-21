@@ -90,11 +90,6 @@ func New(client *http.Client, url string, ttl time.Duration) Service {
 	}
 }
 
-// Get returns a Response with up to four content slots. It serves from cache when
-// fresh. When stale, at most one fetch is in flight at a time: callers with a
-// last-good response get it immediately (the refresh runs in the background),
-// while callers with no last-good wait for the single in-flight fetch. A failed
-// fetch is negatively cached and never evicts the last-good response.
 // Get returns the cached content slots, with the promotion filtered against
 // its time window at call time, so it disappears at endsAt even while the
 // feed itself is still cached.
@@ -104,6 +99,11 @@ func (s *service) Get(ctx context.Context) Response {
 	return r
 }
 
+// get returns a Response with up to four content slots. It serves from cache when
+// fresh. When stale, at most one fetch is in flight at a time: callers with a
+// last-good response get it immediately (the refresh runs in the background),
+// while callers with no last-good wait for the single in-flight fetch. A failed
+// fetch is negatively cached and never evicts the last-good response.
 func (s *service) get(ctx context.Context) Response {
 	s.mu.Lock()
 

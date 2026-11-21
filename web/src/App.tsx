@@ -89,7 +89,8 @@ export function App() {
             onUpdateAvailableChange={setUpdateAvailable}
           />
         )}
-        <main className="body">
+        {/* tabIndex -1: programmatic focus target (e.g. after closing the promotion banner). */}
+        <main className="body" tabIndex={-1}>
           <Outlet />
         </main>
         <CliDrawer context={rumView} values={cliValues} />

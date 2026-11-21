@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNews } from '../hooks/useNews'
-import { dismissPromo, isPromoDismissed } from '../lib/promoDismissed'
+import { dismissPromo, isPromoDismissed, markPromoShown } from '../lib/promoDismissed'
 import { trackAction } from '../lib/telemetry'
 
 const DAY_MS = 86_400_000
@@ -29,7 +29,7 @@ export function PromoBanner({ delayMs = 1000 }: { delayMs?: number }) {
   // Closed in this session: hides at once, independent of storage availability.
   const [closedId, setClosedId] = useState<string | null>(null)
   const [shown, setShown] = useState(false)
-  const trackedId = useRef<string | null>(null)
+  const asideRef = useRef<HTMLElement>(null)
   // Bumped by a timer so an open tab re-checks endsAt without a refetch.
   const [tick, setTick] = useState(0)
 
@@ -47,11 +47,11 @@ export function PromoBanner({ delayMs = 1000 }: { delayMs?: number }) {
 
   useEffect(() => {
     if (!visibleId) return
-    if (trackedId.current !== visibleId) {
-      trackedId.current = visibleId
-      trackAction('promo_shown', { id: visibleId })
-    }
-    const t = setTimeout(() => setShown(true), delayMs)
+    const t = setTimeout(() => {
+      setShown(true)
+      // Count it once it is actually on screen, and once per tab (not per remount).
+      if (markPromoShown(visibleId)) trackAction('promo_shown', { id: visibleId })
+    }, delayMs)
     return () => {
       clearTimeout(t)
       setShown(false)
@@ -61,14 +61,20 @@ export function PromoBanner({ delayMs = 1000 }: { delayMs?: number }) {
   if (!visible) return null
 
   const close = (action: 'promo_dismiss' | 'promo_click') => {
+    // Closing unmounts the focused control; hand keyboard focus to the page content.
+    const hadFocus = asideRef.current?.contains(document.activeElement) ?? false
     dismissPromo(promo.id)
     setClosedId(promo.id)
     trackAction(action, { id: promo.id })
+    if (hadFocus && action === 'promo_dismiss') document.querySelector<HTMLElement>('main')?.focus()
   }
 
   return (
     <aside
+      ref={asideRef}
       className={shown ? 'promo show' : 'promo'}
+      // Invisible during the entrance delay: keep it out of the tab order and a11y tree.
+      inert={!shown}
       aria-label="Promotion"
       onKeyDown={(e) => {
         if (e.key === 'Escape') close('promo_dismiss')

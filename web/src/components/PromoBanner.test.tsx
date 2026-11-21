@@ -23,14 +23,19 @@ function serve(promotion: unknown) {
   server.use(http.get('/api/news', () => HttpResponse.json(news(promotion))))
 }
 
-function renderBanner(client = makeQueryClient()) {
+function renderBanner(client = makeQueryClient(), delayMs = 0) {
   render(
     <QueryProvider client={client}>
-      <PromoBanner delayMs={0} />
+      {/* Mirrors the App shell: the focus target after a keyboard close. */}
+      <main className="body" tabIndex={-1} />
+      <PromoBanner delayMs={delayMs} />
     </QueryProvider>,
   )
   return client
 }
+
+const shownCalls = () => vi.mocked(trackAction).mock.calls.filter(([n]) => n === 'promo_shown')
+const promoEl = () => document.querySelector('aside.promo')
 
 const banner = () => screen.findByRole('complementary', { name: 'Promotion' })
 const noBanner = () => expect(screen.queryByRole('complementary', { name: 'Promotion' })).toBeNull()
@@ -38,7 +43,51 @@ const noBanner = () => expect(screen.queryByRole('complementary', { name: 'Promo
 describe('PromoBanner', () => {
   beforeEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
     vi.mocked(trackAction).mockClear()
+  })
+
+  it('is inert until it has slid in', async () => {
+    serve(promo())
+    renderBanner(makeQueryClient(), 300)
+    await waitFor(() => expect(promoEl()).not.toBeNull())
+    expect(promoEl()).toHaveAttribute('inert')
+    expect(promoEl()).not.toHaveClass('show')
+    await waitFor(() => expect(promoEl()).toHaveClass('show'))
+    expect(promoEl()).not.toHaveAttribute('inert')
+  })
+
+  it('tracks promo_shown only once it has actually slid in', async () => {
+    serve(promo())
+    renderBanner(makeQueryClient(), 300)
+    await waitFor(() => expect(promoEl()).not.toBeNull())
+    expect(shownCalls()).toHaveLength(0)
+    await waitFor(() => expect(shownCalls()).toHaveLength(1))
+  })
+
+  it('does not re-track promo_shown when remounted in the same tab', async () => {
+    serve(promo())
+    renderBanner()
+    await waitFor(() => expect(shownCalls()).toHaveLength(1))
+    cleanup()
+    renderBanner()
+    await waitFor(() => expect(promoEl()).toHaveClass('show'))
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(shownCalls()).toHaveLength(1)
+  })
+
+  it.each([
+    ['Escape', (el: HTMLElement) => fireEvent.keyDown(el, { key: 'Escape' })],
+    ['the close button', (el: HTMLElement) => fireEvent.click(el)],
+  ])('moves focus to the main content after closing with %s while focused inside', async (_, close) => {
+    serve(promo())
+    renderBanner()
+    await banner()
+    const btn = screen.getByRole('button', { name: 'Dismiss promotion' })
+    btn.focus()
+    close(btn)
+    noBanner()
+    expect(document.activeElement).toBe(document.querySelector('main'))
   })
 
   it('shows title, text and a "Join now ↗" link', async () => {

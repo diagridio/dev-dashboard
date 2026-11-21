@@ -162,6 +162,8 @@ body {
 .sbvert .vtext { margin: auto 0; transform: rotate(-90deg); white-space: nowrap; font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); cursor: pointer; }
 
 .body { margin-left: var(--sbw); transition: margin-left .18s ease; }
+/* Programmatic focus target (tabIndex -1), never tabbed to: no outline around the whole page. */
+.body:focus { outline: none; }
 @media (max-width: 760px) {
   .app { --sbw: 44px; }
   .sbscroll, .sbfoot { display: none; }
@@ -320,12 +322,15 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .toast .d { width: 8px; height: 8px; border-radius: 50%; background: var(--done-fg); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 /* Promotion banner (PromoBanner): floats in bottom-right, dismissible per promotion id. */
-.promo { position: fixed; right: 20px; bottom: 20px; z-index: 45; max-width: 320px; display: flex; align-items: flex-start; gap: 10px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 12px 10px 12px 14px; font-size: 12.5px; opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .25s ease, transform .25s ease; }
-.promo.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
-.promo-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.promo { position: fixed; right: 20px; bottom: 20px; z-index: 45; max-width: 320px; display: flex; align-items: flex-start; gap: 10px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 12px 10px 12px 14px; font-size: 12.5px; opacity: 0; transform: translateY(12px); pointer-events: none; visibility: hidden; transition: opacity .25s ease, transform .25s ease, right .18s ease, visibility 0s linear .25s; }
+.promo.show { opacity: 1; transform: translateY(0); pointer-events: auto; visibility: visible; transition-delay: 0s; }
+/* Sit left of the open CLI drawer panel (width min(33vw, 33%)) rather than covering it. */
+.cli-drawer.open ~ .promo { right: calc(min(33vw, 33%) + 20px); }
+.promo-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .promo-title { font-weight: 600; font-size: 13px; }
 .promo-text { color: var(--muted); }
 .promo-link { font-weight: 500; align-self: flex-start; }
+.promo-link:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; border-radius: 2px; }
 .promo-close { background: none; border: none; color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; padding: 2px 4px; margin-left: auto; border-radius: 4px; }
 .promo-close:hover { color: var(--text); }
 .promo-close:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
