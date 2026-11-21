@@ -319,6 +319,17 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px); background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 9px 15px; font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 50; }
 .toast .d { width: 8px; height: 8px; border-radius: 50%; background: var(--done-fg); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* Promotion banner (PromoBanner): floats in bottom-right, dismissible per promotion id. */
+.promo { position: fixed; right: 20px; bottom: 20px; z-index: 45; max-width: 320px; display: flex; align-items: flex-start; gap: 10px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 12px 10px 12px 14px; font-size: 12.5px; opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .25s ease, transform .25s ease; }
+.promo.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.promo-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.promo-title { font-weight: 600; font-size: 13px; }
+.promo-text { color: var(--muted); }
+.promo-link { font-weight: 500; align-self: flex-start; }
+.promo-close { background: none; border: none; color: var(--muted); font-size: 13px; line-height: 1; cursor: pointer; padding: 2px 4px; margin-left: auto; border-radius: 4px; }
+.promo-close:hover { color: var(--text); }
+.promo-close:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .promo { transition: none; transform: none; } }
 .banner { margin-bottom: 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; color: var(--text); }
 .banner.danger { color: var(--fail-fg); }
 .banner.ok { color: var(--accent-bright); }
