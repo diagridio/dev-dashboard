@@ -6,3 +6,6 @@
 
 # Applications page — shown when no Dapr apps were discovered.
 apps: "New to Dapr? Clone the [Dapr Quickstarts repo](https://github.com/dapr/quickstarts) and run some applications! There are more resources available in the left menu."
+
+# Applications page — second paragraph, encouraging people to learn Dapr.
+learn: "Want to learn Dapr? Take a free, hands-on Dapr University course: [Dapr 101](https://www.diagrid.io/university/dapr-101?utm_source=dev-dashboard&utm_medium=empty-state), [Dapr Workflow](https://www.diagrid.io/university/dapr-workflow?utm_source=dev-dashboard&utm_medium=empty-state), or [Dapr Pub/Sub](https://www.diagrid.io/university/dapr-pubsub?utm_source=dev-dashboard&utm_medium=empty-state)."

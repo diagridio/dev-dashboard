@@ -57,6 +57,9 @@ export function Applications() {
         <p className="muted" data-testid="empty-hint">
           {renderCopyLinks(emptyStateContent.apps)}
         </p>
+        <p className="muted" data-testid="empty-learn">
+          {renderCopyLinks(emptyStateContent.learn)}
+        </p>
         <KonamiHint />
       </div>
     )
