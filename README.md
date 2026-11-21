@@ -1,7 +1,13 @@
 # Diagrid Dapr Dev Dashboard
 
-A local dashboard for Dapr developers that offers a live view of everything Dapr running on
-your machine, plus guided builders for authoring Dapr component and resiliency YAML.
+[![Latest release](https://img.shields.io/github/v/release/diagridio/dev-dashboard)](https://github.com/diagridio/dev-dashboard/releases/latest)
+[![CI](https://github.com/diagridio/dev-dashboard/actions/workflows/ci.yaml/badge.svg?branch=main)](https://github.com/diagridio/dev-dashboard/actions/workflows/ci.yaml)
+
+A free local dashboard for Dapr developers: see the sidecars, Dapr Workflow executions, actors
+and components running on your machine, and author component and resiliency YAML.
+
+From [Diagrid](https://www.diagrid.io), built on [Dapr](https://dapr.io). See the
+[Diagrid docs](https://docs.diagrid.io) for more on building with Dapr and Dapr Workflow.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/applications-dark.png">
@@ -621,16 +627,7 @@ Compose, or Dapr Testcontainers.
 
 ## Architecture
 
-The dashboard is a **single Go binary** with an embedded React SPA. It discovers running
-apps the same way `dapr list` does (plus Docker Compose, Testcontainers, and Aspire),
-enriches them from each sidecar's `/v1.0/metadata` and `/v1.0/healthz` endpoints, and reads
-workflows from your state store (Redis, PostgreSQL, SQLite, or MongoDB), or live from the
-sidecar's gRPC workflow API (Dapr ≥ 1.17) when the store can't be opened.
-
-See [ARCHITECTURE.md](ARCHITECTURE.md) for how discovery, state-store election, the HTTP
-layer, and the SPA fit together, and where to extend each part. The original design
-rationale is in
-[`docs/specs/2026-06-25-dev-dashboard-design.md`](docs/specs/2026-06-25-dev-dashboard-design.md).
+See [ARCHITECTURE.md](ARCHITECTURE.md) for how discovery, state-store election, the HTTP layer and the SPA fit together.
 
 ## Contributing
 
