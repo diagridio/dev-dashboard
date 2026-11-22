@@ -98,6 +98,8 @@ cmd/                    cobra root + subcommands; process wiring; NO domain logi
   mode.go               --mode / DEVDASHBOARD_MODE resolution + container posture
   sources.go            mode → discovery scanners + control-plane families
   listen_error.go       friendly "port in use" error
+  newsfeed.go           product-feed source: production URL, or a local override via
+                        DEVDASHBOARD_NEWS_FEED_URL (file path, file:// or http(s); 5s TTL)
   update.go             `update` subcommand → pkg/selfupdate
   update_notice.go      startup update notice / offer
   restart_*.go          re-exec after a self-update (unix / windows)
@@ -172,8 +174,10 @@ reconciler.)
 
 Environment variables read at startup: `DEVDASHBOARD_MODE` (same as `--mode`),
 `DEVDASHBOARD_APP_*` (env contract, aspire or compose), `DEVDASHBOARD_ALLOWED_HOSTS` (Host allowlist in
-container posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, and `DASH_CONTAINER_RUNTIME` (force
-`docker` / `podman`).
+container posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, `DEVDASHBOARD_NEWS_FEED_URL` (dev-only:
+replace the diagrid.io product feed with a local file or URL, re-read every 5s; an invalid
+value fails startup — see `docs/testing-promotion-banner.md`), and `DASH_CONTAINER_RUNTIME`
+(force `docker` / `podman`).
 
 ### `serve` boot sequence (`cmd/root.go` `runServe` → `cmd/serve.go` `assembleOptions`)
 
@@ -645,6 +649,15 @@ background refresh runs; a failed fetch is remembered for a short negative TTL a
 evicts the last-good response. The response exposes one latest blog/report and the next
 upcoming webinar/event, with UTM params appended to diagrid.io links.
 
+It also carries the feed's optional `promotion` (`id`, `title`, `url` required; `text`, `cta`,
+`startsAt`, `endsAt` optional), which drives the SPA's `PromoBanner`. The promotion is decoded
+separately from the rest of the payload (`json.RawMessage`), so a malformed value drops only the
+promotion, never the Resources content. It is dropped when a required field is missing, the URL
+isn't http(s) or a date doesn't parse, and its `startsAt`/`endsAt` window is applied on every
+`Get` rather than at fetch time, so it disappears at `endsAt` even while the feed is cached (a
+date-only `endsAt` lasts through that UTC day). The feed source (production URL, or the
+`DEVDASHBOARD_NEWS_FEED_URL` override) is resolved in `cmd/newsfeed.go`.
+
 ### Update check (`pkg/updatecheck`)
 
 Resolves the latest GitHub release (reusing `pkg/selfupdate`'s resolver), compares it to
@@ -681,8 +694,11 @@ discard handler otherwise); logs are grouped by `component=`
 React 19 + TypeScript + Vite, built to `web/dist` and embedded in the binary. `main.tsx`
 mounts the provider stack: `QueryProvider` (TanStack Query) → `RefreshProvider` (global
 polling) → `ConnectionProvider` (backend health) → `RouterProvider`. `App.tsx` is the shell (TopNav + collapsible ResourcesSidebar
-+ routed `Outlet`), wrapped by a `SmallScreenGuard` (desktop-width UI) and route-level
-error boundaries.
++ routed `Outlet` + `CliDrawer` + `PromoBanner`), wrapped by a `SmallScreenGuard` (desktop-width UI) and route-level
+error boundaries. The sidebar's collapsed state is deliberately not persisted, so Resources is
+open on every start. `PromoBanner` (not rendered on `/replay`) floats in the feed's promotion
+bottom-right; closed promotion ids are kept in localStorage (`devdash.promoDismissed`), so a
+new `id` shows again, and the open tab re-checks `endsAt` itself.
 
 ### Routing (`router.tsx`)
 
