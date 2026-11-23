@@ -40,6 +40,9 @@ export interface WorkflowExecution extends WorkflowSummary {
 export interface WorkflowListResult {
   items: WorkflowSummary[]
   nextToken?: string
+  // Set when the selected store could not be opened and the items were read
+  // from the apps' sidecars instead; holds the reason the store was skipped.
+  storeError?: string
 }
 
 export interface WorkflowStats {
@@ -59,4 +62,7 @@ export interface StateStore {
   // Names an unresolved secret reference that will make this store fail to
   // connect. Absent/empty when there is none.
   secretIssue?: string
+  // True for a store type the dashboard cannot open directly (e.g.
+  // state.sqlserver); its workflows can only be read via the sidecars.
+  unsupported?: boolean
 }

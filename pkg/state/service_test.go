@@ -161,7 +161,7 @@ func TestServiceDegradation(t *testing.T) {
 	})
 
 	t.Run("unreachable service names the store and its connection", func(t *testing.T) {
-		svc := NewUnreachable("mystore", "localhost:6379")
+		svc := NewUnreachable("mystore", "localhost:6379", nil)
 		_, err := svc.List(ctx, ListQuery{})
 		require.ErrorIs(t, err, ErrStoreUnreachable)
 		require.Contains(t, err.Error(), "mystore")

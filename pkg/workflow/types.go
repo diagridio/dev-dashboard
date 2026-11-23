@@ -88,6 +88,10 @@ type Execution struct {
 type ListResult struct {
 	Items     []ExecutionSummary `json:"items"`
 	NextToken string             `json:"nextToken,omitempty"`
+	// StoreError is set when the selected state store could not be opened
+	// and the items were read from the apps' sidecars instead. It holds the
+	// reason the store could not be opened.
+	StoreError string `json:"storeError,omitempty"`
 }
 
 type StatsResult struct {

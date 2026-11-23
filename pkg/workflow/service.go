@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -205,21 +204,24 @@ func (s *service) effectiveNS(ctx context.Context, appID string) string {
 
 // unreachableService is a workflow.Service for a known state store whose
 // backend could not be opened. Every method returns ErrStoreUnreachable
-// wrapped with the store's display name and secrets-free connection so the
-// API can surface an accurate "could not connect…" message.
+// wrapped with the store's display name, secrets-free connection and the open
+// failure, so the API can surface the real reason (an unsupported type, or
+// the connection error).
 type unreachableService struct {
-	name string
-	conn string
+	name  string
+	conn  string
+	cause error
 }
 
 // NewUnreachableService builds a Service whose List/Stats/Get all fail with a
-// store-specific ErrStoreUnreachable error.
-func NewUnreachableService(name, conn string) Service {
-	return unreachableService{name: name, conn: conn}
+// store-specific ErrStoreUnreachable error. cause is the open failure (may be
+// nil).
+func NewUnreachableService(name, conn string, cause error) Service {
+	return unreachableService{name: name, conn: conn, cause: cause}
 }
 
 func (u unreachableService) err() error {
-	return fmt.Errorf("%w %q (%s)", ErrStoreUnreachable, u.name, u.conn)
+	return &statestore.OpenError{Kind: ErrStoreUnreachable, Name: u.name, Conn: u.conn, Cause: u.cause}
 }
 
 func (u unreachableService) List(context.Context, ListQuery) (ListResult, error) {

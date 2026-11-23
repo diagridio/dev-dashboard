@@ -41,7 +41,15 @@ type StoreInfo struct {
 	// SecretIssue names an unresolved secret reference that will make this
 	// store fail to connect. Empty when there is none.
 	SecretIssue string `json:"secretIssue,omitempty"`
+	// Unsupported marks a store type the dashboard cannot open directly
+	// (e.g. state.sqlserver); its workflows can only be read via the sidecar.
+	Unsupported bool `json:"unsupported,omitempty"`
 }
+
+// SidecarStoreID is the reserved ?store= value that reads workflows from the
+// running apps' sidecars only, without any state store. Registry ids are
+// 12 hex characters, so it cannot collide with one.
+const SidecarStoreID = "sidecar"
 
 // TargetResolver resolves an (appID, instanceID) pair into a RemoveTarget.
 // Implemented in cmd (Task 13) by combining discovery.Service + workflow.Service.

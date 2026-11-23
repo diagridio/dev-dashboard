@@ -4,6 +4,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strconv"
 	"testing"
@@ -300,4 +301,32 @@ func TestSidecarPoolConnAfterClose(t *testing.T) {
 	require.NoError(t, p.Close())
 	_, err := p.Conn("127.0.0.1:1")
 	require.EqualError(t, err, "sidecar pool closed")
+}
+
+func TestMapSidecarErr(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		unsupported bool
+	}{
+		{"pre-1.17 unimplemented", status.Error(codes.Unimplemented, "unknown method ListInstanceIDs"), true},
+		{"unknown code saying not implemented", status.Error(codes.Unknown, "not implemented"), true},
+		{
+			// Dapr 1.19 over a store without KeysLike (e.g. state.sqlserver v2).
+			"1.17+ runtime failure keeps its own message",
+			status.Error(codes.Unknown, "failed to list instance IDs: state store *sqlserver.SQLServer does not support listing keys"),
+			false,
+		},
+		{"non-gRPC error", errors.New("boom"), false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := mapSidecarErr(tc.err)
+			require.Equal(t, tc.unsupported, errors.Is(got, ErrSidecarUnsupported), "got %v", got)
+			if !tc.unsupported {
+				require.NotContains(t, got.Error(), "1.17")
+				require.Equal(t, tc.err.Error(), got.Error())
+			}
+		})
+	}
 }

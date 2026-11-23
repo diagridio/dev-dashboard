@@ -41,7 +41,18 @@ func storeMissing(err error) bool {
 	return errors.Is(err, ErrNoStore) || errors.Is(err, ErrStoreUnreachable)
 }
 
+// List serves the routed list and, when the store could not be opened and
+// the sidecars answered instead, records why in StoreError — for app-scoped
+// reads too, which never consult the store when the sidecar answers.
 func (c *composite) List(ctx context.Context, q ListQuery) (ListResult, error) {
+	res, err := c.list(ctx, q)
+	if u, ok := c.base.(unreachableService); ok && err == nil {
+		res.StoreError = u.err().Error()
+	}
+	return res, err
+}
+
+func (c *composite) list(ctx context.Context, q ListQuery) (ListResult, error) {
 	if q.AppID != "" {
 		if c.sc.Owns(ctx, q.AppID) {
 			return c.ownedList(ctx, q)

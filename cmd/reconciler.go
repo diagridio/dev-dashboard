@@ -430,6 +430,7 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 			Connection:  statestore.ConnInfo(comp),
 			UpdatedAt:   e.UpdatedAt,
 			SecretIssue: issue,
+			Unsupported: !statestore.Supported(e.Type),
 		})
 	}
 	sortStores(out)
@@ -607,21 +608,26 @@ func (rc *reconciler) StateFor(id string) (state.Service, bool) {
 	defer cancel()
 	e, err := rc.pool.openOrGet(octx, comp)
 	if err != nil {
-		return state.NewUnreachable(comp.Name, statestore.ConnInfo(comp)), true
+		return state.NewUnreachable(comp.Name, statestore.ConnInfo(comp), err), true
 	}
 	return e.state, true
 }
 
 // baseServiceFor resolves the store-backed service exactly as ServiceFor
 // historically did. storeUp reports whether a store actually opened (false
-// for the degraded no-store entry and the unreachable service).
-func (rc *reconciler) baseServiceFor(id string) (svc workflow.Service, rem server.WorkflowRemover, storeUp, known bool) {
+// for the degraded no-store entry and the unreachable service); active
+// reports whether id addresses the elected active store (always true for "").
+func (rc *reconciler) baseServiceFor(id string) (svc workflow.Service, rem server.WorkflowRemover, storeUp, active, known bool) {
 	comp, degraded, known := rc.resolveComponent(id)
 	if !known {
-		return nil, nil, false, false
+		return nil, nil, false, false, false
 	}
 	if degraded {
-		return rc.degraded.svc, rc.degraded.rem, false, true
+		return rc.degraded.svc, rc.degraded.rem, false, true, true
+	}
+	active = id == ""
+	if a := rc.activeComponent(); !active && a != nil {
+		active = identity(&comp) == identity(ptr(rc.translate(*a)))
 	}
 
 	// Derive from baseCtx so shutdown aborts an in-flight dial here too.
@@ -629,32 +635,38 @@ func (rc *reconciler) baseServiceFor(id string) (svc workflow.Service, rem serve
 	defer cancel()
 	e, err := rc.pool.openOrGet(octx, comp)
 	if err != nil {
-		// Known store, unreachable: surface an accurate store-specific
-		// "could not connect…" error (not the no-store message).
-		return workflow.NewUnreachableService(comp.Name, statestore.ConnInfo(comp)),
-			rc.degraded.rem, false, true
+		// Known store, unreachable: surface the store-specific open failure
+		// (unsupported type or connection error), not the no-store message.
+		return workflow.NewUnreachableService(comp.Name, statestore.ConnInfo(comp), err),
+			rc.degraded.rem, false, active, true
 	}
-	return e.svc, e.rem, true, true
+	return e.svc, e.rem, true, active, true
 }
 
 // ServiceFor satisfies server.WorkflowBackend. The store-backed service is
 // composed with the sidecar-gRPC source: testcontainers apps always read via
-// their sidecar; when the active store is missing or unopenable (id == ""),
-// every reachable sidecar with a gRPC port becomes sidecar-sourced.
+// their sidecar; when the active store is missing or unopenable (whether
+// addressed as "" or by its id), every reachable sidecar with a gRPC port
+// becomes sidecar-sourced.
 //
 // The argument is a registry entry id (the ?store= value), never a name.
 //   - id == "" -> the elected active store, pre-warmed via the pool. If no store
 //     is elected, the degraded (ErrNoStore) entry. If a store IS elected but the
 //     pool cannot open it, the unreachable service (ErrStoreUnreachable).
+//   - id == server.SidecarStoreID -> no store at all: every reachable sidecar.
 //   - id matches a registry entry -> build its component and connect via the
 //     pool; on open failure, the unreachable service.
 //   - unknown id -> ok=false.
 func (rc *reconciler) ServiceFor(id string) (workflow.Service, server.WorkflowRemover, server.TargetResolver, bool) {
-	baseSvc, rem, storeUp, known := rc.baseServiceFor(id)
+	if id == server.SidecarStoreID {
+		svc := workflow.NewComposite(rc.degraded.svc, rc.sidecarPool.Service(rc.sidecarEndpoints(true)))
+		return svc, rc.degraded.rem, newTargetResolver(rc.apps, svc), true
+	}
+	baseSvc, rem, storeUp, active, known := rc.baseServiceFor(id)
 	if !known {
 		return nil, nil, nil, false
 	}
-	sc := rc.sidecarPool.Service(rc.sidecarEndpoints(id == "" && !storeUp))
+	sc := rc.sidecarPool.Service(rc.sidecarEndpoints(active && !storeUp))
 	svc := workflow.NewComposite(baseSvc, sc)
 	return svc, rem, newTargetResolver(rc.apps, svc), true
 }

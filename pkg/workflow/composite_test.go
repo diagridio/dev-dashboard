@@ -4,10 +4,12 @@ package workflow
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/dapr/durabletask-go/api/protos"
+	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -272,4 +274,38 @@ func TestComposite_StatsKeepsStoreCountsForFailingSidecar(t *testing.T) {
 	st, err := NewComposite(base, sc).Stats(context.Background(), ListQuery{})
 	require.NoError(t, err)
 	require.Equal(t, 1, st.Total)
+}
+
+// An active store the dashboard cannot open is replaced by the sidecar list,
+// and the result says why the store was skipped so the page can explain it.
+func TestComposite_UnreachableStoreServedBySidecarWithNote(t *testing.T) {
+	base := NewUnreachableService("statestore", "", fmt.Errorf("%w: state.sqlserver", statestore.ErrUnsupported))
+	sc := sidecarWith(t, "mortgage-agent", &fakeHub{
+		pages:  [][]string{{"w1"}},
+		states: map[string]*protos.WorkflowState{"w1": wfState("w1", "W", protos.OrchestrationStatus_ORCHESTRATION_STATUS_RUNNING, "")},
+	})
+	svc := NewComposite(base, sc)
+
+	res, err := svc.List(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 1)
+	require.Equal(t, `state store "statestore" can't be read directly: unsupported state store type: state.sqlserver`, res.StoreError)
+
+	// App-scoped (the page's default app filter) carries the same note.
+	res, err = svc.List(context.Background(), ListQuery{AppID: "mortgage-agent", IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 1)
+	require.Contains(t, res.StoreError, "unsupported state store type: state.sqlserver")
+
+	ids, err := svc.AppIDs(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"mortgage-agent"}, ids)
+	stats, err := svc.Stats(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Equal(t, 1, stats.Total)
+
+	// With no store configured at all there is nothing to explain.
+	res, err = NewComposite(fakeBase{err: ErrNoStore}, sc).List(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Empty(t, res.StoreError)
 }

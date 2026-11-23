@@ -1018,7 +1018,7 @@ describe('Workflows page — store selector', () => {
     renderAt()
     const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
     // Only one option for the duplicated store.
-    await waitFor(() => expect(storeSelect.querySelectorAll('option')).toHaveLength(1))
+    await waitFor(() => expect(storeSelect.querySelectorAll('option:not([value="sidecar"])')).toHaveLength(1))
     // The active member (redis-p2) is the representative shown and selected.
     const opt = storeSelect.querySelector('option') as HTMLOptionElement
     expect(opt.value).toBe('redis-p2')
@@ -1085,5 +1085,70 @@ describe('Workflows page — stale-data error-state gating', () => {
     expect(screen.queryByText('1 selected')).toBeNull()
     // Next button is disabled (stale nextToken must not enable it).
     expect(screen.getByRole('button', { name: 'Next →' })).toBeDisabled()
+  })
+})
+
+describe('Workflows page — sidecar source (issue #196)', () => {
+  const sqlserverActive = [
+    { id: 'sql-auto', name: 'statestore', type: 'state.sqlserver', source: 'auto', path: '/r/statestore.yaml', active: true, connection: '', unsupported: true },
+    { id: 'redis-auto', name: 'statestore', type: 'state.redis', source: 'auto', path: '/c/statestore.yaml', active: false, connection: 'localhost:6379' },
+  ]
+
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('offers an app-sidecars choice that queries ?store=sidecar', async () => {
+    const seen: (string | null)[] = []
+    server.use(
+      http.get('/api/workflows', ({ request }) => {
+        seen.push(new URL(request.url).searchParams.get('store'))
+        return HttpResponse.json({ items: [] })
+      }),
+    )
+    renderAt()
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    await waitFor(() => expect(storeSelect.value).toBe('redis-auto'))
+    const opt = storeSelect.querySelector('option[value="sidecar"]') as HTMLOptionElement
+    expect(opt.textContent).toBe('app sidecars — no state store')
+    await userEvent.selectOptions(storeSelect, 'sidecar')
+    await waitFor(() => expect(seen).toContain('sidecar'))
+    // No component to link to for the sidecar choice.
+    expect(screen.queryByRole('link', { name: /component page/ })).toBeNull()
+  })
+
+  it('does not preselect an active store the dashboard cannot open', async () => {
+    const seen: (string | null)[] = []
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(sqlserverActive)),
+      http.get('/api/workflows', ({ request }) => {
+        seen.push(new URL(request.url).searchParams.get('store'))
+        return HttpResponse.json({ items: [] })
+      }),
+    )
+    renderAt()
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    await waitFor(() => expect(storeSelect.value).toBe('sidecar'))
+    await waitFor(() => expect(seen.length).toBeGreaterThan(0))
+    expect(seen).not.toContain('sql-auto')
+  })
+
+  it('shows a note with the reason when the list was served by the sidecars instead of the store', async () => {
+    window.localStorage.setItem('devdash.workflowStore', 'sql-auto')
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(sqlserverActive)),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [{ appId: 'mortgage-agent', instanceId: 'prequal-1', name: 'PreQualificationWorkflow', status: 'Running', createdAt: '2026-11-23T10:00:00Z' }],
+          storeError: 'state store "statestore" can\'t be read directly: unsupported state store type: state.sqlserver',
+        }),
+      ),
+    )
+    renderAt()
+    expect(await screen.findByRole('link', { name: 'prequal-1' })).toBeInTheDocument()
+    const note = await screen.findByTestId('sidecar-fallback-note')
+    expect(note).toHaveTextContent(/showing workflows from the app sidecars/i)
+    expect(note).toHaveTextContent(/unsupported state store type: state\.sqlserver/)
+    expect(screen.queryByTestId('load-error-banner')).toBeNull()
   })
 })

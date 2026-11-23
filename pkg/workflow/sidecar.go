@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -473,11 +474,30 @@ func mapSidecarErrFor(appID string, err error) error {
 	return mapSidecarErr(err)
 }
 
-// mapSidecarErr converts the pre-1.17 "not implemented" gRPC codes into
-// ErrSidecarUnsupported (mirroring the dapr CLI's fallback detection).
+// mapSidecarErr converts the pre-1.17 "not implemented" gRPC errors into
+// ErrSidecarUnsupported (mirroring the dapr CLI's fallback detection). An
+// Unknown code counts only when its message says the method is missing: a
+// 1.17+ sidecar also answers Unknown for runtime failures (e.g. a state store
+// that cannot list keys), and those must be reported as they are.
 func mapSidecarErr(err error) error {
-	if c, ok := status.FromError(err); ok && (c.Code() == codes.Unimplemented || c.Code() == codes.Unknown) {
+	c, ok := status.FromError(err)
+	if !ok {
+		return err
+	}
+	if c.Code() == codes.Unimplemented || (c.Code() == codes.Unknown && notImplementedMsg(c.Message())) {
 		return fmt.Errorf("%w (%v)", ErrSidecarUnsupported, err)
 	}
 	return err
+}
+
+// notImplementedMsg reports whether a gRPC error message says the method or
+// service does not exist on the server.
+func notImplementedMsg(msg string) bool {
+	m := strings.ToLower(msg)
+	for _, s := range []string{"not implemented", "unimplemented", "unknown method", "unknown service"} {
+		if strings.Contains(m, s) {
+			return true
+		}
+	}
+	return false
 }

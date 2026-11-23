@@ -117,7 +117,11 @@ marked `actorStateStore: "true"` (falling back to the first detected). Check:
 - Only **Redis / PostgreSQL / SQLite / MongoDB** state stores can be opened directly. Apps whose store
   the dashboard can't open (e.g. `state.in-memory`, or a Testcontainers app whose store lives
   inside the container) are served **via their sidecar's gRPC workflow API** instead — this
-  requires Dapr ≥ 1.17 and only works while the sidecar is running.
+  requires Dapr ≥ 1.17 and only works while the sidecar is running. The Workflows page notes when
+  it is showing sidecar runs because the selected store can't be opened, and the store picker's
+  **app sidecars — no state store** choice reads the sidecars only. The sidecar can list runs
+  only if its own state store supports listing keys (`state.sqlserver` in Dapr 1.19 does not);
+  otherwise the dashboard logs the sidecar's error.
 - Confirm the app actually persisted a workflow (an empty store → empty list).
 
 **Testcontainers apps** (e.g. the Java quickstarts run with `mvn spring-boot:test-run`) need

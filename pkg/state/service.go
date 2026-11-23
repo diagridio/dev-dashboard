@@ -125,13 +125,19 @@ func (s *service) Set(ctx context.Context, req SetRequest) error {
 // opened. Every method fails with a store-specific ErrStoreUnreachable so the
 // API can surface an accurate "could not connect…" message. There is no
 // sidecar fallback: Dapr's HTTP State API cannot enumerate keys.
-type unreachable struct{ name, conn string }
+type unreachable struct {
+	name, conn string
+	cause      error
+}
 
 // NewUnreachable builds a Service that always reports ErrStoreUnreachable.
-func NewUnreachable(name, conn string) Service { return unreachable{name: name, conn: conn} }
+// cause is the open failure (may be nil).
+func NewUnreachable(name, conn string, cause error) Service {
+	return unreachable{name: name, conn: conn, cause: cause}
+}
 
 func (u unreachable) err() error {
-	return fmt.Errorf("%w %q (%s)", ErrStoreUnreachable, u.name, u.conn)
+	return &statestore.OpenError{Kind: ErrStoreUnreachable, Name: u.name, Conn: u.conn, Cause: u.cause}
 }
 
 func (u unreachable) List(context.Context, ListQuery) (ListResult, error) {
