@@ -99,8 +99,21 @@ func TestServeIndexInjectsCapabilities(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	h.ServeHTTP(rec, req)
 	body := rec.Body.String()
-	want := `window.__DASH_CAPABILITIES__={"lifecycle":false,"controlPlane":false,"logs":false,"workflows":true,"state":false,"mode":"","containerPosture":false,"secretReveal":false}`
+	want := `window.__DASH_CAPABILITIES__={"lifecycle":false,"controlPlane":false,"logs":false,"workflows":true,"state":false,"mode":"","containerPosture":false,"secretReveal":false,"hidePromotion":false,"resourcesCollapsed":false}`
 	if !strings.Contains(body, want) {
 		t.Fatalf("body missing %q:\n%s", want, body)
+	}
+}
+
+func TestServeIndexInjectsDisplayCapabilities(t *testing.T) {
+	fsys := fstest.MapFS{"index.html": {Data: []byte("<html><head></head><body></body></html>")}}
+	h := SPAHandler(fsys, "", false, "v1.2.3", Capabilities{HidePromotion: true, ResourcesCollapsed: true})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	body := rec.Body.String()
+	for _, want := range []string{`"hidePromotion":true`, `"resourcesCollapsed":true`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("body missing %q:\n%s", want, body)
+		}
 	}
 }

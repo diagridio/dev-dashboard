@@ -167,17 +167,20 @@ threads through everything.
 | `--statestore` | `""` | Explicit state-store component YAML; disables auto-detection |
 | `--namespace` | `default` | Dapr namespace for workflow state keys |
 | `--verbose` | `false` | Emit diagnostic slog output to stderr |
+| `--no-promotion` | `false` | Hide the promotion banner; `/api/news` omits `promotion` (env: `DEVDASHBOARD_NO_PROMOTION=true`, flag wins) |
+| `--resources-collapsed` | `false` | Start with the Resources sidebar collapsed (env: `DEVDASHBOARD_RESOURCES_COLLAPSED=true`, flag wins) |
 
 The only subcommand is `update [version]` (self-update). (`cmd/workflow.go` is not a
 subcommand — it holds the store-election and target-resolution helpers used by the
 reconciler.)
 
-Environment variables read at startup: `DEVDASHBOARD_MODE` (same as `--mode`),
-`DEVDASHBOARD_APP_*` (env contract, aspire or compose), `DEVDASHBOARD_ALLOWED_HOSTS` (Host allowlist in
-container posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, `DEVDASHBOARD_NEWS_FEED_URL` (dev-only:
-replace the diagrid.io product feed with a local file or URL, re-read every 5s; an invalid
-value fails startup — see `docs/testing-promotion-banner.md`), and `DASH_CONTAINER_RUNTIME`
-(force `docker` / `podman`).
+Environment variables read at startup: `DEVDASHBOARD_MODE` (same as `--mode`), `DEVDASHBOARD_APP_*`
+(env contract, aspire or compose), `DEVDASHBOARD_ALLOWED_HOSTS` (Host allowlist in container
+posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, `DEVDASHBOARD_NO_PROMOTION` (same as `--no-promotion`:
+hides the promotion banner), `DEVDASHBOARD_RESOURCES_COLLAPSED` (same as `--resources-collapsed`:
+Resources sidebar starts collapsed), `DEVDASHBOARD_NEWS_FEED_URL` (dev-only: replace the diagrid.io
+product feed with a local file or URL, re-read every 5s; an invalid value fails startup — see
+`docs/testing-promotion-banner.md`), and `DASH_CONTAINER_RUNTIME` (force `docker` / `podman`).
 
 ### `serve` boot sequence (`cmd/root.go` `runServe` → `cmd/serve.go` `assembleOptions`)
 

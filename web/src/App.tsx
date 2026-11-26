@@ -6,6 +6,7 @@ import { ResourcesSidebar } from './components/ResourcesSidebar'
 import { CliDrawer } from './components/CliDrawer'
 import { PromoBanner } from './components/PromoBanner'
 import { getTheme, type Theme } from './lib/prefs'
+import { getCapabilities } from './lib/capabilities'
 import { trackAction, trackView } from './lib/telemetry'
 import { useDiscoveryTelemetry } from './hooks/useDiscoveryTelemetry'
 import { useKonami } from './hooks/useKonami'
@@ -17,8 +18,9 @@ interface RouteHandle {
 
 export function App() {
   const [theme, setTheme] = useState<Theme>(getTheme)
-  // Not persisted on purpose: Resources opens on every dashboard start.
-  const [collapsed, setCollapsed] = useState(false)
+  // Not persisted on purpose: the start state comes from the server config
+  // (open by default, collapsed with --resources-collapsed) on every dashboard start.
+  const [collapsed, setCollapsed] = useState(() => getCapabilities().resourcesCollapsed === true)
   const [hasNew, setHasNew] = useState(false)
   const [updateAvailable, setUpdateAvailable] = useState(false)
   // Easter egg: Ctrl+B swaps the Diagrid logo for the Dapr logo and hides the
@@ -89,7 +91,7 @@ export function App() {
         </main>
         <CliDrawer context={rumView} values={cliValues} />
         {/* Not on REPLAY (and so not in its kiosk mode): the game owns the whole frame. */}
-        {pathname !== '/replay' && <PromoBanner />}
+        {pathname !== '/replay' && getCapabilities().hidePromotion !== true && <PromoBanner />}
       </div>
     </SmallScreenGuard>
   )

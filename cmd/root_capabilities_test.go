@@ -125,3 +125,35 @@ func TestContainerCapabilities(t *testing.T) {
 		})
 	}
 }
+
+func TestApplyDisplaySettings(t *testing.T) {
+	both := serveSettings{NoPromotion: true, ResourcesCollapsed: true}
+	base := server.FullCapabilities()
+	want := base
+	want.HidePromotion, want.ResourcesCollapsed = true, true
+	if got := applyDisplaySettings(base, both); got != want {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+	if got := applyDisplaySettings(base, serveSettings{}); got != base {
+		t.Fatalf("no settings must leave caps unchanged, got %+v", got)
+	}
+}
+
+func TestApplyDisplaySettingsContainerPosture(t *testing.T) {
+	both := serveSettings{NoPromotion: true, ResourcesCollapsed: true}
+	scan, err := discovery.NewContractScanner(func(k string) string {
+		if k == "DEVDASHBOARD_APP_COUNT" {
+			return "0"
+		}
+		return ""
+	}, contractSource(ModeCompose))
+	if err != nil {
+		t.Fatalf("scanner: %v", err)
+	}
+	base := *containerCapabilities(ModeCompose, true, scan)
+	want := base
+	want.HidePromotion, want.ResourcesCollapsed = true, true
+	if got := applyDisplaySettings(base, both); got != want {
+		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+}

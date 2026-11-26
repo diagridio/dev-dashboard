@@ -44,6 +44,9 @@ func NewRootCmd() *cobra.Command {
 		stateStore string
 		namespace  string
 		verbose    bool
+
+		noPromotion        bool
+		resourcesCollapsed bool
 	)
 	info := version.Get()
 	c := &cobra.Command{
@@ -59,7 +62,7 @@ func NewRootCmd() *cobra.Command {
 			}
 			inCtr := inContainer(os.Getenv, fileExists)
 			posture := containerPosture(mode, os.Getenv, inCtr)
-			settings, err := resolveServeSettings(posture, cmd.Flags().Changed, port, bind, stateStore, namespace, os.Getenv)
+			settings, err := resolveServeSettings(posture, cmd.Flags().Changed, port, bind, stateStore, namespace, noPromotion, resourcesCollapsed, os.Getenv)
 			if err != nil {
 				return err
 			}
@@ -76,6 +79,8 @@ func NewRootCmd() *cobra.Command {
 	c.Flags().StringVar(&stateStore, "statestore", "", "path to a state-store component YAML (overrides auto-detect)")
 	c.Flags().StringVar(&namespace, "namespace", "default", "Dapr namespace for workflow keys")
 	c.Flags().BoolVar(&verbose, "verbose", false, "enable diagnostic logging to stderr")
+	c.Flags().BoolVar(&noPromotion, "no-promotion", false, "hide the promotion banner (env DEVDASHBOARD_NO_PROMOTION=true)")
+	c.Flags().BoolVar(&resourcesCollapsed, "resources-collapsed", false, "start with the Resources sidebar collapsed (env DEVDASHBOARD_RESOURCES_COLLAPSED=true)")
 	c.AddCommand(newUpdateCmd())
 	return c
 }
@@ -201,6 +206,14 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	}
 	finalized := finalizeSecretReveal(*caps, settings.Bind)
 	caps = &finalized
+	displayed := applyDisplaySettings(*caps, settings)
+	caps = &displayed
+	if settings.NoPromotion {
+		slog.Info("promotion banner disabled")
+	}
+	if settings.ResourcesCollapsed {
+		slog.Info("Resources sidebar starts collapsed")
+	}
 
 	telemetry := telemetryEnabled(os.Getenv)
 	opts, closers := assembleOptions(ctx, serveDeps{
@@ -245,7 +258,7 @@ func runServe(ctx context.Context, mode Mode, containerPosture bool, settings se
 	if err := srv.Listen(); err != nil {
 		return listenError(err, addr, settings.Port, url)
 	}
-	writeStartupBanner(os.Stdout, url, telemetry, postureNotice)
+	writeStartupBanner(os.Stdout, url, telemetry, postureNotice, displaySettingsNotices(settings))
 	if newsFeed.Notice != "" {
 		fmt.Fprintln(os.Stdout, newsFeed.Notice)
 	}
@@ -291,9 +304,9 @@ func writeStartupLogo(w io.Writer) {
 }
 
 // writeStartupBanner prints the lines shown when the server starts: the URL,
-// the posture notice (when there is one), the telemetry notice, and a hint at
+// the posture notice (when there is one), the telemetry notice, one line per active display setting, and a hint at
 // the REPLAY easter egg.
-func writeStartupBanner(w io.Writer, url string, telemetry bool, postureNotice string) {
+func writeStartupBanner(w io.Writer, url string, telemetry bool, postureNotice string, displayNotices []string) {
 	fmt.Fprintf(w, "Diagrid Dapr Dev Dashboard is starting → %s\n", url)
 	if postureNotice != "" {
 		fmt.Fprintln(w, postureNotice)
@@ -303,7 +316,24 @@ func writeStartupBanner(w io.Writer, url string, telemetry bool, postureNotice s
 	} else {
 		fmt.Fprintln(w, "Anonymous usage telemetry is disabled (DEVDASHBOARD_TELEMETRY_OPTOUT=true).")
 	}
+	for _, n := range displayNotices {
+		fmt.Fprintln(w, n)
+	}
 	fmt.Fprintln(w, "Make sure to try the Konami code and have some fun! ;)")
+}
+
+// displaySettingsNotices returns one startup line per active display setting
+// (--no-promotion, --resources-collapsed). Nothing is returned for a setting
+// that is off.
+func displaySettingsNotices(s serveSettings) []string {
+	var n []string
+	if s.NoPromotion {
+		n = append(n, "Promotion banner hidden (--no-promotion / DEVDASHBOARD_NO_PROMOTION).")
+	}
+	if s.ResourcesCollapsed {
+		n = append(n, "Resources sidebar starts collapsed (--resources-collapsed / DEVDASHBOARD_RESOURCES_COLLAPSED).")
+	}
+	return n
 }
 
 // telemetryEnabled reports whether RUM telemetry should run, based on the
@@ -342,6 +372,15 @@ func finalizeSecretReveal(caps server.Capabilities, bind string) server.Capabili
 	if !isLoopbackBind(bind) {
 		caps.SecretReveal = false
 	}
+	return caps
+}
+
+// applyDisplaySettings copies the startup display settings onto the
+// capabilities. It is a separate step from capability construction so it
+// covers every posture (host, compose and aspire container).
+func applyDisplaySettings(caps server.Capabilities, s serveSettings) server.Capabilities {
+	caps.HidePromotion = s.NoPromotion
+	caps.ResourcesCollapsed = s.ResourcesCollapsed
 	return caps
 }
 

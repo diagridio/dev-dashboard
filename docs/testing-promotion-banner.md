@@ -24,7 +24,7 @@ The startup output confirms the override:
 News feed override (DEVDASHBOARD_NEWS_FEED_URL): /tmp/product-feed.json, re-read every 5s.
 ```
 
-The banner slides in about 1 second after the page loads.
+The banner slides in about 1 second after the page loads. If it never appears, check that `--no-promotion` / `DEVDASHBOARD_NO_PROMOTION=true` isn't set; it removes `promotion` from `/api/news`.
 
 ## `DEVDASHBOARD_NEWS_FEED_URL`
 
