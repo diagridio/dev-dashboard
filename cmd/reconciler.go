@@ -130,6 +130,22 @@ func identity(c *statestore.Component) string {
 	return c.Name + "|" + c.Type + "|" + statestore.ConnInfo(*c)
 }
 
+// sameStore reports whether a and b are the same store for the "active"
+// check. identity alone can't tell apart two same-named components of a type
+// with no connection summary (ConnInfo is empty for unsupported types, e.g.
+// two projects' "statestore" of type state.sqlserver), so when both come from
+// a component file the file must match too. A manual entry has no path and
+// still matches the active store by identity.
+func sameStore(a, b *statestore.Component) bool {
+	if a == nil || b == nil || identity(a) != identity(b) {
+		return false
+	}
+	if a.Path == "" || b.Path == "" {
+		return true
+	}
+	return normPath(a.Path) == normPath(b.Path)
+}
+
 // resolveComponentSecrets returns c.Metadata with every secretKeyRef applied,
 // plus a one-sentence diagnostic naming the first unresolved reference (empty
 // when everything resolved). The diagnostic is what the connections panel and
@@ -394,9 +410,9 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 		}
 		return rc.electedReg.Stores()
 	}
-	var activeID string
-	if active := rc.activeComponent(); active != nil {
-		activeID = identity(ptr(rc.translate(*active)))
+	var active *statestore.Component
+	if a := rc.activeComponent(); a != nil {
+		active = ptr(rc.translate(*a))
 	}
 	entries := rc.registry.List()
 	// Detect all auto-entry paths in one pass and share the result across
@@ -426,7 +442,7 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 			Type:        e.Type,
 			Source:      e.Source,
 			Path:        e.Path,
-			Active:      identity(&comp) == activeID && activeID != "",
+			Active:      sameStore(&comp, active),
 			Connection:  statestore.ConnInfo(comp),
 			UpdatedAt:   e.UpdatedAt,
 			SecretIssue: issue,
@@ -627,7 +643,7 @@ func (rc *reconciler) baseServiceFor(id string) (svc workflow.Service, rem serve
 	}
 	active = id == ""
 	if a := rc.activeComponent(); !active && a != nil {
-		active = identity(&comp) == identity(ptr(rc.translate(*a)))
+		active = sameStore(&comp, ptr(rc.translate(*a)))
 	}
 
 	// Derive from baseCtx so shutdown aborts an in-flight dial here too.
