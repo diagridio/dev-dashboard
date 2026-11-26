@@ -5,6 +5,7 @@ package workflow
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strconv"
 	"testing"
@@ -315,6 +316,27 @@ func TestMapSidecarErr(t *testing.T) {
 			// Dapr 1.19 over a store without KeysLike (e.g. state.sqlserver v2).
 			"1.17+ runtime failure keeps its own message",
 			status.Error(codes.Unknown, "failed to list instance IDs: state store *sqlserver.SQLServer does not support listing keys"),
+			false,
+		},
+		{
+			// Dapr 1.16 has no durabletask management methods, so daprd hands
+			// the call to its gRPC proxy, which fails for want of dapr-app-id.
+			// Wrapped as the durabletask client returns it (seen against 1.16.21).
+			"pre-1.17 proxy fallback (list)",
+			fmt.Errorf("failed to list instance IDs: %w", status.Error(codes.Unknown,
+				"failed to proxy request: required metadata dapr-callee-app-id or dapr-app-id not found")),
+			true,
+		},
+		{
+			"pre-1.17 proxy fallback (history)",
+			fmt.Errorf("failed to get instance history: %w", status.Error(codes.Unknown,
+				"failed to proxy request: required metadata dapr-callee-app-id or dapr-app-id not found")),
+			true,
+		},
+		{
+			// A sidecar still starting up is not a version problem.
+			"proxy not initialized keeps its own message",
+			status.Error(codes.Unknown, "failed to proxy request: proxy not initialized; daprd startup may be incomplete"),
 			false,
 		},
 		{"non-gRPC error", errors.New("boom"), false},

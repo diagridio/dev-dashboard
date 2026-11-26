@@ -475,10 +475,11 @@ func mapSidecarErrFor(appID string, err error) error {
 }
 
 // mapSidecarErr converts the pre-1.17 "not implemented" gRPC errors into
-// ErrSidecarUnsupported (mirroring the dapr CLI's fallback detection). An
-// Unknown code counts only when its message says the method is missing: a
-// 1.17+ sidecar also answers Unknown for runtime failures (e.g. a state store
-// that cannot list keys), and those must be reported as they are.
+// ErrSidecarUnsupported. The dapr CLI treats every Unknown code as pre-1.17;
+// here an Unknown code counts only when its message says the method is
+// missing, because a 1.17+ sidecar also answers Unknown for runtime failures
+// (e.g. a state store that cannot list keys), and those must be reported as
+// they are.
 func mapSidecarErr(err error) error {
 	c, ok := status.FromError(err)
 	if !ok {
@@ -491,10 +492,15 @@ func mapSidecarErr(err error) error {
 }
 
 // notImplementedMsg reports whether a gRPC error message says the method or
-// service does not exist on the server.
+// service does not exist on the server. A pre-1.17 daprd (e.g. 1.16) has no
+// durabletask management methods and hands the call to its gRPC service-
+// invocation proxy, which fails with "failed to proxy request: required
+// metadata dapr-callee-app-id or dapr-app-id not found" because the dashboard
+// sends no target app id. Other proxy failures (e.g. "proxy not initialized"
+// during startup) are not version problems and are left as they are.
 func notImplementedMsg(msg string) bool {
 	m := strings.ToLower(msg)
-	for _, s := range []string{"not implemented", "unimplemented", "unknown method", "unknown service"} {
+	for _, s := range []string{"not implemented", "unimplemented", "unknown method", "unknown service", "required metadata"} {
 		if strings.Contains(m, s) {
 			return true
 		}
