@@ -4,8 +4,9 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { InvokeActorDialog } from '../components/InvokeActorDialog'
 import { useActorDetail, useDeleteReminder } from '../hooks/useActors'
 import { useStateRecord } from '../hooks/useStateRecords'
-import { actorStateKey } from '../lib/actorFormat'
+import { actorStateKey, isInternalActorType } from '../lib/actorFormat'
 import { actorPath } from '../lib/actorRecents'
+import { getCapabilities } from '../lib/capabilities'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import type { Scheduled } from '../types/actors'
 import type { StateItem } from '../types/state'
@@ -14,6 +15,8 @@ export function ActorDetail() {
   const { appId: appKey = '', actorType = '', actorId = '' } = useParams()
   const [invokeOpen, setInvokeOpen] = useState(false)
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
+  const internal = isInternalActorType(actorType)
+  const stateEnabled = getCapabilities().state !== false
   useDocumentTitle(`${actorType}/${actorId} — Actors`)
 
   const { data, isLoading, error } = useActorDetail(appKey, actorType, actorId)
@@ -33,7 +36,9 @@ export function ActorDetail() {
         <Link className="btn ghost" to={`/logs?app=${encodeURIComponent(data?.appId ?? appKey)}&source=app`}>
           View logs
         </Link>
-        <button type="button" className="btn ghost" onClick={() => setInvokeOpen(true)}>Invoke</button>
+        {!internal && (
+          <button type="button" className="btn ghost" onClick={() => setInvokeOpen(true)}>Invoke</button>
+        )}
       </div>
     </div>
   )
@@ -68,7 +73,13 @@ export function ActorDetail() {
       <h2 className="sec-title">State</h2>
       {data.stateUnavailable ? (
         <p className="muted">
-          {data.stateUnavailable.reason} <Link className="celllink" to="/state">Open State</Link>
+          {data.stateUnavailable.reason}
+          {stateEnabled && (
+            <>
+              {' '}
+              <Link className="celllink" to="/state">Open State</Link>
+            </>
+          )}
         </p>
       ) : (
         <div className="card">
@@ -103,7 +114,7 @@ export function ActorDetail() {
         <ScheduledTable
           rows={data.reminders}
           empty="No reminders"
-          onDelete={(name) => setPendingDelete(name)}
+          onDelete={internal ? undefined : (name) => setPendingDelete(name)}
         />
       )}
       {del.error && <p className="field-err">{del.error.message}</p>}

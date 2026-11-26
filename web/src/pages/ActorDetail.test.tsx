@@ -43,6 +43,14 @@ const base = {
   timers: [],
 }
 
+function serveInternal() {
+  server.use(
+    http.get('/api/actors/a/dapr.internal.ns.a.wf/x1', () =>
+      HttpResponse.json({ ...base, type: 'dapr.internal.ns.a.wf' }),
+    ),
+  )
+}
+
 function serve(over: Record<string, unknown> = {}) {
   let hits = 0
   server.use(
@@ -63,6 +71,28 @@ describe('ActorDetail', () => {
     expect(screen.getByRole('link', { name: 'a' })).toHaveAttribute('href', '/apps/a')
     expect(screen.getByRole('link', { name: 'View logs' })).toHaveAttribute('href', '/logs?app=a&source=app')
     expect(screen.getByRole('button', { name: 'Invoke' })).toBeInTheDocument()
+  })
+
+  it('hides Invoke and reminder Delete for internal actor types', async () => {
+    serveInternal()
+    renderAt('/actors/a/dapr.internal.ns.a.wf/x1')
+    expect(await screen.findByText('r1')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Invoke' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
+  })
+
+  it('hides the Open State link when the state capability is off', async () => {
+    serve({ state: [], stateUnavailable: { reason: 'sidecar unreachable' } })
+    window.__DASH_CAPABILITIES__ = {
+      lifecycle: true, controlPlane: true, logs: true, workflows: true, state: false,
+    }
+    try {
+      renderAt()
+      expect(await screen.findByText(/sidecar unreachable/)).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'Open State' })).not.toBeInTheDocument()
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
   })
 
   it('lists state keys without the prefix and opens the full value', async () => {
@@ -116,7 +146,7 @@ describe('ActorDetail', () => {
 
     await userEvent.click(within(row).getByRole('button', { name: 'Delete' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Confirm' }))
-    await screen.findByText('r1')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirm' })).not.toBeInTheDocument())
     expect(deleted).toEqual(['r1'])
   })
 

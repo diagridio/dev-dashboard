@@ -9,3 +9,8 @@ export function actorStateKey(logicalKey: string, type: string, id: string): str
   const prefix = `${type}||${id}||`
   return logicalKey.startsWith(prefix) ? logicalKey.slice(prefix.length) : logicalKey
 }
+
+/** Dapr-internal actor types (workflow, scheduler) are not user-invocable or editable. */
+export function isInternalActorType(type: string): boolean {
+  return type.startsWith('dapr.internal.')
+}
