@@ -1,7 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchJSON } from '../lib/api'
-
-export { useActors } from './useActors'
 import { useRefreshInterval, refetchMs } from '../lib/refresh'
 import type { Subscription, ResourceKind, ResourceSummary, ResourceDetail } from '../types/resources'
 
