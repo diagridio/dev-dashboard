@@ -298,6 +298,8 @@ func (s *service) enrich(ctx context.Context, r ScanResult) Instance {
 	in.HTTPEndpoints = md.HTTPEndpoints
 	in.EnabledFeatures = md.EnabledFeatures
 	in.Placement = md.Placement
+	in.ActorRuntimeStatus = md.RuntimeStatus
+	in.ActorHostReady = md.HostReady
 	if md.AppProtocol != "" {
 		in.AppProtocol = md.AppProtocol
 	}

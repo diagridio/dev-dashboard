@@ -94,3 +94,41 @@ func TestFetchMetadata_AppProtocol(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "http", md.AppProtocol)
 }
+
+func TestParseMetadataActorRuntime(t *testing.T) {
+	cases := []struct {
+		name      string
+		body      string
+		status    string
+		hostReady bool
+		placement string
+	}{
+		{
+			name:      "running",
+			body:      `{"id":"a","actorRuntime":{"runtimeStatus":"RUNNING","hostReady":true,"placement":"placement: connected","activeActors":[{"type":"Deck","count":2}]}}`,
+			status:    "RUNNING",
+			hostReady: true,
+			placement: "placement: connected",
+		},
+		{
+			name:      "disabled",
+			body:      `{"id":"a","actorRuntime":{"runtimeStatus":"DISABLED","placement":"placement: disconnected"}}`,
+			status:    "DISABLED",
+			hostReady: false,
+			placement: "placement: disconnected",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			t.Cleanup(srv.Close)
+			md, err := FetchMetadata(context.Background(), &http.Client{Timeout: 2 * time.Second}, srv.URL)
+			require.NoError(t, err)
+			require.Equal(t, tc.status, md.RuntimeStatus)
+			require.Equal(t, tc.hostReady, md.HostReady)
+			require.Equal(t, tc.placement, md.Placement)
+		})
+	}
+}

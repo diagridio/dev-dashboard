@@ -69,6 +69,8 @@ type Metadata struct {
 	HTTPEndpoints   []HTTPEndpoint
 	EnabledFeatures []string
 	Placement       string
+	RuntimeStatus   string
+	HostReady       bool
 }
 
 type rawSubscription struct {
@@ -90,7 +92,9 @@ type rawMetadata struct {
 	Resiliencies    []Resiliency      `json:"resiliencies"`
 	HTTPEndpoints   []HTTPEndpoint    `json:"httpEndpoints"`
 	ActorRuntime    struct {
-		Placement string `json:"placement"`
+		Placement     string `json:"placement"`
+		RuntimeStatus string `json:"runtimeStatus"`
+		HostReady     bool   `json:"hostReady"`
 	} `json:"actorRuntime"`
 	AppConnectionProperties struct {
 		Port           int    `json:"port"`
@@ -168,5 +172,7 @@ func FetchMetadata(ctx context.Context, client *http.Client, baseURL string) (Me
 		HTTPEndpoints:     raw.HTTPEndpoints,
 		EnabledFeatures:   raw.EnabledFeatures,
 		Placement:         raw.ActorRuntime.Placement,
+		RuntimeStatus:     raw.ActorRuntime.RuntimeStatus,
+		HostReady:         raw.ActorRuntime.HostReady,
 	}, nil
 }

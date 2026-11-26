@@ -64,24 +64,26 @@ type Instance struct {
 	DaprdStartedAt string `json:"daprdStartedAt,omitempty"` // RFC3339 UTC; "" when stopped/unknown
 	// SidecarOrphaned marks a standalone daprd with no supervising dapr CLI
 	// and no live app (e.g. an external stop missed a detached sidecar).
-	SidecarOrphaned bool           `json:"sidecarOrphaned,omitempty"`
-	Age             string         `json:"age"`     // human, e.g. "14m"
-	Created         string         `json:"created"` // local time string
-	RunTemplate     string         `json:"runTemplate"`
-	ResourcePaths   []string       `json:"resourcePaths"`
-	ConfigPath      string         `json:"configPath"`
-	AppLogPath      string         `json:"appLogPath"`
-	DaprdLogPath    string         `json:"daprdLogPath"`
-	AppLogFormat    string         `json:"appLogFormat,omitempty"`   // "" / "plain" / "dcp"
-	DaprdLogFormat  string         `json:"daprdLogFormat,omitempty"` // "" / "plain" / "dcp"
-	Command         string         `json:"command"`
-	RuntimeVersion  string         `json:"runtimeVersion"` // from metadata; "" if unavailable
-	MetadataOK      bool           `json:"metadataOk"`     // false if /v1.0/metadata failed
-	Actors          []ActorType    `json:"actors,omitempty"`
-	Subscriptions   []Subscription `json:"subscriptions,omitempty"`
-	Components      []Component    `json:"components,omitempty"`
-	Resiliencies    []Resiliency   `json:"resiliencies,omitempty"`
-	HTTPEndpoints   []HTTPEndpoint `json:"httpEndpoints,omitempty"`
-	EnabledFeatures []string       `json:"enabledFeatures,omitempty"`
-	Placement       string         `json:"placement,omitempty"`
+	SidecarOrphaned    bool           `json:"sidecarOrphaned,omitempty"`
+	Age                string         `json:"age"`     // human, e.g. "14m"
+	Created            string         `json:"created"` // local time string
+	RunTemplate        string         `json:"runTemplate"`
+	ResourcePaths      []string       `json:"resourcePaths"`
+	ConfigPath         string         `json:"configPath"`
+	AppLogPath         string         `json:"appLogPath"`
+	DaprdLogPath       string         `json:"daprdLogPath"`
+	AppLogFormat       string         `json:"appLogFormat,omitempty"`   // "" / "plain" / "dcp"
+	DaprdLogFormat     string         `json:"daprdLogFormat,omitempty"` // "" / "plain" / "dcp"
+	Command            string         `json:"command"`
+	RuntimeVersion     string         `json:"runtimeVersion"` // from metadata; "" if unavailable
+	MetadataOK         bool           `json:"metadataOk"`     // false if /v1.0/metadata failed
+	Actors             []ActorType    `json:"actors,omitempty"`
+	Subscriptions      []Subscription `json:"subscriptions,omitempty"`
+	Components         []Component    `json:"components,omitempty"`
+	Resiliencies       []Resiliency   `json:"resiliencies,omitempty"`
+	HTTPEndpoints      []HTTPEndpoint `json:"httpEndpoints,omitempty"`
+	EnabledFeatures    []string       `json:"enabledFeatures,omitempty"`
+	Placement          string         `json:"placement,omitempty"`
+	ActorRuntimeStatus string         `json:"actorRuntimeStatus,omitempty"`
+	ActorHostReady     bool           `json:"actorHostReady"`
 }
