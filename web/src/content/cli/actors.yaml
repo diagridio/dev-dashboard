@@ -10,3 +10,9 @@ tools:
       - title: Get an actor reminder
         command: dapr scheduler get actor/<actor-type>/<actor-id>/<reminder-name> -o yaml
         docs: https://docs.dapr.io/reference/cli/dapr-scheduler/
+      - title: List an actor's reminders
+        command: curl http://localhost:<dapr-http-port>/v1.0/actors/<actor-type>/<actor-id>/reminders
+        docs: https://docs.dapr.io/reference/api/actors_api/
+      - title: List an actor's timers (1.19+)
+        command: curl http://localhost:<dapr-http-port>/v1.0/actors/<actor-type>/<actor-id>/timers
+        docs: https://docs.dapr.io/reference/api/actors_api/
