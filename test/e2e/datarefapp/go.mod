@@ -1,9 +1,9 @@
 module github.com/diagridio/dev-dashboard/test/e2e/datarefapp
 
-go 1.26.10
+go 1.26.11
 
 require (
-	github.com/dapr/dapr v1.19.1
+	github.com/dapr/dapr v1.19.2
 	github.com/dapr/durabletask-go v0.15.1
 	github.com/dapr/go-sdk v1.16.0
 	google.golang.org/grpc v1.85.0
