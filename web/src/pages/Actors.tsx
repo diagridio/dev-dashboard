@@ -1,9 +1,15 @@
+import { Fragment, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useActors } from '../hooks/useResources'
+import { InvokeActorDialog } from '../components/InvokeActorDialog'
+import { actorPath } from '../lib/actorRecents'
+import { reentrancyLabel } from '../lib/actorFormat'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import type { Actor } from '../types/resources'
 
-const INTERNAL_PREFIX = 'dapr.internal'
+const rowKey = (a: Actor) => a.instanceKey || a.appId
+const hostReady = (a: Actor) => a.placement === 'placement: connected' && a.hostReady
+
 
 export function Actors() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -12,6 +18,9 @@ export function Actors() {
   useDocumentTitle(appIdFilter ? `Actors — ${appIdFilter}` : 'Actors')
 
   const { data: actors, isLoading } = useActors(appIdFilter)
+  const [invokeTarget, setInvokeTarget] = useState<Actor | null>(null)
+  // Internal workflow/activity actor types are hidden by default, like internal keys on the State page.
+  const [showInternal, setShowInternal] = useState(false)
 
   function clearFilter() {
     setSearchParams({})
@@ -60,9 +69,42 @@ export function Actors() {
     )
   }
 
-  const activeActors = actors.reduce((sum, a) => sum + (a.count || 0), 0)
-  const actorTypes = new Set(actors.map((a) => a.type)).size
-  const hostingApps = new Set(actors.map((a) => a.instanceKey ?? a.appId)).size
+  const internalToggle = (
+    <div className="filters">
+      <label className="childtoggle">
+        <input
+          type="checkbox"
+          aria-label="Show internal"
+          checked={showInternal}
+          onChange={(e) => setShowInternal(e.target.checked)}
+        />
+        Show internal
+      </label>
+    </div>
+  )
+
+  const visible = showInternal ? actors : actors.filter((a) => !a.internal)
+
+  if (visible.length === 0) {
+    return (
+      <div className="page">
+        {header}
+        {internalToggle}
+        <p className="muted">Only internal actor types are registered. Check Show internal to see them.</p>
+      </div>
+    )
+  }
+
+  const activeActors = visible.reduce((sum, a) => sum + (a.count || 0), 0)
+  const actorTypes = new Set(visible.map((a) => a.type)).size
+  const hostingApps = new Set(visible.map(rowKey)).size
+  const hosts = new Map<string, boolean>()
+  for (const a of visible) hosts.set(rowKey(a), (hosts.get(rowKey(a)) ?? true) && hostReady(a))
+  const notReady = [...hosts].filter(([, ok]) => !ok).map(([k]) => k)
+  const readyCount = hosts.size - notReady.length
+  const placementLed = notReady.length === 0 ? 'ok' : readyCount > 0 ? 'warn' : 'bad'
+  const placementTitle =
+    notReady.length === 0 ? 'All hosts connected to placement' : `Not ready: ${notReady.join(', ')}`
 
   return (
     <div className="page">
@@ -80,15 +122,19 @@ export function Actors() {
           <div className="n">{hostingApps}</div>
           <div className="l">Hosting apps</div>
         </div>
-        <div className="stat">
+        <div className="stat" title={placementTitle}>
           <div className="n">
             <span className="health">
-              <span className="led ok" />
+              <span className={`led ${placementLed}`} />
+              <span className="tabnum" style={{ marginLeft: 6 }}>
+                {readyCount}/{hosts.size}
+              </span>
             </span>
           </div>
           <div className="l">Placement connected</div>
         </div>
       </div>
+      {internalToggle}
       <div className="card">
         <div className="tablewrap">
           <table className="t">
@@ -97,14 +143,24 @@ export function Actors() {
                 <th>Host app</th>
                 <th>Actor type</th>
                 <th>Active</th>
-                <th>Idle timeout</th>
+                <th>
+                  Idle
+                  <br />
+                  timeout
+                </th>
+                <th>Reentrancy</th>
                 <th>Reminders</th>
                 <th>Placement</th>
+                <th />
               </tr>
             </thead>
             <tbody>
-              {actors.map((actor) => (
-                <ActorRow key={`${actor.instanceKey ?? actor.appId}/${actor.type}`} actor={actor} />
+              {visible.map((actor) => (
+                <ActorRow
+                  key={`${rowKey(actor)}/${actor.type}`}
+                  actor={actor}
+                  onInvoke={() => setInvokeTarget(actor)}
+                />
               ))}
             </tbody>
           </table>
@@ -112,16 +168,54 @@ export function Actors() {
       </div>
       <p className="hint">
         Dapr Workflow runs on internal actor types (<span className="mono">workflow</span> /{' '}
-        <span className="mono">activity</span>) — tagged <span className="tag-int">internal</span> and
-        shown for completeness.
+        <span className="mono">activity</span>), tagged <span className="tag-int">internal</span>. Check
+        Show internal to include them.
       </p>
+      {invokeTarget && (
+        <InvokeActorDialog
+          open
+          onClose={() => setInvokeTarget(null)}
+          appKey={rowKey(invokeTarget)}
+          appId={invokeTarget.appId}
+          actorType={invokeTarget.type}
+        />
+      )}
     </div>
   )
 }
 
-function ActorRow({ actor }: { actor: Actor }) {
-  const isInternal = actor.type.toLowerCase().includes(INTERNAL_PREFIX)
-  const key = actor.instanceKey ?? actor.appId
+function Dash({ reason }: { reason?: string }) {
+  return (
+    <span className="none" title={reason}>
+      —
+    </span>
+  )
+}
+
+/** Renders a dotted name with a line-break opportunity after each dot, so long
+ * internal actor types (dapr.internal.<ns>.<app>.workflow) wrap at the dots. */
+function DotBreaks({ text }: { text: string }) {
+  const parts = text.split('.')
+  return (
+    <>
+      {parts.map((p, i) => (
+        <Fragment key={i}>
+          {p}
+          {i < parts.length - 1 && (
+            <>
+              .<wbr />
+            </>
+          )}
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
+function ActorRow({ actor, onInvoke }: { actor: Actor; onInvoke: () => void }) {
+  const key = rowKey(actor)
+  const cfg = actor.config
+  const disabled = actor.runtimeStatus === 'DISABLED'
   return (
     <tr>
       <td className="b">
@@ -133,19 +227,42 @@ function ActorRow({ actor }: { actor: Actor }) {
         </Link>
       </td>
       <td className="mono">
-        {actor.type}
-        {isInternal && <span className="tag-int">internal</span>}
+        <Link className="celllink" to={actorPath(key, actor.type)}>
+          <DotBreaks text={actor.type} />
+        </Link>
+        {actor.internal && <span className="tag-int">internal</span>}
       </td>
       <td className="mono tabnum b">{actor.count}</td>
-      <td className="mono tabnum faint">—</td>
-      <td className="mono tabnum faint">—</td>
+      <td className="mono tabnum">
+        {cfg ? (
+          cfg.idleTimeoutDefault ? `${cfg.idleTimeout} (default)` : cfg.idleTimeout
+        ) : (
+          <Dash reason={actor.configUnavailable?.reason} />
+        )}
+      </td>
+      <td className="mono tabnum reent nowrap">
+        {cfg ? reentrancyLabel(cfg.reentrancy) : <Dash reason={actor.configUnavailable?.reason} />}
+      </td>
+      <td className="mono tabnum">
+        {actor.reminders !== undefined ? actor.reminders : <Dash reason={actor.remindersUnavailable?.reason} />}
+      </td>
       <td>
-        {actor.placement ? (
+        {disabled ? (
+          <span className="muted">actors disabled</span>
+        ) : actor.placement ? (
           <span className="health">
-            <span className="led ok" /> connected
+            <span className={`led ${hostReady(actor) ? 'ok' : 'bad'}`} />{' '}
+            {hostReady(actor) ? 'connected' : 'not ready'}
           </span>
         ) : (
-          <span className="none">—</span>
+          <Dash />
+        )}
+      </td>
+      <td className="nowrap">
+        {!actor.internal && (
+          <button type="button" className="btn ghost" onClick={onInvoke}>
+            Invoke
+          </button>
         )}
       </td>
     </tr>

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/actors"
 	"github.com/diagridio/dev-dashboard/pkg/discovery"
 	"github.com/diagridio/dev-dashboard/pkg/lifecycle"
 	"github.com/go-chi/chi/v5"
@@ -122,7 +123,7 @@ type publishBody struct {
 
 // publishHandler proxies a message to the resolved instance's sidecar
 // /v1.0/publish/{pubsub}/{topic}. On a daprd error the response status is
-// passed through and the body is reduced to its message via daprdErrorMessage.
+// passed through and the body is reduced to its message via actors.DaprdErrorMessage.
 func publishHandler(svc discovery.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		in, err := svc.Get(req.Context(), chi.URLParam(req, "appId"))
@@ -180,29 +181,8 @@ func publishHandler(svc discovery.Service) http.HandlerFunc {
 			return
 		}
 		msg, _ := io.ReadAll(resp.Body)
-		writeJSON(w, resp.StatusCode, map[string]string{"error": daprdErrorMessage(msg)})
+		writeJSON(w, resp.StatusCode, map[string]string{"error": actors.DaprdErrorMessage(msg)})
 	}
-}
-
-// daprdErrorMessage extracts a human-readable message from a daprd error
-// response body, which is normally JSON of the form
-// {"errorCode":"...","message":"..."}. It falls back to the error code, then
-// the trimmed raw body, if the message field is empty or the body isn't the
-// expected shape.
-func daprdErrorMessage(body []byte) string {
-	var parsed struct {
-		Message   string `json:"message"`
-		ErrorCode string `json:"errorCode"`
-	}
-	if err := json.Unmarshal(body, &parsed); err == nil {
-		if parsed.Message != "" {
-			return parsed.Message
-		}
-		if parsed.ErrorCode != "" {
-			return parsed.ErrorCode
-		}
-	}
-	return strings.TrimSpace(string(body))
 }
 
 // hasPubsubComponent reports whether the instance exposes a pub/sub component

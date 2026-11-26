@@ -1,5 +1,7 @@
 using Bridge.Actors;
 using Bridge.Seed;
+using Dapr.Actors;
+using Dapr.Actors.Runtime;
 using Dapr.Client;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,8 +10,13 @@ builder.WebHost.UseUrls("http://localhost:6002");
 builder.Services.AddDaprClient();
 builder.Services.AddActors(options =>
 {
+    options.ActorIdleTimeout = TimeSpan.FromMinutes(30);
     options.Actors.RegisterActor<SubsystemActor>();
-    options.Actors.RegisterActor<DeckActor>();
+    options.Actors.RegisterActor<DeckActor>(typeOptions: new ActorRuntimeOptions
+    {
+        ActorIdleTimeout = TimeSpan.FromMinutes(10),
+        ReentrancyConfig = new ActorReentrancyConfig { Enabled = true, MaxStackDepth = 8 },
+    });
 });
 builder.Services.AddSingleton<ISeedPort>(sp => new DaprSeedPort(sp.GetRequiredService<DaprClient>()));
 builder.Services.AddSingleton(sp => new DemoController(

@@ -37,7 +37,7 @@ describe('Actors', () => {
     server.use(
       http.get('/api/actors', () =>
         HttpResponse.json([
-          { appId: 'order', type: 'OrderActor', count: 3, placement: 'localhost:50005' },
+          { appId: 'order', instanceKey: 'order', type: 'OrderActor', count: 3, placement: 'placement: connected', hostReady: true },
         ]),
       ),
     )
@@ -57,11 +57,12 @@ describe('Actors', () => {
     server.use(
       http.get('/api/actors', () =>
         HttpResponse.json([
-          { appId: 'order', type: 'dapr.internal.default.order.workflow', count: 5 },
+          { appId: 'order', instanceKey: 'order', type: 'dapr.internal.default.order.workflow', count: 5, internal: true },
         ]),
       ),
     )
     renderAt()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Show internal' }))
     const link = await screen.findByRole('link', { name: 'order' })
     // Scope to the table row so the .tag-int badge in the hint footer doesn't collide
     const row = within(link.closest('tr') as HTMLElement)
@@ -118,5 +119,124 @@ describe('Actors', () => {
     // Container names shown to tell the rows apart.
     expect(screen.getByText('(daprmq-host-1)')).toBeInTheDocument()
     expect(screen.getByText('(daprmq-host-2)')).toBeInTheDocument()
+  })
+
+  const row = (o: Record<string, unknown>) => ({
+    appId: 'a', instanceKey: 'a', type: 'T', count: 1, internal: false,
+    hostReady: true, placement: 'placement: connected', ...o,
+  })
+
+  it('placement stat is green, amber or red with not-ready hosts named', async () => {
+    const cases: [unknown[], string, string][] = [
+      [[row({}), row({ appId: 'b', instanceKey: 'b' })], 'ok', 'All hosts'],
+      [[row({}), row({ appId: 'b', instanceKey: 'b', hostReady: false })], 'warn', 'Not ready: b'],
+      [[row({ hostReady: false }), row({ appId: 'b', instanceKey: 'b', placement: 'placement: disconnected' })], 'bad', 'Not ready: a, b'],
+    ]
+    for (const [rows, led, title] of cases) {
+      server.use(http.get('/api/actors', () => HttpResponse.json(rows)))
+      const { unmount } = renderAt()
+      const stat = (await screen.findByText('Placement connected')).closest('.stat') as HTMLElement
+      expect(stat.querySelector('.led')).toHaveClass(led)
+      expect(stat.getAttribute('title')).toContain(title)
+      unmount()
+    }
+  })
+
+  it('shows config, reminders and unavailable reasons', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([
+          row({ type: 'A', config: { idleTimeout: '5m', idleTimeoutDefault: false, reentrancy: { enabled: false } }, reminders: 4 }),
+          row({ type: 'B', config: { idleTimeout: '60m', idleTimeoutDefault: true, reentrancy: { enabled: true, maxStackDepth: 8 } },
+            remindersUnavailable: { reason: 'requires Dapr 1.17+' } }),
+          row({ type: 'C', configUnavailable: { reason: 'gRPC app: no /dapr/config' } }),
+          row({ type: 'D', runtimeStatus: 'DISABLED' }),
+        ]),
+      ),
+    )
+    renderAt()
+    const a = within((await screen.findByRole('link', { name: 'A' })).closest('tr') as HTMLElement)
+    expect(a.getByText('5m')).toBeInTheDocument()
+    expect(a.getByText('off')).toBeInTheDocument()
+    expect(a.getByText('4')).toBeInTheDocument()
+    expect(a.getByRole('link', { name: 'A' })).toHaveAttribute('href', '/actors/a/A')
+    const b = within(screen.getByRole('link', { name: 'B' }).closest('tr') as HTMLElement)
+    expect(b.getByText('60m (default)')).toBeInTheDocument()
+    expect(b.getByText('on (depth 8)')).toBeInTheDocument()
+    expect(b.getAllByText('—').some((e) => e.getAttribute('title') === 'requires Dapr 1.17+')).toBe(true)
+    const c = within(screen.getByRole('link', { name: 'C' }).closest('tr') as HTMLElement)
+    expect(c.getAllByText('—').some((e) => e.getAttribute('title') === 'gRPC app: no /dapr/config')).toBe(true)
+    const d = within(screen.getByRole('link', { name: 'D' }).closest('tr') as HTMLElement)
+    expect(d.getByText('actors disabled')).toBeInTheDocument()
+  })
+
+  it('internal rows have no Invoke button', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([row({ type: 'dapr.internal.x.workflow', internal: true }), row({ type: 'Plain' })]),
+      ),
+    )
+    renderAt()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Show internal' }))
+    const int = within((await screen.findByRole('link', { name: /dapr\.internal/ })).closest('tr') as HTMLElement)
+    expect(int.queryByRole('button', { name: 'Invoke' })).not.toBeInTheDocument()
+    const plain = within(screen.getByRole('link', { name: 'Plain' }).closest('tr') as HTMLElement)
+    expect(plain.getByRole('button', { name: 'Invoke' })).toBeInTheDocument()
+  })
+
+  it('lets long actor types wrap after each dot and keeps compact columns', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([row({ type: 'dapr.internal.default.order.workflow', internal: true }), row({ type: 'Plain' })]),
+      ),
+    )
+    renderAt()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Show internal' }))
+    const link = await screen.findByRole('link', { name: 'dapr.internal.default.order.workflow' })
+    // A break opportunity after each of the four dots; the visible text is unchanged.
+    expect(link.querySelectorAll('wbr')).toHaveLength(4)
+    expect(screen.getByRole('link', { name: 'Plain' }).querySelectorAll('wbr')).toHaveLength(0)
+    // "Idle timeout" header is split over two lines.
+    const idle = screen.getByRole('columnheader', { name: /idle\s*timeout/i })
+    expect(idle.querySelector('br')).not.toBeNull()
+    // Reentrancy values and the Invoke button never wrap.
+    const plain = screen.getByRole('link', { name: 'Plain' }).closest('tr') as HTMLElement
+    expect(within(plain).getByRole('button', { name: 'Invoke' }).closest('td')).toHaveClass('nowrap')
+    expect(plain.querySelector('td.reent')).toHaveClass('nowrap')
+  })
+
+  it('hides internal actor types until Show internal is checked', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([
+          row({ appId: 'wf', instanceKey: 'wf', type: 'dapr.internal.default.wf.workflow', internal: true, count: 2 }),
+          row({ type: 'Plain', count: 3 }),
+        ]),
+      ),
+    )
+    renderAt()
+    const box = await screen.findByRole('checkbox', { name: 'Show internal' })
+    expect(box).not.toBeChecked()
+    expect(box.closest('label')).toHaveClass('childtoggle')
+    expect(screen.getByRole('link', { name: 'Plain' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /dapr\.internal/ })).not.toBeInTheDocument()
+    // Stats follow the visible rows: one type, three active actors.
+    expect(screen.getByText('Actor types').previousElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Active actors').previousElementSibling).toHaveTextContent('3')
+    await userEvent.click(box)
+    expect(screen.getByRole('link', { name: /dapr\.internal/ })).toBeInTheDocument()
+    expect(screen.getByText('Actor types').previousElementSibling).toHaveTextContent('2')
+  })
+
+  it('says when only internal actor types are registered', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([row({ type: 'dapr.internal.default.wf.workflow', internal: true })]),
+      ),
+    )
+    renderAt()
+    expect(await screen.findByText('Only internal actor types are registered. Check Show internal to see them.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Show internal' }))
+    expect(screen.getByRole('link', { name: /dapr\.internal/ })).toBeInTheDocument()
   })
 })

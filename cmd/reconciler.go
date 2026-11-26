@@ -402,18 +402,7 @@ func (rc *reconciler) Stores() []server.StoreInfo {
 	// Detect all auto-entry paths in one pass and share the result across
 	// entries; without this every entry re-walked its YAML path (and the old
 	// componentFor(e.ID) re-scanned the whole registry per entry: O(n²)).
-	var det *autoDetection
-	var autoPaths []string
-	seen := map[string]bool{}
-	for _, e := range entries {
-		if e.Source != SourceManual && !e.Dismissed && !seen[e.Path] {
-			seen[e.Path] = true
-			autoPaths = append(autoPaths, e.Path)
-		}
-	}
-	if len(autoPaths) > 0 {
-		det = detectAuto(autoPaths, slog.Default().With("component", "reconciler"))
-	}
+	det := rc.detectRegistry(entries)
 	out := make([]server.StoreInfo, 0, len(entries))
 	for _, e := range entries {
 		if e.Dismissed {
@@ -724,4 +713,21 @@ func (d reconcilingApps) List(ctx context.Context) ([]discovery.Instance, error)
 
 func (d reconcilingApps) Get(ctx context.Context, appID string) (discovery.Instance, error) {
 	return d.inner.Get(ctx, appID)
+}
+
+// detectRegistry runs one auto-detection pass over the distinct paths of all
+// live auto entries. It returns nil when there are none.
+func (rc *reconciler) detectRegistry(entries []ConnEntry) *autoDetection {
+	var autoPaths []string
+	seen := map[string]bool{}
+	for _, e := range entries {
+		if e.Source != SourceManual && !e.Dismissed && !seen[e.Path] {
+			seen[e.Path] = true
+			autoPaths = append(autoPaths, e.Path)
+		}
+	}
+	if len(autoPaths) == 0 {
+		return nil
+	}
+	return detectAuto(autoPaths, slog.Default().With("component", "reconciler"))
 }

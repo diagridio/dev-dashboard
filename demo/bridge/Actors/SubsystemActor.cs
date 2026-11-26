@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Bridge.Seed;
 using Dapr.Actors.Runtime;
 
@@ -40,9 +41,23 @@ public sealed class SubsystemActor(ActorHost host) : Actor(host), ISubsystemActo
         return cond.HasValue ? cond.Value : null;
     }
 
+    public async Task<SubsystemState> SetPowerLevelAsync(PowerRequest request)
+    {
+        if (request.Level is < 0 or > 100)
+        {
+            throw new ArgumentOutOfRangeException(nameof(request), "Level must be between 0 and 100.");
+        }
+        var current = await GetStateAsync() ?? new SubsystemState("nominal", DateTimeOffset.UtcNow);
+        var updated = current with { PowerLevel = request.Level };
+        await StateManager.SetStateAsync(StateKey, updated);
+        await StateManager.SaveStateAsync();
+        return updated;
+    }
+
     public async Task RegisterHeartbeatAsync()
     {
-        await RegisterReminderAsync(Scenario.HeartbeatReminder, null,
+        await RegisterReminderAsync(Scenario.HeartbeatReminder,
+            JsonSerializer.SerializeToUtf8Bytes(new { subsystem = Id.GetId() }),
             Scenario.HeartbeatInterval, Scenario.HeartbeatInterval);
     }
 

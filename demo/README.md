@@ -59,7 +59,7 @@ The dashboard opens at <http://localhost:9090>.
 | App | Language | Dapr features | Dashboard pages |
 |---|---|---|---|
 | `engineering` | Go (go-sdk 1.16) | Workflows: `DiagnosticSweep` parents with `SubsystemCheck` children, activities, a durable timer, an external event, a 1.19 data reference (large payload in `binarystore.in-memory`); service-invocation target; cron input binding | Workflows, Workflow detail, Apps, App detail, Logs |
-| `bridge` | .NET (`Dapr.*` 1.19.0) | Actors `SubsystemActor` and `DeckActor` with reminders and a `status-poll` actor timer; pub/sub publish; service invocation to `engineering` and `sickbay`; secret store read | Actors, Apps, App detail, Logs |
+| `bridge` | .NET (`Dapr.*` 1.19.0) | Actors `SubsystemActor` and `DeckActor` with reminders that carry data, a `status-poll` actor timer, a `SetPowerLevelAsync` method to invoke and per-type config (idle timeout, reentrancy); pub/sub publish; service invocation to `engineering` and `sickbay`; secret store read | Actors, Actor type, Actor detail, Apps, App detail, Logs |
 | `sickbay` | Python (`dapr[workflow,fastapi]` 1.19.0) | Declarative (`red-alert-sub`) and programmatic (`diagnostics.results`) subscriptions; state store writes; a small `CrewHealthScan` workflow; a call through the `starfleet-command` HTTPEndpoint | Subscriptions, State, HTTP Endpoints, Workflows, Apps, Logs |
 | shared (`resources/`) | — | Redis state store (actor store) and pub/sub, cron binding, local-file secret store, `binarystore.in-memory`, Configuration `diagnostics` (tracing, a feature flag), Resiliency `ship-systems`, HTTPEndpoint `starfleet-command` with a secret-backed header | Components, Configurations, Resiliency, HTTP Endpoints, Control Plane |
 
@@ -70,7 +70,10 @@ The seeded scenario:
   arrives; `sweep-006` has a data-reference payload. Each sweep has four children, such as
   `sweep-001-shields`. In `sickbay`, `medscan-001` completed.
 - **Actors:** `SubsystemActor` warp-core, shields, deflector, life-support (each with a 24 h
-  `diagnostic-heartbeat` reminder), and `DeckActor` deck-01, deck-07, deck-12.
+  `diagnostic-heartbeat` reminder that carries `{"subsystem":"<id>"}` as data), and `DeckActor`
+  deck-01, deck-07, deck-12. `SubsystemActor` has a 30 minute idle timeout and reentrancy off;
+  `DeckActor` has a 10 minute idle timeout and reentrancy on (depth 8). To try **Invoke**, call
+  `SetPowerLevelAsync` on `shields` with the body `{"level": 80}`.
 - **State:** `crewlog-0001` to `crewlog-0006`, `alert-RA-0001` to `alert-RA-0004` (delivered
   through `red-alert`), and `result-DR-0001` (delivered through `diagnostics.results`).
 

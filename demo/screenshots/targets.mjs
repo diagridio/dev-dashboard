@@ -32,6 +32,23 @@ export const TARGETS = [
     },
   },
   { name: 'actors', path: '/actors', waitFor: 'SubsystemActor' },
+  { name: 'actor-type', path: '/actors/bridge/SubsystemActor', waitFor: ['warp-core', 'life-support'] },
+  {
+    name: 'actor-detail',
+    path: '/actors/bridge/SubsystemActor/shields',
+    waitFor: ['diagnostic-heartbeat', 'status-poll'],
+  },
+  {
+    name: 'invoke-actor',
+    path: '/actors/bridge/SubsystemActor/shields',
+    waitFor: ['diagnostic-heartbeat', 'status-poll'],
+    prepare: async (page) => {
+      await page.getByRole('button', { name: 'Invoke', exact: true }).click()
+      await page.getByRole('dialog').waitFor()
+      await page.getByLabel('Method').fill('SetPowerLevelAsync')
+      await page.getByLabel('Body').fill('{"level": 80}')
+    },
+  },
   // Bridge publishes the alerts/results after sickbay seeds the crew log.
   { name: 'state', path: '/state?app=sickbay', waitFor: ['crewlog-0001', 'alert-RA-0004', 'result-DR-0001'] },
   {

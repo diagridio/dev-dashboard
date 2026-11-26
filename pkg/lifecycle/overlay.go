@@ -132,6 +132,8 @@ func (o *overlay) synthesize(e Entry) discovery.Instance {
 	in.EnabledFeatures = nil
 	in.RuntimeVersion = ""
 	in.Placement = ""
+	in.ActorRuntimeStatus = ""
+	in.ActorHostReady = false
 	appAlive := in.AppPID != 0 && o.proc != nil && o.proc.Alive(in.AppPID)
 	if _, appStopped := e.Procs[TargetApp]; appStopped || !appAlive {
 		in.AppStatus = discovery.StatusStopped

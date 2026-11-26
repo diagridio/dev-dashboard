@@ -20,7 +20,7 @@ import (
 )
 
 // apiRouter builds the JSON API surface served under /api.
-func apiRouter(v version.Info, apps discovery.Service, containerLogs func(context.Context, string) (<-chan string, error), life lifecycle.Manager, backend WorkflowBackend, stateBackend StateBackend, stores StoreRegistry, res resources.Service, newsSvc news.Service, cp controlplane.Manager, uc updatecheck.Service, bin BinaryFileReader, caps Capabilities) http.Handler {
+func apiRouter(v version.Info, apps discovery.Service, containerLogs func(context.Context, string) (<-chan string, error), life lifecycle.Manager, backend WorkflowBackend, stateBackend StateBackend, stores StoreRegistry, res resources.Service, newsSvc news.Service, cp controlplane.Manager, uc updatecheck.Service, bin BinaryFileReader, actorsSvc ActorsService, caps Capabilities) http.Handler {
 	r := chi.NewRouter()
 	r.Get("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -92,7 +92,7 @@ func apiRouter(v version.Info, apps discovery.Service, containerLogs func(contex
 		})
 	})
 	r.Mount("/apps", appsRouter(apps, containerLogs, life, bin, caps))
-	r.Mount("/actors", actorsRouter(apps))
+	r.Mount("/actors", actorsRouter(actorsSvc))
 	r.Mount("/subscriptions", subscriptionsRouter(apps))
 	if caps.Workflows {
 		r.Mount("/workflows", workflowsRouter(backend, stores))
