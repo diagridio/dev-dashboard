@@ -120,3 +120,126 @@ func TestConfigReaderTimeoutAndCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.EqualValues(t, 2, okHits.Load(), "new AppStartedAt refetches")
 }
+
+func TestParseAppConfigRequiresEntities(t *testing.T) {
+	_, err := ParseAppConfig([]byte(`{"status":"ok"}`))
+	assert.Error(t, err, "JSON without an entities key is not Dapr config")
+
+	cfg, err := ParseAppConfig([]byte(`{"entities":[]}`))
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Entities)
+}
+
+func countingServer(t *testing.T, body string) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &hits
+}
+
+func TestConfigReaderNonConfigJSONIsUnreachable(t *testing.T) {
+	srv, _ := countingServer(t, `{"status":"ok"}`)
+	r := NewConfigReader(srv.Client(), time.Minute)
+	_, err := r.Get(context.Background(), instanceFor(t, srv, "t0"))
+	assert.ErrorIs(t, err, ErrConfigUnreachable)
+}
+
+func TestConfigReaderSkipsCompose(t *testing.T) {
+	srv, hits := countingServer(t, `{"entities":["Deck"]}`)
+	r := NewConfigReader(srv.Client(), time.Minute)
+	in := instanceFor(t, srv, "t0")
+	in.Source = discovery.SourceCompose
+	_, err := r.Get(context.Background(), in)
+	assert.ErrorIs(t, err, ErrConfigUnreachable)
+	assert.Zero(t, hits.Load(), "compose AppPort is the in-container port; no request")
+}
+
+func TestConfigReaderCancelledCallerNotCached(t *testing.T) {
+	srv, hits := countingServer(t, `{"entities":["Deck"]}`)
+	r := NewConfigReader(srv.Client(), time.Minute)
+	in := instanceFor(t, srv, "t0")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := r.Get(ctx, in)
+	assert.ErrorIs(t, err, ErrConfigUnreachable)
+
+	cfg, err := r.Get(context.Background(), in)
+	require.NoError(t, err, "a cancelled caller must not cache a failure")
+	assert.Equal(t, []string{"Deck"}, cfg.Entities)
+	assert.EqualValues(t, 1, hits.Load())
+}
+
+func TestConfigReaderFailureExpires(t *testing.T) {
+	var fail atomic.Bool
+	fail.Store(true)
+	var hits atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if fail.Load() {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(`{"entities":["Deck"]}`))
+	}))
+	defer srv.Close()
+	r := NewConfigReader(srv.Client(), 50*time.Millisecond)
+	in := instanceFor(t, srv, "t0")
+
+	_, err := r.Get(context.Background(), in)
+	assert.ErrorIs(t, err, ErrConfigUnreachable)
+	_, err = r.Get(context.Background(), in)
+	assert.ErrorIs(t, err, ErrConfigUnreachable)
+	assert.EqualValues(t, 1, hits.Load(), "failure cached within failTTL")
+
+	fail.Store(false)
+	time.Sleep(80 * time.Millisecond)
+	_, err = r.Get(context.Background(), in)
+	require.NoError(t, err, "failure refetched after failTTL")
+	assert.EqualValues(t, 2, hits.Load())
+}
+
+func TestConfigReaderNoStartTimeSuccessExpires(t *testing.T) {
+	srv, hits := countingServer(t, `{"entities":["Deck"]}`)
+	r := NewConfigReader(srv.Client(), 50*time.Millisecond)
+	in := instanceFor(t, srv, "")
+
+	_, err := r.Get(context.Background(), in)
+	require.NoError(t, err)
+	_, err = r.Get(context.Background(), in)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, hits.Load(), "success cached within failTTL")
+
+	time.Sleep(80 * time.Millisecond)
+	_, err = r.Get(context.Background(), in)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, hits.Load(), "without AppStartedAt a success expires after failTTL")
+}
+
+func TestConfigReaderPrunesOldStartTimes(t *testing.T) {
+	srv, _ := countingServer(t, `{"entities":["Deck"]}`)
+	r := NewConfigReader(srv.Client(), time.Minute)
+	in := instanceFor(t, srv, "t0")
+	other := instanceFor(t, srv, "t0")
+	other.InstanceKey = "app2"
+
+	for _, started := range []string{"t0", "t1", "t2"} {
+		in.AppStartedAt = started
+		_, err := r.Get(context.Background(), in)
+		require.NoError(t, err)
+	}
+	_, err := r.Get(context.Background(), other)
+	require.NoError(t, err)
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	keys := make([]string, 0, len(r.cache))
+	for k := range r.cache {
+		keys = append(keys, k)
+	}
+	assert.ElementsMatch(t, []string{"app|t2", "app2|t0"}, keys)
+}

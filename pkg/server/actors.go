@@ -30,10 +30,15 @@ func instanceKey(in discovery.Instance) string {
 	return in.AppID
 }
 
-// pathParam returns a URL-decoded chi param. chi matches on the escaped path
-// when one exists, so an ID like "a%2Fb" arrives still escaped.
+// pathParam returns a URL-decoded chi param. chi matches on RawPath only when
+// Go kept one (an escape the default encoding wouldn't produce, like "%2F"),
+// so a param arrives still escaped only then; otherwise it is already decoded
+// and must not be decoded again.
 func pathParam(req *http.Request, name string) string {
 	v := chi.URLParam(req, name)
+	if req.URL.RawPath == "" {
+		return v
+	}
 	if d, err := url.PathUnescape(v); err == nil {
 		return d
 	}

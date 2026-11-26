@@ -56,8 +56,16 @@ type TypeConfig struct {
 }
 
 // ParseAppConfig decodes a /dapr/config body. Non-JSON bodies (such as an
-// HTML page from an app that answers every path) are rejected.
+// HTML page from an app that answers every path) and JSON without an
+// "entities" key (some other endpoint) are rejected.
 func ParseAppConfig(b []byte) (AppConfig, error) {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keys); err != nil {
+		return AppConfig{}, fmt.Errorf("parse app config: %w", err)
+	}
+	if _, ok := keys["entities"]; !ok {
+		return AppConfig{}, errors.New("parse app config: no entities key")
+	}
 	var c AppConfig
 	if err := json.Unmarshal(b, &c); err != nil {
 		return AppConfig{}, fmt.Errorf("parse app config: %w", err)
@@ -88,7 +96,7 @@ func (c AppConfig) ForType(actorType string) TypeConfig {
 type configEntry struct {
 	cfg     AppConfig
 	failed  bool
-	expires time.Time // failures only
+	expires time.Time // zero: a success that lasts until AppStartedAt changes
 }
 
 // ConfigReader fetches and caches apps' /dapr/config.
@@ -101,47 +109,62 @@ type ConfigReader struct {
 }
 
 // NewConfigReader returns a reader that caches successes until the instance's
-// AppStartedAt changes and failures for failTTL.
+// AppStartedAt changes and failures for failTTL. When AppStartedAt is unknown,
+// successes are cached for failTTL too.
 func NewConfigReader(client *http.Client, failTTL time.Duration) *ConfigReader {
 	return &ConfigReader{client: client, failTTL: failTTL, cache: map[string]configEntry{}}
 }
 
 // Get returns the app's config. gRPC apps yield ErrConfigUnsupported; any
-// other failure yields ErrConfigUnreachable.
+// other failure yields ErrConfigUnreachable. Compose apps are not read: their
+// AppPort is the in-container port, so 127.0.0.1:<AppPort> could be another app.
 func (r *ConfigReader) Get(ctx context.Context, in discovery.Instance) (AppConfig, error) {
 	if p := strings.ToLower(in.AppProtocol); p == "grpc" || p == "grpcs" {
 		return AppConfig{}, ErrConfigUnsupported
 	}
-	if in.AppPort <= 0 {
+	if in.AppPort <= 0 || in.Source == discovery.SourceCompose {
 		return AppConfig{}, ErrConfigUnreachable
 	}
 
-	key := in.InstanceKey
-	if key == "" {
-		key = in.AppID
+	prefix := in.InstanceKey
+	if prefix == "" {
+		prefix = in.AppID
 	}
-	key += "|" + in.AppStartedAt
+	prefix += "|"
+	key := prefix + in.AppStartedAt
 
 	r.mu.Lock()
 	e, ok := r.cache[key]
 	r.mu.Unlock()
-	if ok {
-		if !e.failed {
-			return e.cfg, nil
-		}
-		if time.Now().Before(e.expires) {
+	if ok && (e.expires.IsZero() || time.Now().Before(e.expires)) {
+		if e.failed {
 			return AppConfig{}, ErrConfigUnreachable
 		}
+		return e.cfg, nil
 	}
 
 	cfg, err := r.fetch(ctx, in.AppPort)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if err != nil {
-		r.cache[key] = configEntry{failed: true, expires: time.Now().Add(r.failTTL)}
+	if err != nil && ctx.Err() != nil {
+		// The caller went away; that says nothing about the app.
 		return AppConfig{}, ErrConfigUnreachable
 	}
-	r.cache[key] = configEntry{cfg: cfg}
+	entry := configEntry{cfg: cfg}
+	if err != nil {
+		entry = configEntry{failed: true, expires: time.Now().Add(r.failTTL)}
+	} else if in.AppStartedAt == "" {
+		entry.expires = time.Now().Add(r.failTTL)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for k := range r.cache {
+		if k != key && strings.HasPrefix(k, prefix) {
+			delete(r.cache, k)
+		}
+	}
+	r.cache[key] = entry
+	if err != nil {
+		return AppConfig{}, ErrConfigUnreachable
+	}
 	return cfg, nil
 }
 

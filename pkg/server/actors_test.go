@@ -93,6 +93,24 @@ func TestActorDetailRouteDecodesParams(t *testing.T) {
 	require.Contains(t, body, `"id":"a/b"`)
 }
 
+func TestActorDetailRouteDecodesOnce(t *testing.T) {
+	cases := []struct{ path, id string }{
+		// No RawPath: chi already hands back the decoded value.
+		{"/orders-1/Deck/a%2541", "a%41"},
+		{"/orders-1/Deck/x%252Fy", "x%2Fy"},
+		// RawPath set (escaped slash): chi matches the escaped path.
+		{"/orders-1/Deck/a%2Fb%20c%7C%7Cd", "a/b c||d"},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			f := &fakeActors{}
+			res, _ := get(t, actorsRouter(f), c.path)
+			require.Equal(t, http.StatusOK, res.StatusCode)
+			require.Equal(t, []string{"orders-1", "Deck", c.id}, f.gotArgs)
+		})
+	}
+}
+
 func TestInvokeRoute(t *testing.T) {
 	f := &fakeActors{invokeRes: actors.InvokeResult{Status: 200, Body: `{"ok":true}`, DurationMs: 3}}
 	h := actorsRouter(f)

@@ -16,11 +16,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type fakeSched struct {
 	runtimev1pb.UnimplementedDaprServer
 	data []byte
+	any  *anypb.Any // overrides data when set
 	err  error
 
 	mu        sync.Mutex
@@ -39,7 +42,7 @@ func (f *fakeSched) ListActorReminders(_ context.Context, req *runtimev1pb.ListA
 	mk := func(name, id string) *runtimev1pb.NamedActorReminder {
 		return &runtimev1pb.NamedActorReminder{Name: name, Reminder: &runtimev1pb.ActorReminder{
 			ActorType: "Deck", ActorId: id, DueTime: &due, Period: &period, Ttl: &ttl,
-			Data: &anypb.Any{Value: f.data},
+			Data: f.payload(),
 		}}
 	}
 	return &runtimev1pb.ListActorRemindersResponse{Reminders: []*runtimev1pb.NamedActorReminder{mk("r1", "a1"), mk("r2", "a2")}}, nil
@@ -49,7 +52,29 @@ func (f *fakeSched) ListActorTimers(_ context.Context, req *runtimev1pb.ListActo
 	f.mu.Lock()
 	f.timerReqs = append(f.timerReqs, req)
 	f.mu.Unlock()
-	return nil, f.err
+	if f.err != nil {
+		return nil, f.err
+	}
+	due, period, ttl, cb := "2s", "10s", "30m", "onTick"
+	return &runtimev1pb.ListActorTimersResponse{Timers: []*runtimev1pb.NamedActorTimer{{
+		Name: "t1",
+		Timer: &runtimev1pb.ActorTimer{
+			ActorType: "Deck", ActorId: req.GetActorId(), DueTime: &due, Period: &period, Ttl: &ttl,
+			Callback: &cb, Data: f.payload(),
+		},
+	}}}, nil
+}
+
+// payload wraps data the way daprd stores it: anypb.New(wrapperspb.Bytes(data)).
+func (f *fakeSched) payload() *anypb.Any {
+	if f.any != nil {
+		return f.any
+	}
+	a, err := anypb.New(wrapperspb.Bytes(f.data))
+	if err != nil {
+		panic(err)
+	}
+	return a
 }
 
 type testConns struct {
@@ -162,5 +187,83 @@ func TestListRemindersUnsupportedVersion(t *testing.T) {
 	_, err := ListReminders(context.Background(), &testConns{}, discovery.Instance{RuntimeVersion: "1.16.0", SidecarReachable: true}, "Deck", nil)
 	if err == nil || err.Error() != "requires Dapr 1.17+" {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestListTimersSuccess(t *testing.T) {
+	f := &fakeSched{data: []byte(`{"n":2}`)}
+	in, conns := startSched(t, f)
+
+	got, err := ListTimers(context.Background(), conns, in, "Deck", "a1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.timerReqs) != 1 || f.timerReqs[0].GetActorType() != "Deck" || f.timerReqs[0].GetActorId() != "a1" {
+		t.Fatalf("unexpected request: %+v", f.timerReqs)
+	}
+	want := Scheduled{Name: "t1", ActorID: "a1", DueTime: "2s", Period: "10s", TTL: "30m",
+		Callback: "onTick", Data: `{"n":2}`, DataEncoding: "text"}
+	if len(got) != 1 || got[0] != want {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestEncodeData(t *testing.T) {
+	str, err := anypb.New(structpb.NewStringValue("hi"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name     string
+		in       *anypb.Any
+		data     string
+		encoding string
+	}{
+		{"nil", nil, "", "text"},
+		{"bytes wrapper", mustAny(t, wrapperspb.Bytes([]byte(`{"a":1}`))), `{"a":1}`, "text"},
+		{"binary bytes wrapper", mustAny(t, wrapperspb.Bytes([]byte{0xff, 0xfe})), "//4=", "base64"},
+		{"other message", str, `"hi"`, "text"},
+		{"unknown type falls back to raw value", &anypb.Any{TypeUrl: "type.googleapis.com/x.Unknown", Value: []byte("raw")}, "raw", "text"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d, e := encodeData(c.in)
+			if d != c.data || e != c.encoding {
+				t.Fatalf("got (%q, %q), want (%q, %q)", d, e, c.data, c.encoding)
+			}
+		})
+	}
+}
+
+func mustAny(t *testing.T, m *wrapperspb.BytesValue) *anypb.Any {
+	t.Helper()
+	a, err := anypb.New(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+func TestListUnimplementedMapsToVersionReason(t *testing.T) {
+	f := &fakeSched{err: status.Error(codes.Unimplemented, "unknown method")}
+	in, conns := startSched(t, f)
+
+	_, err := ListReminders(context.Background(), conns, in, "Deck", nil)
+	if !errors.Is(err, ErrUnsupportedVersion) || err.Error() != "requires Dapr 1.17+" {
+		t.Fatalf("reminders: got %v", err)
+	}
+	_, err = ListTimers(context.Background(), conns, in, "Deck", "a1")
+	if !errors.Is(err, ErrUnsupportedVersion) || err.Error() != "requires Dapr 1.19+" {
+		t.Fatalf("timers: got %v", err)
+	}
+}
+
+func TestListDeadlineExceededMapsToUnreachable(t *testing.T) {
+	f := &fakeSched{err: status.Error(codes.DeadlineExceeded, "too slow")}
+	in, conns := startSched(t, f)
+
+	_, err := ListReminders(context.Background(), conns, in, "Deck", nil)
+	if !errors.Is(err, ErrSidecarUnreachable) {
+		t.Fatalf("got %v, want ErrSidecarUnreachable", err)
 	}
 }

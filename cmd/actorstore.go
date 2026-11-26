@@ -32,9 +32,13 @@ func (rc *reconciler) ActorStoreFor(in discovery.Instance) (string, string, bool
 	var found, underWon bool
 
 	if rc.registry == nil {
-		// Container posture: only the elected store is addressable.
+		// Container posture: only the elected store is addressable, and only
+		// when it is flagged as the actor state store.
 		if active := rc.activeComponent(); active != nil && loaded[active.Name] {
-			return entryID(SourceAuto, normPath(active.Path)), active.Name, true
+			if active.Metadata["actorStateStore"] == "true" {
+				return entryID(SourceAuto, normPath(active.Path)), active.Name, true
+			}
+			return "", active.Name, false
 		}
 	} else {
 		entries := rc.registry.List()

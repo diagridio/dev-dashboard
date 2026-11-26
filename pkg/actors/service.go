@@ -66,6 +66,7 @@ type ActorDetail struct {
 	ID                   string       `json:"id"`
 	State                []state.Item `json:"state"`
 	StateUnavailable     *Unavailable `json:"stateUnavailable,omitempty"`
+	StateTruncated       bool         `json:"stateTruncated"`
 	Reminders            []Scheduled  `json:"reminders"`
 	RemindersUnavailable *Unavailable `json:"remindersUnavailable,omitempty"`
 	Timers               []Scheduled  `json:"timers"`
@@ -336,12 +337,13 @@ func (s *Service) Actor(ctx context.Context, key, actorType, actorID string) (Ac
 			return
 		}
 		d.StoreID = id
-		items, _, err := scanState(ctx, svc, in.AppID, actorType+"||"+actorID+"||")
+		items, truncated, err := scanState(ctx, svc, in.AppID, actorType+"||"+actorID+"||")
 		if err != nil {
 			d.StateUnavailable = &Unavailable{Reason: err.Error()}
 			return
 		}
 		d.State = StateKeysFor(items, actorType, actorID)
+		d.StateTruncated = truncated
 	}()
 	if !IsInternal(actorType) {
 		wg.Add(2)

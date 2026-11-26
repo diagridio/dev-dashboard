@@ -375,3 +375,32 @@ func TestServiceInvokeValidation(t *testing.T) {
 
 func isInvalid(err error) bool  { return errors.Is(err, ErrInvalidRequest) }
 func isNotFound(err error) bool { return errors.Is(err, discovery.ErrNotFound) }
+
+func TestActorDetailStateTruncated(t *testing.T) {
+	store := &fakeStore{endless: true}
+	svc := newTestService(t, &svcSched{}, store, nil, func(b discovery.Instance) []discovery.Instance {
+		b.Actors = []discovery.ActorType{{Type: "Deck", Count: 1}}
+		return []discovery.Instance{b}
+	})
+	d, err := svc.Actor(context.Background(), "orders", "Deck", "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.StateTruncated {
+		t.Fatal("want stateTruncated")
+	}
+	if !strings.Contains(mustJSON(t, d), `"stateTruncated":true`) {
+		t.Fatal("json missing stateTruncated")
+	}
+
+	d, err = newTestService(t, &svcSched{}, &fakeStore{}, nil, func(b discovery.Instance) []discovery.Instance {
+		b.Actors = []discovery.ActorType{{Type: "Deck", Count: 1}}
+		return []discovery.Instance{b}
+	}).Actor(context.Background(), "orders", "Deck", "d1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.StateTruncated || !strings.Contains(mustJSON(t, d), `"stateTruncated":false`) {
+		t.Fatalf("want stateTruncated false: %s", mustJSON(t, d))
+	}
+}

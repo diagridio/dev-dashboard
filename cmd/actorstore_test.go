@@ -102,7 +102,8 @@ func TestActorStoreForNotConnected(t *testing.T) {
 func TestActorStoreForContainerPosture(t *testing.T) {
 	dir := t.TempDir()
 	rc := newActorStoreRC(t, nil)
-	active := statestore.Component{Name: "wfstore", Type: "state.sqlite", Path: filepath.Join(dir, "statestore.yaml")}
+	active := statestore.Component{Name: "wfstore", Type: "state.sqlite", Path: filepath.Join(dir, "statestore.yaml"),
+		Metadata: map[string]string{"actorStateStore": "true"}}
 	rc.mu.Lock()
 	rc.electedReg = newStoreRegistry([]statestore.Component{active}, nil, nil)
 	rc.mu.Unlock()
@@ -116,6 +117,16 @@ func TestActorStoreForContainerPosture(t *testing.T) {
 	require.False(t, ok)
 	require.Empty(t, id)
 	require.Equal(t, "other", name)
+
+	// The elected store is only the actor store when it is flagged as one.
+	unflagged := statestore.Component{Name: "wfstore", Type: "state.sqlite", Path: filepath.Join(dir, "statestore.yaml")}
+	rc.mu.Lock()
+	rc.electedReg = newStoreRegistry([]statestore.Component{unflagged}, nil, nil)
+	rc.mu.Unlock()
+	id, name, ok = rc.ActorStoreFor(discovery.Instance{Components: stateComps("a", "wfstore")})
+	require.False(t, ok)
+	require.Empty(t, id)
+	require.Equal(t, "wfstore", name)
 }
 
 func TestActorStoreForNoneFlagged(t *testing.T) {
