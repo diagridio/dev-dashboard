@@ -525,11 +525,32 @@ Expand a row to see the full value with its size, version and encoding. **+ New 
 
 ## Actors
 
-The **Actors** page lists the actor types across all apps: the host app, the number of active actors, the idle timeout, reminders and placement status.
+The **Actors** page lists the actor types across all apps: the host app, the number of active actors, the idle timeout, reentrancy, reminders and placement status. The idle timeout and reentrancy come from the app's own actor config.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/actors-dark.png">
   <img alt="Dev Dashboard - Actors" src="docs/images/actors-light.png">
+</picture>
+
+Select a type to see its actors. Dapr doesn't list active actor IDs, so the list shows the actors that have state or reminders. Use **Go** to open any actor ID.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/actor-type-dark.png">
+  <img alt="Dev Dashboard - Actor type" src="docs/images/actor-type-light.png">
+</picture>
+
+The actor page shows its state, its reminders (with **Delete**) and its timers (Dapr 1.19 and later).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/actor-detail-dark.png">
+  <img alt="Dev Dashboard - Actor detail" src="docs/images/actor-detail-light.png">
+</picture>
+
+**Invoke** opens a dialog that calls a method on an actor. Enter the actor ID and method, pick an HTTP verb and optionally set a JSON body. The call goes through the app's sidecar and runs real app code on the actor host, so it can change state. For .NET actors, the body is the method's single parameter.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/invoke-actor-dark.png">
+  <img alt="Dev Dashboard - Invoke an actor" src="docs/images/invoke-actor-light.png">
 </picture>
 
 ## Subscriptions
