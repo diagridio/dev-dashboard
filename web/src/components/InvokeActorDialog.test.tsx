@@ -77,6 +77,7 @@ describe('InvokeActorDialog', () => {
     await userEvent.click(screen.getByRole('button', { name: /^invoke$/i }))
     expect(await screen.findByText('500')).toBeInTheDocument()
     expect(screen.getByText('boom')).toBeInTheDocument()
+    expect(recentIds('order', 'Cart')).toEqual([])
   })
 
   it('shows a non-JSON body as is', async () => {

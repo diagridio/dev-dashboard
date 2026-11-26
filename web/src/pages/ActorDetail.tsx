@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { InvokeActorDialog } from '../components/InvokeActorDialog'
 import { useActorDetail, useDeleteReminder } from '../hooks/useActors'
 import { useStateRecord } from '../hooks/useStateRecords'
 import { actorStateKey, isInternalActorType } from '../lib/actorFormat'
-import { actorPath } from '../lib/actorRecents'
+import { actorPath, rememberId } from '../lib/actorRecents'
 import { getCapabilities } from '../lib/capabilities'
+import { formatBytes } from '../lib/formatBytes'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
 import type { Scheduled } from '../types/actors'
 import type { StateItem } from '../types/state'
@@ -21,6 +22,12 @@ export function ActorDetail() {
 
   const { data, isLoading, error } = useActorDetail(appKey, actorType, actorId)
   const del = useDeleteReminder(appKey, actorType, actorId)
+  const loaded = data !== undefined
+
+  // An opened actor counts as recent, alongside invoked ones.
+  useEffect(() => {
+    if (loaded) rememberId(appKey, actorType, actorId)
+  }, [loaded, appKey, actorType, actorId])
 
   const header = (
     <div className="phead">
@@ -82,29 +89,34 @@ export function ActorDetail() {
           )}
         </p>
       ) : (
-        <div className="card">
-          <div className="tablewrap">
-            <table className="t">
-              <thead>
-                <tr>
-                  <th>Key</th>
-                  <th>Preview</th>
-                  <th>Size</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.state.length === 0 && (
+        <>
+          {data.stateTruncated && (
+            <p className="hint">Only part of the state store was scanned; this actor may have more keys.</p>
+          )}
+          <div className="card">
+            <div className="tablewrap">
+              <table className="t">
+                <thead>
                   <tr>
-                    <td colSpan={3} className="muted">No state</td>
+                    <th>Key</th>
+                    <th>Preview</th>
+                    <th>Size</th>
                   </tr>
-                )}
-                {data.state.map((item) => (
-                  <StateRow key={item.key} item={item} type={actorType} id={actorId} store={data.storeId} />
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.state.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="muted">No state</td>
+                    </tr>
+                  )}
+                  {data.state.map((item) => (
+                    <StateRow key={item.key} item={item} type={actorType} id={actorId} store={data.storeId} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       <h2 className="sec-title">Reminders</h2>
@@ -123,7 +135,7 @@ export function ActorDetail() {
       {data.timersUnavailable ? (
         <p className="muted">{data.timersUnavailable.reason}</p>
       ) : (
-        <ScheduledTable rows={data.timers} empty="No timers" />
+        <ScheduledTable rows={data.timers} empty="No timers" showCallback />
       )}
 
       <InvokeActorDialog
@@ -158,7 +170,7 @@ function StateRow({ item, type, id, store }: { item: StateItem; type: string; id
           </button>
         </td>
         <td className="mono">{item.preview}</td>
-        <td className="mono tabnum">{item.size}</td>
+        <td className="mono tabnum">{formatBytes(item.size)}</td>
       </tr>
       {open && (
         <tr>
@@ -177,8 +189,18 @@ function StateRow({ item, type, id, store }: { item: StateItem; type: string; id
   )
 }
 
-function ScheduledTable({ rows, empty, onDelete }: { rows: Scheduled[]; empty: string; onDelete?: (name: string) => void }) {
-  const cols = onDelete ? 6 : 5
+function ScheduledTable({
+  rows,
+  empty,
+  onDelete,
+  showCallback = false,
+}: {
+  rows: Scheduled[]
+  empty: string
+  onDelete?: (name: string) => void
+  showCallback?: boolean
+}) {
+  const cols = 5 + (showCallback ? 1 : 0) + (onDelete ? 1 : 0)
   return (
     <div className="card">
       <div className="tablewrap">
@@ -189,6 +211,7 @@ function ScheduledTable({ rows, empty, onDelete }: { rows: Scheduled[]; empty: s
               <th>Due time</th>
               <th>Period</th>
               <th>TTL</th>
+              {showCallback && <th>Callback</th>}
               <th>Data</th>
               {onDelete && <th />}
             </tr>
@@ -205,6 +228,7 @@ function ScheduledTable({ rows, empty, onDelete }: { rows: Scheduled[]; empty: s
                 <td className="mono tabnum">{r.dueTime || '—'}</td>
                 <td className="mono tabnum">{r.period || '—'}</td>
                 <td className="mono tabnum">{r.ttl || '—'}</td>
+                {showCallback && <td className="mono">{r.callback || '—'}</td>}
                 <td className="mono">
                   {r.data ? r.data : '—'}
                   {r.data && r.dataEncoding === 'base64' && <span className="chip">base64</span>}

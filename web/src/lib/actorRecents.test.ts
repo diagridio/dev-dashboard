@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { recentIds, recentMethods, rememberInvoke, actorPath } from './actorRecents'
+import { recentIds, recentMethods, rememberInvoke, rememberId, actorPath } from './actorRecents'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -50,6 +50,15 @@ describe('actorRecents', () => {
     expect(() => rememberInvoke('a', 'T', 'x', 'm')).not.toThrow()
     expect(recentIds('a', 'T')).toEqual([])
     Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: ls })
+  })
+
+  it('rememberId adds an opened ID to the recent IDs without a method', () => {
+    rememberInvoke('a', 'T', 'x', 'm')
+    rememberId('a', 'T', 'y')
+    expect(recentIds('a', 'T')).toEqual(['y', 'x'])
+    expect(recentMethods('a', 'T')).toEqual(['m'])
+    rememberId('a', 'T', '')
+    expect(recentIds('a', 'T')).toEqual(['y', 'x'])
   })
 
   it('actorPath encodes each segment', () => {

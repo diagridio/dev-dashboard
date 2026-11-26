@@ -8,6 +8,7 @@ import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { ActorDetail } from './ActorDetail'
+import { recentIds } from '../lib/actorRecents'
 
 function renderAt(entry = '/actors/a/T/x1') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: 0, staleTime: 0 } } })
@@ -41,6 +42,7 @@ const base = {
   ],
   reminders: [sched],
   timers: [],
+  stateTruncated: false,
 }
 
 function serveInternal() {
@@ -183,5 +185,45 @@ describe('ActorDetail', () => {
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Invoke' }))
     await screen.findByText('ok')
     await waitFor(() => expect(hits()).toBeGreaterThan(before))
+  })
+
+  it('says when the state scan was truncated', async () => {
+    serve({ stateTruncated: true })
+    renderAt()
+    expect(
+      await screen.findByText('Only part of the state store was scanned; this actor may have more keys.'),
+    ).toBeInTheDocument()
+  })
+
+  it('shows no truncation note when the whole store was scanned', async () => {
+    serve()
+    renderAt()
+    await screen.findByRole('button', { name: 'count' })
+    expect(screen.queryByText(/Only part of the state store was scanned/)).not.toBeInTheDocument()
+  })
+
+  it('shows the timer callback column', async () => {
+    serve({ reminders: [], timers: [{ ...sched, name: 't1', callback: 'onTick' }] })
+    renderAt()
+    const row = (await screen.findByText('t1')).closest('tr') as HTMLElement
+    expect(within(row).getByText('onTick')).toBeInTheDocument()
+    const timersTable = row.closest('table') as HTMLElement
+    expect(within(timersTable).getByRole('columnheader', { name: 'Callback' })).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader', { name: 'Callback' })).toHaveLength(1)
+  })
+
+  it('formats state size in readable units', async () => {
+    serve({ state: [{ ...base.state[0], size: 2048 }] })
+    renderAt()
+    const row = (await screen.findByRole('button', { name: 'count' })).closest('tr') as HTMLElement
+    expect(row).toHaveTextContent('2.0 KiB')
+  })
+
+  it('remembers an opened actor ID as recent', async () => {
+    localStorage.clear()
+    serve()
+    renderAt()
+    await screen.findByRole('heading', { name: 'x1' })
+    await waitFor(() => expect(recentIds('a', 'T')).toEqual(['x1']))
   })
 })

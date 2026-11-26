@@ -22,7 +22,7 @@ function push(k: string, value: string): void {
   safeSet(k, JSON.stringify(next))
 }
 
-/** Recently invoked actor IDs for an app and type, newest first (max 10). */
+/** Recently invoked or opened actor IDs for an app and type, newest first (max 10). */
 export function recentIds(appKey: string, type: string): string[] {
   return read(key('ids', appKey, type))
 }
@@ -35,6 +35,11 @@ export function recentMethods(appKey: string, type: string): string[] {
 export function rememberInvoke(appKey: string, type: string, id: string, method: string): void {
   push(key('ids', appKey, type), id)
   push(key('methods', appKey, type), method)
+}
+
+/** Records an actor ID the user opened; it joins the recently invoked IDs. */
+export function rememberId(appKey: string, type: string, id: string): void {
+  push(key('ids', appKey, type), id)
 }
 
 /** SPA route for an actor type or instance; each segment is URI-encoded. */

@@ -64,6 +64,7 @@ export interface ActorDetail {
   id: string
   state: StateItem[]
   stateUnavailable?: Unavailable
+  stateTruncated: boolean
   reminders: Scheduled[]
   remindersUnavailable?: Unavailable
   timers: Scheduled[]

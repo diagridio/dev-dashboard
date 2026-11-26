@@ -90,6 +90,7 @@ export function ActorType() {
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '12px 0' }}>
         <form onSubmit={submitGoTo} style={{ display: 'flex', gap: 8 }}>
           <input
+            className="inp"
             aria-label="Go to actor ID"
             placeholder="Go to actor ID"
             value={goTo}

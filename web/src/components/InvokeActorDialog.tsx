@@ -75,7 +75,11 @@ export function InvokeActorDialog({ open, onClose, appKey, appId, actorType, act
     if (!ok) return
     invoke.mutate(
       { id: trimmedId, method: trimmedMethod, verb, body },
-      { onSuccess: () => rememberInvoke(appKey, actorType, trimmedId, trimmedMethod) },
+      {
+        onSuccess: (res) => {
+          if (res.status >= 200 && res.status < 300) rememberInvoke(appKey, actorType, trimmedId, trimmedMethod)
+        },
+      },
     )
   }
 

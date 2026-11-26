@@ -62,7 +62,9 @@ describe('ActorType', () => {
   it('Go to actor ID round-trips an ID with a slash', async () => {
     serve()
     const router = renderAt()
-    await userEvent.type(await screen.findByLabelText('Go to actor ID'), 'x/y{Enter}')
+    const input = await screen.findByLabelText('Go to actor ID')
+    expect(input).toHaveClass('inp')
+    await userEvent.type(input, 'x/y{Enter}')
     expect(await screen.findByText('detail:x/y')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/actors/a/T/x%2Fy')
   })
