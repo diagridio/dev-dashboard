@@ -1,17 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchJSON } from '../lib/api'
-import { useRefreshInterval, refetchMs } from '../lib/refresh'
-import type { Actor, Subscription, ResourceKind, ResourceSummary, ResourceDetail } from '../types/resources'
 
-export function useActors(appId?: string) {
-  const ctx = useRefreshInterval()
-  const qs = appId ? `?appId=${encodeURIComponent(appId)}` : ''
-  return useQuery<Actor[]>({
-    queryKey: ['actors', appId],
-    queryFn: () => fetchJSON<Actor[]>(`/actors${qs}`),
-    refetchInterval: refetchMs(ctx),
-  })
-}
+export { useActors } from './useActors'
+import { useRefreshInterval, refetchMs } from '../lib/refresh'
+import type { Subscription, ResourceKind, ResourceSummary, ResourceDetail } from '../types/resources'
+
+export { useActors } from './useActors'
 
 export function useSubscriptions(appId?: string) {
   const ctx = useRefreshInterval()

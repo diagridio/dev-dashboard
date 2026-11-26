@@ -1,13 +1,7 @@
+import type { TypeRow } from './actors'
 import type { Policies, Targets } from './resiliency'
 
-export interface Actor {
-  appId: string
-  /** routing identity: container name for compose apps, appId otherwise */
-  instanceKey?: string
-  type: string
-  count: number
-  placement?: string
-}
+export type Actor = TypeRow
 
 export interface SubRule {
   match?: string
