@@ -7,6 +7,7 @@ import { Workflows } from './pages/Workflows'
 import { WorkflowDetail } from './pages/WorkflowDetail'
 import { State } from './pages/State'
 import { Actors } from './pages/Actors'
+import { ActorType } from './pages/ActorType'
 import { Subscriptions } from './pages/Subscriptions'
 import { ResourceList } from './pages/ResourceList'
 import { ComponentBuilder } from './pages/component-builder/ComponentBuilder'
@@ -30,6 +31,7 @@ const gatedChildren: RouteObject[] = [
     : []),
   ...(caps.state ? [{ path: 'state', element: <State />, handle: { rumView: 'State' } }] : []),
   { path: 'actors', element: <Actors />, handle: { rumView: 'Actors' } },
+  { path: 'actors/:appId/:actorType', element: <ActorType />, handle: { rumView: 'ActorType' } },
   { path: 'subscriptions', element: <Subscriptions />, handle: { rumView: 'Subscriptions' } },
   { path: 'components/new', element: <ComponentBuilder />, handle: { rumView: 'ComponentBuilder' } },
   { path: 'components', element: <ResourceList kind="component" />, handle: { rumView: 'Components' } },

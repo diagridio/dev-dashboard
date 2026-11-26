@@ -37,7 +37,7 @@ describe('Actors', () => {
     server.use(
       http.get('/api/actors', () =>
         HttpResponse.json([
-          { appId: 'order', type: 'OrderActor', count: 3, placement: 'localhost:50005' },
+          { appId: 'order', instanceKey: 'order', type: 'OrderActor', count: 3, placement: 'placement: connected', hostReady: true },
         ]),
       ),
     )
@@ -57,7 +57,7 @@ describe('Actors', () => {
     server.use(
       http.get('/api/actors', () =>
         HttpResponse.json([
-          { appId: 'order', type: 'dapr.internal.default.order.workflow', count: 5 },
+          { appId: 'order', instanceKey: 'order', type: 'dapr.internal.default.order.workflow', count: 5, internal: true },
         ]),
       ),
     )
@@ -118,5 +118,67 @@ describe('Actors', () => {
     // Container names shown to tell the rows apart.
     expect(screen.getByText('(daprmq-host-1)')).toBeInTheDocument()
     expect(screen.getByText('(daprmq-host-2)')).toBeInTheDocument()
+  })
+
+  const row = (o: Record<string, unknown>) => ({
+    appId: 'a', instanceKey: 'a', type: 'T', count: 1, internal: false,
+    hostReady: true, placement: 'placement: connected', ...o,
+  })
+
+  it('placement stat is green, amber or red with not-ready hosts named', async () => {
+    const cases: [unknown[], string, string][] = [
+      [[row({}), row({ appId: 'b', instanceKey: 'b' })], 'ok', 'All hosts'],
+      [[row({}), row({ appId: 'b', instanceKey: 'b', hostReady: false })], 'warn', 'Not ready: b'],
+      [[row({ hostReady: false }), row({ appId: 'b', instanceKey: 'b', placement: 'placement: disconnected' })], 'bad', 'Not ready: a, b'],
+    ]
+    for (const [rows, led, title] of cases) {
+      server.use(http.get('/api/actors', () => HttpResponse.json(rows)))
+      const { unmount } = renderAt()
+      const stat = (await screen.findByText('Placement connected')).closest('.stat') as HTMLElement
+      expect(stat.querySelector('.led')).toHaveClass(led)
+      expect(stat.getAttribute('title')).toContain(title)
+      unmount()
+    }
+  })
+
+  it('shows config, reminders and unavailable reasons', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([
+          row({ type: 'A', config: { idleTimeout: '5m', idleTimeoutDefault: false, reentrancy: { enabled: false } }, reminders: 4 }),
+          row({ type: 'B', config: { idleTimeout: '60m', idleTimeoutDefault: true, reentrancy: { enabled: true, maxStackDepth: 8 } },
+            remindersUnavailable: { reason: 'requires Dapr 1.17+' } }),
+          row({ type: 'C', configUnavailable: { reason: 'gRPC app: no /dapr/config' } }),
+          row({ type: 'D', runtimeStatus: 'DISABLED' }),
+        ]),
+      ),
+    )
+    renderAt()
+    const a = within((await screen.findByRole('link', { name: 'A' })).closest('tr') as HTMLElement)
+    expect(a.getByText('5m')).toBeInTheDocument()
+    expect(a.getByText('off')).toBeInTheDocument()
+    expect(a.getByText('4')).toBeInTheDocument()
+    expect(a.getByRole('link', { name: 'A' })).toHaveAttribute('href', '/actors/a/A')
+    const b = within(screen.getByRole('link', { name: 'B' }).closest('tr') as HTMLElement)
+    expect(b.getByText('60m (default)')).toBeInTheDocument()
+    expect(b.getByText('on (depth 8)')).toBeInTheDocument()
+    expect(b.getAllByText('—').some((e) => e.getAttribute('title') === 'requires Dapr 1.17+')).toBe(true)
+    const c = within(screen.getByRole('link', { name: 'C' }).closest('tr') as HTMLElement)
+    expect(c.getAllByText('—').some((e) => e.getAttribute('title') === 'gRPC app: no /dapr/config')).toBe(true)
+    const d = within(screen.getByRole('link', { name: 'D' }).closest('tr') as HTMLElement)
+    expect(d.getByText('actors disabled')).toBeInTheDocument()
+  })
+
+  it('internal rows have no Invoke button', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([row({ type: 'dapr.internal.x.workflow', internal: true }), row({ type: 'Plain' })]),
+      ),
+    )
+    renderAt()
+    const int = within((await screen.findByRole('link', { name: /dapr\.internal/ })).closest('tr') as HTMLElement)
+    expect(int.queryByRole('button', { name: 'Invoke' })).not.toBeInTheDocument()
+    const plain = within(screen.getByRole('link', { name: 'Plain' }).closest('tr') as HTMLElement)
+    expect(plain.getByRole('button', { name: 'Invoke' })).toBeInTheDocument()
   })
 })
