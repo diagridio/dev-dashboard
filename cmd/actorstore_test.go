@@ -117,3 +117,20 @@ func TestActorStoreForContainerPosture(t *testing.T) {
 	require.Empty(t, id)
 	require.Equal(t, "other", name)
 }
+
+func TestActorStoreForNoneFlagged(t *testing.T) {
+	reg := LoadRegistry(t.TempDir())
+	require.NoError(t, reg.Add(ConnEntry{Name: "b", Type: "state.redis"}))
+	require.NoError(t, reg.Add(ConnEntry{Name: "a", Type: "state.redis"}))
+	rc := newActorStoreRC(t, reg)
+
+	id, name, ok := rc.ActorStoreFor(discovery.Instance{Components: stateComps("a", "b")})
+	require.False(t, ok)
+	require.Empty(t, id)
+	require.Equal(t, "a", name)
+
+	// A single registered but unflagged store is not an actor store either.
+	_, name, ok = rc.ActorStoreFor(discovery.Instance{Components: stateComps("a")})
+	require.False(t, ok)
+	require.Equal(t, "a", name)
+}

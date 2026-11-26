@@ -31,7 +31,7 @@ func splitActorKey(logical string) (typ, id string, ok bool) {
 func IDsFromState(items []state.Item, actorType string) map[string]int {
 	out := map[string]int{}
 	for _, it := range items {
-		if typ, id, ok := splitActorKey(it.LogicalKey); ok && typ == actorType {
+		if typ, id, ok := splitActorKey(it.LogicalKey); ok && typ == actorType && id != "" {
 			out[id]++
 		}
 	}
@@ -61,11 +61,17 @@ func MergeIDs(fromState map[string]int, reminders []Scheduled) []ActorID {
 		return a
 	}
 	for id, n := range fromState {
+		if id == "" {
+			continue
+		}
 		a := get(id)
 		a.StateKeys = n
 		a.Sources = append(a.Sources, "state")
 	}
 	for _, r := range reminders {
+		if r.ActorID == "" {
+			continue
+		}
 		a := get(r.ActorID)
 		if a.Reminders == 0 {
 			a.Sources = append(a.Sources, "reminders")

@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"log/slog"
 	"sort"
 	"strings"
 
@@ -13,8 +12,10 @@ import (
 // component name.
 //
 // ok=false with a non-empty name means the app loads a state component the
-// dashboard has no connection for. Both empty means the app loads no state
-// component at all.
+// dashboard has no connection for (or none flagged actorStateStore). The
+// reported name is a best guess: sidecar metadata does not carry the
+// actorStateStore flag. Both empty means the app loads no state component the
+// dashboard can identify.
 func (rc *reconciler) ActorStoreFor(in discovery.Instance) (string, string, bool) {
 	loaded := map[string]bool{}
 	for _, c := range in.Components {
@@ -37,24 +38,13 @@ func (rc *reconciler) ActorStoreFor(in discovery.Instance) (string, string, bool
 		}
 	} else {
 		entries := rc.registry.List()
-		var autoPaths []string
-		seen := map[string]bool{}
-		for _, e := range entries {
-			if e.Source != SourceManual && !e.Dismissed && !seen[e.Path] {
-				seen[e.Path] = true
-				autoPaths = append(autoPaths, e.Path)
-			}
-		}
-		var det *autoDetection
-		if len(autoPaths) > 0 {
-			det = detectAuto(autoPaths, slog.Default().With("component", "reconciler"))
-		}
+		det := rc.detectRegistry(entries)
 
 		type candidate struct {
 			id, name string
 			under    bool
 		}
-		var actor, anyLoaded []candidate
+		var actor []candidate
 		for _, e := range entries {
 			if e.Dismissed || !loaded[e.Name] {
 				continue
@@ -62,18 +52,12 @@ func (rc *reconciler) ActorStoreFor(in discovery.Instance) (string, string, bool
 			connected[e.Name] = true
 			comp, _ := rc.componentForEntry(e, det)
 			c := candidate{id: e.ID, name: e.Name, under: pathUnder(comp.Path, in.ResourcePaths)}
-			anyLoaded = append(anyLoaded, c)
 			if comp.Metadata["actorStateStore"] == "true" {
 				actor = append(actor, c)
 			}
 		}
-		pool := actor
-		if len(pool) == 0 && len(anyLoaded) == 1 {
-			// No store is flagged as the actor store; a single loaded match is unambiguous.
-			pool = anyLoaded
-		}
 		// Same-named stores: the one under the app's resource paths wins.
-		for _, c := range pool {
+		for _, c := range actor {
 			if !found || (c.under && !underWon) {
 				id, name, found, underWon = c.id, c.name, true, c.under
 			}
@@ -95,5 +79,11 @@ func (rc *reconciler) ActorStoreFor(in discovery.Instance) (string, string, bool
 	if len(missing) > 0 {
 		return "", missing[0], false
 	}
-	return "", "", false
+	// Every loaded name is registered but none is flagged as the actor store.
+	names := make([]string, 0, len(loaded))
+	for n := range loaded {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	return "", names[0], false
 }

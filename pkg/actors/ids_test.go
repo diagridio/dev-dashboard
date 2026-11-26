@@ -18,7 +18,7 @@ func items(keys ...string) []state.Item {
 }
 
 func TestIDsFromState(t *testing.T) {
-	got := IDsFromState(items("Deck||d1||a", "Deck||d1||b", "Deck||d2||a", "DeckX||d9||a", "XDeck||d8||a"), "Deck")
+	got := IDsFromState(items("Deck||d1||a", "Deck||d1||b", "Deck||d2||a", "DeckX||d9||a", "XDeck||d8||a", "Deck||||k"), "Deck")
 	require.Equal(t, map[string]int{"d1": 2, "d2": 1}, got)
 }
 
@@ -29,7 +29,7 @@ func TestStateKeysFor(t *testing.T) {
 }
 
 func TestMergeIDs(t *testing.T) {
-	got := MergeIDs(map[string]int{"d1": 2}, []Scheduled{{ActorID: "d1"}, {ActorID: "d3"}})
+	got := MergeIDs(map[string]int{"d1": 2, "": 1}, []Scheduled{{ActorID: "d1"}, {ActorID: "d3"}, {ActorID: ""}})
 	require.Equal(t, []ActorID{
 		{ID: "d1", StateKeys: 2, Reminders: 1, Sources: []string{"state", "reminders"}},
 		{ID: "d3", StateKeys: 0, Reminders: 1, Sources: []string{"reminders"}},
