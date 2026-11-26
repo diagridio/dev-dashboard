@@ -89,6 +89,8 @@ func (c AppConfig) ForType(actorType string) TypeConfig {
 	if tc.IdleTimeout == "" {
 		tc.IdleTimeout = DefaultIdleTimeout
 		tc.IdleTimeoutDefault = true
+	} else {
+		tc.IdleTimeout = compactDuration(tc.IdleTimeout)
 	}
 	return tc
 }

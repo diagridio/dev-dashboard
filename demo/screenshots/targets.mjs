@@ -45,6 +45,8 @@ export const TARGETS = [
     prepare: async (page) => {
       await page.getByRole('button', { name: 'Invoke', exact: true }).click()
       await page.getByRole('dialog').waitFor()
+      await page.getByLabel('Method').fill('SetPowerLevelAsync')
+      await page.getByLabel('Body').fill('{"level": 80}')
     },
   },
   // Bridge publishes the alerts/results after sickbay seeds the crew log.

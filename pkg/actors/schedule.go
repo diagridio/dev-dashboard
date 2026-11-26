@@ -1,8 +1,10 @@
 package actors
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -62,9 +64,9 @@ func ListReminders(ctx context.Context, conns ConnProvider, in discovery.Instanc
 		s := Scheduled{
 			Name:    nr.GetName(),
 			ActorID: r.GetActorId(),
-			DueTime: r.GetDueTime(),
-			Period:  r.GetPeriod(),
-			TTL:     r.GetTtl(),
+			DueTime: compactDuration(r.GetDueTime()),
+			Period:  compactDuration(r.GetPeriod()),
+			TTL:     compactDuration(r.GetTtl()),
 		}
 		s.Data, s.DataEncoding = encodeData(r.GetData())
 		out = append(out, s)
@@ -89,9 +91,9 @@ func ListTimers(ctx context.Context, conns ConnProvider, in discovery.Instance, 
 		s := Scheduled{
 			Name:     nt.GetName(),
 			ActorID:  t.GetActorId(),
-			DueTime:  t.GetDueTime(),
-			Period:   t.GetPeriod(),
-			TTL:      t.GetTtl(),
+			DueTime:  compactDuration(t.GetDueTime()),
+			Period:   compactDuration(t.GetPeriod()),
+			TTL:      compactDuration(t.GetTtl()),
 			Callback: t.GetCallback(),
 		}
 		s.Data, s.DataEncoding = encodeData(t.GetData())
@@ -152,7 +154,29 @@ func encodeData(a *anypb.Any) (string, string) {
 		}
 	}
 	if utf8.Valid(b) {
+		if dec, ok := decodeBase64JSON(b); ok {
+			return dec, "text"
+		}
 		return string(b), "text"
 	}
 	return base64.StdEncoding.EncodeToString(b), "base64"
+}
+
+// decodeBase64JSON handles data the .NET SDK sends as a JSON string holding
+// base64 of a JSON document: it returns the decoded document when b is such a
+// string and the decoded bytes are valid UTF-8 JSON starting with '{' or '['.
+func decodeBase64JSON(b []byte) (string, bool) {
+	var str string
+	if json.Unmarshal(b, &str) != nil {
+		return "", false
+	}
+	dec, err := base64.StdEncoding.DecodeString(str)
+	if err != nil || !utf8.Valid(dec) || !json.Valid(dec) {
+		return "", false
+	}
+	t := bytes.TrimSpace(dec)
+	if len(t) == 0 || (t[0] != '{' && t[0] != '[') {
+		return "", false
+	}
+	return string(dec), true
 }

@@ -223,6 +223,9 @@ func TestEncodeData(t *testing.T) {
 		{"bytes wrapper", mustAny(t, wrapperspb.Bytes([]byte(`{"a":1}`))), `{"a":1}`, "text"},
 		{"binary bytes wrapper", mustAny(t, wrapperspb.Bytes([]byte{0xff, 0xfe})), "//4=", "base64"},
 		{"other message", str, `"hi"`, "text"},
+		{"dotnet base64 json", mustAny(t, wrapperspb.Bytes([]byte(`"eyJzdWJzeXN0ZW0iOiJzaGllbGRzIn0="`))), `{"subsystem":"shields"}`, "text"},
+		{"plain json string stays", mustAny(t, wrapperspb.Bytes([]byte(`"hello"`))), `"hello"`, "text"},
+		{"base64 of non-json stays", mustAny(t, wrapperspb.Bytes([]byte(`"aGVsbG8gd29ybGQ="`))), `"aGVsbG8gd29ybGQ="`, "text"},
 		{"unknown type falls back to raw value", &anypb.Any{TypeUrl: "type.googleapis.com/x.Unknown", Value: []byte("raw")}, "raw", "text"},
 	}
 	for _, c := range cases {
