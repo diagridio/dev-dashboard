@@ -15,6 +15,10 @@ export interface Capabilities {
    * compose scan and for a dashboard running as a compose service.
    */
   containerPosture?: boolean
+  /** Hide the promotion banner (--no-promotion / DEVDASHBOARD_NO_PROMOTION). */
+  hidePromotion?: boolean
+  /** Start with the Resources sidebar collapsed (--resources-collapsed / DEVDASHBOARD_RESOURCES_COLLAPSED). */
+  resourcesCollapsed?: boolean
 }
 
 declare global {

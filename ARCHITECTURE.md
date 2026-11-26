@@ -174,7 +174,9 @@ reconciler.)
 
 Environment variables read at startup: `DEVDASHBOARD_MODE` (same as `--mode`),
 `DEVDASHBOARD_APP_*` (env contract, aspire or compose), `DEVDASHBOARD_ALLOWED_HOSTS` (Host allowlist in
-container posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, `DEVDASHBOARD_NEWS_FEED_URL` (dev-only:
+container posture), `DEVDASHBOARD_TELEMETRY_OPTOUT`, `DEVDASHBOARD_NO_PROMOTION` (same as `--no-promotion`: hides the
+promotion banner), `DEVDASHBOARD_RESOURCES_COLLAPSED` (same as `--resources-collapsed`: Resources sidebar
+starts collapsed), `DEVDASHBOARD_NEWS_FEED_URL` (dev-only:
 replace the diagrid.io product feed with a local file or URL, re-read every 5s; an invalid
 value fails startup — see `docs/testing-promotion-banner.md`), and `DASH_CONTAINER_RUNTIME`
 (force `docker` / `podman`).

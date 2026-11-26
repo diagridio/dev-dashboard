@@ -9,6 +9,7 @@ import { routes } from './router'
 import { QueryProvider, makeQueryClient } from './lib/query'
 import { RefreshProvider } from './lib/refresh'
 import { ConnectionContext } from './lib/connection'
+import { getCapabilities } from './lib/capabilities'
 import { trackAction, trackView } from './lib/telemetry'
 
 vi.mock('./lib/telemetry', () => ({ trackAction: vi.fn(), trackView: vi.fn(), setTelemetryContext: vi.fn(), trackError: vi.fn() }))
@@ -67,6 +68,18 @@ describe('App shell', () => {
     expect(container.querySelector('.app')).not.toHaveClass('collapsed')
     expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument()
     localStorage.removeItem('devdash.sidebarCollapsed')
+  })
+
+  it('starts with the Resources sidebar collapsed when resourcesCollapsed is set, and the toggle expands it', () => {
+    window.__DASH_CAPABILITIES__ = { ...getCapabilities(), resourcesCollapsed: true }
+    try {
+      const { container } = renderApp()
+      expect(container.querySelector('.app')).toHaveClass('collapsed')
+      fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }))
+      expect(container.querySelector('.app')).not.toHaveClass('collapsed')
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
   })
 
   it('renders TopNav', () => {
@@ -286,6 +299,18 @@ describe('App promotion banner', () => {
   it('shows the promotion banner on the Applications page', async () => {
     renderApp('/')
     expect(await screen.findByRole('complementary', { name: 'Promotion' })).toHaveTextContent('Advent of Workflow')
+  })
+
+  it('hides the promotion banner when hidePromotion is set, even if /api/news returns one', async () => {
+    window.__DASH_CAPABILITIES__ = { ...getCapabilities(), hidePromotion: true }
+    try {
+      renderApp('/')
+      await vi.waitFor(() => expect(newsHits).toBeGreaterThan(0))
+      await act(() => new Promise((resolve) => setTimeout(resolve, 1500)))
+      expect(screen.queryByRole('complementary', { name: 'Promotion' })).toBeNull()
+    } finally {
+      delete window.__DASH_CAPABILITIES__
+    }
   })
 
   it('does not show the promotion banner on /replay', async () => {

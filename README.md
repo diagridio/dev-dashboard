@@ -131,6 +131,17 @@ startup without one, except in container posture (the `DEVDASHBOARD_APP_*` contr
 under `aspire` or `compose`), which needs no runtime. `--bind` (default `127.0.0.1`, `0.0.0.0`
 in container posture) controls the listen address alongside `--port`.
 
+### Running inside a sandbox (Instruqt, workshops)
+
+Two display settings suit shared sandboxes: `--no-promotion` hides the promotion banner and
+`--resources-collapsed` starts with the Resources sidebar collapsed. Each also reads an env var,
+which turns the setting on only when it equals `true` (case-insensitive); an explicit flag wins.
+
+```sh
+export DEVDASHBOARD_NO_PROMOTION=true DEVDASHBOARD_RESOURCES_COLLAPSED=true
+diagrid-dev-dashboard --port 9090 --bind 0.0.0.0 --no-open
+```
+
 ## Run as a container
 
 The dashboard also ships as a container image that runs inside an orchestrated project: either
@@ -203,6 +214,8 @@ development tool — never expose it publicly.
 | `DEVDASHBOARD_NAMESPACE` / `--namespace` | `default` | default Dapr namespace for workflow actor keys |
 | `DEVDASHBOARD_RESOURCES_PATH` | dir of `DEVDASHBOARD_STATESTORE_FILE` | extra resource directories for the Components, Configurations, Resiliency and HTTP Endpoints pages, `os.PathListSeparator`-separated |
 | `DEVDASHBOARD_ALLOWED_HOSTS` | unset (any host) | optional, container posture only; comma-separated hostnames the `Host` header is restricted to (loopback always allowed). Empty means any host. Set it to close the DNS-rebinding hole described above |
+| `DEVDASHBOARD_NO_PROMOTION` / `--no-promotion` | unset (banner shown) | `true` hides the promotion banner |
+| `DEVDASHBOARD_RESOURCES_COLLAPSED` / `--resources-collapsed` | unset (sidebar open) | `true` starts with the Resources sidebar collapsed |
 | `DEVDASHBOARD_MODE` | `aspire` (baked into the image) | see mode switch above |
 | `DEVDASHBOARD_IN_CONTAINER` | `true` (baked into the image) | marks the process as running in a container; compose container posture requires it (or Docker's `/.dockerenv` / Podman's `/run/.containerenv`). Set it yourself only for a runtime that leaves neither marker |
 
