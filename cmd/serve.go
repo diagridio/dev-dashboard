@@ -5,7 +5,9 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"time"
 
+	"github.com/diagridio/dev-dashboard/pkg/actors"
 	"github.com/diagridio/dev-dashboard/pkg/binarystore"
 	"github.com/diagridio/dev-dashboard/pkg/containerruntime"
 	"github.com/diagridio/dev-dashboard/pkg/controlplane"
@@ -162,6 +164,7 @@ func assembleOptions(ctx context.Context, deps serveDeps, dist fs.FS) (server.Op
 		TelemetryEnabled: deps.TelemetryEnabled,
 		UpdateCheck:      deps.UpdateCheck,
 		BinaryStore:      binarystore.New(decorated, rc.sidecarPool),
+		Actors:           actors.NewService(decorated, rc.sidecarPool, actors.NewConfigReader(&http.Client{}, 60*time.Second), rc.StateFor, rc.ActorStoreFor, &http.Client{Timeout: 30 * time.Second}),
 		AllowNonLoopback: deps.AllowNonLoopback,
 		AllowedHosts:     deps.AllowedHosts,
 		ListenPort:       deps.ListenPort,

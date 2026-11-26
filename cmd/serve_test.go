@@ -4,7 +4,9 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -127,4 +129,29 @@ func TestVirtualPathsDoNotFeedStoreDetection(t *testing.T) {
 	comps, err := statestore.Detect([]string{"crazy_lamport:/dapr-resources"})
 	require.NoError(t, err)
 	require.Empty(t, comps)
+}
+
+// TestServeMountsActorRoutes verifies assembleOptions wires the actor
+// service: an unknown app yields the handler's JSON 404 (chi's own 404 is
+// plain text) rather than the 503 "actors unavailable" of a nil service.
+func TestServeMountsActorRoutes(t *testing.T) {
+	opts, closers := assembleOptions(context.Background(), serveDeps{
+		Namespace:  "default",
+		Apps:       emptyApps{},
+		HTTPClient: &http.Client{Timeout: time.Second},
+	}, fstest.MapFS{})
+	t.Cleanup(func() {
+		for _, c := range closers {
+			_ = c()
+		}
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "http://localhost/api/actors/app/Deck", nil)
+	server.NewRouter(opts).ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusNotFound, rec.Code)
+	var body map[string]string
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), rec.Body.String())
+	require.Equal(t, "app not found", body["error"])
 }
