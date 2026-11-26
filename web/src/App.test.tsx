@@ -306,8 +306,10 @@ describe('App promotion banner', () => {
     try {
       renderApp('/')
       await vi.waitFor(() => expect(newsHits).toBeGreaterThan(0))
-      await act(() => new Promise((resolve) => setTimeout(resolve, 1500)))
+      // Let the response settle into the query cache and re-render.
+      await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
       expect(screen.queryByRole('complementary', { name: 'Promotion' })).toBeNull()
+      expect(document.querySelector('aside.promo')).toBeNull()
     } finally {
       delete window.__DASH_CAPABILITIES__
     }

@@ -34,7 +34,7 @@ func TestWriteStartupBanner(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			writeStartupBanner(&buf, "http://localhost:9090/", tc.telemetry, "")
+			writeStartupBanner(&buf, "http://localhost:9090/", tc.telemetry, "", nil)
 			lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
 			require.Len(t, lines, 3)
 			require.Equal(t, "Diagrid Dapr Dev Dashboard is starting → http://localhost:9090/", lines[0])
@@ -47,10 +47,30 @@ func TestWriteStartupBanner(t *testing.T) {
 // The posture notice, when there is one, sits right under the URL line.
 func TestWriteStartupBannerPostureNotice(t *testing.T) {
 	var buf bytes.Buffer
-	writeStartupBanner(&buf, "http://localhost:8080/", true, "Running in compose container posture.")
+	writeStartupBanner(&buf, "http://localhost:8080/", true, "Running in compose container posture.", nil)
 	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
 	require.Len(t, lines, 4)
 	require.Equal(t, "Running in compose container posture.", lines[1])
+}
+
+// Each active display setting gets one plain line after the telemetry notice;
+// nothing is printed for a setting that is off.
+func TestDisplaySettingsNotices(t *testing.T) {
+	require.Empty(t, displaySettingsNotices(serveSettings{}))
+	require.Equal(t, []string{"Promotion banner hidden (--no-promotion / DEVDASHBOARD_NO_PROMOTION)."},
+		displaySettingsNotices(serveSettings{NoPromotion: true}))
+	require.Equal(t, []string{"Resources sidebar starts collapsed (--resources-collapsed / DEVDASHBOARD_RESOURCES_COLLAPSED)."},
+		displaySettingsNotices(serveSettings{ResourcesCollapsed: true}))
+
+	var buf bytes.Buffer
+	writeStartupBanner(&buf, "http://localhost:8080/", true, "",
+		displaySettingsNotices(serveSettings{NoPromotion: true, ResourcesCollapsed: true}))
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	require.Len(t, lines, 5)
+	require.Contains(t, lines[1], "telemetry")
+	require.Equal(t, "Promotion banner hidden (--no-promotion / DEVDASHBOARD_NO_PROMOTION).", lines[2])
+	require.Equal(t, "Resources sidebar starts collapsed (--resources-collapsed / DEVDASHBOARD_RESOURCES_COLLAPSED).", lines[3])
+	require.Contains(t, lines[4], "Konami")
 }
 
 func TestVersionFlag(t *testing.T) {
