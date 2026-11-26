@@ -92,6 +92,12 @@ type Capabilities struct {
 	// whenever the dashboard is served off-host (AllowNonLoopback), because
 	// that posture can be reached through a proxy from another machine.
 	SecretReveal bool `json:"secretReveal"`
+	// HidePromotion hides the promotion banner (--no-promotion). The zero
+	// value keeps the banner shown.
+	HidePromotion bool `json:"hidePromotion"`
+	// ResourcesCollapsed starts the Resources sidebar collapsed
+	// (--resources-collapsed). The zero value keeps it open.
+	ResourcesCollapsed bool `json:"resourcesCollapsed"`
 }
 
 // FullCapabilities is the host-mode default: everything on.

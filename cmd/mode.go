@@ -123,14 +123,30 @@ type serveSettings struct {
 	// AllowedHosts restricts the Host header in container posture
 	// (DEVDASHBOARD_ALLOWED_HOSTS, comma-separated; env-only, no flag).
 	AllowedHosts []string
+	// NoPromotion hides the promotion banner (--no-promotion or
+	// DEVDASHBOARD_NO_PROMOTION=true).
+	NoPromotion bool
+	// ResourcesCollapsed starts the Resources sidebar collapsed
+	// (--resources-collapsed or DEVDASHBOARD_RESOURCES_COLLAPSED=true).
+	ResourcesCollapsed bool
 }
 
 // resolveServeSettings applies the flag > env > posture-default precedence.
 // flagChanged reports whether the named cobra flag was set explicitly; port,
 // bind, stateStore, namespace carry the flag values (which hold cobra
-// defaults when unchanged).
-func resolveServeSettings(containerPosture bool, flagChanged func(string) bool, port int, bind, stateStore, namespace string, getenv func(string) string) (serveSettings, error) {
-	s := serveSettings{Port: port, Bind: bind, StateStore: stateStore, Namespace: namespace}
+// defaults when unchanged). noPromotion and resourcesCollapsed are the bool
+// flag values; an unchanged flag falls back to its env var, which turns the
+// setting on only when it equals "true" (case-insensitive).
+func resolveServeSettings(containerPosture bool, flagChanged func(string) bool, port int, bind, stateStore, namespace string, noPromotion, resourcesCollapsed bool, getenv func(string) string) (serveSettings, error) {
+	s := serveSettings{Port: port, Bind: bind, StateStore: stateStore, Namespace: namespace,
+		NoPromotion: noPromotion, ResourcesCollapsed: resourcesCollapsed}
+
+	if !flagChanged("no-promotion") {
+		s.NoPromotion = strings.EqualFold(getenv("DEVDASHBOARD_NO_PROMOTION"), "true")
+	}
+	if !flagChanged("resources-collapsed") {
+		s.ResourcesCollapsed = strings.EqualFold(getenv("DEVDASHBOARD_RESOURCES_COLLAPSED"), "true")
+	}
 
 	if !flagChanged("port") {
 		if v := getenv("DEVDASHBOARD_PORT"); v != "" {

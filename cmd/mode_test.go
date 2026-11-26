@@ -109,7 +109,7 @@ func TestComposeContainerPostureServeDefaults(t *testing.T) {
 	getenv := func(string) string { return "" }
 	unchanged := func(string) bool { return false }
 
-	got, err := resolveServeSettings(true, unchanged, 9090, "127.0.0.1", "", "default", getenv)
+	got, err := resolveServeSettings(true, unchanged, 9090, "127.0.0.1", "", "default", false, false, getenv)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -226,7 +226,7 @@ func TestResolveServeSettings(t *testing.T) {
 			if ns == "" {
 				ns = "default"
 			}
-			got, err := resolveServeSettings(tc.container, tc.changed, tc.port, tc.bind, tc.stateStore, ns, getenv)
+			got, err := resolveServeSettings(tc.container, tc.changed, tc.port, tc.bind, tc.stateStore, ns, false, false, getenv)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -236,7 +236,7 @@ func TestResolveServeSettings(t *testing.T) {
 		})
 	}
 	t.Run("bad DEVDASHBOARD_PORT errors", func(t *testing.T) {
-		_, err := resolveServeSettings(true, noneChanged, 9090, "127.0.0.1", "", "default",
+		_, err := resolveServeSettings(true, noneChanged, 9090, "127.0.0.1", "", "default", false, false,
 			func(k string) string {
 				if k == "DEVDASHBOARD_PORT" {
 					return "not-a-port"
@@ -306,5 +306,53 @@ func TestPostureNotice(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestResolveDisplaySettings(t *testing.T) {
+	settings := []struct {
+		flag string
+		env  string
+		get  func(serveSettings) bool
+	}{
+		{"no-promotion", "DEVDASHBOARD_NO_PROMOTION", func(s serveSettings) bool { return s.NoPromotion }},
+		{"resources-collapsed", "DEVDASHBOARD_RESOURCES_COLLAPSED", func(s serveSettings) bool { return s.ResourcesCollapsed }},
+	}
+	tests := []struct {
+		name        string
+		flagChanged bool
+		flagValue   bool
+		env         string
+		want        bool
+	}{
+		{"flag set, env unset", true, true, "", true},
+		{"env true", false, false, "true", true},
+		{"env TRUE", false, false, "TRUE", true},
+		{"env 1", false, false, "1", false},
+		{"env yes", false, false, "yes", false},
+		{"both unset", false, false, "", false},
+		{"flag explicitly false beats env true", true, false, "true", false},
+	}
+	for _, st := range settings {
+		for _, tc := range tests {
+			t.Run(st.flag+"/"+tc.name, func(t *testing.T) {
+				changed := func(n string) bool { return tc.flagChanged && n == st.flag }
+				getenv := func(k string) string {
+					if k == st.env {
+						return tc.env
+					}
+					return ""
+				}
+				flagVal := func(name string) bool { return name == st.flag && tc.flagValue }
+				got, err := resolveServeSettings(false, changed, 9090, "127.0.0.1", "", "default",
+					flagVal("no-promotion"), flagVal("resources-collapsed"), getenv)
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if st.get(got) != tc.want {
+					t.Fatalf("got %v want %v", st.get(got), tc.want)
+				}
+			})
+		}
 	}
 }
