@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -42,12 +41,6 @@ const listTimeout = 5 * time.Second
 // ConnProvider hands out gRPC connections to sidecar endpoints.
 type ConnProvider interface {
 	ConnFor(addr string, useTLS bool) (*grpc.ClientConn, error)
-}
-
-// isInternal reports whether actorType is a Dapr internal actor type.
-// TODO(task 5): replaced by the exported IsInternal.
-func isInternal(actorType string) bool {
-	return strings.HasPrefix(actorType, "dapr.internal.")
 }
 
 // ListReminders lists reminders for actorType, or for one actor when actorID is set.
@@ -107,7 +100,7 @@ func ListTimers(ctx context.Context, conns ConnProvider, in discovery.Instance, 
 
 // prepare runs the shared checks and returns a client plus a timeout context.
 func prepare(ctx context.Context, conns ConnProvider, in discovery.Instance, actorType string, f Feature) (runtimev1pb.DaprClient, context.Context, context.CancelFunc, error) {
-	if isInternal(actorType) {
+	if IsInternal(actorType) {
 		return nil, nil, nil, fmt.Errorf("internal actor type %q is not supported", actorType)
 	}
 	if err := Supports(in.RuntimeVersion, f); err != nil {
