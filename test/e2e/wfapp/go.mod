@@ -1,6 +1,6 @@
 module github.com/diagridio/dev-dashboard/test/e2e/wfapp
 
-go 1.26.10
+go 1.26.11
 
 require (
 	github.com/dapr/durabletask-go v0.15.1
@@ -10,7 +10,7 @@ require (
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/dapr/dapr v1.19.1 // indirect
+	github.com/dapr/dapr v1.19.2 // indirect
 	github.com/dapr/kit v0.19.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect

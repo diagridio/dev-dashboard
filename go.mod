@@ -6,8 +6,8 @@ require (
 	github.com/alicebob/miniredis/v2 v2.40.0
 	github.com/briandowns/spinner v1.23.2
 	github.com/dapr/cli v1.19.1
-	github.com/dapr/components-contrib v1.19.0
-	github.com/dapr/dapr v1.19.1
+	github.com/dapr/components-contrib v1.19.2
+	github.com/dapr/dapr v1.19.2
 	github.com/dapr/durabletask-go v0.15.1
 	github.com/dapr/kit v0.19.0
 	github.com/go-chi/chi/v5 v5.5.0
