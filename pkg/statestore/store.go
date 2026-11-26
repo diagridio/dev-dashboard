@@ -110,7 +110,9 @@ func New(ctx context.Context, c Component) (Store, error) {
 			Properties: c.Metadata,
 		},
 	}); err != nil {
-		return nil, fmt.Errorf("init %s: %w", c.Type, err)
+		// The driver error can echo the connection string, password included,
+		// and it is shown in API responses and the UI: strip secrets here.
+		return nil, &initError{msg: "init " + c.Type + ": " + redactSecrets(err.Error(), c), err: err}
 	}
 
 	return &ccStore{inner: inner, storeType: c.Type}, nil
