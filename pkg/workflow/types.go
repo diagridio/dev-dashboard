@@ -92,6 +92,16 @@ type ListResult struct {
 	// and the items were read from the apps' sidecars instead. It holds the
 	// reason the store could not be opened.
 	StoreError string `json:"storeError,omitempty"`
+	// SidecarErrors lists the apps whose sidecar could not list workflows
+	// while no store was answering for them, so an empty or short list is
+	// not mistaken for "no workflows". Unset when a store served the list.
+	SidecarErrors []SidecarError `json:"sidecarErrors,omitempty"`
+}
+
+// SidecarError is one app's sidecar workflow-listing failure.
+type SidecarError struct {
+	AppID string `json:"appId"`
+	Error string `json:"error"`
 }
 
 type StatsResult struct {

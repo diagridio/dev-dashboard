@@ -43,6 +43,14 @@ export interface WorkflowListResult {
   // Set when the selected store could not be opened and the items were read
   // from the apps' sidecars instead; holds the reason the store was skipped.
   storeError?: string
+  // Apps whose sidecar could not list workflows while no store answered for
+  // them, so an empty or short list is not mistaken for "no workflows".
+  sidecarErrors?: WorkflowSidecarError[]
+}
+
+export interface WorkflowSidecarError {
+  appId: string
+  error: string
 }
 
 export interface WorkflowStats {

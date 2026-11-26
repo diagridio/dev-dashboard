@@ -424,6 +424,30 @@ export function Workflows() {
         </div>
       )}
 
+      {/* Sidecar failures — no store answered for these apps, so their
+          workflows are missing from the list */}
+      {!loadError && data?.sidecarErrors && data.sidecarErrors.length > 0 && (
+        <div className="banner danger" data-testid="sidecar-errors-note">
+          {data.sidecarErrors.length === 1 ? (
+            <>
+              Couldn&apos;t list workflows from the sidecar of <b>{data.sidecarErrors[0].appId}</b>:{' '}
+              {data.sidecarErrors[0].error}.
+            </>
+          ) : (
+            <>
+              Couldn&apos;t list workflows from these app sidecars:
+              <ul>
+                {data.sidecarErrors.map((e) => (
+                  <li key={e.appId}>
+                    <b>{e.appId}</b>: {e.error}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Remove status banner */}
       {removeStatus && (
         <div className={removeStatus.failed > 0 ? 'banner danger' : 'banner ok'}>

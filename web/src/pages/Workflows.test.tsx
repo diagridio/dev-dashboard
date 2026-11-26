@@ -1150,5 +1150,27 @@ describe('Workflows page — sidecar source (issue #196)', () => {
     expect(note).toHaveTextContent(/showing workflows from the app sidecars/i)
     expect(note).toHaveTextContent(/unsupported state store type: state\.sqlserver/)
     expect(screen.queryByTestId('load-error-banner')).toBeNull()
+    expect(screen.queryByTestId('sidecar-errors-note')).toBeNull()
+  })
+
+  it('names each app whose sidecar could not list workflows', async () => {
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(sqlserverActive)),
+      http.get('/api/workflows', () =>
+        HttpResponse.json({
+          items: [],
+          sidecarErrors: [
+            { appId: 'mortgage-agent', error: 'failed to list instance IDs: state store *sqlserver.SQLServer does not support listing keys' },
+            { appId: 'pricing', error: 'workflow inspection via the sidecar requires Dapr 1.17 or newer' },
+          ],
+        }),
+      ),
+    )
+    renderAt()
+    const note = await screen.findByTestId('sidecar-errors-note')
+    expect(note).toHaveTextContent(/mortgage-agent/)
+    expect(note).toHaveTextContent(/does not support listing keys/)
+    expect(note).toHaveTextContent(/pricing/)
+    expect(note).toHaveTextContent(/requires Dapr 1\.17 or newer/)
   })
 })

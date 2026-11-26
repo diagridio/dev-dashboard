@@ -29,6 +29,9 @@ type fakeHub struct {
 	states        map[string]*protos.WorkflowState
 	history       map[string][]*protos.HistoryEvent
 	unimplemented bool
+	// listErr, when set, is returned by ListInstanceIDs (a 1.17+ runtime
+	// failure, e.g. a state store that cannot list keys).
+	listErr error
 	// block, when set, makes ListInstanceIDs and GetInstance hang until the
 	// caller's context is done, simulating a wedged sidecar.
 	block bool
@@ -41,6 +44,9 @@ func (f *fakeHub) ListInstanceIDs(ctx context.Context, req *protos.ListInstanceI
 	}
 	if f.unimplemented {
 		return nil, status.Error(codes.Unimplemented, "not implemented")
+	}
+	if f.listErr != nil {
+		return nil, f.listErr
 	}
 	page := 0
 	if tok := req.GetContinuationToken(); tok != "" {
