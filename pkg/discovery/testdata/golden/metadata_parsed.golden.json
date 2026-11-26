@@ -50,5 +50,7 @@
     "ServiceInvocation",
     "StateManagement"
   ],
-  "Placement": "placement: connected"
+  "Placement": "placement: connected",
+  "RuntimeStatus": "",
+  "HostReady": false
 }
