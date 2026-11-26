@@ -1153,6 +1153,33 @@ describe('Workflows page — sidecar source (issue #196)', () => {
     expect(screen.queryByTestId('sidecar-errors-note')).toBeNull()
   })
 
+  it('drops the fallback notes as soon as another store is picked, while it loads', async () => {
+    window.localStorage.setItem('devdash.workflowStore', 'sql-auto')
+    server.use(
+      http.get('/api/statestores', () => HttpResponse.json(sqlserverActive)),
+      http.get('/api/workflows', async ({ request }) => {
+        if (new URL(request.url).searchParams.get('store') === 'redis-auto') {
+          await delay('infinite')
+        }
+        return HttpResponse.json({
+          items: [],
+          storeError: 'state store "statestore" can\'t be read directly: unsupported state store type: state.sqlserver',
+          sidecarErrors: [{ appId: 'mortgage-agent', error: 'failed to list instance IDs: no state store with actor support found' }],
+        })
+      }),
+    )
+    renderAt()
+    const storeSelect = (await screen.findByTestId('store-select')) as HTMLSelectElement
+    await screen.findByTestId('sidecar-fallback-note')
+    await screen.findByTestId('sidecar-errors-note')
+
+    await userEvent.selectOptions(storeSelect, 'redis-auto')
+    // The redis response never arrives: the sqlserver notes must not stand
+    // in for it (the previous result is never kept across a store switch).
+    await waitFor(() => expect(screen.queryByTestId('sidecar-fallback-note')).toBeNull())
+    expect(screen.queryByTestId('sidecar-errors-note')).toBeNull()
+  })
+
   it('names each app whose sidecar could not list workflows', async () => {
     server.use(
       http.get('/api/statestores', () => HttpResponse.json(sqlserverActive)),
