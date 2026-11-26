@@ -62,6 +62,7 @@ describe('Actors', () => {
       ),
     )
     renderAt()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Show internal' }))
     const link = await screen.findByRole('link', { name: 'order' })
     // Scope to the table row so the .tag-int badge in the hint footer doesn't collide
     const row = within(link.closest('tr') as HTMLElement)
@@ -176,6 +177,7 @@ describe('Actors', () => {
       ),
     )
     renderAt()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Show internal' }))
     const int = within((await screen.findByRole('link', { name: /dapr\.internal/ })).closest('tr') as HTMLElement)
     expect(int.queryByRole('button', { name: 'Invoke' })).not.toBeInTheDocument()
     const plain = within(screen.getByRole('link', { name: 'Plain' }).closest('tr') as HTMLElement)
@@ -189,6 +191,7 @@ describe('Actors', () => {
       ),
     )
     renderAt()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Show internal' }))
     const link = await screen.findByRole('link', { name: 'dapr.internal.default.order.workflow' })
     // A break opportunity after each of the four dots; the visible text is unchanged.
     expect(link.querySelectorAll('wbr')).toHaveLength(4)
@@ -200,5 +203,40 @@ describe('Actors', () => {
     const plain = screen.getByRole('link', { name: 'Plain' }).closest('tr') as HTMLElement
     expect(within(plain).getByRole('button', { name: 'Invoke' }).closest('td')).toHaveClass('nowrap')
     expect(plain.querySelector('td.reent')).toHaveClass('nowrap')
+  })
+
+  it('hides internal actor types until Show internal is checked', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([
+          row({ appId: 'wf', instanceKey: 'wf', type: 'dapr.internal.default.wf.workflow', internal: true, count: 2 }),
+          row({ type: 'Plain', count: 3 }),
+        ]),
+      ),
+    )
+    renderAt()
+    const box = await screen.findByRole('checkbox', { name: 'Show internal' })
+    expect(box).not.toBeChecked()
+    expect(box.closest('label')).toHaveClass('childtoggle')
+    expect(screen.getByRole('link', { name: 'Plain' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /dapr\.internal/ })).not.toBeInTheDocument()
+    // Stats follow the visible rows: one type, three active actors.
+    expect(screen.getByText('Actor types').previousElementSibling).toHaveTextContent('1')
+    expect(screen.getByText('Active actors').previousElementSibling).toHaveTextContent('3')
+    await userEvent.click(box)
+    expect(screen.getByRole('link', { name: /dapr\.internal/ })).toBeInTheDocument()
+    expect(screen.getByText('Actor types').previousElementSibling).toHaveTextContent('2')
+  })
+
+  it('says when only internal actor types are registered', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([row({ type: 'dapr.internal.default.wf.workflow', internal: true })]),
+      ),
+    )
+    renderAt()
+    expect(await screen.findByText('Only internal actor types are registered. Check Show internal to see them.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Show internal' }))
+    expect(screen.getByRole('link', { name: /dapr\.internal/ })).toBeInTheDocument()
   })
 })

@@ -110,11 +110,17 @@ describe('ActorDetail', () => {
       }),
     )
     renderAt()
-    const key = await screen.findByRole('button', { name: 'count' })
-    const row = key.closest('tr') as HTMLElement
+    // Same expand pattern as the State page: the whole row toggles, with a caret, no button.
+    expect(screen.queryByRole('button', { name: 'count' })).not.toBeInTheDocument()
+    const row = (await screen.findByText('count')).closest('tr') as HTMLElement
     expect(row).toHaveTextContent('42')
-    await userEvent.click(key)
+    expect(row).toHaveTextContent('▸')
+    expect(row).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(row)
     expect(await screen.findByText('{"full":true}')).toBeInTheDocument()
+    expect(row).toHaveTextContent('▾')
+    expect(row).toHaveAttribute('aria-expanded', 'true')
+    expect(row).toHaveClass('sel')
     const u = new URL(url)
     expect(u.searchParams.get('store')).toBe('st1')
     expect(u.searchParams.get('key')).toBe('a||T||x1||count')
@@ -198,7 +204,7 @@ describe('ActorDetail', () => {
   it('shows no truncation note when the whole store was scanned', async () => {
     serve()
     renderAt()
-    await screen.findByRole('button', { name: 'count' })
+    await screen.findByText('count')
     expect(screen.queryByText(/Only part of the state store was scanned/)).not.toBeInTheDocument()
   })
 
@@ -209,13 +215,14 @@ describe('ActorDetail', () => {
     expect(within(row).getByText('onTick')).toBeInTheDocument()
     const timersTable = row.closest('table') as HTMLElement
     expect(within(timersTable).getByRole('columnheader', { name: 'Callback' })).toBeInTheDocument()
-    expect(screen.getAllByRole('columnheader', { name: 'Callback' })).toHaveLength(1)
+    // Both tables carry the Callback column so they align; reminders show — there.
+    expect(screen.getAllByRole('columnheader', { name: 'Callback' })).toHaveLength(2)
   })
 
   it('formats state size in readable units', async () => {
     serve({ state: [{ ...base.state[0], size: 2048 }] })
     renderAt()
-    const row = (await screen.findByRole('button', { name: 'count' })).closest('tr') as HTMLElement
+    const row = (await screen.findByText('count')).closest('tr') as HTMLElement
     expect(row).toHaveTextContent('2.0 KiB')
   })
 
@@ -225,5 +232,19 @@ describe('ActorDetail', () => {
     renderAt()
     await screen.findByRole('heading', { name: 'x1' })
     await waitFor(() => expect(recentIds('a', 'T')).toEqual(['x1']))
+  })
+
+  it('aligns the reminders and timers tables on the same columns', async () => {
+    serve({ timers: [{ ...sched, name: 't1', callback: 'Poll' }] })
+    renderAt()
+    await screen.findByText('t1')
+    const tables = Array.from(document.querySelectorAll('table.sched')) as HTMLTableElement[]
+    expect(tables).toHaveLength(2)
+    const heads = tables.map((t) => Array.from(t.querySelectorAll('th')).map((th) => th.textContent))
+    expect(heads[0]).toEqual(['Name', 'Due time', 'Period', 'TTL', 'Callback', 'Data', ''])
+    expect(heads[1]).toEqual(heads[0])
+    const cols = tables.map((t) => Array.from(t.querySelectorAll('col')).map((c) => c.className))
+    expect(cols[0]).toHaveLength(7)
+    expect(cols[1]).toEqual(cols[0])
   })
 })

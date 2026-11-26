@@ -135,7 +135,7 @@ export function ActorDetail() {
       {data.timersUnavailable ? (
         <p className="muted">{data.timersUnavailable.reason}</p>
       ) : (
-        <ScheduledTable rows={data.timers} empty="No timers" showCallback />
+        <ScheduledTable rows={data.timers} empty="No timers" />
       )}
 
       <InvokeActorDialog
@@ -163,18 +163,31 @@ function StateRow({ item, type, id, store }: { item: StateItem; type: string; id
   const rec = useStateRecord(item.key, store, open)
   return (
     <>
-      <tr>
+      <tr
+        className={open ? 'sel' : undefined}
+        style={{ cursor: 'pointer' }}
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setOpen((o) => !o)
+          }
+        }}
+      >
         <td className="mono b">
-          <button type="button" className="celllink" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-            {actorStateKey(item.logicalKey, type, id)}
-          </button>
+          <span aria-hidden="true" style={{ marginRight: 6 }}>
+            {open ? '▾' : '▸'}
+          </span>
+          {actorStateKey(item.logicalKey, type, id)}
         </td>
         <td className="mono">{item.preview}</td>
         <td className="mono tabnum">{formatBytes(item.size)}</td>
       </tr>
       {open && (
         <tr>
-          <td colSpan={3}>
+          <td colSpan={3} style={{ background: 'var(--surface)' }}>
             {rec.isLoading && <span className="muted">Loading…</span>}
             {rec.error && <span className="muted">{rec.error.message}</span>}
             {rec.data && (
@@ -193,33 +206,41 @@ function ScheduledTable({
   rows,
   empty,
   onDelete,
-  showCallback = false,
 }: {
   rows: Scheduled[]
   empty: string
   onDelete?: (name: string) => void
-  showCallback?: boolean
 }) {
-  const cols = 5 + (showCallback ? 1 : 0) + (onDelete ? 1 : 0)
+  // Reminders and timers share one fixed column layout (table.sched + colgroup) so the two
+  // tables line up. Reminders have no callback and timers have no Delete; those cells stay empty.
   return (
     <div className="card">
       <div className="tablewrap">
-        <table className="t">
+        <table className="t sched">
+          <colgroup>
+            <col className="c-name" />
+            <col className="c-due" />
+            <col className="c-period" />
+            <col className="c-ttl" />
+            <col className="c-cb" />
+            <col className="c-data" />
+            <col className="c-act" />
+          </colgroup>
           <thead>
             <tr>
               <th>Name</th>
               <th>Due time</th>
               <th>Period</th>
               <th>TTL</th>
-              {showCallback && <th>Callback</th>}
+              <th>Callback</th>
               <th>Data</th>
-              {onDelete && <th />}
+              <th />
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={cols} className="muted">{empty}</td>
+                <td colSpan={7} className="muted">{empty}</td>
               </tr>
             )}
             {rows.map((r) => (
@@ -228,18 +249,18 @@ function ScheduledTable({
                 <td className="mono tabnum">{r.dueTime || '—'}</td>
                 <td className="mono tabnum">{r.period || '—'}</td>
                 <td className="mono tabnum">{r.ttl || '—'}</td>
-                {showCallback && <td className="mono">{r.callback || '—'}</td>}
-                <td className="mono">
+                <td className="mono">{r.callback || '—'}</td>
+                <td className="mono wrapany">
                   {r.data ? r.data : '—'}
                   {r.data && r.dataEncoding === 'base64' && <span className="chip">base64</span>}
                 </td>
-                {onDelete && (
-                  <td>
+                <td>
+                  {onDelete && (
                     <button type="button" className="btn ghost" onClick={() => onDelete(r.name)}>
                       Delete
                     </button>
-                  </td>
-                )}
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

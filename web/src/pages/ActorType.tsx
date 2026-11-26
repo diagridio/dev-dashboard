@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { InvokeActorDialog } from '../components/InvokeActorDialog'
 import { useActorType } from '../hooks/useActors'
 import { actorPath, recentIds } from '../lib/actorRecents'
@@ -9,8 +9,7 @@ import { reentrancyLabel } from '../lib/actorFormat'
 
 export function ActorType() {
   const { appId: appKey = '', actorType = '' } = useParams()
-  const navigate = useNavigate()
-  const [goTo, setGoTo] = useState('')
+  const [search, setSearch] = useState('')
   const [invokeOpen, setInvokeOpen] = useState(false)
   useDocumentTitle(`${actorType} — Actors`)
 
@@ -55,11 +54,9 @@ export function ActorType() {
   const cfg = data.config
   const cfgReason = data.configUnavailable?.reason
 
-  function submitGoTo(e: React.FormEvent) {
-    e.preventDefault()
-    const id = goTo.trim()
-    if (id) navigate(actorPath(appKey, actorType, id))
-  }
+  const query = search.trim()
+  // Dapr can't list every actor, so when nothing listed matches, the typed ID can still be opened.
+  const shown = query ? rows.filter((r) => r.id.toLowerCase().includes(query.toLowerCase())) : rows
 
   return (
     <div className="page">
@@ -87,17 +84,16 @@ export function ActorType() {
       <p className="hint">
         Dapr doesn&apos;t list active actor IDs. This list shows actors with state or reminders.
       </p>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', margin: '12px 0' }}>
-        <form onSubmit={submitGoTo} style={{ display: 'flex', gap: 8 }}>
+      <div className="filters">
+        <label className="search">
+          🔍
           <input
-            className="inp"
-            aria-label="Go to actor ID"
-            placeholder="Go to actor ID"
-            value={goTo}
-            onChange={(e) => setGoTo(e.target.value)}
+            placeholder="Search actor ID…"
+            aria-label="Search actor ID"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
           />
-          <button type="submit" className="btn ghost">Go</button>
-        </form>
+        </label>
         {!data.internal && (
           <button type="button" className="btn ghost" onClick={() => setInvokeOpen(true)}>
             Invoke
@@ -111,7 +107,7 @@ export function ActorType() {
       )}
       {data.truncated && (
         <p className="muted">
-          Showing the first {data.ids.length} actors found in state. Use Go to actor ID for others.
+          Showing the first {data.ids.length} actors found in state. Search for an ID to open one that isn&apos;t listed.
         </p>
       )}
       <div className="card">
@@ -126,12 +122,21 @@ export function ActorType() {
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 && (
+              {shown.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="muted">No actors found</td>
+                  <td colSpan={4} className="muted">{query ? 'No listed actor IDs match' : 'No actors found'}</td>
                 </tr>
               )}
-              {rows.map((r) => (
+              {query && shown.length === 0 && (
+                <tr>
+                  <td colSpan={4}>
+                    <Link className="celllink mono" to={actorPath(appKey, actorType, query)}>
+                      Open actor {query}
+                    </Link>
+                  </td>
+                </tr>
+              )}
+              {shown.map((r) => (
                 <tr key={r.id}>
                   <td className="mono b">
                     <Link className="celllink" to={actorPath(appKey, actorType, r.id)}>{r.id}</Link>

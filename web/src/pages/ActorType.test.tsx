@@ -59,12 +59,23 @@ describe('ActorType', () => {
     expect(screen.getByText("Dapr doesn't list active actor IDs. This list shows actors with state or reminders.")).toBeInTheDocument()
   })
 
-  it('Go to actor ID round-trips an ID with a slash', async () => {
+  it('search filters the actor IDs while typing', async () => {
+    serve()
+    renderAt()
+    const input = await screen.findByLabelText('Search actor ID')
+    expect(input.closest('label')).toHaveClass('search')
+    expect(screen.queryByRole('button', { name: 'Go' })).not.toBeInTheDocument()
+    await userEvent.type(input, 'on')
+    expect(screen.getByRole('link', { name: 'one' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'two' })).not.toBeInTheDocument()
+  })
+
+  it('search offers to open an unlisted ID, and round-trips an ID with a slash', async () => {
     serve()
     const router = renderAt()
-    const input = await screen.findByLabelText('Go to actor ID')
-    expect(input).toHaveClass('inp')
-    await userEvent.type(input, 'x/y{Enter}')
+    await userEvent.type(await screen.findByLabelText('Search actor ID'), 'x/y')
+    expect(screen.getByText('No listed actor IDs match')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'Open actor x/y' }))
     expect(await screen.findByText('detail:x/y')).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/actors/a/T/x%2Fy')
   })
@@ -72,7 +83,7 @@ describe('ActorType', () => {
   it('shows the truncated notice', async () => {
     serve({ truncated: true })
     renderAt()
-    expect(await screen.findByText('Showing the first 2 actors found in state. Use Go to actor ID for others.')).toBeInTheDocument()
+    expect(await screen.findByText("Showing the first 2 actors found in state. Search for an ID to open one that isn't listed.")).toBeInTheDocument()
   })
 
   it('shows stateUnavailable reason with a link to /state', async () => {

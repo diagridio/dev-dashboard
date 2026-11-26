@@ -19,6 +19,8 @@ export function Actors() {
 
   const { data: actors, isLoading } = useActors(appIdFilter)
   const [invokeTarget, setInvokeTarget] = useState<Actor | null>(null)
+  // Internal workflow/activity actor types are hidden by default, like internal keys on the State page.
+  const [showInternal, setShowInternal] = useState(false)
 
   function clearFilter() {
     setSearchParams({})
@@ -67,11 +69,37 @@ export function Actors() {
     )
   }
 
-  const activeActors = actors.reduce((sum, a) => sum + (a.count || 0), 0)
-  const actorTypes = new Set(actors.map((a) => a.type)).size
-  const hostingApps = new Set(actors.map(rowKey)).size
+  const internalToggle = (
+    <div className="filters">
+      <label className="childtoggle">
+        <input
+          type="checkbox"
+          aria-label="Show internal"
+          checked={showInternal}
+          onChange={(e) => setShowInternal(e.target.checked)}
+        />
+        Show internal
+      </label>
+    </div>
+  )
+
+  const visible = showInternal ? actors : actors.filter((a) => !a.internal)
+
+  if (visible.length === 0) {
+    return (
+      <div className="page">
+        {header}
+        {internalToggle}
+        <p className="muted">Only internal actor types are registered. Check Show internal to see them.</p>
+      </div>
+    )
+  }
+
+  const activeActors = visible.reduce((sum, a) => sum + (a.count || 0), 0)
+  const actorTypes = new Set(visible.map((a) => a.type)).size
+  const hostingApps = new Set(visible.map(rowKey)).size
   const hosts = new Map<string, boolean>()
-  for (const a of actors) hosts.set(rowKey(a), (hosts.get(rowKey(a)) ?? true) && hostReady(a))
+  for (const a of visible) hosts.set(rowKey(a), (hosts.get(rowKey(a)) ?? true) && hostReady(a))
   const notReady = [...hosts].filter(([, ok]) => !ok).map(([k]) => k)
   const readyCount = hosts.size - notReady.length
   const placementLed = notReady.length === 0 ? 'ok' : readyCount > 0 ? 'warn' : 'bad'
@@ -106,6 +134,7 @@ export function Actors() {
           <div className="l">Placement connected</div>
         </div>
       </div>
+      {internalToggle}
       <div className="card">
         <div className="tablewrap">
           <table className="t">
@@ -126,7 +155,7 @@ export function Actors() {
               </tr>
             </thead>
             <tbody>
-              {actors.map((actor) => (
+              {visible.map((actor) => (
                 <ActorRow
                   key={`${rowKey(actor)}/${actor.type}`}
                   actor={actor}
@@ -139,8 +168,8 @@ export function Actors() {
       </div>
       <p className="hint">
         Dapr Workflow runs on internal actor types (<span className="mono">workflow</span> /{' '}
-        <span className="mono">activity</span>) — tagged <span className="tag-int">internal</span> and
-        shown for completeness.
+        <span className="mono">activity</span>), tagged <span className="tag-int">internal</span>. Check
+        Show internal to include them.
       </p>
       {invokeTarget && (
         <InvokeActorDialog

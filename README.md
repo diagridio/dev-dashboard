@@ -525,21 +525,21 @@ Expand a row to see the full value with its size, version and encoding. **+ New 
 
 ## Actors
 
-The **Actors** page lists the actor types across all apps: the host app, the number of active actors, the idle timeout, reentrancy, reminders and placement status. The idle timeout and reentrancy come from the app's own actor config.
+The **Actors** page lists the actor types across all apps: the host app, the number of active actors, the idle timeout, reentrancy, reminders and placement status. The idle timeout and reentrancy come from the app's own actor config. The internal actor types that Dapr Workflow runs on are hidden unless you tick *Show internal*.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/actors-dark.png">
   <img alt="Dev Dashboard - Actors" src="docs/images/actors-light.png">
 </picture>
 
-Select a type to see its actors. Dapr doesn't list active actor IDs, so the list shows the actors that have state or reminders. Use **Go** to open any actor ID.
+Select a type to see its actors. Dapr doesn't list active actor IDs, so the list shows the actors that have state or reminders. Type in the search box to filter the IDs. If nothing listed matches, you can still open the ID you typed.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/actor-type-dark.png">
   <img alt="Dev Dashboard - Actor type" src="docs/images/actor-type-light.png">
 </picture>
 
-The actor page shows its state, its reminders (with **Delete**) and its timers (Dapr 1.19 and later).
+The actor page shows its state, its reminders (with **Delete**) and its timers (Dapr 1.19 and later). Click a state key to expand its full value.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/actor-detail-dark.png">

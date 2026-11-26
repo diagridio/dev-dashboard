@@ -563,6 +563,30 @@ copy/download buttons per builder.
   the user can switch to a working store.
 - **Clickable card rows:** `table.t.click` (or `table.wf`) handles cursor + hover;
   navigate from the row's `onClick`.
+- **Expandable table rows:** a row that opens its detail in place (State records,
+  actor state keys) toggles from a click anywhere on the `<tr>`, not from a button or
+  link inside it. The first text cell starts with a caret, `▸` when closed and `▾`
+  when open, in an `aria-hidden` span with `marginRight: 6`. The open row gets
+  `className="sel"`, and the detail renders in a following
+  `<tr><td colSpan={n} style={{ background: 'var(--surface)' }}>`. Give the row
+  `tabIndex={0}`, `aria-expanded`, and toggle on Enter/Space too. Collapsible
+  *cards* (workflow history events) use the same idea through `details.evd` and its
+  rotating `.caret` instead; don't mix the two in one list.
+  ```tsx
+  <tr className={open ? 'sel' : undefined} tabIndex={0} aria-expanded={open}
+      onClick={toggle} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() } }}>
+    <td className="mono"><span aria-hidden="true" style={{ marginRight: 6 }}>{open ? '▾' : '▸'}</span>{key}</td>
+  ```
+- **Search filters as you type:** a list filter is a `.search` label (`🔍` + an
+  `<input>` with a placeholder ending in `…` and an `aria-label`) inside `.filters`.
+  It filters while the user types, with no Go/Search button. Filter client-side when
+  the list is already loaded (actor IDs); debounce ~250 ms when each keystroke
+  queries the server (State keys). When a typed value can name something the list
+  can't show (an actor ID Dapr doesn't report), offer an "Open …" link row for it.
+- **Tables that must line up:** two tables shown one above the other with related
+  columns (actor reminders and timers) share one column set and a `<colgroup>` under
+  `table-layout: fixed` (`table.t.sched`), so their columns align. Keep a column
+  even where one table has no value for it, and show `—` in it.
 
 ---
 

@@ -227,6 +227,16 @@ table.t th { font-family: var(--mono); font-size: 10px; letter-spacing: .09em; t
 table.t td { padding: 11px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
 table.t tbody tr:last-child td { border-bottom: none; }
 table.t td.nowrap { white-space: nowrap; }
+/* Actor reminders + timers: one fixed layout so the two tables line up. */
+table.t.sched { table-layout: fixed; }
+table.t.sched col.c-name { width: 18%; }
+table.t.sched col.c-due { width: 11%; }
+table.t.sched col.c-period { width: 13%; }
+table.t.sched col.c-ttl { width: 8%; }
+table.t.sched col.c-cb { width: 13%; }
+table.t.sched col.c-act { width: 96px; }
+table.t.sched td { overflow-wrap: anywhere; }
+table.t.sched td.wrapany { white-space: normal; }
 table.t.click tbody tr { cursor: pointer; }
 table.t.click tbody tr:hover { background: var(--surface-2); }
 .tabnum { font-variant-numeric: tabular-nums; }
