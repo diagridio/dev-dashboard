@@ -181,4 +181,24 @@ describe('Actors', () => {
     const plain = within(screen.getByRole('link', { name: 'Plain' }).closest('tr') as HTMLElement)
     expect(plain.getByRole('button', { name: 'Invoke' })).toBeInTheDocument()
   })
+
+  it('lets long actor types wrap after each dot and keeps compact columns', async () => {
+    server.use(
+      http.get('/api/actors', () =>
+        HttpResponse.json([row({ type: 'dapr.internal.default.order.workflow', internal: true }), row({ type: 'Plain' })]),
+      ),
+    )
+    renderAt()
+    const link = await screen.findByRole('link', { name: 'dapr.internal.default.order.workflow' })
+    // A break opportunity after each of the four dots; the visible text is unchanged.
+    expect(link.querySelectorAll('wbr')).toHaveLength(4)
+    expect(screen.getByRole('link', { name: 'Plain' }).querySelectorAll('wbr')).toHaveLength(0)
+    // "Idle timeout" header is split over two lines.
+    const idle = screen.getByRole('columnheader', { name: /idle\s*timeout/i })
+    expect(idle.querySelector('br')).not.toBeNull()
+    // Reentrancy values and the Invoke button never wrap.
+    const plain = screen.getByRole('link', { name: 'Plain' }).closest('tr') as HTMLElement
+    expect(within(plain).getByRole('button', { name: 'Invoke' }).closest('td')).toHaveClass('nowrap')
+    expect(plain.querySelector('td.reent')).toHaveClass('nowrap')
+  })
 })

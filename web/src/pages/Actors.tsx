@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useActors } from '../hooks/useResources'
 import { InvokeActorDialog } from '../components/InvokeActorDialog'
@@ -114,7 +114,11 @@ export function Actors() {
                 <th>Host app</th>
                 <th>Actor type</th>
                 <th>Active</th>
-                <th>Idle timeout</th>
+                <th>
+                  Idle
+                  <br />
+                  timeout
+                </th>
                 <th>Reentrancy</th>
                 <th>Reminders</th>
                 <th>Placement</th>
@@ -159,6 +163,26 @@ function Dash({ reason }: { reason?: string }) {
   )
 }
 
+/** Renders a dotted name with a line-break opportunity after each dot, so long
+ * internal actor types (dapr.internal.<ns>.<app>.workflow) wrap at the dots. */
+function DotBreaks({ text }: { text: string }) {
+  const parts = text.split('.')
+  return (
+    <>
+      {parts.map((p, i) => (
+        <Fragment key={i}>
+          {p}
+          {i < parts.length - 1 && (
+            <>
+              .<wbr />
+            </>
+          )}
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
 function ActorRow({ actor, onInvoke }: { actor: Actor; onInvoke: () => void }) {
   const key = rowKey(actor)
   const cfg = actor.config
@@ -174,7 +198,9 @@ function ActorRow({ actor, onInvoke }: { actor: Actor; onInvoke: () => void }) {
         </Link>
       </td>
       <td className="mono">
-        <Link className="celllink" to={actorPath(key, actor.type)}>{actor.type}</Link>
+        <Link className="celllink" to={actorPath(key, actor.type)}>
+          <DotBreaks text={actor.type} />
+        </Link>
         {actor.internal && <span className="tag-int">internal</span>}
       </td>
       <td className="mono tabnum b">{actor.count}</td>
@@ -185,7 +211,7 @@ function ActorRow({ actor, onInvoke }: { actor: Actor; onInvoke: () => void }) {
           <Dash reason={actor.configUnavailable?.reason} />
         )}
       </td>
-      <td className="mono tabnum">
+      <td className="mono tabnum reent nowrap">
         {cfg ? reentrancyLabel(cfg.reentrancy) : <Dash reason={actor.configUnavailable?.reason} />}
       </td>
       <td className="mono tabnum">
@@ -203,7 +229,7 @@ function ActorRow({ actor, onInvoke }: { actor: Actor; onInvoke: () => void }) {
           <Dash />
         )}
       </td>
-      <td>
+      <td className="nowrap">
         {!actor.internal && (
           <button type="button" className="btn ghost" onClick={onInvoke}>
             Invoke
