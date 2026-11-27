@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { CodeBlock } from './CodeBlock'
 import { copyText } from '../lib/clipboard'
@@ -6,6 +6,10 @@ import { copyText } from '../lib/clipboard'
 vi.mock('../lib/clipboard', () => ({ copyText: vi.fn() }))
 
 describe('CodeBlock', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('renders json highlighted', () => {
     const { container } = render(<CodeBlock value='{"a":1}' kind="json" label="Input" />)
     const pre = container.querySelector('pre')!
@@ -46,6 +50,15 @@ describe('CodeBlock', () => {
     expect(btn).toHaveAttribute('title', 'Copy the raw value')
     fireEvent.click(btn)
     expect(copyText).toHaveBeenCalledWith('actual')
+  })
+
+  it('empty value disables the copy button and copies nothing', () => {
+    render(<CodeBlock value="" kind="yaml" label="YAML" />)
+    const btn = screen.getByRole('button', { name: 'Copy YAML' })
+    expect(btn).toBeDisabled()
+    fireEvent.click(btn)
+    expect(copyText).not.toHaveBeenCalled()
+    expect(screen.queryByText('YAML copied')).toBeNull()
   })
 
   it('copy button is not inside the pre', () => {

@@ -71,7 +71,7 @@ describe('PayloadView', () => {
     const user = userEvent.setup()
     await waitFor(() => expect(screen.getByRole('button', { name: 'Load payload' })).toBeEnabled())
     await user.click(screen.getByRole('button', { name: 'Load payload' }))
-    await user.click(await screen.findByRole('button', { name: 'Copy Payload' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy Input' }))
     expect(copyText).toHaveBeenCalledWith('hello world')
   })
 
@@ -79,7 +79,7 @@ describe('PayloadView', () => {
     mockApps(true)
     const value = envelope()
     renderView(value)
-    await userEvent.click(screen.getByRole('button', { name: '⧉ Copy reference' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Input reference' }))
     expect(copyText).toHaveBeenCalledWith(value)
   })
 

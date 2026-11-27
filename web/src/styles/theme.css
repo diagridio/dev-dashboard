@@ -262,6 +262,7 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 /* Binary-store reference card: inset within a panel body (10px nested tier, no shadow) */
 .refcard { margin: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .refcard-bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; }
+.refcard-bar .refcard-copy { margin-left: auto; }
 .refcard-bar.wrap { flex-wrap: wrap; }
 .refcard-note { padding: 0 14px; }
 /* The card already has a border, so a loaded payload sits flush under the bar with just a divider. */
@@ -331,6 +332,8 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .copybtn { font: inherit; font-family: var(--mono); font-size: 10.5px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
 .copybtn:hover { color: var(--text); border-color: var(--faint); }
 .copybtn.ok { color: var(--done-fg); border-color: color-mix(in srgb, var(--done-fg) 45%, transparent); }
+.copybtn:disabled { opacity: 0.5; cursor: default; }
+.copybtn:disabled:hover { color: var(--muted); border-color: var(--line); }
 .copybtn:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px); background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 9px 15px; font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 50; }
 .toast .d { width: 8px; height: 8px; border-radius: 50%; background: var(--done-fg); }

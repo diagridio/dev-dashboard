@@ -25,10 +25,10 @@ export function PayloadView({ value, appId, label }: { value: string; appId: str
       </>
     )
   }
-  return <RefCard dref={parsed.ref} appId={appId} value={value} />
+  return <RefCard dref={parsed.ref} appId={appId} value={value} label={label} />
 }
 
-function RefCard({ dref, appId, value }: { dref: DaprRef; appId: string; value: string }) {
+function RefCard({ dref, appId, value, label }: { dref: DaprRef; appId: string; value: string; label: string }) {
   const { toast, toastNode } = useToast()
   const [show, setShow] = useState(false)
   const reasonId = useId()
@@ -62,8 +62,8 @@ function RefCard({ dref, appId, value }: { dref: DaprRef; appId: string; value: 
           </span>
           <button type="button" className="btn ghost" onClick={() => setShow(false)}>Hide</button>
         </div>
-        {content.kind === 'json' && <CodeBlock kind="json" value={content.text} label="Payload" />}
-        {content.kind === 'text' && <CodeBlock kind="text" value={content.text} label="Payload" />}
+        {content.kind === 'json' && <CodeBlock kind="json" value={content.text} label={label} />}
+        {content.kind === 'text' && <CodeBlock kind="text" value={content.text} label={label} />}
         {content.kind === 'binary' && (
           <p className="muted refcard-note">Binary payload ({content.size} bytes) — not shown</p>
         )}
@@ -81,8 +81,8 @@ function RefCard({ dref, appId, value }: { dref: DaprRef; appId: string; value: 
         Stored in binary store
         <button
           type="button"
-          className="btn ghost"
-          style={{ marginLeft: 'auto' }}
+          className="btn ghost refcard-copy"
+          aria-label={`Copy ${label} reference`}
           onClick={() => {
             copyText(value)
             toast.show('Reference copied')

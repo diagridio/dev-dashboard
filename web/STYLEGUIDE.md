@@ -286,7 +286,7 @@ component fails the suite until the doc is updated.
 | Field with suggestions | `components/form/ClearableInput.tsx` — an `<input list>` with a × button inside the field (`.inp-clear` / `.inp-x`). Every datalist field uses it; the × shows only with a value, never when read-only or disabled. |
 | Hand-composed form fields | `components/form/` primitives (`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`, `ClearableInput`) — see §6. |
 | Multi-step builder shell | `components/wizard/` (`Wizard`, `Stepper`, `StepNav`) — see §6. |
-| YAML output step | `components/YamlPreview.tsx` — highlighted preview + Copy/Download — see §6. |
+| YAML output step | `components/YamlPreview.tsx` — `CodeBlock` preview + Download — see §6. |
 | Connection manager | `components/StateStoreConnectionDialog.tsx` (a `Modal` of `.field` rows driven by `MetadataFieldInput`) + `components/StateStoreConnectionsPanel.tsx`. |
 | Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh, whose dot is also the backend-offline indicator — never mount a per-page one), `components/ThemeToggle.tsx`, and the `Share ↗` button (opens `ShareDialog`). `components/CliDrawer.tsx` is mounted once in the `App.tsx` shell as a fixed right-edge overlay (outside `.body`) — like `RefreshControl` it's global; don't mount a per-page one. |
 | Share dialog | `components/ShareDialog.tsx` — a `narrow` `Modal` with an intro line, a read-only message-preview `<textarea>`, and a `.modal-actions` row of channel buttons: Copy (`.btn.primary` + `copyText`/toast, initial focus) and Email / X / LinkedIn / BlueSky (`.btn.ghost` links built by `lib/share.ts`). |
@@ -511,7 +511,7 @@ field can be empty — coerce when you emit.
 ### YAML preview & download
 
 `YamlPreview` (`components/YamlPreview.tsx`) is the standard final step: the
-emitted YAML in a `CodeBlock` (its own `Copy YAML` button and toast), plus a right-aligned
+emitted YAML in a `CodeBlock` (its own button reads "⧉ Copy", accessible name "Copy YAML", with a "YAML copied" toast), plus a right-aligned
 **Download** action (`downloadText()` from `lib/download.ts`, client-side blob download).
 Don't re-implement copy/download buttons per builder.
 
@@ -568,8 +568,9 @@ Don't re-implement copy/download buttons per builder.
   don't render it disabled.
 - **Em dash for empty values:** render `<span className="faint">—</span>`, not an
   empty cell.
-- **Copy-to-clipboard:** `.copybtn` (or click-to-copy on a `.vv.mono`) → `copyText()`
-  → `toast.show('… copied')`. The `⧉ Copy` label is the convention.
+- **Copy-to-clipboard:** code blocks get their copy button from `CodeBlock`; `.copybtn` +
+  `copyText()` → `toast.show('… copied')` is only for one-off values such as IDs
+  (or click-to-copy on a `.vv.mono`). The `⧉ Copy` label is the convention.
 - **Inline page banners:** a non-blocking message above the content — a load error
   the page degrades around, or the result of a bulk action — is a `.banner`, with
   `.danger` (failure) or `.ok` (success) for the text color; the neutral `.banner`

@@ -28,6 +28,7 @@ export function CodeBlock({
   const cls = [kind === 'json' ? 'json' : kind === 'yaml' ? 'code' : '', wrap ? 'wrap' : '']
     .filter(Boolean)
     .join(' ')
+  const empty = (copyValue ?? value) === ''
   const body = kind === 'json' ? highlightJson(value) : kind === 'yaml' ? highlightYaml(value) : value
   return (
     <div className="codeblock">
@@ -37,7 +38,9 @@ export function CodeBlock({
         className="copybtn"
         aria-label={`Copy ${label}`}
         title={copyTitle}
+        disabled={empty}
         onClick={() => {
+          if (empty) return
           copyToClipboard(copyValue ?? value)
           toast.show(`${label} copied`)
         }}
