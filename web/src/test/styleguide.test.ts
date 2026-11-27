@@ -318,11 +318,14 @@ describe('theme.css CodeBlock', () => {
     expect(sels).toContain('.codeblock > pre.code')
   })
 
-  it('no .evbody descendant pre rule styles a pre inside .codeblock', () => {
-    const offenders = rules
-      .flatMap((r) => r.selector.split(',').map((s) => s.trim()))
-      .filter((s) => /^\.evbody\s+pre\b/.test(s))
-    expect(offenders, 'use `.evbody > pre`, which does not reach into .codeblock').toEqual([])
+  it('the .evbody pre rule is a descendant selector that excludes .codeblock pres', () => {
+    const sels = rules.flatMap((r) => r.selector.split(',').map((s) => s.trim()))
+    // Nested pres (PayloadView, stack trace) sit inside wrapper divs, so a
+    // child combinator (`.evbody > pre`) would match none of them.
+    expect(sels.filter((s) => /^\.evbody\s*>\s*pre\b/.test(s))).toEqual([])
+    const sel = sels.find((s) => /^\.evbody\s+pre\b/.test(s))
+    expect(sel, 'no `.evbody pre` descendant rule').toBeDefined()
+    expect(sel).toMatch(/:not\(\s*\.codeblock\s*>\s*pre\s*\)/)
   })
 
   it('reserves a top strip for the copy button instead of right padding', () => {
