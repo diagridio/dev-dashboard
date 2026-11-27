@@ -134,13 +134,14 @@ func (r *storeRegistry) Stores() []server.StoreInfo {
 		return []server.StoreInfo{}
 	}
 	return []server.StoreInfo{{
-		ID:         entryID(SourceAuto, normPath(active.Path)),
-		Name:       active.Name,
-		Type:       active.Type,
-		Source:     SourceAuto,
-		Path:       active.Path,
-		Active:     true,
-		Connection: statestore.ConnInfo(*active),
+		ID:          entryID(SourceAuto, normPath(active.Path)),
+		Name:        active.Name,
+		Type:        active.Type,
+		Source:      SourceAuto,
+		Path:        active.Path,
+		Active:      true,
+		Connection:  statestore.ConnInfo(*active),
+		Unsupported: !statestore.Supported(active.Type),
 	}}
 }
 

@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -182,11 +184,13 @@ func (s *SidecarService) endpointFor(ctx context.Context, appID string) (Sidecar
 // List returns every matching instance across the sidecar-sourced apps in one
 // page (NextToken is always empty: local sidecars hold bounded instance
 // counts, so store-style cursor paging buys nothing here). A failing app is
-// skipped and logged — one down sidecar never empties the whole page.
+// skipped and logged — one down sidecar never empties the whole page — and
+// recorded in SidecarErrors.
 func (s *SidecarService) List(ctx context.Context, q ListQuery) (ListResult, error) {
 	var (
 		mu    sync.Mutex
 		items []ExecutionSummary
+		errs  []SidecarError
 	)
 	s.forEachReachable(ctx, func(ep SidecarEndpoint) {
 		if q.AppID != "" && ep.AppID != q.AppID {
@@ -195,6 +199,9 @@ func (s *SidecarService) List(ctx context.Context, q ListQuery) (ListResult, err
 		sums, err := s.listApp(ctx, ep)
 		if err != nil {
 			sidecarLogger().Warn("sidecar workflow list failed", "appID", ep.AppID, "addr", ep.Addr, "err", err)
+			mu.Lock()
+			errs = append(errs, SidecarError{AppID: ep.AppID, Error: sidecarErrText(err)})
+			mu.Unlock()
 			return
 		}
 		mu.Lock()
@@ -208,7 +215,17 @@ func (s *SidecarService) List(ctx context.Context, q ListQuery) (ListResult, err
 	sort.SliceStable(items, func(a, b int) bool {
 		return afterOrZero(items[a].CreatedAt, items[b].CreatedAt)
 	})
-	return ListResult{Items: items}, nil
+	sort.Slice(errs, func(a, b int) bool { return errs[a].AppID < errs[b].AppID })
+	return ListResult{Items: items, SidecarErrors: errs}, nil
+}
+
+// grpcStatusPrefix is the "rpc error: code = X desc = " that grpc-go puts in
+// front of a status message; it means nothing to a dashboard user.
+var grpcStatusPrefix = regexp.MustCompile(`rpc error: code = \w+ desc = `)
+
+// sidecarErrText is err's message for display, without gRPC status framing.
+func sidecarErrText(err error) string {
+	return grpcStatusPrefix.ReplaceAllString(err.Error(), "")
 }
 
 // forEachReachable runs fn for every endpoint discovery reports reachable,
@@ -473,11 +490,36 @@ func mapSidecarErrFor(appID string, err error) error {
 	return mapSidecarErr(err)
 }
 
-// mapSidecarErr converts the pre-1.17 "not implemented" gRPC codes into
-// ErrSidecarUnsupported (mirroring the dapr CLI's fallback detection).
+// mapSidecarErr converts the pre-1.17 "not implemented" gRPC errors into
+// ErrSidecarUnsupported. The dapr CLI treats every Unknown code as pre-1.17;
+// here an Unknown code counts only when its message says the method is
+// missing, because a 1.17+ sidecar also answers Unknown for runtime failures
+// (e.g. a state store that cannot list keys), and those must be reported as
+// they are.
 func mapSidecarErr(err error) error {
-	if c, ok := status.FromError(err); ok && (c.Code() == codes.Unimplemented || c.Code() == codes.Unknown) {
+	c, ok := status.FromError(err)
+	if !ok {
+		return err
+	}
+	if c.Code() == codes.Unimplemented || (c.Code() == codes.Unknown && notImplementedMsg(c.Message())) {
 		return fmt.Errorf("%w (%v)", ErrSidecarUnsupported, err)
 	}
 	return err
+}
+
+// notImplementedMsg reports whether a gRPC error message says the method or
+// service does not exist on the server. A pre-1.17 daprd (e.g. 1.16) has no
+// durabletask management methods and hands the call to its gRPC service-
+// invocation proxy, which fails with "failed to proxy request: required
+// metadata dapr-callee-app-id or dapr-app-id not found" because the dashboard
+// sends no target app id. Other proxy failures (e.g. "proxy not initialized"
+// during startup) are not version problems and are left as they are.
+func notImplementedMsg(msg string) bool {
+	m := strings.ToLower(msg)
+	for _, s := range []string{"not implemented", "unimplemented", "unknown method", "unknown service", "required metadata"} {
+		if strings.Contains(m, s) {
+			return true
+		}
+	}
+	return false
 }

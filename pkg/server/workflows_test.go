@@ -290,7 +290,7 @@ func (f *fakeBackend) ServiceFor(store string) (workflow.Service, WorkflowRemove
 }
 
 func TestWorkflowsListUnreachableStore(t *testing.T) {
-	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379")
+	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379", nil)
 	h := workflowsRouter(newFakeBackend(unreachable), nil)
 
 	res, body := get(t, h, "/")
@@ -339,7 +339,7 @@ func TestParseListQueryLimitClamped(t *testing.T) {
 }
 
 func TestWorkflowsStatsUnreachableStore(t *testing.T) {
-	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379")
+	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379", nil)
 	h := workflowsRouter(newFakeBackend(unreachable), nil)
 
 	res, body := get(t, h, "/stats")
@@ -348,7 +348,7 @@ func TestWorkflowsStatsUnreachableStore(t *testing.T) {
 }
 
 func TestWorkflowDetailUnreachableStore(t *testing.T) {
-	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379")
+	unreachable := workflow.NewUnreachableService("statestore", "localhost:16379", nil)
 	h := workflowsRouter(newFakeBackend(unreachable), nil)
 
 	res, body := get(t, h, "/order/abc")

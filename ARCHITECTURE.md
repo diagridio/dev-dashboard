@@ -529,8 +529,13 @@ sidecar with a gRPC port when no store is openable) read via gRPC, everything el
 store. An app-scoped read of an owned app that the sidecar cannot answer (unreachable,
 pre-1.17) falls back to the store, and keeps the sidecar outcome only if the store fails too;
 all-apps queries merge both (sidecar wins collisions, first page only), and the no-store /
-unreachable-store banners still fire when nothing is sidecar-eligible. The reconciler's
-`ServiceFor` builds this composite (`cmd/reconciler.go`); sidecar gRPC connections are
+unreachable-store banners still fire when nothing is sidecar-eligible. "No store is
+openable" covers the active store whether it is addressed as `?store=` (empty) or by its
+id, so an active store of an unsupported type (e.g. `state.sqlserver`) or one that fails to
+connect still lists the sidecar runs; the list result then carries `storeError` with the
+reason, which the Workflows page shows as a note. `?store=sidecar` reads the sidecars with no
+store at all; the page preselects it when the active store's type is `unsupported`. The
+reconciler's `ServiceFor` builds this composite (`cmd/reconciler.go`); sidecar gRPC connections are
 cached per address in a `SidecarPool` closed on shutdown. Connections are plaintext unless
 the endpoint asks for TLS (`SidecarEndpoint.TLS`, from a contract app's
 `DEVDASHBOARD_APP_<i>_DAPR_GRPC_TLS` or an `https` `DAPR_HTTP`), verified against the

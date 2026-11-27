@@ -4,11 +4,15 @@ package workflow
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/dapr/durabletask-go/api/protos"
+	"github.com/diagridio/dev-dashboard/pkg/statestore"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -272,4 +276,83 @@ func TestComposite_StatsKeepsStoreCountsForFailingSidecar(t *testing.T) {
 	st, err := NewComposite(base, sc).Stats(context.Background(), ListQuery{})
 	require.NoError(t, err)
 	require.Equal(t, 1, st.Total)
+}
+
+// An active store the dashboard cannot open is replaced by the sidecar list,
+// and the result says why the store was skipped so the page can explain it.
+func TestComposite_UnreachableStoreServedBySidecarWithNote(t *testing.T) {
+	base := NewUnreachableService("statestore", "", fmt.Errorf("%w: state.sqlserver", statestore.ErrUnsupported))
+	sc := sidecarWith(t, "mortgage-agent", &fakeHub{
+		pages:  [][]string{{"w1"}},
+		states: map[string]*protos.WorkflowState{"w1": wfState("w1", "W", protos.OrchestrationStatus_ORCHESTRATION_STATUS_RUNNING, "")},
+	})
+	svc := NewComposite(base, sc)
+
+	res, err := svc.List(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 1)
+	require.Equal(t, `state store "statestore" can't be read directly: unsupported state store type: state.sqlserver`, res.StoreError)
+
+	// App-scoped (the page's default app filter) carries the same note.
+	res, err = svc.List(context.Background(), ListQuery{AppID: "mortgage-agent", IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 1)
+	require.Contains(t, res.StoreError, "unsupported state store type: state.sqlserver")
+
+	ids, err := svc.AppIDs(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, []string{"mortgage-agent"}, ids)
+	stats, err := svc.Stats(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Equal(t, 1, stats.Total)
+
+	// With no store configured at all there is nothing to explain.
+	res, err = NewComposite(fakeBase{err: ErrNoStore}, sc).List(context.Background(), ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Empty(t, res.StoreError)
+}
+
+// When the store can't be used and a sidecar fails too, the result names the
+// failing app and why, so an empty list isn't mistaken for "no workflows"
+// (#196: state.sqlserver on 1.19, where the sidecar can't list keys either).
+func TestComposite_SidecarFailureReportedWhenStoreUnusable(t *testing.T) {
+	const why = "state store *sqlserver.SQLServer does not support listing keys"
+	failing := func() *SidecarService {
+		return sidecarWith(t, "mortgage-agent", &fakeHub{listErr: status.Error(codes.Unknown, why)})
+	}
+	unsupported := NewUnreachableService("statestore", "", fmt.Errorf("%w: state.sqlserver", statestore.ErrUnsupported))
+	ctx := context.Background()
+	want := []SidecarError{{AppID: "mortgage-agent", Error: "failed to list instance IDs: " + why}}
+
+	// Unopenable store, all apps and app-scoped.
+	svc := NewComposite(unsupported, failing())
+	res, err := svc.List(ctx, ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Empty(t, res.Items)
+	require.NotEmpty(t, res.StoreError)
+	require.Equal(t, want, res.SidecarErrors)
+
+	res, err = svc.List(ctx, ListQuery{AppID: "mortgage-agent", IncludeChildren: true})
+	require.NoError(t, err)
+	require.Empty(t, res.Items)
+	require.Equal(t, want, res.SidecarErrors)
+
+	// No store at all (the "app sidecars" choice): reported too.
+	res, err = NewComposite(fakeBase{err: ErrNoStore}, failing()).List(ctx, ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Empty(t, res.StoreError)
+	require.Equal(t, want, res.SidecarErrors)
+
+	// A working store answers for the app, so there is nothing to report.
+	now := time.Now()
+	store := fakeBase{items: []ExecutionSummary{{AppID: "mortgage-agent", InstanceID: "s1", Status: StatusCompleted, CreatedAt: &now}}}
+	res, err = NewComposite(store, failing()).List(ctx, ListQuery{IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 1)
+	require.Empty(t, res.SidecarErrors)
+
+	res, err = NewComposite(store, failing()).List(ctx, ListQuery{AppID: "mortgage-agent", IncludeChildren: true})
+	require.NoError(t, err)
+	require.Len(t, res.Items, 1)
+	require.Empty(t, res.SidecarErrors)
 }

@@ -17,6 +17,10 @@ const ALL_STATUSES: WorkflowStatus[] = ['Running', 'Completed', 'Failed', 'Termi
 
 const STORE_KEY = 'devdash.workflowStore'
 
+// Reserved store id (server.SidecarStoreID): read workflows from the running
+// apps' sidecars only, without any state store.
+const SIDECAR_STORE = 'sidecar'
+
 /** Compute a human-readable duration between two dates (or from createdAt to now if no end). */
 function formatDuration(createdAt?: string, endAt?: string): string {
   if (!createdAt) return '—'
@@ -106,8 +110,10 @@ export function Workflows() {
   const displayStores = useMemo(() => dedupeStores(storeList ?? []), [storeList])
 
   // selectedStore is a store id (null = not yet determined; waits for storeList).
-  // Initialize from localStorage when that id is still in the list, else the
-  // active store's id. A stale persisted id falls back to active.
+  // Initialize from localStorage when that id is still in the list (or is the
+  // sidecar choice), else the active store's id — or the sidecar choice when
+  // the active store is a type the dashboard can't open. A stale persisted id
+  // falls back the same way.
   // Using null-sentinel avoids a double-fetch: the workflow query is disabled
   // until selectedStore is resolved.
   const [selectedStore, setSelectedStore] = useState<string | null>(null)
@@ -119,10 +125,11 @@ export function Workflows() {
   const queryStore = noStores ? undefined : selectedStore ?? undefined
   useEffect(() => {
     if (!displayStores || displayStores.length === 0) return
-    if (selectedStore !== null && displayStores.some((s) => s.id === selectedStore)) return
+    const known = (id: string | null) => id === SIDECAR_STORE || displayStores.some((s) => s.id === id)
+    if (selectedStore !== null && known(selectedStore)) return
     const persisted = window.localStorage.getItem(STORE_KEY)
-    const fromPersisted = persisted && displayStores.some((s) => s.id === persisted) ? persisted : undefined
-    const fallback = activeStore?.id ?? displayStores[0].id
+    const fromPersisted = persisted && known(persisted) ? persisted : undefined
+    const fallback = activeStore?.unsupported ? SIDECAR_STORE : (activeStore?.id ?? displayStores[0].id)
     setSelectedStore(fromPersisted ?? fallback)
   }, [displayStores, activeStore, selectedStore])
 
@@ -375,6 +382,7 @@ export function Workflows() {
                     {storeOptionLabel(s)}
                   </option>
                 ))}
+                <option value={SIDECAR_STORE}>app sidecars — no state store</option>
               </select>
               {selectedStoreObj && (
                 <Link
@@ -405,6 +413,38 @@ export function Workflows() {
       {loadError && (
         <div className="banner danger" data-testid="load-error-banner">
           {loadError} — Select another state store or check the connection.
+        </div>
+      )}
+
+      {/* Sidecar fallback note — the selected store can't be opened, so the
+          list comes from the apps' sidecars */}
+      {!loadError && data?.storeError && (
+        <div className="banner" data-testid="sidecar-fallback-note">
+          Showing workflows from the app sidecars: {data.storeError}.
+        </div>
+      )}
+
+      {/* Sidecar failures — no store answered for these apps, so their
+          workflows are missing from the list */}
+      {!loadError && data?.sidecarErrors && data.sidecarErrors.length > 0 && (
+        <div className="banner danger" data-testid="sidecar-errors-note">
+          {data.sidecarErrors.length === 1 ? (
+            <>
+              Couldn&apos;t list workflows from the sidecar of <b>{data.sidecarErrors[0].appId}</b>:{' '}
+              {data.sidecarErrors[0].error}.
+            </>
+          ) : (
+            <>
+              Couldn&apos;t list workflows from these app sidecars:
+              <ul>
+                {data.sidecarErrors.map((e) => (
+                  <li key={e.appId}>
+                    <b>{e.appId}</b>: {e.error}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       )}
 

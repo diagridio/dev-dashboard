@@ -41,7 +41,18 @@ func storeMissing(err error) bool {
 	return errors.Is(err, ErrNoStore) || errors.Is(err, ErrStoreUnreachable)
 }
 
+// List serves the routed list and, when the store could not be opened and
+// the sidecars answered instead, records why in StoreError — for app-scoped
+// reads too, which never consult the store when the sidecar answers.
 func (c *composite) List(ctx context.Context, q ListQuery) (ListResult, error) {
+	res, err := c.list(ctx, q)
+	if u, ok := c.base.(unreachableService); ok && err == nil {
+		res.StoreError = u.err().Error()
+	}
+	return res, err
+}
+
+func (c *composite) list(ctx context.Context, q ListQuery) (ListResult, error) {
 	if q.AppID != "" {
 		if c.sc.Owns(ctx, q.AppID) {
 			return c.ownedList(ctx, q)
@@ -66,8 +77,12 @@ func (c *composite) List(ctx context.Context, q ListQuery) (ListResult, error) {
 		return baseRes, nil
 	}
 	if baseErr != nil {
+		// No store answered, so the sidecars' failures explain what is
+		// missing from the list; scRes carries them in SidecarErrors.
 		return scRes, nil
 	}
+	// The store answered: an app whose sidecar failed is covered by it, so
+	// its sidecar error is not reported.
 	seen := make(map[string]struct{}, len(scRes.Items))
 	items := make([]ExecutionSummary, 0, len(scRes.Items)+len(baseRes.Items))
 	for _, it := range scRes.Items {
@@ -154,7 +169,7 @@ func (c *composite) Get(ctx context.Context, appID, instanceID string) (Executio
 // ownedList serves an app-scoped list for a sidecar-owned app, falling back
 // to the store when the sidecar fails. With no usable store the failing app
 // yields an empty list, matching the all-apps rule that one bad sidecar never
-// errors the page.
+// errors the page, with the failure in SidecarErrors.
 func (c *composite) ownedList(ctx context.Context, q ListQuery) (ListResult, error) {
 	res, err := c.sc.listOwned(ctx, q)
 	if err == nil {
@@ -163,7 +178,7 @@ func (c *composite) ownedList(ctx context.Context, q ListQuery) (ListResult, err
 	if fb, fbErr := c.base.List(ctx, q); fbErr == nil {
 		return fb, nil
 	}
-	return ListResult{}, nil
+	return ListResult{SidecarErrors: []SidecarError{{AppID: q.AppID, Error: sidecarErrText(err)}}}, nil
 }
 
 // ownedStats is the Stats counterpart of ownedList.
