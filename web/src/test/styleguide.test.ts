@@ -95,6 +95,25 @@ describe('styleguide lint guards', () => {
     ).toEqual([])
   })
 
+  it('no raw pre: text, JSON and YAML output goes through CodeBlock', () => {
+    // Matches `<pre` in code only: comments are stripped first.
+    const offenders: string[] = []
+    for (const rel of files) {
+      if (rel.split(path.sep).join('/') === 'components/CodeBlock.tsx') continue
+      const src = readFileSync(path.join(srcDir, rel), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1')
+      src.split('\n').forEach((line, i) => {
+        if (/<pre\b/.test(line)) offenders.push(`${rel}:${i + 1}: ${line.trim()}`)
+      })
+    }
+    expect(
+      offenders,
+      `Raw <pre> found — use components/CodeBlock (it owns the border, copy button and toast):\n` +
+        offenders.join('\n'),
+    ).toEqual([])
+  })
+
   it('no bright mint text (use var(--accent-fg) for green text)', () => {
     // --accent-bright, --ok-bright and --primary are fills; as a text colour
     // they are unreadable on the light theme's white surfaces. Only the exact
@@ -298,8 +317,9 @@ describe('dropdown variants', () => {
 
 /**
  * CodeBlock layout is pinned statically because jsdom cannot measure layout.
- * Two regressions this guards: later (0,1,1) rules `pre.json` and `.evbody pre`
- * used to out-rank `.codeblock > pre` by source order, and right padding in an
+ * Two regressions this guards: later (0,1,1) layout rules for `pre.json` and
+ * `.evbody pre` used to out-rank `.codeblock > pre` by source order (those rules
+ * are gone now that every pre is a CodeBlock), and right padding in an
  * overflow:auto pre does not keep a long first line out from under the button.
  */
 describe('theme.css CodeBlock', () => {
@@ -318,14 +338,18 @@ describe('theme.css CodeBlock', () => {
     expect(sels).toContain('.codeblock > pre.code')
   })
 
-  it('the .evbody pre rule is a descendant selector that excludes .codeblock pres', () => {
+  it('has no layout rules for raw pres (every pre is a CodeBlock)', () => {
     const sels = rules.flatMap((r) => r.selector.split(',').map((s) => s.trim()))
-    // Nested pres (PayloadView, stack trace) sit inside wrapper divs, so a
-    // child combinator (`.evbody > pre`) would match none of them.
-    expect(sels.filter((s) => /^\.evbody\s*>\s*pre\b/.test(s))).toEqual([])
-    const sel = sels.find((s) => /^\.evbody\s+pre\b/.test(s))
-    expect(sel, 'no `.evbody pre` descendant rule').toBeDefined()
-    expect(sel).toMatch(/:not\(\s*\.codeblock\s*>\s*pre\s*\)/)
+    // Highlighter colour rules (`.json .k`, `.code .yk`) stay; layout rules for a
+    // bare pre must not come back and out-rank `.codeblock > pre`.
+    const bare = sels.filter((s) => /^(\.evbody\s+pre\b|pre\.(json|code|stacktrace)\b)/.test(s))
+    expect(bare).toEqual([])
+  })
+
+  it('a loaded binary-store payload does not double the refcard border', () => {
+    const rule = rules.find((r) => r.selector === '.refcard > .codeblock')
+    expect(rule, 'no `.refcard > .codeblock` rule').toBeDefined()
+    expect(rule!.body).toMatch(/border:\s*0/)
   })
 
   it('reserves a top strip for the copy button instead of right padding', () => {

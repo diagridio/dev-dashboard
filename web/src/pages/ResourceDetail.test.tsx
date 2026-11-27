@@ -1,12 +1,15 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { ResourceDetail } from './ResourceDetail'
+import { copyText } from '../lib/clipboard'
+
+vi.mock('../lib/clipboard', () => ({ copyText: vi.fn() }))
 
 const STATESTORE_FIXTURE = {
   name: 'statestore',
@@ -51,6 +54,18 @@ function renderResourceDetail(kind: 'component' | 'configuration' = 'component',
 }
 
 describe('ResourceDetail', () => {
+  it('YAML block has one copy button', async () => {
+    server.use(
+      http.get('/api/resources/component/statestore', () => HttpResponse.json(STATESTORE_FIXTURE)),
+    )
+    renderResourceDetail()
+    const btn = await screen.findByRole('button', { name: 'Copy YAML' })
+    expect(screen.getAllByRole('button', { name: /copy/i })).toHaveLength(1)
+    expect(btn).toHaveTextContent('⧉ Copy')
+    btn.click()
+    expect(copyText).toHaveBeenCalledWith(STATESTORE_FIXTURE.raw)
+  })
+
   it('renders YAML body and loadedBy app link', async () => {
     server.use(
       http.get('/api/resources/component/statestore', () =>

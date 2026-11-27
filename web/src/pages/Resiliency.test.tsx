@@ -1,12 +1,15 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { Resiliency } from './Resiliency'
+import { copyText } from '../lib/clipboard'
+
+vi.mock('../lib/clipboard', () => ({ copyText: vi.fn() }))
 
 const PARTY = {
   id: 'res111res111',
@@ -73,6 +76,16 @@ function serve(list: unknown[]) {
 }
 
 describe('Resiliency page', () => {
+  it('YAML block has one copy button', async () => {
+    serve([GLOBAL, PARTY])
+    renderPage('/resiliency/res111res111')
+    await waitFor(() => expect(document.querySelector('pre.code')?.textContent).toContain('kind: Resiliency'))
+    expect(screen.getAllByRole('button', { name: /copy yaml/i })).toHaveLength(1)
+    expect(screen.queryByText('⧉ Copy YAML')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy YAML' }))
+    expect(copyText).toHaveBeenCalledWith('kind: Resiliency\n')
+  })
+
   it('shows the empty state and a New resiliency policy link', async () => {
     serve([])
     renderPage()

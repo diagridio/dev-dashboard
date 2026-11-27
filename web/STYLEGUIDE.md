@@ -303,8 +303,9 @@ component fails the suite until the doc is updated.
 - `.card` — rounded bordered surface with shadow; wrap a `table.t` in
   `.card > .tablewrap`.
 - `.panel` — like a card, with a `.ph` header row (`> .ph`); body is usually `.kv`,
-  `.compchips`, or a `<pre>`. Use `.ph .ic` for the little square glyph,
-  `.ph .tagdot` for a colored dot, `.ph .copybtn` auto-right-aligns.
+  `.compchips`, or a `CodeBlock`. Use `.ph .ic` for the little square glyph,
+  `.ph .tagdot` for a colored dot. A `CodeBlock` directly inside a `.panel` is inset 12px
+  (`.panel > .codeblock`) and carries its own copy button, so the `.ph` has none.
 - `.stats` / `.stat` — auto-fit grid of summary tiles. `.stat .n` (big number —
   **mono** + tabular-nums by default), `.stat .l` (caption label).
 - `.metagrid` — dense 4-col key/value header grid (`.m` cell, `.m.span2` to span,
@@ -422,7 +423,9 @@ scrollbars.
 **Code blocks**
 - Text, JSON and YAML output always uses `CodeBlock` (`components/CodeBlock.tsx`): a bordered
   block with its own copy button. Don't add a separate copy button next to it, and don't
-  render a raw `<pre>`.
+  render a raw `<pre>`: the `no raw pre` test in `src/test/styleguide.test.ts` fails on any
+  `<pre` outside `components/CodeBlock.tsx`. When the shown text is a lossy rendering of the
+  stored value (decoded base64), pass `copyValue` plus `copyText="⧉ Copy raw"` and a `copyTitle`.
 
 **Workflow event timeline** — a self-contained vocabulary in `theme.css`
 (the workflows section). Reuse it for anything event-feed-shaped; don't fork it:
@@ -434,7 +437,7 @@ scrollbars.
   Header cells — `.evtype`, `.evname` / `.evnamecell`, `.evtag`, `.evanchor` —
   are pinned to explicit columns of a shared grid so they align vertically
   across every row, even when a cell is absent.
-- Payloads go in `.evbody` (`.lbl` / `.lblrow` captions + bounded `pre`).
+- Payloads go in `.evbody` (`.lbl` / `.lblrow` captions + bounded `CodeBlock`).
 - Related-event pairing: `a.pairchip` / `span.pairchip` (`.pending` dashed),
   with `.ev.pair-hover` / `.ev.pair-selected` highlight states; `.retrybadge`
   flags retries.
@@ -508,10 +511,9 @@ field can be empty — coerce when you emit.
 ### YAML preview & download
 
 `YamlPreview` (`components/YamlPreview.tsx`) is the standard final step: the
-emitted YAML as a highlighted `<pre className="code">`, plus right-aligned
-**Copy** (clipboard + toast) and **Download** (`downloadText()` from
-`lib/download.ts`, client-side blob download) actions. Don't re-implement
-copy/download buttons per builder.
+emitted YAML in a `CodeBlock` (its own `Copy YAML` button and toast), plus a right-aligned
+**Download** action (`downloadText()` from `lib/download.ts`, client-side blob download).
+Don't re-implement copy/download buttons per builder.
 
 ---
 

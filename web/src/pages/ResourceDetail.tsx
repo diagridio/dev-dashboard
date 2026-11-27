@@ -1,8 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useResource } from '../hooks/useResources'
-import { highlightYaml } from '../lib/yaml-highlight'
-import { copyText } from '../lib/clipboard'
-import { useToast } from '../lib/toast'
+import { CodeBlock } from '../components/CodeBlock'
 import { SecretRefsPanel } from '../components/SecretRefsPanel'
 import { SecretStorePanel } from '../components/SecretStorePanel'
 import type { ResourceKind } from '../types/resources'
@@ -19,7 +17,6 @@ export interface ResourceDetailProps {
  */
 export function ResourceDetail({ kind, idOrName }: ResourceDetailProps) {
   const { data: detail, isLoading, isError } = useResource(kind, idOrName)
-  const { toast, toastNode } = useToast()
 
   if (isLoading) {
     return (
@@ -51,13 +48,6 @@ export function ResourceDetail({ kind, idOrName }: ResourceDetailProps) {
   const refList = detail.loadedBy ?? []
   const refLabel = kind === 'component' ? 'loaded' : 'used'
 
-  const copyYaml = () => {
-    if (rawYaml) {
-      copyText(rawYaml)
-      toast.show('YAML copied')
-    }
-  }
-
   return (
     <div>
       {kind === 'component' && detail.secretStore && <SecretStorePanel info={detail.secretStore} />}
@@ -87,12 +77,8 @@ export function ResourceDetail({ kind, idOrName }: ResourceDetailProps) {
               not currently {refLabel}
             </span>
           )}
-          <button className="copybtn" style={{ marginLeft: 'auto' }} onClick={copyYaml}>
-            ⧉ Copy YAML
-          </button>
         </div>
-        <pre className="code">{highlightYaml(rawYaml)}</pre>
-        {toastNode}
+        <CodeBlock value={rawYaml} kind="yaml" label="YAML" />
       </div>
     </div>
   )

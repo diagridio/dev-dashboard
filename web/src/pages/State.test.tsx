@@ -578,6 +578,30 @@ describe('State page row expansion', () => {
       expect(copyText).toHaveBeenCalledWith(B64)
     })
 
+    it('decoded value copies raw: one button, "⧉ Copy raw", copying the stored value', async () => {
+      const panel = await expandB64Row()
+      await userEvent.click(await toggle())
+      await waitFor(() => expect(panel).not.toHaveTextContent(B64))
+
+      expect(within(panel).getAllByRole('button')).toHaveLength(1)
+      const btn = within(panel).getByText('⧉ Copy raw')
+      expect(btn).toHaveAttribute('title', 'Copy the raw base64, not the decoded rendering')
+      await userEvent.click(btn)
+      expect(copyText).toHaveBeenCalledWith(B64)
+      expect(await screen.findByText('Raw value copied')).toBeInTheDocument()
+    })
+
+    it('plain record has one "⧉ Copy" button copying the value', async () => {
+      stubApi()
+      server.use(http.get('/api/state/record', () => HttpResponse.json(RECORD)))
+      renderAt()
+      await userEvent.click(await screen.findByText('order-42'))
+      const panel = await screen.findByTestId('record-panel')
+      expect(within(panel).getAllByRole('button')).toHaveLength(1)
+      await userEvent.click(within(panel).getByText('⧉ Copy'))
+      expect(copyText).toHaveBeenCalledWith(RECORD.value)
+    })
+
     it('notes the decoding in the panel metadata', async () => {
       const panel = await expandB64Row()
       await userEvent.click(await toggle())
@@ -595,7 +619,7 @@ describe('State page row expansion', () => {
       const panel = await screen.findByTestId('record-panel')
       expect(panel).toHaveTextContent('"total"')
       expect(panel).not.toHaveTextContent(/decoded/i)
-      expect(within(panel).getByRole('button', { name: '⧉ Copy' })).toBeInTheDocument()
+      expect(within(panel).getByRole('button', { name: 'Copy Value' })).toBeInTheDocument()
     })
   })
 

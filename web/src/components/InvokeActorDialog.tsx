@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Modal } from './Modal'
 import { ClearableInput } from './form'
+import { CodeBlock } from './CodeBlock'
 import { useInvokeActor } from '../hooks/useActors'
 import { actorPath, recentIds, recentMethods, rememberInvoke } from '../lib/actorRecents'
 import type { InvokeVerb } from '../types/actors'
@@ -101,7 +102,7 @@ export function InvokeActorDialog({ open, onClose, appKey, appId, actorType, act
             <span className="vv mono">{result.durationMs} ms</span>
           </div>
           {result.error && <p className="err">{result.error}</p>}
-          {result.body !== '' && <pre className="code mono">{prettyBody(result.body)}</pre>}
+          {result.body !== '' && <CodeBlock value={prettyBody(result.body)} kind="text" label="Response" />}
           <p>
             <Link className="celllink" to={actorPath(appKey, actorType, id.trim())}>Open actor</Link>
             {' · '}

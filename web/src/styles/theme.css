@@ -264,7 +264,8 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 .refcard-bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; }
 .refcard-bar.wrap { flex-wrap: wrap; }
 .refcard-note { padding: 0 14px; }
-.refcard > pre.json { border-top: 1px solid var(--line); }
+/* The card already has a border, so a loaded payload sits flush under the bar with just a divider. */
+.refcard > .codeblock { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
 .cn-secretwarn { color: var(--fail-fg); font-size: 11px; }
 .health { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; }
 .health .led { width: 8px; height: 8px; border-radius: 50%; }
@@ -375,7 +376,6 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; box-shadow: var(--shadow); }
 .panel > .ph { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 13.5px; }
 .panel > .ph .ic { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 10px; font-family: var(--mono); font-weight: 700; }
-.panel > .ph .copybtn { margin-left: auto; }
 .panel > .codeblock { margin: 12px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 0; }
 .kv > div { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; }
@@ -397,7 +397,6 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .ci.sel { background: color-mix(in srgb, var(--accent-bright) 10%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent-bright); }
 .ci .cn { font-weight: 600; font-size: 13.5px; }
 .ci .ct { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; line-height: 1.65; overflow-x: auto; white-space: pre; }
 .code .yk { color: var(--yk); }
 .code .ys { color: var(--ys); }
 .code .yc { color: var(--yc); }
@@ -518,7 +517,6 @@ tr.sel:hover { background: color-mix(in srgb, var(--accent-bright) 13%, var(--su
 /* Panel variant for workflow detail (override panel border-radius) */
 .io .panel, .io > .panel { border-radius: 12px; }
 .panel > .ph .tagdot { width: 7px; height: 7px; border-radius: 50%; }
-pre.json { margin: 0; padding: 13px; font-family: var(--mono); font-size: 12px; line-height: 1.6; max-height: 24em; overflow: auto; white-space: pre; }
 .json .k { color: var(--jkey); }
 .json .s { color: var(--jstr); }
 .json .n { color: var(--jnum); }
@@ -609,9 +607,7 @@ details[open] .caret { transform: rotate(90deg); }
 .evbody { border-top: 1px solid var(--line-soft); padding: 11px 12px; display: grid; gap: 10px; }
 .evbody > * { min-width: 0; }
 .evbody .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.evbody pre:not(.codeblock > pre) { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px 11px; max-height: 23.25em; overflow: auto; }
 .evbody .lblrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
-.evbody .lblrow .copybtn { padding: 2px 7px; font-size: 10px; }
 .evbody .evfail { display: grid; gap: 6px; padding: 9px 11px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--fail-fg) 35%, transparent); background: color-mix(in srgb, var(--fail-fg) 10%, transparent); }
 .evbody .evfail-type { font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--fail-fg); }
 .evbody .evfail-msg { font-size: 12.5px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
@@ -622,10 +618,6 @@ details[open] .caret { transform: rotate(90deg); }
 .failbanner-head .tbtn { margin-left: auto; }
 .failbanner-msg { font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .failbanner .lblrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-/* Stack traces wrap (long frames/paths) instead of overflowing the box, while
-   keeping the vertical max-height scroll from .evbody pre. Scoped to .stacktrace so
-   JSON payloads keep their non-wrapping, horizontally-scrolling layout. */
-pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .retrybadge { font-family: var(--mono); font-size: 10px; color: var(--pend-fg); background: var(--pend-bg); border-radius: 5px; padding: 1px 6px; }
 .err { color: var(--fail-fg); }
 .ev.reveal { animation: fadein .28s ease; }

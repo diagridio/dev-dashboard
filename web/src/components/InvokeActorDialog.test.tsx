@@ -7,6 +7,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { InvokeActorDialog } from './InvokeActorDialog'
+import { copyText } from '../lib/clipboard'
+
+vi.mock('../lib/clipboard', () => ({ copyText: vi.fn() }))
 import { rememberInvoke, recentIds } from '../lib/actorRecents'
 
 const URL = '/api/actors/order/Cart/c1/invoke'
@@ -33,6 +36,16 @@ async function fill(id: string, method: string, body?: string) {
 }
 
 describe('InvokeActorDialog', () => {
+  it('response body can be copied', async () => {
+    server.use(http.post(URL, () => HttpResponse.json({ status: 200, durationMs: 1, contentType: 'application/json', body: '{"a":1}' })))
+    renderDialog({ actorId: 'c1' })
+    await fill('', 'Add')
+    await userEvent.click(screen.getByRole('button', { name: /^invoke$/i }))
+    await screen.findByText('200')
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Response' }))
+    expect(copyText).toHaveBeenCalledWith(JSON.stringify({ a: 1 }, null, 2))
+  })
+
   beforeEach(() => localStorage.clear())
 
   it('clear buttons empty actor id and method', async () => {

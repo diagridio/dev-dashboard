@@ -2,9 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useResource, useResources } from '../hooks/useResources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-import { highlightYaml } from '../lib/yaml-highlight'
-import { copyText } from '../lib/clipboard'
-import { useToast } from '../lib/toast'
+import { CodeBlock } from '../components/CodeBlock'
 import { SecretStatusPill } from '../components/SecretStatusPill'
 import type { HTTPEndpointHeader, ResourceSummary, SecretRefStatus } from '../types/resources'
 import { ResourceSources } from '../components/ResourceSources'
@@ -182,7 +180,6 @@ export function HttpEndpoints() {
 
 function HttpEndpointDetail({ summary }: { summary: ResourceSummary }) {
   const { data: detail } = useResource('httpendpoint', summary.id)
-  const { toast, toastNode } = useToast()
   const spec = summary.httpEndpoint
   const headers = spec?.headers ?? []
   const rawYaml = detail?.raw ?? ''
@@ -250,22 +247,8 @@ function HttpEndpointDetail({ summary }: { summary: ResourceSummary }) {
       </div>
 
       <div className="panel">
-        <div className="ph">
-          YAML
-          <button
-            className="copybtn"
-            onClick={() => {
-              if (rawYaml) {
-                copyText(rawYaml)
-                toast.show('YAML copied')
-              }
-            }}
-          >
-            ⧉ Copy YAML
-          </button>
-        </div>
-        <pre className="code">{highlightYaml(rawYaml)}</pre>
-        {toastNode}
+        <div className="ph">YAML</div>
+        <CodeBlock value={rawYaml} kind="yaml" label="YAML" />
       </div>
     </div>
   )

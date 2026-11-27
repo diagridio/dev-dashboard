@@ -99,7 +99,7 @@ function tokenize(raw: string): Token[] {
  * Pretty-printing is attempted; if the value is not valid JSON it is rendered
  * verbatim so the caller never needs to catch.
  *
- * Output is suitable for use inside `<pre className="json">`.
+ * Output is suitable for rendering inside a CodeBlock (kind="json").
  * Pure/deterministic; no external dependency.
  */
 export function highlightJson(value: string): React.ReactNode {

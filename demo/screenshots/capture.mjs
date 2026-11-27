@@ -61,7 +61,7 @@ async function settle(page, target) {
   )
   // Resource detail panels load their YAML in a separate request with no
   // loading text; wait for the YAML body when the panel is on the page.
-  if (await page.getByText('Copy YAML').filter({ visible: true }).count()) {
+  if (await page.getByRole('button', { name: 'Copy YAML' }).filter({ visible: true }).count()) {
     await page.getByText('apiVersion').filter({ visible: true }).first().waitFor({ timeout: TIMEOUT_MS })
   }
   await page.evaluate(() => document.fonts.ready)
