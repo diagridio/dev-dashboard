@@ -69,6 +69,7 @@ body {
   --line: #373A39; --line-soft: #262928;
   --text: #F8F8F8; --muted: #A6A6A6; --faint: #6A6A6A;
   --link: #63B8F6; --dapr: #3EA9F5;
+  --accent-fg: #2FE3AD; /* mint for text; --accent-bright is a fill */
   --gold: #F0C75E; --purple: #AC4BFF;
   --run-bg: #0c3450; --run-fg: #7cc6ff; --done-bg: #0c3a1c; --done-fg: #5fdd86;
   --fail-bg: #421321; --fail-fg: #ff8198; --term-bg: #2a323b; --term-fg: #aab4be;
@@ -87,6 +88,7 @@ body {
   --line: #DFE3E8; --line-soft: #ECEFF2;
   --text: #212B36; --muted: #637381; --faint: #919EAB;
   --link: #007AD3; --dapr: #0D2192;
+  --accent-fg: #067A5B; /* dark mint for text; 5.3:1 on --surface */
   --gold: #B8860B; --purple: #7A2FD0;
   --run-bg: #E4F4FE; --run-fg: #0a6ebd; --done-bg: #E3FBEA; --done-fg: #0a8a2c;
   --fail-bg: #FCE4EB; --fail-fg: #b30a45; --term-bg: #EEF1F4; --term-fg: #5c6770;
@@ -151,7 +153,7 @@ body {
 .app.has-new.collapsed #bell-v { display: inline-flex; }
 
 /* Update-available indicator (footer badge + collapsed dot) */
-.upbadge { color: var(--primary); text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.upbadge { color: var(--accent-fg); text-decoration: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
 .upbadge:hover { text-decoration: underline; }
 .updot { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); display: inline-block; }
 .sbvert #update-v { display: none; }
@@ -260,9 +262,11 @@ table.t.click tbody tr:hover { background: var(--surface-2); }
 /* Binary-store reference card: inset within a panel body (10px nested tier, no shadow) */
 .refcard { margin: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .refcard-bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; }
+.refcard-bar .refcard-copy { margin-left: auto; }
 .refcard-bar.wrap { flex-wrap: wrap; }
 .refcard-note { padding: 0 14px; }
-.refcard > pre.json { border-top: 1px solid var(--line); }
+/* The card already has a border, so a loaded payload sits flush under the bar with just a divider. */
+.refcard > .codeblock { border: 0; border-top: 1px solid var(--line); border-radius: 0; }
 .cn-secretwarn { color: var(--fail-fg); font-size: 11px; }
 .health { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; }
 .health .led { width: 8px; height: 8px; border-radius: 50%; }
@@ -328,6 +332,8 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .copybtn { font: inherit; font-family: var(--mono); font-size: 10.5px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
 .copybtn:hover { color: var(--text); border-color: var(--faint); }
 .copybtn.ok { color: var(--done-fg); border-color: color-mix(in srgb, var(--done-fg) 45%, transparent); }
+.copybtn:disabled { opacity: 0.5; cursor: default; }
+.copybtn:disabled:hover { color: var(--muted); border-color: var(--line); }
 .copybtn:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px); background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 9px 15px; font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 50; }
 .toast .d { width: 8px; height: 8px; border-radius: 50%; background: var(--done-fg); }
@@ -348,7 +354,7 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 @media (prefers-reduced-motion: reduce) { .promo { transition: none; transform: none; } }
 .banner { margin-bottom: 12px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 13px; color: var(--text); }
 .banner.danger { color: var(--fail-fg); }
-.banner.ok { color: var(--accent-bright); }
+.banner.ok { color: var(--accent-fg); }
 .banner-dismiss { font: inherit; color: inherit; background: none; border: none; padding: 0; text-decoration: underline; cursor: pointer; }
 .banner-dismiss:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .hint { font-family: var(--mono); font-size: 11px; color: var(--faint); text-align: center; margin-top: 14px; }
@@ -373,7 +379,8 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; overflow: hidden; box-shadow: var(--shadow); }
 .panel > .ph { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 13.5px; }
 .panel > .ph .ic { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 10px; font-family: var(--mono); font-weight: 700; }
-.panel > .ph .copybtn { margin-left: auto; }
+.panel > .codeblock,
+.card > .codeblock { margin: 12px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 0; }
 .kv > div { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; }
 .kv > div:nth-last-child(-n+2) { border-bottom: none; }
@@ -394,11 +401,20 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .ci.sel { background: color-mix(in srgb, var(--accent-bright) 10%, var(--surface)); box-shadow: inset 3px 0 0 var(--accent-bright); }
 .ci .cn { font-weight: 600; font-size: 13.5px; }
 .ci .ct { font-family: var(--mono); font-size: 11px; color: var(--muted); }
-pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; line-height: 1.65; overflow-x: auto; white-space: pre; }
 .code .yk { color: var(--yk); }
 .code .ys { color: var(--ys); }
 .code .yc { color: var(--yc); }
 .code .yd { color: var(--dapr); }
+
+/* CodeBlock: bordered block; the copy button sits outside the scrolling pre so it
+   stays put (and never covers text) when a long line scrolls sideways. */
+.codeblock { position: relative; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.codeblock > pre,
+.codeblock > pre.json,
+.codeblock > pre.code { margin: 0; padding: 32px 11px 9px; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; max-height: 24em; overflow: auto; white-space: pre; background: transparent; border: 0; border-radius: inherit; }
+.codeblock > pre.wrap,
+.codeblock > pre.json.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.codeblock > .copybtn { position: absolute; top: 6px; right: 6px; padding: 2px 7px; font-size: 10px; }
 
 /* ---- Logs ---- */
 .logbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
@@ -421,7 +437,7 @@ pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; 
 .lvl.error { color: var(--fail-fg); background: var(--fail-bg); }
 .lsrc { white-space: nowrap; font-size: 11px; }
 .lsrc.lsrc-daprd { color: var(--dapr); }
-.lsrc.lsrc-app { color: var(--accent-bright); font-weight: 600; }
+.lsrc.lsrc-app { color: var(--accent-fg); font-weight: 600; }
 .lsrc.lsrc-cp { color: var(--run-fg); }
 .lmsg { color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .logrow.error .lmsg { color: var(--fail-fg); }
@@ -505,7 +521,6 @@ tr.sel:hover { background: color-mix(in srgb, var(--accent-bright) 13%, var(--su
 /* Panel variant for workflow detail (override panel border-radius) */
 .io .panel, .io > .panel { border-radius: 12px; }
 .panel > .ph .tagdot { width: 7px; height: 7px; border-radius: 50%; }
-pre.json { margin: 0; padding: 13px; font-family: var(--mono); font-size: 12px; line-height: 1.6; max-height: 24em; overflow: auto; white-space: pre; }
 .json .k { color: var(--jkey); }
 .json .s { color: var(--jstr); }
 .json .n { color: var(--jnum); }
@@ -596,9 +611,7 @@ details[open] .caret { transform: rotate(90deg); }
 .evbody { border-top: 1px solid var(--line-soft); padding: 11px 12px; display: grid; gap: 10px; }
 .evbody > * { min-width: 0; }
 .evbody .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.evbody pre { margin: 0; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 8px; padding: 9px 11px; max-height: 23.25em; overflow: auto; }
 .evbody .lblrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
-.evbody .lblrow .copybtn { padding: 2px 7px; font-size: 10px; }
 .evbody .evfail { display: grid; gap: 6px; padding: 9px 11px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--fail-fg) 35%, transparent); background: color-mix(in srgb, var(--fail-fg) 10%, transparent); }
 .evbody .evfail-type { font-family: var(--mono); font-size: 11.5px; font-weight: 600; color: var(--fail-fg); }
 .evbody .evfail-msg { font-size: 12.5px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
@@ -609,10 +622,6 @@ details[open] .caret { transform: rotate(90deg); }
 .failbanner-head .tbtn { margin-left: auto; }
 .failbanner-msg { font-size: 13px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
 .failbanner .lblrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-/* Stack traces wrap (long frames/paths) instead of overflowing the box, while
-   keeping the vertical max-height scroll from pre.json. Scoped to .stacktrace so
-   JSON payloads keep their non-wrapping, horizontally-scrolling layout. */
-pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .retrybadge { font-family: var(--mono); font-size: 10px; color: var(--pend-fg); background: var(--pend-bg); border-radius: 5px; padding: 1px 6px; }
 .err { color: var(--fail-fg); }
 .ev.reveal { animation: fadein .28s ease; }
@@ -644,6 +653,12 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
    look alike. Browsers also grey a disabled control's own text, so the explicit
    color keeps it on our token instead of the UA's. */
 .inp:disabled, .select:disabled { color: var(--faint); background-color: var(--surface-2); border-color: var(--line-soft); cursor: default; }
+/* ClearableInput: the × sits inside the field's right padding. */
+.inp-clear { position: relative; display: block; }
+.inp-clear .inp { padding-right: 30px; }
+.inp-x { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font: inherit; font-size: 15px; line-height: 1; color: var(--muted); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
+.inp-x:hover { color: var(--text); }
+.inp-x:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
 .field-err { color: var(--fail-fg); font-size: 11px; margin-top: 2px; }
 .field-row { display: flex; align-items: center; gap: 8px; }
 .section-label { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 10px; margin: 6px 0 8px; }
@@ -654,7 +669,7 @@ pre.stacktrace { white-space: pre-wrap; overflow-wrap: anywhere; }
 .stepper { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-bottom: 14px; border-bottom: 1px solid var(--line-soft); }
 .stepper .step { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; }
 .stepper .step.active { color: var(--text); border-color: var(--faint); background: var(--surface-2); }
-.stepper .step.done { color: var(--accent-bright); }
+.stepper .step.done { color: var(--accent-fg); }
 .stepper .step-arrow { font-family: var(--mono); font-size: 12px; line-height: 1; color: var(--faint); user-select: none; }
 .wizard-body { min-height: 120px; }
 .stepnav { display: flex; justify-content: space-between; gap: 10px; }

@@ -1,9 +1,7 @@
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useResource, useResources } from '../hooks/useResources'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
-import { highlightYaml } from '../lib/yaml-highlight'
-import { copyText } from '../lib/clipboard'
-import { useToast } from '../lib/toast'
+import { CodeBlock } from '../components/CodeBlock'
 import type { ResourceSummary, ResiliencySpec } from '../types/resources'
 import { ResourceSources } from '../components/ResourceSources'
 
@@ -164,7 +162,6 @@ function targetRows(spec: ResiliencySpec): TargetRow[] {
 
 function ResiliencyDetail({ summary }: { summary: ResourceSummary }) {
   const { data: detail } = useResource('resiliency', summary.id)
-  const { toast, toastNode } = useToast()
   const spec = summary.resiliency
   const policies = spec ? policyRows(spec) : []
   const targets = spec ? targetRows(spec) : []
@@ -247,22 +244,8 @@ function ResiliencyDetail({ summary }: { summary: ResourceSummary }) {
       </div>
 
       <div className="panel">
-        <div className="ph">
-          YAML
-          <button
-            className="copybtn"
-            onClick={() => {
-              if (rawYaml) {
-                copyText(rawYaml)
-                toast.show('YAML copied')
-              }
-            }}
-          >
-            ⧉ Copy YAML
-          </button>
-        </div>
-        <pre className="code">{highlightYaml(rawYaml)}</pre>
-        {toastNode}
+        <div className="ph">YAML</div>
+        <CodeBlock value={rawYaml} kind="yaml" label="YAML" />
       </div>
     </div>
   )

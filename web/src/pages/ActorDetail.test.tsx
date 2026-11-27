@@ -2,13 +2,16 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { ActorDetail } from './ActorDetail'
 import { recentIds } from '../lib/actorRecents'
+import { copyText } from '../lib/clipboard'
+
+vi.mock('../lib/clipboard', () => ({ copyText: vi.fn() }))
 
 function renderAt(entry = '/actors/a/T/x1') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: 0, staleTime: 0 } } })
@@ -124,6 +127,23 @@ describe('ActorDetail', () => {
     const u = new URL(url)
     expect(u.searchParams.get('store')).toBe('st1')
     expect(u.searchParams.get('key')).toBe('a||T||x1||count')
+  })
+
+  it('expanded state value can be copied', async () => {
+    serve()
+    server.use(
+      http.get('/api/state/record', () =>
+        HttpResponse.json({
+          key: 'a||T||x1||count', appId: 'a', logicalKey: 'T||x1||count', kind: 'actor',
+          value: '{"full":true}', encoding: 'text', size: 13, truncated: false,
+        }),
+      ),
+    )
+    renderAt()
+    await userEvent.click((await screen.findByText('count')).closest('tr') as HTMLElement)
+    await screen.findByText('{"full":true}')
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Value' }))
+    expect(copyText).toHaveBeenCalledWith('{"full":true}')
   })
 
   it('shows the state reason with a link to /state', async () => {

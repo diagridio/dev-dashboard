@@ -20,9 +20,10 @@ describe('YamlPreview (read-only)', () => {
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
   })
 
-  it('Copy copies the yaml', () => {
+  it('Copy is the block\'s Copy YAML button and is the only copy button', () => {
     render(<YamlPreview yaml={'a: 1\n'} filename="c.yaml" />)
-    fireEvent.click(screen.getByRole('button', { name: /^copy$/i }))
+    expect(screen.getAllByRole('button', { name: /copy/i })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy YAML' }))
     expect(copyText).toHaveBeenCalledWith('a: 1\n')
   })
 

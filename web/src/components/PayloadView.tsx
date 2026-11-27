@@ -4,7 +4,9 @@ import { useBinaryFile } from '../hooks/useBinaryFile'
 import { appKey } from '../lib/appKey'
 import { parseDaprRef, type DaprRef } from '../lib/daprRef'
 import { formatBytes } from '../lib/formatBytes'
-import { highlightJson } from '../lib/json-highlight'
+import { copyText } from '../lib/clipboard'
+import { useToast } from '../lib/toast'
+import { CodeBlock } from './CodeBlock'
 import { Spinner } from './Spinner'
 
 const MAX_BYTES = 1048576
@@ -12,21 +14,22 @@ const MAX_BYTES = 1048576
 const tooLarge = (n: number) => `Payload is ${formatBytes(n)} — too large to show here (limit 1 MiB)`
 
 /** Renders a workflow payload: plain data as before, a $daprRef envelope as an on-demand loadable card. */
-export function PayloadView({ value, appId }: { value: string; appId: string }) {
+export function PayloadView({ value, appId, label }: { value: string; appId: string; label: string }) {
   const parsed = parseDaprRef(value)
-  if (parsed.kind === 'data') return <pre className="json">{highlightJson(value)}</pre>
+  if (parsed.kind === 'data') return <CodeBlock kind="json" value={value} label={label} />
   if (parsed.kind === 'invalid') {
     return (
       <>
-        <pre className="json">{highlightJson(value)}</pre>
+        <CodeBlock kind="json" value={value} label={label} />
         <p className="muted" role="note">Invalid data reference: {parsed.reason}</p>
       </>
     )
   }
-  return <RefCard dref={parsed.ref} appId={appId} />
+  return <RefCard dref={parsed.ref} appId={appId} value={value} label={label} />
 }
 
-function RefCard({ dref, appId }: { dref: DaprRef; appId: string }) {
+function RefCard({ dref, appId, value, label }: { dref: DaprRef; appId: string; value: string; label: string }) {
+  const { toast, toastNode } = useToast()
   const [show, setShow] = useState(false)
   const reasonId = useId()
   const apps = useApps()
@@ -59,8 +62,8 @@ function RefCard({ dref, appId }: { dref: DaprRef; appId: string }) {
           </span>
           <button type="button" className="btn ghost" onClick={() => setShow(false)}>Hide</button>
         </div>
-        {content.kind === 'json' && <pre className="json">{highlightJson(content.text)}</pre>}
-        {content.kind === 'text' && <pre className="json">{content.text}</pre>}
+        {content.kind === 'json' && <CodeBlock kind="json" value={content.text} label={label} />}
+        {content.kind === 'text' && <CodeBlock kind="text" value={content.text} label={label} />}
         {content.kind === 'binary' && (
           <p className="muted refcard-note">Binary payload ({content.size} bytes) — not shown</p>
         )}
@@ -74,7 +77,20 @@ function RefCard({ dref, appId }: { dref: DaprRef; appId: string }) {
 
   return (
     <div className="refcard">
-      <div className="refcard-bar b">Stored in binary store</div>
+      <div className="refcard-bar b">
+        Stored in binary store
+        <button
+          type="button"
+          className="btn ghost refcard-copy"
+          aria-label={`Copy ${label} reference`}
+          onClick={() => {
+            copyText(value)
+            toast.show('Reference copied')
+          }}
+        >
+          ⧉ Copy reference
+        </button>
+      </div>
       <div className="kv">
         <div className="kk">store</div>
         <div className="vv mono">{dref.store}</div>
@@ -104,6 +120,7 @@ function RefCard({ dref, appId }: { dref: DaprRef; appId: string }) {
           </>
         )}
       </div>
+      {toastNode}
     </div>
   )
 }

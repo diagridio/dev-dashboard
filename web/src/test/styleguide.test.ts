@@ -95,6 +95,47 @@ describe('styleguide lint guards', () => {
     ).toEqual([])
   })
 
+  it('no raw pre: text, JSON and YAML output goes through CodeBlock', () => {
+    // Matches `<pre` in code only: comments are stripped first.
+    const offenders: string[] = []
+    for (const rel of files) {
+      if (rel.split(path.sep).join('/') === 'components/CodeBlock.tsx') continue
+      const src = readFileSync(path.join(srcDir, rel), 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/(^|[^:])\/\/.*$/gm, '$1')
+      src.split('\n').forEach((line, i) => {
+        if (/<pre\b/.test(line)) offenders.push(`${rel}:${i + 1}: ${line.trim()}`)
+      })
+    }
+    expect(
+      offenders,
+      `Raw <pre> found — use components/CodeBlock (it owns the border, copy button and toast):\n` +
+        offenders.join('\n'),
+    ).toEqual([])
+  })
+
+  it('no bright mint text (use var(--accent-fg) for green text)', () => {
+    // --accent-bright, --ok-bright and --primary are fills; as a text colour
+    // they are unreadable on the light theme's white surfaces. Only the exact
+    // properties color/fill/stroke are checked, so background/border pass.
+    const bad = /(?<![\w-])(?:color|fill|stroke)['"]?\s*[:=]\s*[{'"]*\s*var\(--(?:accent-bright|ok-bright|primary)\)/
+    const offenders: string[] = []
+    const scan = (rel: string) => {
+      const lines = readFileSync(path.join(srcDir, rel), 'utf8').split('\n')
+      lines.forEach((line, i) => {
+        if (bad.test(line)) offenders.push(`${rel}:${i + 1}: ${line.trim()}`)
+      })
+    }
+    scan('styles/theme.css')
+    for (const rel of files) scan(rel)
+    expect(
+      offenders,
+      `Bright mint used as a text colour — use var(--accent-fg) instead ` +
+        `(see STYLEGUIDE.md "Brand & accents"):\n` +
+        offenders.join('\n'),
+    ).toEqual([])
+  })
+
   it('no template-literal className starting with an interpolation (needs a static prefix)', () => {
     // className={`${x} …`} — the first class token comes from data, so it can
     // collide with any global class (STYLEGUIDE.md §1 antipattern). A static
@@ -202,6 +243,11 @@ describe('theme.css native control chrome', () => {
     expect(rule).toMatch(/background(-color)?:/)
   })
 
+  it('defines --accent-fg per theme', () => {
+    expect(block('.app[data-theme="dark"]')).toMatch(/--accent-fg:\s*#2FE3AD/i)
+    expect(block('.app[data-theme="light"]')).toMatch(/--accent-fg:\s*#067A5B/i)
+  })
+
   it('keeps the dark canvas identical to the dark app background', () => {
     const canvas = /--canvas:\s*([^;]+);/.exec(block(':root[data-theme="dark"]'))?.[1]?.trim()
     const appBg = /--bg:\s*([^;]+);/.exec(block('.app[data-theme="dark"]'))?.[1]?.trim()
@@ -250,5 +296,76 @@ describe('dropdown variants', () => {
       `<select> without the .select (filter) or .inp (form) variant — dropdowns must not ` +
         `drift apart, see STYLEGUIDE.md §Dropdowns:\n${offenders.join('\n')}`,
     ).toEqual([])
+  })
+
+  it('no raw datalist inputs (use ClearableInput)', () => {
+    const offenders: string[] = []
+    for (const rel of sourceFiles()) {
+      if (rel.split(path.sep).join('/') === 'components/form/ClearableInput.tsx') continue
+      const src = code(readFileSync(path.join(srcDir, rel), 'utf8'))
+      for (const m of src.matchAll(/<input\b[^>]*>/g)) {
+        if (/\blist=/.test(m[0])) offenders.push(`${rel}: ${m[0].replace(/\s+/g, ' ').slice(0, 90)}`)
+      }
+    }
+    expect(
+      offenders,
+      `<input list=…> outside ClearableInput — a field with suggestions needs the × ` +
+        `(STYLEGUIDE.md §Dropdowns):\n${offenders.join('\n')}`,
+    ).toEqual([])
+  })
+})
+
+/**
+ * CodeBlock layout is pinned statically because jsdom cannot measure layout.
+ * Two regressions this guards: later (0,1,1) layout rules for `pre.json` and
+ * `.evbody pre` used to out-rank `.codeblock > pre` by source order (those rules
+ * are gone now that every pre is a CodeBlock), and right padding in an
+ * overflow:auto pre does not keep a long first line out from under the button.
+ */
+describe('theme.css CodeBlock', () => {
+  const css = readFileSync(path.join(srcDir, 'styles/theme.css'), 'utf8')
+  const rules = [...css.matchAll(/([^{}@;]+)\{([^{}]*)\}/g)].map((m) => ({
+    // Drop /* … */ comments that sit in front of a selector.
+    selector: m[1].replace(/\/\*[\s\S]*?\*\//g, '').trim(),
+    body: m[2],
+  }))
+
+  it('the .codeblock pre rule also covers pre.json and pre.code at higher specificity', () => {
+    const rule = rules.find((r) => /^\.codeblock > pre,/.test(r.selector))
+    expect(rule, 'no `.codeblock > pre, …` rule').toBeDefined()
+    const sels = rule!.selector.split(',').map((s) => s.trim())
+    expect(sels).toContain('.codeblock > pre.json')
+    expect(sels).toContain('.codeblock > pre.code')
+  })
+
+  it('has no layout rules for raw pres (every pre is a CodeBlock)', () => {
+    const sels = rules.flatMap((r) => r.selector.split(',').map((s) => s.trim()))
+    // Highlighter colour rules (`.json .k`, `.code .yk`) stay; layout rules for a
+    // bare pre must not come back and out-rank `.codeblock > pre`.
+    const bare = sels.filter((s) => /^(\.evbody\s+pre\b|pre\.(json|code|stacktrace)\b)/.test(s))
+    expect(bare).toEqual([])
+  })
+
+  it('a loaded binary-store payload does not double the refcard border', () => {
+    const rule = rules.find((r) => r.selector === '.refcard > .codeblock')
+    expect(rule, 'no `.refcard > .codeblock` rule').toBeDefined()
+    expect(rule!.body).toMatch(/border:\s*0/)
+  })
+
+  it('insets a CodeBlock held directly by a card or panel by 12px', () => {
+    for (const sel of ['.panel > .codeblock', '.card > .codeblock']) {
+      const rule = rules.find((r) => r.selector.split(',').map((x) => x.trim()).includes(sel))
+      expect(rule, `no rule for ${sel}`).toBeDefined()
+      expect(rule!.body).toMatch(/margin:\s*12px/)
+    }
+  })
+
+  it('reserves a top strip for the copy button instead of right padding', () => {
+    const rule = rules.find((r) => /^\.codeblock > pre,/.test(r.selector))!
+    const padding = rule.body.match(/padding:\s*([^;]+);/)
+    expect(padding, 'padding missing').not.toBeNull()
+    const [top, right] = padding![1].trim().split(/\s+/).map((v) => parseFloat(v))
+    expect(top).toBeGreaterThanOrEqual(30)
+    expect(right).toBeLessThan(40)
   })
 })

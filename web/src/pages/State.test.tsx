@@ -136,6 +136,18 @@ describe('State page', () => {
     await waitFor(() => expect(seen).toContain('appId=other-app'))
   })
 
+  it('app filter title shows the selected app', async () => {
+    stubApi()
+    renderAt()
+    await screen.findByText('order-42')
+    const appSelect = await screen.findByTestId('app-select')
+    expect(appSelect).not.toHaveAttribute('title')
+    await userEvent.selectOptions(appSelect, 'other-app')
+    await waitFor(() => expect(appSelect).toHaveAttribute('title', 'other-app'))
+    await userEvent.selectOptions(appSelect, '')
+    await waitFor(() => expect(appSelect).not.toHaveAttribute('title'))
+  })
+
   it('debounces the key search into the query', async () => {
     stubApi()
     let seen = ''
@@ -356,8 +368,8 @@ describe('State page record creation', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /new record/i }))
 
-    expect(await screen.findByLabelText(/app id/i)).toHaveValue('myapp')
-    const listId = screen.getByLabelText(/app id/i).getAttribute('list')
+    expect(await screen.findByLabelText(/^app id/i)).toHaveValue('myapp')
+    const listId = screen.getByLabelText(/^app id/i).getAttribute('list')
     const suggested = Array.from(
       document.getElementById(listId as string)?.querySelectorAll('option') ?? [],
     ).map((o) => o.value)
@@ -386,7 +398,7 @@ describe('State page record creation', () => {
     await screen.findByText('order-42')
 
     await userEvent.click(screen.getByRole('button', { name: /new record/i }))
-    await userEvent.type(screen.getByLabelText(/app id/i), 'myapp')
+    await userEvent.type(screen.getByLabelText(/^app id/i), 'myapp')
     await userEvent.type(screen.getByLabelText(/^key/i), 'cart-1')
     await userEvent.type(screen.getByLabelText(/^value/i), 'hello')
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }))
@@ -566,6 +578,30 @@ describe('State page row expansion', () => {
       expect(copyText).toHaveBeenCalledWith(B64)
     })
 
+    it('decoded value copies raw: one button, "⧉ Copy raw", copying the stored value', async () => {
+      const panel = await expandB64Row()
+      await userEvent.click(await toggle())
+      await waitFor(() => expect(panel).not.toHaveTextContent(B64))
+
+      expect(within(panel).getAllByRole('button')).toHaveLength(1)
+      const btn = within(panel).getByText('⧉ Copy raw')
+      expect(btn).toHaveAttribute('title', 'Copy the raw base64, not the decoded rendering')
+      await userEvent.click(btn)
+      expect(copyText).toHaveBeenCalledWith(B64)
+      expect(await screen.findByText('Raw value copied')).toBeInTheDocument()
+    })
+
+    it('plain record has one "⧉ Copy" button copying the value', async () => {
+      stubApi()
+      server.use(http.get('/api/state/record', () => HttpResponse.json(RECORD)))
+      renderAt()
+      await userEvent.click(await screen.findByText('order-42'))
+      const panel = await screen.findByTestId('record-panel')
+      expect(within(panel).getAllByRole('button')).toHaveLength(1)
+      await userEvent.click(within(panel).getByText('⧉ Copy'))
+      expect(copyText).toHaveBeenCalledWith(RECORD.value)
+    })
+
     it('notes the decoding in the panel metadata', async () => {
       const panel = await expandB64Row()
       await userEvent.click(await toggle())
@@ -583,7 +619,7 @@ describe('State page row expansion', () => {
       const panel = await screen.findByTestId('record-panel')
       expect(panel).toHaveTextContent('"total"')
       expect(panel).not.toHaveTextContent(/decoded/i)
-      expect(within(panel).getByRole('button', { name: '⧉ Copy' })).toBeInTheDocument()
+      expect(within(panel).getByRole('button', { name: 'Copy Value' })).toBeInTheDocument()
     })
   })
 

@@ -1,12 +1,15 @@
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { http, HttpResponse } from 'msw'
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { HttpEndpoints } from './HttpEndpoints'
+import { copyText } from '../lib/clipboard'
+
+vi.mock('../lib/clipboard', () => ({ copyText: vi.fn() }))
 
 const IDENTITY = {
   id: 'ep111ep111ep',
@@ -70,6 +73,16 @@ function serve(list: unknown[]) {
 }
 
 describe('HttpEndpoints page', () => {
+  it('YAML block has one copy button', async () => {
+    serve([BILLING, IDENTITY])
+    renderPage('/http-endpoints/ep111ep111ep')
+    await waitFor(() => expect(document.querySelector('pre.code')?.textContent).toContain('kind: HTTPEndpoint'))
+    expect(screen.getAllByRole('button', { name: /copy yaml/i })).toHaveLength(1)
+    expect(screen.queryByText('⧉ Copy YAML')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy YAML' }))
+    expect(copyText).toHaveBeenCalledWith(expect.stringContaining('kind: HTTPEndpoint'))
+  })
+
   it('shows the empty state', async () => {
     serve([])
     renderPage()

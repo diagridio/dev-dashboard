@@ -12,9 +12,7 @@ import { DateTimeCell } from '../components/DateTimeCell'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { NewStateRecordDialog } from '../components/NewStateRecordDialog'
 import { dedupeStores } from '../lib/dedupeStores'
-import { highlightJson } from '../lib/json-highlight'
-import { copyText } from '../lib/clipboard'
-import { useToast } from '../lib/toast'
+import { CodeBlock } from '../components/CodeBlock'
 import { decodeBase64Preview } from '../lib/base64'
 import type { StateStore } from '../types/workflow'
 import type { StateItem } from '../types/state'
@@ -61,7 +59,6 @@ function RecordPanel({
   decode: boolean
 }) {
   const { data, isLoading, isError } = useStateRecord(recordKey, store)
-  const { toast, toastNode } = useToast()
 
   if (isLoading) {
     return (
@@ -83,29 +80,23 @@ function RecordPanel({
 
   return (
     <div className="panel" data-testid="record-panel">
-      {/* .panel > .ph already lays out a header row and pushes .copybtn right. */}
       <div className="ph">
         <span className="mono" style={{ minWidth: 0, wordBreak: 'break-all' }}>
           {data.key}
         </span>
-        {/* Copy is always the stored value: the decoded rendering is lossy,
-            so copying it would hand over bytes that were never in the store. */}
-        <button
-          type="button"
-          className="copybtn"
-          title={decoded ? 'Copy the raw base64, not the decoded rendering' : undefined}
-          onClick={() => {
-            copyText(data.value)
-            toast.show(decoded ? 'Raw value copied' : 'Value copied')
-          }}
-        >
-          {decoded ? '⧉ Copy raw' : '⧉ Copy'}
-        </button>
       </div>
       <div style={{ padding: 12 }}>
-        <pre className="json" style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {highlightJson(decoded ?? data.value)}
-        </pre>
+        {/* Copy is always the stored value: the decoded rendering is lossy,
+            so copying it would hand over bytes that were never in the store. */}
+        <CodeBlock
+          value={decoded ?? data.value}
+          kind="json"
+          wrap
+          label={decoded ? 'Raw value' : 'Value'}
+          copyValue={data.value}
+          copyText={decoded ? '⧉ Copy raw' : undefined}
+          copyTitle={decoded ? 'Copy the raw base64, not the decoded rendering' : undefined}
+        />
         <div className="muted" style={{ marginTop: 8, fontSize: 12 }}>
           {formatSize(data.size)} · version {data.etag || <span className="faint">—</span>} ·{' '}
           {data.encoding}
@@ -114,7 +105,6 @@ function RecordPanel({
           {data.truncated ? ' · truncated at 1 MB' : ''}
         </div>
       </div>
-      {toastNode}
     </div>
   )
 }
@@ -384,6 +374,7 @@ export function State() {
           className="select"
           data-testid="app-select"
           aria-label="Filter by app"
+          title={selectedApp || undefined}
           value={selectedApp}
           onChange={(e) => {
             setSelectedApp(e.target.value)

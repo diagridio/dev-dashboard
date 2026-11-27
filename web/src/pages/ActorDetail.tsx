@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { CodeBlock } from '../components/CodeBlock'
 import { InvokeActorDialog } from '../components/InvokeActorDialog'
 import { useActorDetail, useDeleteReminder } from '../hooks/useActors'
 import { useStateRecord } from '../hooks/useStateRecords'
@@ -191,9 +192,7 @@ function StateRow({ item, type, id, store }: { item: StateItem; type: string; id
             {rec.isLoading && <span className="muted">Loading…</span>}
             {rec.error && <span className="muted">{rec.error.message}</span>}
             {rec.data && (
-              <pre className="mono" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                {rec.data.value}
-              </pre>
+              <CodeBlock value={rec.data.value} kind="text" wrap label="Value" />
             )}
           </td>
         </tr>

@@ -346,6 +346,40 @@ describe('WorkflowDetail', () => {
     expect(outputPre.querySelector('.k')).not.toBeNull()
   })
 
+  it('each payload has exactly one copy button', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order',
+          instanceId: 'abc',
+          name: 'MyWorkflow',
+          status: 'Completed',
+          createdAt: '2026-06-26T10:00:00Z',
+          lastUpdatedAt: '2026-06-26T10:00:10Z',
+          replayCount: 0,
+          input: '{"a":1}',
+          output: '{"b":2}',
+          history: [
+            { sequenceId: 0, timestamp: '2026-06-26T10:00:00Z', type: 'TaskScheduled', name: 'DoWork', input: '{"y":2}' },
+          ],
+        }),
+      ),
+    )
+    renderDetail()
+    await waitFor(() => expect(screen.getByText('COMPLETED')).toBeInTheDocument())
+    const panels = document.querySelectorAll('.io .panel')
+    expect(panels.length).toBe(2)
+    for (const [i, label] of ['Input', 'Output'].entries()) {
+      const copies = within(panels[i] as HTMLElement).getAllByRole('button', { name: /copy/i })
+      expect(copies).toHaveLength(1)
+      expect(copies[0]).toHaveAccessibleName(`Copy ${label}`)
+      expect(panels[i].querySelector('.ph .copybtn')).toBeNull()
+    }
+    const ev = document.querySelector('details.evd .evbody') as HTMLElement
+    expect(within(ev).getAllByRole('button', { name: /^Copy Input$/ })).toHaveLength(1)
+    expect(ev.querySelector('.lblrow .copybtn')).toBeNull()
+  })
+
   it('shows pendingout while workflow is running with no output', async () => {
     server.use(
       http.get('/api/workflows/order/abc', () =>
@@ -993,7 +1027,7 @@ describe('EventRow', () => {
     expect(screen.getByText(/at Charge\(\)/)).toBeInTheDocument()
     expect(screen.getByText('Stack trace')).toBeInTheDocument()
     // Stack trace uses the wrapping class so long frames stay inside the box.
-    expect(container.querySelector('pre.stacktrace')).not.toBeNull()
+    expect(container.querySelector('.codeblock > pre.wrap')).not.toBeNull()
   })
 
   it('omits the stack-trace section when a failed event has no stack trace', () => {
@@ -1280,7 +1314,7 @@ describe('WorkflowDetail — failure banner', () => {
     await userEvent.click(screen.getByRole('button', { name: /show stack trace/i }))
     expect(within(banner).getByText(/at Foo\(\)/)).toBeInTheDocument()
     // Stack trace uses the wrapping class so long frames stay inside the banner.
-    expect(banner.querySelector('pre.stacktrace')).not.toBeNull()
+    expect(banner.querySelector('.codeblock > pre.wrap')).not.toBeNull()
   })
 
   it('shows no failure banner for a completed workflow', async () => {

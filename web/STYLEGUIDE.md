@@ -113,7 +113,8 @@ All tokens are CSS custom properties. Reference them with `var(--name)`.
 | Token | Use |
 |---|---|
 | `--primary` `#0BDDA3` | Brand mint (theme-independent) |
-| `--accent-bright` / `--ok-bright` | Brighter mint (theme-independent) — the single interactive accent: `.btn.primary`, focus rings, selection tints, active nav tab, LEDs, "beat" pulse, checkboxes |
+| `--accent-bright` / `--ok-bright` | Brighter mint (theme-independent) — fills for the single interactive accent: `.btn.primary`, focus rings, selection tints, active nav tab, LEDs, "beat" pulse, checkboxes. Never a text colour |
+| `--accent-fg` | Mint for text: bright in the dark theme (`#2FE3AD`), dark mint in the light theme (`#067A5B`). Use it whenever text should be the accent colour. `--accent-bright`, `--ok-bright` and `--primary` are fills, never a text colour; they're unreadable on the light theme's white surfaces |
 | `--dapr` | Dapr-specific blue (sidecar badges, daprd log source) |
 | `--gold` / `--purple` | Diagrid-brand secondary accents — available for highlights / category chips (not yet used in default UI) |
 
@@ -282,9 +283,10 @@ component fails the suite until the doc is updated.
 | Save/cancel form dialog | `components/form/DialogShell.tsx` — titled `Modal` with Save/Cancel footer + `duplicateNameError` name-collision guard; the builder dialogs are the reference usage. |
 | Follow-scroll log pane | `hooks/useFollowScroll.ts` — pin-to-bottom with scroll-away disengage (24px threshold); both Logs viewers use it. |
 | Descriptor-driven form control | `components/MetadataFieldInput.tsx` — one `.inp` control from a component-metadata field descriptor (vs hand-composed forms: see §6). |
-| Hand-composed form fields | `components/form/` primitives (`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`) — see §6. |
+| Field with suggestions | `components/form/ClearableInput.tsx` — an `<input list>` with a × button inside the field (`.inp-clear` / `.inp-x`). Every datalist field uses it; the × shows only with a value, never when read-only or disabled. |
+| Hand-composed form fields | `components/form/` primitives (`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`, `ClearableInput`) — see §6. |
 | Multi-step builder shell | `components/wizard/` (`Wizard`, `Stepper`, `StepNav`) — see §6. |
-| YAML output step | `components/YamlPreview.tsx` — highlighted preview + Copy/Download — see §6. |
+| YAML output step | `components/YamlPreview.tsx` — `CodeBlock` preview + Download — see §6. |
 | Connection manager | `components/StateStoreConnectionDialog.tsx` (a `Modal` of `.field` rows driven by `MetadataFieldInput`) + `components/StateStoreConnectionsPanel.tsx`. |
 | Global chrome | `components/TopNav.tsx` hosts `components/RefreshControl.tsx` (the app-wide auto-refresh, whose dot is also the backend-offline indicator — never mount a per-page one), `components/ThemeToggle.tsx`, and the `Share ↗` button (opens `ShareDialog`). `components/CliDrawer.tsx` is mounted once in the `App.tsx` shell as a fixed right-edge overlay (outside `.body`) — like `RefreshControl` it's global; don't mount a per-page one. |
 | Share dialog | `components/ShareDialog.tsx` — a `narrow` `Modal` with an intro line, a read-only message-preview `<textarea>`, and a `.modal-actions` row of channel buttons: Copy (`.btn.primary` + `copyText`/toast, initial focus) and Email / X / LinkedIn / BlueSky (`.btn.ghost` links built by `lib/share.ts`). |
@@ -292,7 +294,8 @@ component fails the suite until the doc is updated.
 | Busy indicator | `components/Spinner.tsx` — inline braille-dots spinner for in-progress text. Decorative only (`aria-hidden`): always pair it with a text label, inside a `role="status"` element (e.g. the remove dialog's busy state, the Workflows pager's "Updating…"). Renders nothing under `prefers-reduced-motion`, so the label alone carries the state. |
 | Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. |
 | Promotion banner | `components/PromoBanner.tsx` — mounted once in the `App.tsx` shell (not on `/replay`); a dismissible bottom-right `<aside>` for the product feed's `promotion`, `inert` until it slides in, moving left of the open CLI drawer. Don't build per-page announcement banners; feed content goes here. |
-| Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx` → `<pre className="json">` / `<pre className="code">`. |
+| Code block | `components/CodeBlock.tsx` — bordered block for text, JSON or YAML with its own `⧉ Copy` button (`aria-label="Copy <label>"`, toast `<label> copied`); `wrap` wraps long lines. |
+| Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx`, applied by `components/CodeBlock.tsx` (`kind="json"` / `"yaml"`). |
 
 ### CSS primitives (class → what it is)
 
@@ -300,8 +303,9 @@ component fails the suite until the doc is updated.
 - `.card` — rounded bordered surface with shadow; wrap a `table.t` in
   `.card > .tablewrap`.
 - `.panel` — like a card, with a `.ph` header row (`> .ph`); body is usually `.kv`,
-  `.compchips`, or a `<pre>`. Use `.ph .ic` for the little square glyph,
-  `.ph .tagdot` for a colored dot, `.ph .copybtn` auto-right-aligns.
+  `.compchips`, or a `CodeBlock`. Use `.ph .ic` for the little square glyph,
+  `.ph .tagdot` for a colored dot. A `CodeBlock` directly inside a `.panel` is inset 12px
+  (`.panel > .codeblock`) and carries its own copy button, so the `.ph` has none.
 - `.stats` / `.stat` — auto-fit grid of summary tiles. `.stat .n` (big number —
   **mono** + tabular-nums by default), `.stat .l` (caption label).
 - `.metagrid` — dense 4-col key/value header grid (`.m` cell, `.m.span2` to span,
@@ -369,6 +373,8 @@ component fails the suite until the doc is updated.
 - `.field` — a label-over-control row (`grid`, `gap`); `.field > label` is the muted caption.
   `.req` marks a required-field asterisk; `.field-err` is the inline error line under a control;
   `.field-row` lays out a control plus adjacent element horizontally.
+- `.inp-clear` / `.inp-x` — `ClearableInput`'s wrapper (relative, with right padding on the
+  input) and its × button (muted, `--text` on hover, the `.copybtn` focus ring).
 - `:disabled` — `.inp` and `.select` share one rule (`--surface-2` fill, `--faint` text,
   `--line-soft` border, default cursor) so an input and a dropdown beside it recede together
   and match the disabled buttons. A styleguide test requires it. Prefer omitting a control the
@@ -380,6 +386,21 @@ component fails the suite until the doc is updated.
 and toolbars, `select.inp` in form fields. A styleguide test enforces the pair. A free-text
 field with suggestions is an `<input list>` + `<datalist>` on `.inp` — used for the State
 page's New record app id, where a prefix that has no records yet must still be typeable.
+A field with suggestions uses `ClearableInput`. Browsers only suggest entries that match the
+current text, so a prefilled or typed value hides the other suggestions until it's cleared;
+the × makes that one click. A styleguide test rejects a raw `<input list>`.
+
+The **empty first option** follows one rule per kind of dropdown:
+
+| Dropdown kind | Empty option | Example |
+|---|---|---|
+| Filter (narrows a list) | `All <things>` | Workflows and State: "All apps" |
+| Picker outside a form that must be chosen before the page shows anything | `Select <thing>…` | Logs: "Select target…" |
+| Form field | `—` | `SelectInput`, `MetadataFieldInput`; the field label carries the required asterisk |
+| Action menu (picking adds something) | `+ <action>…` | State store dialog: "+ add optional field…" |
+
+Every `.select` inside `.filters` carries a `title` with the selected value
+(`title={value || undefined}`), so a value cut off by the column width is still readable.
 
 The **popup** either one opens is drawn by the OS *outside the page*, so no CSS reaches inside
 it. `color-scheme` is the only control, and the browser reads it from the **document root** —
@@ -400,9 +421,11 @@ scrollbars.
   `.offline-label` when the `/api/health` probe fails.
 
 **Code blocks**
-- `<pre className="json">` + `highlightJson(...)` for JSON.
-- `<pre className="code">` + YAML highlighter for component/config YAML.
-- `<pre className="evbody pre">` patterns for workflow event payloads.
+- Text, JSON and YAML output always uses `CodeBlock` (`components/CodeBlock.tsx`): a bordered
+  block with its own copy button. Don't add a separate copy button next to it, and don't
+  render a raw `<pre>`: the `no raw pre` test in `src/test/styleguide.test.ts` fails on any
+  `<pre` outside `components/CodeBlock.tsx`. When the shown text is a lossy rendering of the
+  stored value (decoded base64), pass `copyValue` plus `copyText="⧉ Copy raw"` and a `copyTitle`.
 
 **Workflow event timeline** — a self-contained vocabulary in `theme.css`
 (the workflows section). Reuse it for anything event-feed-shaped; don't fork it:
@@ -414,7 +437,7 @@ scrollbars.
   Header cells — `.evtype`, `.evname` / `.evnamecell`, `.evtag`, `.evanchor` —
   are pinned to explicit columns of a shared grid so they align vertically
   across every row, even when a cell is absent.
-- Payloads go in `.evbody` (`.lbl` / `.lblrow` captions + bounded `pre`).
+- Payloads go in `.evbody` (`.lbl` / `.lblrow` captions + bounded `CodeBlock`).
 - Related-event pairing: `a.pairchip` / `span.pairchip` (`.pending` dashed),
   with `.ev.pair-hover` / `.ev.pair-selected` highlight states; `.retrybadge`
   flags retries.
@@ -467,7 +490,7 @@ and `.stepnav`).
 
 ### Form primitives — `components/form/`
 
-`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle` — thin wrappers
+`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`, `ClearableInput` — thin wrappers
 over the `.field` / `.inp` / `.select` / `.childtoggle` classes with a
 `value`/`onChange` string API. `Field` owns the muted label, the `.req`
 required asterisk, and the inline `.field-err` line; put exactly one control
@@ -488,10 +511,9 @@ field can be empty — coerce when you emit.
 ### YAML preview & download
 
 `YamlPreview` (`components/YamlPreview.tsx`) is the standard final step: the
-emitted YAML as a highlighted `<pre className="code">`, plus right-aligned
-**Copy** (clipboard + toast) and **Download** (`downloadText()` from
-`lib/download.ts`, client-side blob download) actions. Don't re-implement
-copy/download buttons per builder.
+emitted YAML in a `CodeBlock` (its own button reads "⧉ Copy", accessible name "Copy YAML", with a "YAML copied" toast), plus a right-aligned
+**Download** action (`downloadText()` from `lib/download.ts`, client-side blob download).
+Don't re-implement copy/download buttons per builder.
 
 ---
 
@@ -546,8 +568,9 @@ copy/download buttons per builder.
   don't render it disabled.
 - **Em dash for empty values:** render `<span className="faint">—</span>`, not an
   empty cell.
-- **Copy-to-clipboard:** `.copybtn` (or click-to-copy on a `.vv.mono`) → `copyText()`
-  → `toast.show('… copied')`. The `⧉ Copy` label is the convention.
+- **Copy-to-clipboard:** code blocks get their copy button from `CodeBlock`; `.copybtn` +
+  `copyText()` → `toast.show('… copied')` is only for one-off values such as IDs
+  (or click-to-copy on a `.vv.mono`). The `⧉ Copy` label is the convention.
 - **Inline page banners:** a non-blocking message above the content — a load error
   the page degrades around, or the result of a bulk action — is a `.banner`, with
   `.danger` (failure) or `.ok` (success) for the text color; the neutral `.banner`
@@ -645,6 +668,9 @@ already provides (e.g. re-specifying the whole `.ph` rule inline as
 - [ ] Root is `.page`; header is `.phead` or `.crumbs`.
 - [ ] Loading, empty, and error states are handled.
 - [ ] No hardcoded colors — everything is `var(--…)`.
+- [ ] Green text uses `--accent-fg`, never `--accent-bright`, `--ok-bright` or `--primary`.
+- [ ] Fields with suggestions use `ClearableInput`.
+- [ ] Text, JSON and YAML output uses `CodeBlock`.
 - [ ] Any class name built from runtime data is prefixed (e.g. `lsrc-${src}`), not a
       bare data word that could collide with a global class (see §1 antipattern).
 - [ ] Labels are mono/uppercase/muted via existing classes; every number/time/

@@ -10,7 +10,7 @@ const BOOL_DAPR_RE = /^(\s*)(true|false)(\s*)$/
  * - string/scalar values → <span className="ys">
  * - boolean/Dapr literals (true/false alone on a line) → <span className="yd">
  * - Lines with no match → verbatim text
- * Returns a fragment suitable for use inside a <pre className="code">.
+ * Returns a fragment suitable for rendering inside a CodeBlock (kind="yaml").
  * Pure/deterministic; no external dependency.
  */
 export function highlightYaml(text: string): React.ReactNode {

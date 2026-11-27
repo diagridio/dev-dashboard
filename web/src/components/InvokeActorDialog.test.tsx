@@ -7,6 +7,9 @@ import { QueryClient } from '@tanstack/react-query'
 import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { InvokeActorDialog } from './InvokeActorDialog'
+import { copyText } from '../lib/clipboard'
+
+vi.mock('../lib/clipboard', () => ({ copyText: vi.fn() }))
 import { rememberInvoke, recentIds } from '../lib/actorRecents'
 
 const URL = '/api/actors/order/Cart/c1/invoke'
@@ -27,13 +30,37 @@ function renderDialog(props: { actorId?: string; suggestedIds?: string[] } = {})
 }
 
 async function fill(id: string, method: string, body?: string) {
-  if (id) await userEvent.type(screen.getByLabelText(/actor id/i), id)
+  if (id) await userEvent.type(screen.getByLabelText(/^actor id/i), id)
   if (method) await userEvent.type(screen.getByLabelText(/^method/i), method)
   if (body) await userEvent.type(screen.getByLabelText(/body/i), body)
 }
 
 describe('InvokeActorDialog', () => {
+  it('response body can be copied', async () => {
+    server.use(http.post(URL, () => HttpResponse.json({ status: 200, durationMs: 1, contentType: 'application/json', body: '{"a":1}' })))
+    renderDialog({ actorId: 'c1' })
+    await fill('', 'Add')
+    await userEvent.click(screen.getByRole('button', { name: /^invoke$/i }))
+    await screen.findByText('200')
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Response' }))
+    expect(copyText).toHaveBeenCalledWith(JSON.stringify({ a: 1 }, null, 2))
+  })
+
   beforeEach(() => localStorage.clear())
+
+  it('clear buttons empty actor id and method', async () => {
+    renderDialog()
+    await fill('c1', 'add')
+    await userEvent.click(screen.getByRole('button', { name: 'Clear Actor ID' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear Method' }))
+    expect(screen.getByLabelText(/^actor id/i)).toHaveValue('')
+    expect(screen.getByLabelText(/^method/i)).toHaveValue('')
+  })
+
+  it('no clear button on a read-only actor id', () => {
+    renderDialog({ actorId: 'c1' })
+    expect(screen.queryByRole('button', { name: 'Clear Actor ID' })).not.toBeInTheDocument()
+  })
 
   it('requires a method and sends nothing', async () => {
     let called = false
@@ -107,7 +134,7 @@ describe('InvokeActorDialog', () => {
 
   it('prefills a read-only ID when actorId is given', () => {
     renderDialog({ actorId: 'c1' })
-    const input = screen.getByLabelText(/actor id/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^actor id/i) as HTMLInputElement
     expect(input.value).toBe('c1')
     expect(input.readOnly).toBe(true)
   })

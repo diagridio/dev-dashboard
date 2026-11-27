@@ -1,6 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
-import { Field, TextInput, NumberInput, SelectInput, Toggle, DialogShell, duplicateNameError } from './index'
+import { ClearableInput, Field, TextInput, NumberInput, SelectInput, Toggle, DialogShell, duplicateNameError } from './index'
 
 describe('Field', () => {
   it('renders label, required marker, and error', () => {
@@ -81,5 +81,28 @@ describe('NumberInput', () => {
     render(<NumberInput value="" onChange={onChange} aria-label="n" />)
     fireEvent.change(screen.getByLabelText('n'), { target: { value: '5' } })
     expect(onChange).toHaveBeenCalledWith('5')
+  })
+})
+
+describe('ClearableInput', () => {
+  it('hides the clear button when empty', () => {
+    render(<ClearableInput label="App ID" value="" onChange={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Clear App ID' })).not.toBeInTheDocument()
+  })
+
+  it('hides it when read-only or disabled', () => {
+    const { rerender } = render(<ClearableInput label="App ID" value="x" readOnly onChange={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Clear App ID' })).not.toBeInTheDocument()
+    rerender(<ClearableInput label="App ID" value="x" disabled onChange={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Clear App ID' })).not.toBeInTheDocument()
+  })
+
+  it('clears and focuses', () => {
+    const onChange = vi.fn()
+    render(<ClearableInput label="App ID" id="a" value="order-app" onChange={onChange} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Clear App ID' }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith('')
+    expect(document.getElementById('a')).toHaveFocus()
   })
 })
