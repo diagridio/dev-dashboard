@@ -81,6 +81,7 @@ describe('PayloadView', () => {
     renderView(value)
     await userEvent.click(screen.getByRole('button', { name: 'Copy Input reference' }))
     expect(copyText).toHaveBeenCalledWith(value)
+    expect(screen.getByText('Input reference copied')).toBeInTheDocument()
   })
 
   it('renders plain JSON highlighted without a card', () => {
