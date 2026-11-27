@@ -295,3 +295,42 @@ describe('dropdown variants', () => {
     ).toEqual([])
   })
 })
+
+/**
+ * CodeBlock layout is pinned statically because jsdom cannot measure layout.
+ * Two regressions this guards: later (0,1,1) rules `pre.json` and `.evbody pre`
+ * used to out-rank `.codeblock > pre` by source order, and right padding in an
+ * overflow:auto pre does not keep a long first line out from under the button.
+ */
+describe('theme.css CodeBlock', () => {
+  const css = readFileSync(path.join(srcDir, 'styles/theme.css'), 'utf8')
+  const rules = [...css.matchAll(/([^{}@;]+)\{([^{}]*)\}/g)].map((m) => ({
+    // Drop /* … */ comments that sit in front of a selector.
+    selector: m[1].replace(/\/\*[\s\S]*?\*\//g, '').trim(),
+    body: m[2],
+  }))
+
+  it('the .codeblock pre rule also covers pre.json and pre.code at higher specificity', () => {
+    const rule = rules.find((r) => /^\.codeblock > pre,/.test(r.selector))
+    expect(rule, 'no `.codeblock > pre, …` rule').toBeDefined()
+    const sels = rule!.selector.split(',').map((s) => s.trim())
+    expect(sels).toContain('.codeblock > pre.json')
+    expect(sels).toContain('.codeblock > pre.code')
+  })
+
+  it('no .evbody descendant pre rule styles a pre inside .codeblock', () => {
+    const offenders = rules
+      .flatMap((r) => r.selector.split(',').map((s) => s.trim()))
+      .filter((s) => /^\.evbody\s+pre\b/.test(s))
+    expect(offenders, 'use `.evbody > pre`, which does not reach into .codeblock').toEqual([])
+  })
+
+  it('reserves a top strip for the copy button instead of right padding', () => {
+    const rule = rules.find((r) => /^\.codeblock > pre,/.test(r.selector))!
+    const padding = rule.body.match(/padding:\s*([^;]+);/)
+    expect(padding, 'padding missing').not.toBeNull()
+    const [top, right] = padding![1].trim().split(/\s+/).map((v) => parseFloat(v))
+    expect(top).toBeGreaterThanOrEqual(30)
+    expect(right).toBeLessThan(40)
+  })
+})
