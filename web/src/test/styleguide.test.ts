@@ -192,6 +192,13 @@ describe('theme.css native control chrome', () => {
     }
   })
 
+  // The shared toast renders at the app root, outside any modal, so it has to
+  // stack above the modal backdrop or a copy inside a dialog shows nothing.
+  it('toast sits above modals', () => {
+    const z = (sel: string) => Number(/z-index:\s*(\d+)/.exec(block(sel))?.[1])
+    expect(z('.toast')).toBeGreaterThan(z('.modal-backdrop'))
+  })
+
   // Codifies the dropdown audit: both variants must keep sharing one chevron
   // rule, so a new one cannot quietly fall back to the OS arrow.
   it('styles both select variants from a single chevron rule', () => {
@@ -367,5 +374,20 @@ describe('theme.css CodeBlock', () => {
     const [top, right] = padding![1].trim().split(/\s+/).map((v) => parseFloat(v))
     expect(top).toBeGreaterThanOrEqual(30)
     expect(right).toBeLessThan(40)
+  })
+})
+
+// The theme tokens (--surface-2, --line, --text, ...) are defined on .app, so
+// the one shared toast must render inside it. Mounted in main.tsx it would sit
+// outside .app and lose its background, border and colours.
+describe('shared toast placement', () => {
+  it('ToastProvider is mounted inside .app in App.tsx, not in main.tsx', () => {
+    const main = readFileSync(path.join(srcDir, 'main.tsx'), 'utf8')
+    const app = readFileSync(path.join(srcDir, 'App.tsx'), 'utf8')
+    expect(main).not.toMatch(/<ToastProvider\b/)
+    const appDiv = app.indexOf('data-theme={theme}>')
+    const provider = app.indexOf('<ToastProvider>')
+    expect(appDiv, 'App.tsx renders the .app div').toBeGreaterThan(-1)
+    expect(provider, 'ToastProvider opens after (inside) the .app div').toBeGreaterThan(appDiv)
   })
 })

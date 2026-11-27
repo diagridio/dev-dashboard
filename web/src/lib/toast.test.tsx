@@ -1,6 +1,6 @@
 import { act, render, renderHook, screen } from '@testing-library/react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { useToast, Toast } from './toast'
+import { useToast, Toast, ToastProvider } from './toast'
 
 // Helper component that exposes the toast API for testing
 function ToastHarness({ onMount }: { onMount: (show: (msg: string) => void) => void }) {
@@ -80,5 +80,56 @@ describe('useToast hook', () => {
     const toastEl = container.querySelector('[aria-live="polite"]')
     expect(toastEl).not.toBeNull()
     expect(toastEl).toHaveAttribute('aria-live', 'polite')
+  })
+})
+
+describe('ToastProvider', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('two components share one toast', () => {
+    let showA: ((msg: string) => void) | null = null
+    let showB: ((msg: string) => void) | null = null
+    render(
+      <ToastProvider>
+        <ToastHarness onMount={(fn) => { showA = fn }} />
+        <ToastHarness onMount={(fn) => { showB = fn }} />
+      </ToastProvider>,
+    )
+    act(() => { showA!('A copied') })
+    act(() => { showB!('B copied') })
+    const toasts = document.querySelectorAll('.toast')
+    expect(toasts).toHaveLength(1)
+    expect(toasts[0]).toHaveClass('show')
+    expect(toasts[0]).toHaveTextContent('B copied')
+    expect(screen.queryByText('A copied')).toBeNull()
+  })
+
+  it('message outlives the caller', () => {
+    vi.useFakeTimers()
+    let show: ((msg: string) => void) | null = null
+    function Host({ withCaller }: { withCaller: boolean }) {
+      return (
+        <ToastProvider>
+          {withCaller && <ToastHarness onMount={(fn) => { show = fn }} />}
+        </ToastProvider>
+      )
+    }
+    const { rerender } = render(<Host withCaller />)
+    act(() => { show!('X copied') })
+    rerender(<Host withCaller={false} />)
+    const toastEl = document.querySelector('.toast')!
+    expect(toastEl).toHaveClass('show')
+    expect(toastEl).toHaveTextContent('X copied')
+    act(() => { vi.advanceTimersByTime(1400) })
+    expect(toastEl).not.toHaveClass('show')
+  })
+
+  it('falls back without a provider', () => {
+    let show: ((msg: string) => void) | null = null
+    const { container } = render(<ToastHarness onMount={(fn) => { show = fn }} />)
+    act(() => { show!('Local copied') })
+    expect(container.querySelector('.toast')).toHaveTextContent('Local copied')
   })
 })

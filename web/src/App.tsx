@@ -11,6 +11,7 @@ import { trackAction, trackView } from './lib/telemetry'
 import { useDiscoveryTelemetry } from './hooks/useDiscoveryTelemetry'
 import { useKonami } from './hooks/useKonami'
 import { useCtrlKeyToggle } from './hooks/useCtrlKeyToggle'
+import { ToastProvider } from './lib/toast'
 
 interface RouteHandle {
   rumView?: string
@@ -76,22 +77,25 @@ export function App() {
   return (
     <SmallScreenGuard>
       <div className={appClass} data-theme={theme}>
-        <TopNav theme={theme} onThemeChange={setTheme} daprLogo={daprMode} />
-        {!daprMode && (
-          <ResourcesSidebar
-            collapsed={collapsed}
-            onCollapsedChange={setCollapsed}
-            onHasNewChange={setHasNew}
-            onUpdateAvailableChange={setUpdateAvailable}
-          />
-        )}
-        {/* tabIndex -1: programmatic focus target (e.g. after closing the promotion banner). */}
-        <main className="body" tabIndex={-1}>
-          <Outlet />
-        </main>
-        <CliDrawer context={rumView} values={cliValues} />
-        {/* Not on REPLAY (and so not in its kiosk mode): the game owns the whole frame. */}
-        {pathname !== '/replay' && getCapabilities().hidePromotion !== true && <PromoBanner />}
+        {/* Inside .app so the one shared toast gets the theme tokens. */}
+        <ToastProvider>
+          <TopNav theme={theme} onThemeChange={setTheme} daprLogo={daprMode} />
+          {!daprMode && (
+            <ResourcesSidebar
+              collapsed={collapsed}
+              onCollapsedChange={setCollapsed}
+              onHasNewChange={setHasNew}
+              onUpdateAvailableChange={setUpdateAvailable}
+            />
+          )}
+          {/* tabIndex -1: programmatic focus target (e.g. after closing the promotion banner). */}
+          <main className="body" tabIndex={-1}>
+            <Outlet />
+          </main>
+          <CliDrawer context={rumView} values={cliValues} />
+          {/* Not on REPLAY (and so not in its kiosk mode): the game owns the whole frame. */}
+          {pathname !== '/replay' && getCapabilities().hidePromotion !== true && <PromoBanner />}
+        </ToastProvider>
       </div>
     </SmallScreenGuard>
   )
