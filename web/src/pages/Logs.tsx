@@ -516,7 +516,7 @@ export function Logs() {
           onChange={e => onTargetChange(e.target.value)}
           aria-label="Target"
         >
-          <option value="">— select target —</option>
+          <option value="">Select target…</option>
           {appOptions.length > 0 && (
             <optgroup label="Applications">
               {appOptions.map(o => (

@@ -384,6 +384,7 @@ export function State() {
           className="select"
           data-testid="app-select"
           aria-label="Filter by app"
+          title={selectedApp || undefined}
           value={selectedApp}
           onChange={(e) => {
             setSelectedApp(e.target.value)

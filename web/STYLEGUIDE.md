@@ -382,6 +382,18 @@ and toolbars, `select.inp` in form fields. A styleguide test enforces the pair. 
 field with suggestions is an `<input list>` + `<datalist>` on `.inp` — used for the State
 page's New record app id, where a prefix that has no records yet must still be typeable.
 
+The **empty first option** follows one rule per kind of dropdown:
+
+| Dropdown kind | Empty option | Example |
+|---|---|---|
+| Filter (narrows a list) | `All <things>` | Workflows and State: "All apps" |
+| Picker outside a form that must be chosen before the page shows anything | `Select <thing>…` | Logs: "Select target…" |
+| Form field | `—` | `SelectInput`, `MetadataFieldInput`; the field label carries the required asterisk |
+| Action menu (picking adds something) | `+ <action>…` | State store dialog: "+ add optional field…" |
+
+Every `.select` inside `.filters` carries a `title` with the selected value
+(`title={value || undefined}`), so a value cut off by the column width is still readable.
+
 The **popup** either one opens is drawn by the OS *outside the page*, so no CSS reaches inside
 it. `color-scheme` is the only control, and the browser reads it from the **document root** —
 which is why `App.tsx` mirrors `data-theme` onto `<html>` and `theme.css` carries

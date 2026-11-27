@@ -187,6 +187,15 @@ describe('Logs', () => {
     expect(row).not.toBeNull()
   })
 
+  it('empty target option reads Select target…', async () => {
+    server.use(
+      http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),
+      http.get('/api/apps/order', () => HttpResponse.json(ORDER_DETAIL)),
+    )
+    renderAt()
+    expect(await screen.findByRole('option', { name: 'Select target…' })).toBeInTheDocument()
+  })
+
   it('shows the page header with .phead, h1, .sub, and .live indicator', async () => {
     server.use(
       http.get('/api/apps', () => HttpResponse.json([ORDER_SUMMARY])),

@@ -136,6 +136,18 @@ describe('State page', () => {
     await waitFor(() => expect(seen).toContain('appId=other-app'))
   })
 
+  it('app filter title shows the selected app', async () => {
+    stubApi()
+    renderAt()
+    await screen.findByText('order-42')
+    const appSelect = await screen.findByTestId('app-select')
+    expect(appSelect).not.toHaveAttribute('title')
+    await userEvent.selectOptions(appSelect, 'other-app')
+    await waitFor(() => expect(appSelect).toHaveAttribute('title', 'other-app'))
+    await userEvent.selectOptions(appSelect, '')
+    await waitFor(() => expect(appSelect).not.toHaveAttribute('title'))
+  })
+
   it('debounces the key search into the query', async () => {
     stubApi()
     let seen = ''
