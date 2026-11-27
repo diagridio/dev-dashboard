@@ -6,6 +6,7 @@ import { useRemoveWorkflows } from '../hooks/useWorkflowRemoval'
 import { StatusPill } from '../components/StatusPill'
 import { ConfirmRemoveDialog } from '../components/ConfirmRemoveDialog'
 import { elapsed, elapsedTenths, formatOffset, formatDateTime, formatDuration } from '../lib/wallclock'
+import { CodeBlock } from '../components/CodeBlock'
 import { PayloadView } from '../components/PayloadView'
 import { useToast, type ToastHandle } from '../lib/toast'
 import { useDocumentTitle } from '../lib/useDocumentTitle'
@@ -207,17 +208,8 @@ export function EventRow({
                     <div>
                       <div className="lblrow">
                         <span className="lbl">Stack trace</span>
-                        <button
-                          className="copybtn"
-                          onClick={() => {
-                            copyText(failure.stackTrace ?? '')
-                            toast.show('Stack trace copied')
-                          }}
-                        >
-                          ⧉ Copy
-                        </button>
                       </div>
-                      <pre className="json stacktrace">{failure.stackTrace}</pre>
+                      <CodeBlock kind="text" value={failure.stackTrace} label="Stack trace" wrap />
                     </div>
                   )}
                 </div>
@@ -226,34 +218,16 @@ export function EventRow({
                 <div>
                   <div className="lblrow">
                     <span className="lbl">Input</span>
-                    <button
-                      className="copybtn"
-                      onClick={() => {
-                        copyText(event.input ?? '')
-                        toast.show('Input copied')
-                      }}
-                    >
-                      ⧉ Copy
-                    </button>
                   </div>
-                  <PayloadView value={event.input} appId={appId} />
+                  <PayloadView value={event.input} appId={appId} label="Input" />
                 </div>
               )}
               {event.output && (
                 <div>
                   <div className="lblrow">
                     <span className="lbl">Output</span>
-                    <button
-                      className="copybtn"
-                      onClick={() => {
-                        copyText(event.output ?? '')
-                        toast.show('Output copied')
-                      }}
-                    >
-                      ⧉ Copy
-                    </button>
                   </div>
-                  <PayloadView value={event.output} appId={appId} />
+                  <PayloadView value={event.output} appId={appId} label="Output" />
                 </div>
               )}
             </div>
@@ -297,7 +271,7 @@ export function EventRow({
   )
 }
 
-function FailureBanner({ failure, toast }: { failure: WorkflowFailureDetails; toast: ToastHandle }) {
+function FailureBanner({ failure }: { failure: WorkflowFailureDetails }) {
   const [showStack, setShowStack] = useState(false)
   return (
     <div className="failbanner" role="alert">
@@ -315,17 +289,8 @@ function FailureBanner({ failure, toast }: { failure: WorkflowFailureDetails; to
         <div>
           <div className="lblrow">
             <span className="lbl">Stack trace</span>
-            <button
-              className="copybtn"
-              onClick={() => {
-                copyText(failure.stackTrace ?? '')
-                toast.show('Stack trace copied')
-              }}
-            >
-              ⧉ Copy
-            </button>
           </div>
-          <pre className="json stacktrace">{failure.stackTrace}</pre>
+          <CodeBlock kind="text" value={failure.stackTrace} label="Stack trace" wrap />
         </div>
       )}
     </div>
@@ -576,7 +541,7 @@ export function WorkflowDetail() {
       </div>
 
       {execution.failureDetails && (
-        <FailureBanner failure={execution.failureDetails} toast={toast} />
+        <FailureBanner failure={execution.failureDetails} />
       )}
 
       {/* ------------------------------------------------------------------ */}
@@ -678,18 +643,9 @@ export function WorkflowDetail() {
           <div className="ph">
             <span className="tagdot" style={{ background: 'var(--accent-bright)' }} />
             {' '}Input{' '}
-            <button
-              className="copybtn"
-              onClick={() => {
-                copyText(execution.input ?? '')
-                toast.show('Input copied')
-              }}
-            >
-              ⧉ Copy
-            </button>
           </div>
           {execution.input ? (
-            <PayloadView value={execution.input} appId={appId ?? ''} />
+            <PayloadView value={execution.input} appId={appId ?? ''} label="Input" />
           ) : (
             <span className="faint">—</span>
           )}
@@ -700,15 +656,6 @@ export function WorkflowDetail() {
           <div className="ph">
             <span className="tagdot" style={{ background: 'var(--fail-fg)' }} />
             {' '}Output{' '}
-            <button
-              className="copybtn"
-              onClick={() => {
-                copyText(execution.output ?? '')
-                toast.show('Output copied')
-              }}
-            >
-              ⧉ Copy
-            </button>
           </div>
           {isRunning && !hasOutput ? (
             <div className="pendingout">
@@ -726,7 +673,7 @@ export function WorkflowDetail() {
             </div>
           ) : (
             execution.output
-              ? <PayloadView value={execution.output} appId={appId ?? ''} />
+              ? <PayloadView value={execution.output} appId={appId ?? ''} label="Output" />
               : <span className="faint">—</span>
           )}
         </div>
@@ -743,17 +690,8 @@ export function WorkflowDetail() {
             <span className="faint" style={{ textTransform: 'none', letterSpacing: 0, fontSize: 11 }}>
               — shown only when the workflow sets it via <span className="mono">ctx.SetCustomStatus()</span>
             </span>
-            <button
-              className="copybtn"
-              onClick={() => {
-                copyText(execution.customStatus ?? '')
-                toast.show('Custom status copied')
-              }}
-            >
-              ⧉ Copy
-            </button>
           </div>
-          <PayloadView value={execution.customStatus} appId={appId ?? ''} />
+          <PayloadView value={execution.customStatus} appId={appId ?? ''} label="Custom status" />
         </div>
       )}
 

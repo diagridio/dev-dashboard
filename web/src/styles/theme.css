@@ -376,6 +376,7 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .panel > .ph { display: flex; align-items: center; gap: 9px; padding: 11px 14px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: 13.5px; }
 .panel > .ph .ic { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 10px; font-family: var(--mono); font-weight: 700; }
 .panel > .ph .copybtn { margin-left: auto; }
+.panel > .codeblock { margin: 12px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 0; }
 .kv > div { padding: 9px 14px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: center; }
 .kv > div:nth-last-child(-n+2) { border-bottom: none; }

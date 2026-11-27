@@ -7,6 +7,9 @@ import { server } from '../test/setup'
 import { QueryProvider } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { PayloadView } from './PayloadView'
+import { copyText } from '../lib/clipboard'
+
+vi.mock('../lib/clipboard', () => ({ copyText: vi.fn() }))
 
 // sha256("{\"a\":1}")
 async function sha(text: string) {
@@ -46,13 +49,40 @@ function renderView(value: string) {
   return render(
     <QueryProvider client={client}>
       <RefreshProvider>
-        <PayloadView value={value} appId="orders" />
+        <PayloadView value={value} appId="orders" label="Input" />
       </RefreshProvider>
     </QueryProvider>,
   )
 }
 
 describe('PayloadView', () => {
+  it('inline payload is a CodeBlock', async () => {
+    mockApps(true)
+    const { container } = renderView('{"name":"x"}')
+    expect(container.querySelector('.codeblock > pre.json')).not.toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Copy Input' }))
+    expect(copyText).toHaveBeenCalledWith('{"name":"x"}')
+  })
+
+  it('loaded binary payload can be copied', async () => {
+    mockApps(true)
+    mockFile('hello world')
+    renderView(envelope({ size: 11, sha256: await sha('hello world') }))
+    const user = userEvent.setup()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Load payload' })).toBeEnabled())
+    await user.click(screen.getByRole('button', { name: 'Load payload' }))
+    await user.click(await screen.findByRole('button', { name: 'Copy Payload' }))
+    expect(copyText).toHaveBeenCalledWith('hello world')
+  })
+
+  it('copy reference copies the reference JSON', async () => {
+    mockApps(true)
+    const value = envelope()
+    renderView(value)
+    await userEvent.click(screen.getByRole('button', { name: '⧉ Copy reference' }))
+    expect(copyText).toHaveBeenCalledWith(value)
+  })
+
   it('renders plain JSON highlighted without a card', () => {
     mockApps(true)
     const { container } = renderView('{"name":"x"}')
@@ -205,7 +235,7 @@ describe('PayloadView', () => {
     }
   })
 
-  it('renders text payloads in pre.json', async () => {
+  it('renders text payloads in a CodeBlock pre', async () => {
     mockApps(true)
     mockFile('hello world')
     const { container } = renderView(envelope({ size: 11, sha256: await sha('hello world') }))
@@ -213,7 +243,7 @@ describe('PayloadView', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Load payload' })).toBeEnabled())
     await user.click(screen.getByRole('button', { name: 'Load payload' }))
     expect(await screen.findByText('hello world')).toBeInTheDocument()
-    expect(container.querySelector('pre.json')?.textContent).toBe('hello world')
+    expect(container.querySelector('.codeblock > pre')?.textContent).toBe('hello world')
   })
 
   it('hides the old error while Retry is refetching', async () => {
