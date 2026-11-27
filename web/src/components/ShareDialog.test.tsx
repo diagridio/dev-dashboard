@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { ShareDialog } from './ShareDialog'
+import { ToastProvider } from '../lib/toast'
 import { copyText } from '../lib/clipboard'
 import { trackAction } from '../lib/telemetry'
 import { shareContent, emailUrl, xUrl, linkedinUrl, blueskyUrl } from '../lib/share'
@@ -46,5 +47,15 @@ describe('ShareDialog', () => {
     render(<ShareDialog open onClose={noop} />)
     fireEvent.click(screen.getByRole('link', { name: 'X' }))
     expect(trackAction).toHaveBeenCalledWith('share_click', { channel: 'x' })
+  })
+
+  it('announces the Copy toast from inside the dialog under the app-wide toast', () => {
+    render(
+      <ToastProvider>
+        <ShareDialog open onClose={noop} />
+      </ToastProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+    expect(screen.getByRole('dialog').contains(screen.getByText('Copied'))).toBe(true)
   })
 })

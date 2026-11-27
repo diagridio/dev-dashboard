@@ -102,6 +102,16 @@ describe('App shell', () => {
     expect(screen.queryByRole('contentinfo')).not.toBeInTheDocument()
   })
 
+  // The shared toast takes its colours from the theme tokens on .app, so it
+  // must render inside .app (a toast outside it gets a transparent background).
+  it('renders exactly one toast, inside .app', async () => {
+    const { container } = renderApp('/')
+    await screen.findByRole('main')
+    const toasts = document.querySelectorAll('.toast')
+    expect(toasts).toHaveLength(1)
+    expect(container.querySelector('.app')?.contains(toasts[0])).toBe(true)
+  })
+
   it('renders .app root with data-theme attribute', () => {
     const { container } = renderApp()
     const appDiv = container.querySelector('.app')

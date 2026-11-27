@@ -18,18 +18,7 @@ interface Props {
 }
 
 export function ShareDialog({ open, onClose }: Props) {
-  const { toast, toastNode } = useToast()
   const copyRef = useRef<HTMLButtonElement>(null)
-
-  function track(channel: ShareChannel) {
-    trackAction('share_click', { channel })
-  }
-
-  function handleCopy() {
-    copyText(shareContent.fullMessage)
-    toast.show('Copied')
-    track('copy')
-  }
 
   return (
     <Modal
@@ -47,6 +36,28 @@ export function ShareDialog({ open, onClose }: Props) {
         rows={12}
         value={shareContent.fullMessage}
       />
+      <ShareActions copyRef={copyRef} />
+    </Modal>
+  )
+}
+
+function track(channel: ShareChannel) {
+  trackAction('share_click', { channel })
+}
+
+/** Rendered inside the Modal so its toast is the dialog's own (announced from
+ *  inside the aria-modal dialog), not the app-wide one. */
+function ShareActions({ copyRef }: { copyRef: React.RefObject<HTMLButtonElement | null> }) {
+  const { toast, toastNode } = useToast()
+
+  function handleCopy() {
+    copyText(shareContent.fullMessage)
+    toast.show('Copied')
+    track('copy')
+  }
+
+  return (
+    <>
       <div className="modal-actions share-actions">
         <button ref={copyRef} type="button" className="btn primary" onClick={handleCopy}>
           Copy
@@ -83,6 +94,6 @@ export function ShareDialog({ open, onClose }: Props) {
         </a>
       </div>
       {toastNode}
-    </Modal>
+    </>
   )
 }

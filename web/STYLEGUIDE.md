@@ -292,7 +292,7 @@ component fails the suite until the doc is updated.
 | Share dialog | `components/ShareDialog.tsx` — a `narrow` `Modal` with an intro line, a read-only message-preview `<textarea>`, and a `.modal-actions` row of channel buttons: Copy (`.btn.primary` + `copyText`/toast, initial focus) and Email / X / LinkedIn / BlueSky (`.btn.ghost` links built by `lib/share.ts`). |
 | CLI command drawer | `components/CliDrawer.tsx` — right-edge overlay panel with a vertical `CLI` edge tab; open state persists via `lib/safeStorage.ts`. Its rows are `components/CliCommand.tsx` — a titled command with an optional docs `↗` link and a `⧉ Copy` `.copybtn`. Context-sensitive command sets and placeholder substitution come from `lib/cli.ts` (`getCliContent` / `resolvePlaceholders`). |
 | Busy indicator | `components/Spinner.tsx` — inline braille-dots spinner for in-progress text. Decorative only (`aria-hidden`): always pair it with a text label, inside a `role="status"` element (e.g. the remove dialog's busy state, the Workflows pager's "Updating…"). Renders nothing under `prefers-reduced-motion`, so the label alone carries the state. |
-| Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. |
+| Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. There is one toast for the whole app: `ToastProvider` is mounted once in `App.tsx`, inside the `.app` div so it gets the theme tokens, and `useToast()` sends messages to it, so a new message replaces the one showing. `Modal` wraps its content in its own `ToastProvider`, so a copy inside a dialog is announced from inside the `aria-modal` dialog. Without a provider (isolated component tests) `useToast()` falls back to a local toast. |
 | Promotion banner | `components/PromoBanner.tsx` — mounted once in the `App.tsx` shell (not on `/replay`); a dismissible bottom-right `<aside>` for the product feed's `promotion`, `inert` until it slides in, moving left of the open CLI drawer. Don't build per-page announcement banners; feed content goes here. |
 | Code block | `components/CodeBlock.tsx` — bordered block for text, JSON or YAML with its own `⧉ Copy` button (`aria-label="Copy <label>"`, toast `<label> copied`); `wrap` wraps long lines. |
 | Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx`, applied by `components/CodeBlock.tsx` (`kind="json"` / `"yaml"`). |
@@ -411,7 +411,7 @@ dropdown light (or system-grey) in the dark theme. The same switch governs check
 scrollbars.
 
 **Feedback**
-- `.toast` (`.show`) — driven by `useToast`.
+- `.toast` (`.show`) — the one shared toast, driven by `useToast`. It sits above modals (`z-index` higher than `.modal-backdrop`), because it renders at the app root.
 - `.promo` (`.show`) with `.promo-body` / `.promo-title` / `.promo-text` / `.promo-link` /
   `.promo-close` — the floating promotion banner, driven by `PromoBanner`.
 - `.hint` — centered faint helper line under content.

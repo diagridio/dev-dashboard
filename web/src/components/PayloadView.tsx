@@ -85,7 +85,7 @@ function RefCard({ dref, appId, value, label }: { dref: DaprRef; appId: string; 
           aria-label={`Copy ${label} reference`}
           onClick={() => {
             copyText(value)
-            toast.show('Reference copied')
+            toast.show(`${label} reference copied`)
           }}
         >
           ⧉ Copy reference

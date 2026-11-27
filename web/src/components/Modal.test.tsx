@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { useState } from 'react'
 import { Modal } from './Modal'
+import { ToastProvider, useToast } from '../lib/toast'
 
 describe('Modal', () => {
   it('renders nothing when closed', () => {
@@ -74,3 +75,32 @@ describe('Modal', () => {
     expect(trigger).toHaveFocus()
   })
 })
+
+// A copy inside an aria-modal dialog must announce from inside the dialog:
+// screen readers can drop live regions outside an aria-modal element. So each
+// open Modal gets its own toast, even under the app-wide ToastProvider.
+describe('Modal toast', () => {
+  function CopyInside() {
+    const { toast, toastNode } = useToast()
+    return (
+      <>
+        <button type="button" onClick={() => toast.show('Message copied')}>Copy</button>
+        {toastNode}
+      </>
+    )
+  }
+
+  it('shows a toast raised inside the dialog within the dialog', () => {
+    render(
+      <ToastProvider>
+        <Modal open title="Share" onClose={() => {}}>
+          <CopyInside />
+        </Modal>
+      </ToastProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }))
+    const msg = screen.getByText('Message copied')
+    expect(screen.getByRole('dialog').contains(msg)).toBe(true)
+  })
+})
+

@@ -9,19 +9,20 @@ import { QueryProvider, makeQueryClient } from '../lib/query'
 import { RefreshProvider } from '../lib/refresh'
 import { WorkflowDetail, EventRow } from './WorkflowDetail'
 import type { WorkflowHistoryEvent } from '../types/workflow'
-import type { ToastHandle } from '../lib/toast'
+import { ToastProvider, type ToastHandle } from '../lib/toast'
 
-function renderDetail(client?: QueryClient, entry = '/workflows/order/abc') {
+function renderDetail(client?: QueryClient, entry = '/workflows/order/abc', withToastProvider = false) {
   // Always use a fresh client to avoid cross-test cache pollution
   const qc = client ?? makeQueryClient()
   const router = createMemoryRouter(
     [{ path: '/workflows/:appId/:instanceId', element: <WorkflowDetail /> }],
     { initialEntries: [entry], future: { v7_relativeSplatPath: true } },
   )
+  const routerNode = <RouterProvider router={router} future={{ v7_startTransition: true }} />
   return render(
     <QueryProvider client={qc}>
       <RefreshProvider>
-        <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        {withToastProvider ? <ToastProvider>{routerNode}</ToastProvider> : routerNode}
       </RefreshProvider>
     </QueryProvider>,
   )
@@ -1315,6 +1316,31 @@ describe('WorkflowDetail — failure banner', () => {
     expect(within(banner).getByText(/at Foo\(\)/)).toBeInTheDocument()
     // Stack trace uses the wrapping class so long frames stay inside the banner.
     expect(banner.querySelector('.codeblock > pre.wrap')).not.toBeNull()
+  })
+
+  it('stack-trace copy toast shows in the shared toast, outside the alert', async () => {
+    server.use(
+      http.get('/api/workflows/order/abc', () =>
+        HttpResponse.json({
+          appId: 'order', instanceId: 'abc', name: 'OrderWorkflow', status: 'Failed',
+          createdAt: '2026-06-26T10:00:00Z', lastUpdatedAt: '2026-06-26T10:00:05Z', replayCount: 0,
+          failureDetails: { errorType: 'System.InvalidOperationException', message: 'boom', stackTrace: 'at Foo()' },
+          history: [],
+        }),
+      ),
+    )
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: () => Promise.resolve() },
+      configurable: true,
+    })
+    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
+    renderDetail(undefined, undefined, true)
+    const banner = await screen.findByRole('alert')
+    await userEvent.click(screen.getByRole('button', { name: /show stack trace/i }))
+    await userEvent.click(within(banner).getByRole('button', { name: 'Copy Stack trace' }))
+    const msg = await screen.findByText('Stack trace copied')
+    expect(banner.contains(msg)).toBe(false)
+    expect(document.querySelectorAll('.toast')).toHaveLength(1)
   })
 
   it('shows no failure banner for a completed workflow', async () => {

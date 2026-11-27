@@ -335,7 +335,7 @@ a.chip:hover { border-color: var(--accent-bright); text-decoration: underline; }
 .copybtn:disabled { opacity: 0.5; cursor: default; }
 .copybtn:disabled:hover { color: var(--muted); border-color: var(--line); }
 .copybtn:focus-visible { outline: 2px solid var(--accent-bright); outline-offset: 2px; }
-.toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px); background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 9px 15px; font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 50; }
+.toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(8px); background: var(--surface-2); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow); border-radius: 9px; padding: 9px 15px; font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 8px; opacity: 0; pointer-events: none; transition: opacity .18s ease, transform .18s ease; z-index: 1100; }
 .toast .d { width: 8px; height: 8px; border-radius: 50%; background: var(--done-fg); }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 /* Promotion banner (PromoBanner): floats in bottom-right, dismissible per promotion id. */
