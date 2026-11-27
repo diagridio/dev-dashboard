@@ -402,6 +402,13 @@ pre.code { margin: 0; padding: 14px; font-family: var(--mono); font-size: 12px; 
 .code .yc { color: var(--yc); }
 .code .yd { color: var(--dapr); }
 
+/* CodeBlock: bordered block; the copy button sits outside the scrolling pre so it
+   stays put (and never covers text) when a long line scrolls sideways. */
+.codeblock { position: relative; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
+.codeblock > pre { margin: 0; padding: 9px 78px 9px 11px; font-family: var(--mono); font-size: 11.5px; line-height: 1.55; max-height: 24em; overflow: auto; white-space: pre; background: transparent; border: 0; border-radius: inherit; }
+.codeblock > pre.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.codeblock > .copybtn { position: absolute; top: 6px; right: 6px; padding: 2px 7px; font-size: 10px; }
+
 /* ---- Logs ---- */
 .logbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
 .lvchips { display: inline-flex; gap: 5px; }

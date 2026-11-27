@@ -294,7 +294,8 @@ component fails the suite until the doc is updated.
 | Busy indicator | `components/Spinner.tsx` — inline braille-dots spinner for in-progress text. Decorative only (`aria-hidden`): always pair it with a text label, inside a `role="status"` element (e.g. the remove dialog's busy state, the Workflows pager's "Updating…"). Renders nothing under `prefers-reduced-motion`, so the label alone carries the state. |
 | Toast + clipboard | `useToast()` in `lib/toast.tsx`; `copyText()` in `lib/clipboard.ts` — pair them. |
 | Promotion banner | `components/PromoBanner.tsx` — mounted once in the `App.tsx` shell (not on `/replay`); a dismissible bottom-right `<aside>` for the product feed's `promotion`, `inert` until it slides in, moving left of the open CLI drawer. Don't build per-page announcement banners; feed content goes here. |
-| Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx` → `<pre className="json">` / `<pre className="code">`. |
+| Code block | `components/CodeBlock.tsx` — bordered block for text, JSON or YAML with its own `⧉ Copy` button (`aria-label="Copy <label>"`, toast `<label> copied`); `wrap` wraps long lines. |
+| Syntax highlight | `lib/json-highlight.tsx` / `lib/yaml-highlight.tsx`, applied by `components/CodeBlock.tsx` (`kind="json"` / `"yaml"`). |
 
 ### CSS primitives (class → what it is)
 
@@ -419,9 +420,9 @@ scrollbars.
   `.offline-label` when the `/api/health` probe fails.
 
 **Code blocks**
-- `<pre className="json">` + `highlightJson(...)` for JSON.
-- `<pre className="code">` + YAML highlighter for component/config YAML.
-- `<pre className="evbody pre">` patterns for workflow event payloads.
+- Text, JSON and YAML output always uses `CodeBlock` (`components/CodeBlock.tsx`): a bordered
+  block with its own copy button. Don't add a separate copy button next to it, and don't
+  render a raw `<pre>`.
 
 **Workflow event timeline** — a self-contained vocabulary in `theme.css`
 (the workflows section). Reuse it for anything event-feed-shaped; don't fork it:
@@ -666,6 +667,7 @@ already provides (e.g. re-specifying the whole `.ph` rule inline as
 - [ ] No hardcoded colors — everything is `var(--…)`.
 - [ ] Green text uses `--accent-fg`, never `--accent-bright`, `--ok-bright` or `--primary`.
 - [ ] Fields with suggestions use `ClearableInput`.
+- [ ] Text, JSON and YAML output uses `CodeBlock`.
 - [ ] Any class name built from runtime data is prefixed (e.g. `lsrc-${src}`), not a
       bare data word that could collide with a global class (see §1 antipattern).
 - [ ] Labels are mono/uppercase/muted via existing classes; every number/time/
