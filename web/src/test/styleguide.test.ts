@@ -352,6 +352,14 @@ describe('theme.css CodeBlock', () => {
     expect(rule!.body).toMatch(/border:\s*0/)
   })
 
+  it('insets a CodeBlock held directly by a card or panel by 12px', () => {
+    for (const sel of ['.panel > .codeblock', '.card > .codeblock']) {
+      const rule = rules.find((r) => r.selector.split(',').map((x) => x.trim()).includes(sel))
+      expect(rule, `no rule for ${sel}`).toBeDefined()
+      expect(rule!.body).toMatch(/margin:\s*12px/)
+    }
+  })
+
   it('reserves a top strip for the copy button instead of right padding', () => {
     const rule = rules.find((r) => /^\.codeblock > pre,/.test(r.selector))!
     const padding = rule.body.match(/padding:\s*([^;]+);/)
