@@ -95,6 +95,28 @@ describe('styleguide lint guards', () => {
     ).toEqual([])
   })
 
+  it('no bright mint text (use var(--accent-fg) for green text)', () => {
+    // --accent-bright, --ok-bright and --primary are fills; as a text colour
+    // they are unreadable on the light theme's white surfaces. Only the exact
+    // properties color/fill/stroke are checked, so background/border pass.
+    const bad = /(?<![\w-])(?:color|fill|stroke)['"]?\s*[:=]\s*[{'"]*\s*var\(--(?:accent-bright|ok-bright|primary)\)/
+    const offenders: string[] = []
+    const scan = (rel: string) => {
+      const lines = readFileSync(path.join(srcDir, rel), 'utf8').split('\n')
+      lines.forEach((line, i) => {
+        if (bad.test(line)) offenders.push(`${rel}:${i + 1}: ${line.trim()}`)
+      })
+    }
+    scan('styles/theme.css')
+    for (const rel of files) scan(rel)
+    expect(
+      offenders,
+      `Bright mint used as a text colour — use var(--accent-fg) instead ` +
+        `(see STYLEGUIDE.md "Brand & accents"):\n` +
+        offenders.join('\n'),
+    ).toEqual([])
+  })
+
   it('no template-literal className starting with an interpolation (needs a static prefix)', () => {
     // className={`${x} …`} — the first class token comes from data, so it can
     // collide with any global class (STYLEGUIDE.md §1 antipattern). A static
@@ -200,6 +222,11 @@ describe('theme.css native control chrome', () => {
     const rule = /[^{}]*\.inp:disabled[^{}]*\{([^}]*)\}/.exec(css)?.[1] ?? ''
     expect(rule).toMatch(/color:/)
     expect(rule).toMatch(/background(-color)?:/)
+  })
+
+  it('defines --accent-fg per theme', () => {
+    expect(block('.app[data-theme="dark"]')).toMatch(/--accent-fg:\s*#2FE3AD/i)
+    expect(block('.app[data-theme="light"]')).toMatch(/--accent-fg:\s*#067A5B/i)
   })
 
   it('keeps the dark canvas identical to the dark app background', () => {

@@ -113,7 +113,8 @@ All tokens are CSS custom properties. Reference them with `var(--name)`.
 | Token | Use |
 |---|---|
 | `--primary` `#0BDDA3` | Brand mint (theme-independent) |
-| `--accent-bright` / `--ok-bright` | Brighter mint (theme-independent) — the single interactive accent: `.btn.primary`, focus rings, selection tints, active nav tab, LEDs, "beat" pulse, checkboxes |
+| `--accent-bright` / `--ok-bright` | Brighter mint (theme-independent) — fills for the single interactive accent: `.btn.primary`, focus rings, selection tints, active nav tab, LEDs, "beat" pulse, checkboxes. Never a text colour |
+| `--accent-fg` | Mint for text: bright in the dark theme (`#2FE3AD`), dark mint in the light theme (`#067A5B`). Use it whenever text should be the accent colour. `--accent-bright`, `--ok-bright` and `--primary` are fills, never a text colour; they're unreadable on the light theme's white surfaces |
 | `--dapr` | Dapr-specific blue (sidecar badges, daprd log source) |
 | `--gold` / `--purple` | Diagrid-brand secondary accents — available for highlights / category chips (not yet used in default UI) |
 
@@ -645,6 +646,7 @@ already provides (e.g. re-specifying the whole `.ph` rule inline as
 - [ ] Root is `.page`; header is `.phead` or `.crumbs`.
 - [ ] Loading, empty, and error states are handled.
 - [ ] No hardcoded colors — everything is `var(--…)`.
+- [ ] Green text uses `--accent-fg`, never `--accent-bright`, `--ok-bright` or `--primary`.
 - [ ] Any class name built from runtime data is prefixed (e.g. `lsrc-${src}`), not a
       bare data word that could collide with a global class (see §1 antipattern).
 - [ ] Labels are mono/uppercase/muted via existing classes; every number/time/

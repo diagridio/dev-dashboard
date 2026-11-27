@@ -269,7 +269,7 @@ function AppDetailContent({ app }: { app: AppDetailType }) {
         {/* Application panel */}
         <div className="panel">
           <div className="ph" style={{ display: 'flex', alignItems: 'center' }}>
-            <span className="ic" style={{ background: 'var(--surface-2)', color: 'var(--accent-bright)' }}>A</span>
+            <span className="ic" style={{ background: 'var(--surface-2)', color: 'var(--accent-fg)' }}>A</span>
             Application
             {panelActions('app', app.appStatus, `application "${app.appId}"`)}
           </div>
