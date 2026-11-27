@@ -283,7 +283,8 @@ component fails the suite until the doc is updated.
 | Save/cancel form dialog | `components/form/DialogShell.tsx` — titled `Modal` with Save/Cancel footer + `duplicateNameError` name-collision guard; the builder dialogs are the reference usage. |
 | Follow-scroll log pane | `hooks/useFollowScroll.ts` — pin-to-bottom with scroll-away disengage (24px threshold); both Logs viewers use it. |
 | Descriptor-driven form control | `components/MetadataFieldInput.tsx` — one `.inp` control from a component-metadata field descriptor (vs hand-composed forms: see §6). |
-| Hand-composed form fields | `components/form/` primitives (`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`) — see §6. |
+| Field with suggestions | `components/form/ClearableInput.tsx` — an `<input list>` with a × button inside the field (`.inp-clear` / `.inp-x`). Every datalist field uses it; the × shows only with a value, never when read-only or disabled. |
+| Hand-composed form fields | `components/form/` primitives (`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`, `ClearableInput`) — see §6. |
 | Multi-step builder shell | `components/wizard/` (`Wizard`, `Stepper`, `StepNav`) — see §6. |
 | YAML output step | `components/YamlPreview.tsx` — highlighted preview + Copy/Download — see §6. |
 | Connection manager | `components/StateStoreConnectionDialog.tsx` (a `Modal` of `.field` rows driven by `MetadataFieldInput`) + `components/StateStoreConnectionsPanel.tsx`. |
@@ -370,6 +371,8 @@ component fails the suite until the doc is updated.
 - `.field` — a label-over-control row (`grid`, `gap`); `.field > label` is the muted caption.
   `.req` marks a required-field asterisk; `.field-err` is the inline error line under a control;
   `.field-row` lays out a control plus adjacent element horizontally.
+- `.inp-clear` / `.inp-x` — `ClearableInput`'s wrapper (relative, with right padding on the
+  input) and its × button (muted, `--text` on hover, the `.copybtn` focus ring).
 - `:disabled` — `.inp` and `.select` share one rule (`--surface-2` fill, `--faint` text,
   `--line-soft` border, default cursor) so an input and a dropdown beside it recede together
   and match the disabled buttons. A styleguide test requires it. Prefer omitting a control the
@@ -381,6 +384,9 @@ component fails the suite until the doc is updated.
 and toolbars, `select.inp` in form fields. A styleguide test enforces the pair. A free-text
 field with suggestions is an `<input list>` + `<datalist>` on `.inp` — used for the State
 page's New record app id, where a prefix that has no records yet must still be typeable.
+A field with suggestions uses `ClearableInput`. Browsers only suggest entries that match the
+current text, so a prefilled or typed value hides the other suggestions until it's cleared;
+the × makes that one click. A styleguide test rejects a raw `<input list>`.
 
 The **empty first option** follows one rule per kind of dropdown:
 
@@ -480,7 +486,7 @@ and `.stepnav`).
 
 ### Form primitives — `components/form/`
 
-`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle` — thin wrappers
+`Field`, `TextInput`, `NumberInput`, `SelectInput`, `Toggle`, `ClearableInput` — thin wrappers
 over the `.field` / `.inp` / `.select` / `.childtoggle` classes with a
 `value`/`onChange` string API. `Field` owns the muted label, the `.req`
 required asterisk, and the inline `.field-err` line; put exactly one control
@@ -659,6 +665,7 @@ already provides (e.g. re-specifying the whole `.ph` rule inline as
 - [ ] Loading, empty, and error states are handled.
 - [ ] No hardcoded colors — everything is `var(--…)`.
 - [ ] Green text uses `--accent-fg`, never `--accent-bright`, `--ok-bright` or `--primary`.
+- [ ] Fields with suggestions use `ClearableInput`.
 - [ ] Any class name built from runtime data is prefixed (e.g. `lsrc-${src}`), not a
       bare data word that could collide with a global class (see §1 antipattern).
 - [ ] Labels are mono/uppercase/muted via existing classes; every number/time/

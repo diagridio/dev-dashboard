@@ -27,13 +27,27 @@ function renderDialog(props: { actorId?: string; suggestedIds?: string[] } = {})
 }
 
 async function fill(id: string, method: string, body?: string) {
-  if (id) await userEvent.type(screen.getByLabelText(/actor id/i), id)
+  if (id) await userEvent.type(screen.getByLabelText(/^actor id/i), id)
   if (method) await userEvent.type(screen.getByLabelText(/^method/i), method)
   if (body) await userEvent.type(screen.getByLabelText(/body/i), body)
 }
 
 describe('InvokeActorDialog', () => {
   beforeEach(() => localStorage.clear())
+
+  it('clear buttons empty actor id and method', async () => {
+    renderDialog()
+    await fill('c1', 'add')
+    await userEvent.click(screen.getByRole('button', { name: 'Clear Actor ID' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear Method' }))
+    expect(screen.getByLabelText(/^actor id/i)).toHaveValue('')
+    expect(screen.getByLabelText(/^method/i)).toHaveValue('')
+  })
+
+  it('no clear button on a read-only actor id', () => {
+    renderDialog({ actorId: 'c1' })
+    expect(screen.queryByRole('button', { name: 'Clear Actor ID' })).not.toBeInTheDocument()
+  })
 
   it('requires a method and sends nothing', async () => {
     let called = false
@@ -107,7 +121,7 @@ describe('InvokeActorDialog', () => {
 
   it('prefills a read-only ID when actorId is given', () => {
     renderDialog({ actorId: 'c1' })
-    const input = screen.getByLabelText(/actor id/i) as HTMLInputElement
+    const input = screen.getByLabelText(/^actor id/i) as HTMLInputElement
     expect(input.value).toBe('c1')
     expect(input.readOnly).toBe(true)
   })

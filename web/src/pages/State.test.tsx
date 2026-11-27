@@ -368,8 +368,8 @@ describe('State page record creation', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /new record/i }))
 
-    expect(await screen.findByLabelText(/app id/i)).toHaveValue('myapp')
-    const listId = screen.getByLabelText(/app id/i).getAttribute('list')
+    expect(await screen.findByLabelText(/^app id/i)).toHaveValue('myapp')
+    const listId = screen.getByLabelText(/^app id/i).getAttribute('list')
     const suggested = Array.from(
       document.getElementById(listId as string)?.querySelectorAll('option') ?? [],
     ).map((o) => o.value)
@@ -398,7 +398,7 @@ describe('State page record creation', () => {
     await screen.findByText('order-42')
 
     await userEvent.click(screen.getByRole('button', { name: /new record/i }))
-    await userEvent.type(screen.getByLabelText(/app id/i), 'myapp')
+    await userEvent.type(screen.getByLabelText(/^app id/i), 'myapp')
     await userEvent.type(screen.getByLabelText(/^key/i), 'cart-1')
     await userEvent.type(screen.getByLabelText(/^value/i), 'hello')
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }))

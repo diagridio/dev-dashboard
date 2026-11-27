@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Modal } from './Modal'
+import { ClearableInput } from './form'
 import { useInvokeActor } from '../hooks/useActors'
 import { actorPath, recentIds, recentMethods, rememberInvoke } from '../lib/actorRecents'
 import type { InvokeVerb } from '../types/actors'
@@ -115,13 +116,14 @@ export function InvokeActorDialog({ open, onClose, appKey, appId, actorType, act
         <div>
           <div className="field">
             <label htmlFor="invoke-id">Actor ID</label>
-            <input
+            <ClearableInput
               id="invoke-id"
+              label="Actor ID"
               className="inp mono"
               list="invoke-ids"
               value={id}
               readOnly={actorId !== undefined}
-              onChange={(e) => setId(e.target.value)}
+              onChange={setId}
             />
             <datalist id="invoke-ids">
               {idOptions.map((v) => <option key={v} value={v} />)}
@@ -131,12 +133,13 @@ export function InvokeActorDialog({ open, onClose, appKey, appId, actorType, act
 
           <div className="field">
             <label htmlFor="invoke-method">Method</label>
-            <input
+            <ClearableInput
               id="invoke-method"
+              label="Method"
               className="inp mono"
               list="invoke-methods"
               value={method}
-              onChange={(e) => setMethod(e.target.value)}
+              onChange={setMethod}
             />
             <datalist id="invoke-methods">
               {methodOptions.map((v) => <option key={v} value={v} />)}

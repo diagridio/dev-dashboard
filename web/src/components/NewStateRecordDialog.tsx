@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './Modal'
-import { Field } from './form'
+import { ClearableInput, Field } from './form'
 import { useCreateStateRecord } from '../hooks/useStateRecords'
 import type { StateWriteError } from '../types/state'
 
@@ -72,17 +72,18 @@ export function NewStateRecordDialog({ open, onClose, store, appIds, defaultAppI
       ) : (
         <div>
           {/* Raw controls rather than the form/ TextInput primitives: the app id
-              needs a datalist and all three want the mono face. Field still owns
+              needs a datalist (ClearableInput) and all three want the mono face. Field still owns
               the label and its required asterisk. */}
           <Field label="App ID" htmlFor="new-rec-app" required>
-            <input
+            <ClearableInput
               id="new-rec-app"
+              label="App ID"
               className="inp mono"
               list={APPID_LIST}
               autoComplete="off"
               placeholder="order-app"
               value={appId}
-              onChange={(e) => editKeyPart(setAppId, e.target.value)}
+              onChange={(v) => editKeyPart(setAppId, v)}
             />
           </Field>
           <datalist id={APPID_LIST}>

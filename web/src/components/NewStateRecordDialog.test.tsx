@@ -58,10 +58,10 @@ function renderReopenable() {
 describe('NewStateRecordDialog', () => {
   it('prefills the app id from the page filter and offers the known prefixes', () => {
     renderDialog({ defaultAppId: 'order-app' })
-    expect(screen.getByLabelText(/app id/i)).toHaveValue('order-app')
+    expect(screen.getByLabelText(/^app id/i)).toHaveValue('order-app')
     // A datalist, not a select: the field can be picked from or typed into
     // freely, so a prefix with no records yet is still reachable.
-    const listId = screen.getByLabelText(/app id/i).getAttribute('list')
+    const listId = screen.getByLabelText(/^app id/i).getAttribute('list')
     expect(listId).toBeTruthy()
     const suggested = Array.from(
       document.getElementById(listId as string)?.querySelectorAll('option') ?? [],
@@ -88,7 +88,7 @@ describe('NewStateRecordDialog', () => {
     const save = screen.getByRole('button', { name: /^save$/i })
     expect(save).toBeDisabled()
 
-    await userEvent.type(screen.getByLabelText(/app id/i), 'order-app')
+    await userEvent.type(screen.getByLabelText(/^app id/i), 'order-app')
     expect(save).toBeDisabled()
 
     await userEvent.type(screen.getByLabelText(/^key/i), 'cart-1')
@@ -100,7 +100,7 @@ describe('NewStateRecordDialog', () => {
 
   it('does not accept an all-whitespace app id or key', async () => {
     renderDialog()
-    await userEvent.type(screen.getByLabelText(/app id/i), '   ')
+    await userEvent.type(screen.getByLabelText(/^app id/i), '   ')
     await userEvent.type(screen.getByLabelText(/^key/i), '   ')
     await userEvent.type(screen.getByLabelText(/^value/i), 'hello')
     expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled()
@@ -211,7 +211,7 @@ describe('NewStateRecordDialog', () => {
       ),
     )
     const { toggleOpen } = renderReopenable()
-    await userEvent.type(screen.getByLabelText(/app id/i), 'order-app')
+    await userEvent.type(screen.getByLabelText(/^app id/i), 'order-app')
     await userEvent.type(screen.getByLabelText(/^key/i), 'cart-1')
     await userEvent.type(screen.getByLabelText(/^value/i), 'hello')
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }))
@@ -224,5 +224,11 @@ describe('NewStateRecordDialog', () => {
     await waitFor(() => expect(screen.getByLabelText(/^key/i)).toHaveValue(''))
     expect(screen.getByLabelText(/^value/i)).toHaveValue('')
     expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled()
+  })
+
+  it('clear button empties a prefilled app id', async () => {
+    renderDialog({ defaultAppId: 'order-app' })
+    await userEvent.click(screen.getByRole('button', { name: 'Clear App ID' }))
+    expect(screen.getByLabelText(/^app id/i)).toHaveValue('')
   })
 })

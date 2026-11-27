@@ -278,4 +278,20 @@ describe('dropdown variants', () => {
         `drift apart, see STYLEGUIDE.md §Dropdowns:\n${offenders.join('\n')}`,
     ).toEqual([])
   })
+
+  it('no raw datalist inputs (use ClearableInput)', () => {
+    const offenders: string[] = []
+    for (const rel of sourceFiles()) {
+      if (rel.split(path.sep).join('/') === 'components/form/ClearableInput.tsx') continue
+      const src = code(readFileSync(path.join(srcDir, rel), 'utf8'))
+      for (const m of src.matchAll(/<input\b[^>]*>/g)) {
+        if (/\blist=/.test(m[0])) offenders.push(`${rel}: ${m[0].replace(/\s+/g, ' ').slice(0, 90)}`)
+      }
+    }
+    expect(
+      offenders,
+      `<input list=…> outside ClearableInput — a field with suggestions needs the × ` +
+        `(STYLEGUIDE.md §Dropdowns):\n${offenders.join('\n')}`,
+    ).toEqual([])
+  })
 })
