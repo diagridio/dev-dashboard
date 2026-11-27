@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useModalFocus } from '../hooks/useModalFocus'
+import { ToastProvider } from '../lib/toast'
 
 interface Props {
   open: boolean
@@ -36,7 +37,9 @@ export function Modal({ open, title, onClose, children, initialFocusRef, narrow 
         className={`card modal-card${narrow ? ' narrow' : ''}`}
       >
         <h2 id="modal-title" className="modal-title">{title}</h2>
-        {children}
+        {/* Own toast inside the aria-modal dialog: screen readers can drop live
+            regions outside it, so the app-wide toast might not be announced. */}
+        <ToastProvider>{children}</ToastProvider>
       </div>
     </div>
   )

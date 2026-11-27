@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 // One toast for the whole app. <ToastProvider> is mounted once in App.tsx,
 // inside .app where the theme tokens live, and renders the single toast.
 // useToast() sends messages to it, so a new message replaces the one showing
-// instead of stacking a second toast on top.
+// instead of stacking a second toast on top. Modal mounts its own provider so a
+// copy inside a dialog is announced from inside the aria-modal dialog.
 //
 // Usage:
 //   const { toast, toastNode } = useToast()
